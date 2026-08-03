@@ -1,0 +1,232 @@
+# EXP-001 — Princípios da Experiência de Construção
+
+**Projeto:** Esboce
+
+**Código:** EXP-001
+
+**Versão:** 1.0
+
+**Status:** Canônico
+
+---
+
+# Objetivo
+
+Definir os princípios fundamentais que orientam a experiência de construção de residências no Esboce.
+
+Este documento não descreve interfaces específicas, mas estabelece os princípios que devem orientar toda decisão relacionada à experiência do usuário.
+
+Toda funcionalidade implementada deverá respeitar estes princípios.
+
+---
+
+# Nossa Missão
+
+Construir uma casa deve ser tão natural quanto desenhá-la em uma folha de papel.
+
+A tecnologia deve desaparecer.
+
+O usuário deve sentir que está construindo uma casa, não operando um software.
+
+---
+
+# Princípio 1 — Construir Antes de Cadastrar
+
+O usuário deve poder iniciar imediatamente.
+
+Nunca obrigaremos cadastro para:
+
+- desenhar;
+- experimentar;
+- testar ideias;
+- aprender.
+
+O cadastro somente será solicitado quando existir valor para o usuário.
+
+Exemplos:
+
+- salvar projeto;
+- gerar orçamento;
+- compartilhar;
+- exportar arquivos;
+- contratar serviços.
+
+---
+
+# Princípio 2 — A Casa é o Centro
+
+A viewport é a protagonista da aplicação.
+
+Menus, barras e painéis existem apenas para apoiar a construção.
+
+A interface nunca deve competir visualmente com a residência.
+
+Sempre que possível:
+
+- aumentar a viewport;
+- reduzir distrações;
+- ocultar elementos desnecessários.
+
+---
+
+# Princípio 3 — Manipulação Direta
+
+O usuário interage com a residência.
+
+Não com formulários.
+
+Sempre que possível:
+
+- clicar;
+- arrastar;
+- mover;
+- redimensionar;
+- substituir.
+
+A construção deve parecer física.
+
+---
+
+# Princípio 4 — Feedback Imediato
+
+Toda ação deve produzir resposta instantânea.
+
+Mover uma parede.
+
+Adicionar uma janela.
+
+Trocar um piso.
+
+Alterar uma cobertura.
+
+A resposta deve acontecer imediatamente.
+
+O usuário nunca deve duvidar se sua ação foi executada.
+
+---
+
+# Princípio 5 — Contexto Inteligente
+
+As ferramentas aparecem quando fazem sentido.
+
+Selecionar uma parede deve revelar apenas ferramentas relacionadas à parede.
+
+Selecionar uma janela deve revelar apenas ferramentas relacionadas à janela.
+
+A interface acompanha o contexto.
+
+Nunca o contrário.
+
+---
+
+# Princípio 6 — Progressão Natural
+
+A complexidade deve crescer junto com o projeto.
+
+Nos primeiros minutos o usuário precisa apenas construir.
+
+Recursos avançados surgem conforme a necessidade.
+
+Nunca antecipadamente.
+
+---
+
+# Princípio 7 — Diversão Faz Parte da Engenharia
+
+Projetar uma residência deve ser prazeroso.
+
+A experiência deve incentivar:
+
+- experimentar;
+- testar ideias;
+- desfazer sem medo;
+- comparar alternativas.
+
+Errar faz parte do processo criativo.
+
+---
+
+# Princípio 8 — O Usuário Pensa em Ambientes
+
+As pessoas não pensam em linhas.
+
+Pensam em:
+
+- sala;
+- cozinha;
+- quarto;
+- varanda.
+
+O Esboce deve permitir construir ambientes completos de forma intuitiva.
+
+As paredes são consequência.
+
+Não o objetivo.
+
+---
+
+# Princípio 9 — O Sistema Assume a Complexidade
+
+Cálculos.
+
+Restrições.
+
+Compatibilidades.
+
+Quantitativos.
+
+Orçamento.
+
+Regras construtivas.
+
+Tudo isso pertence ao sistema.
+
+Nunca ao usuário.
+
+---
+
+# Princípio 10 — Toda Ação Deve Aproximar o Usuário da Casa dos Seus Sonhos
+
+Nenhuma interação deve existir apenas porque um software tradicional faz assim.
+
+Toda interação precisa aproximar o usuário do resultado desejado.
+
+A interface existe para reduzir a distância entre uma ideia e uma residência construída.
+
+---
+
+# Os Primeiros 60 Segundos
+
+Uma pessoa que nunca utilizou o Esboce deve conseguir:
+
+1. Entrar na plataforma.
+2. Começar a desenhar imediatamente.
+3. Criar um ambiente.
+4. Inserir portas e janelas.
+5. Visualizar uma residência surgindo.
+
+Tudo isso sem cadastro.
+
+Sem treinamento.
+
+Sem manual.
+
+---
+
+# Filosofia
+
+O Esboce não é um CAD.
+
+O Esboce não é um BIM.
+
+O Esboce não é um jogo.
+
+O Esboce é uma plataforma onde qualquer pessoa pode transformar uma ideia em uma residência digital de forma simples, intuitiva e prazerosa.
+
+A tecnologia existe para desaparecer.
+
+A casa deve sempre ser a protagonista.
+
+---
+
+> "As pessoas não sonham com paredes. Sonham com a casa onde irão viver. O Esboce existe para reduzir a distância entre esse sonho e sua materialização."
