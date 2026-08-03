@@ -128,9 +128,21 @@ export const commands = {
     applyEndpoint(w, which, x, y);
     emit({ type: 'WallEndpointMoved', wallId, which });
   },
-  updateWallEndpointLive(wallId: string, which: 1 | 2, x: number, y: number): void {
+  updateWallEndpointLive(
+    wallId: string, which: 1 | 2, x: number, y: number, linkedUpdates?: Omit<LinkedWallUpdate, 'x' | 'y'>[]
+  ): void {
     const w = findWall(wallId); if (!w) return;
-    applyEndpoint(w, which, x, y);
+    const sx = Core.snap(x), sy = Core.snap(y);
+    applyEndpoint(w, which, sx, sy);
+    // Uma quina é um único nó topológico, embora ainda seja armazenada
+    // como duas pontas de paredes diferentes. Mover todas as pontas
+    // coincidentes antes de emitir o evento mantém o circuito fechado
+    // durante todo o arraste; assim detectRooms nunca perde o cômodo e o
+    // piso não desaparece por um frame (nem fica um rasgo permanente).
+    (linkedUpdates || []).forEach((u) => {
+      const linkedWall = findWall(u.id); if (!linkedWall) return;
+      applyEndpoint(linkedWall, u.which, sx, sy);
+    });
     emit({ type: 'WallEndpointMoved', wallId, which, live: true });
   },
 
@@ -171,6 +183,30 @@ export const commands = {
     if (idx < 0) return;
     walls.splice(idx, 1);
     emit({ type: 'BridgeWallRemoved', wallId, live: true });
+  },
+
+  // Remove apenas os IDs explicitamente classificados pelo diagnostico
+  // como residuos criados no gesto atual. Nao cria outro passo de undo:
+  // a limpeza pertence a mesma transacao iniciada pelo arraste.
+  pruneDegenerateWallsLive(wallIds: string[]): string[] {
+    const allowed = new Set(wallIds || []);
+    if (!allowed.size) return [];
+    const walls = currentWalls();
+    const removed: string[] = [];
+    for (let i = walls.length - 1; i >= 0; i--) {
+      const wall = walls[i]!;
+      if (!allowed.has(wall.id)) continue;
+      if (Math.hypot(wall.x2 - wall.x1, wall.y2 - wall.y1) >= 1) continue;
+      removed.push(wall.id);
+      walls.splice(i, 1);
+    }
+    if (!removed.length) return removed;
+    const openings = currentOpenings();
+    for (let i = openings.length - 1; i >= 0; i--) {
+      if (removed.includes(openings[i]!.wallId)) openings.splice(i, 1);
+    }
+    emit({ type: 'DegenerateWallsPruned', wallIds: removed, count: removed.length, live: true });
+    return removed;
   },
 
   // Arrasta o "módulo" (cômodo) inteiro — todas as paredes que formam
@@ -252,7 +288,78 @@ export const commands = {
     emit({ type: 'WallsFused', wallAId, wallBId });
   },
 
+  // Materializa junções em T no modelo. detectRooms já sabia dividir a
+  // parede passante apenas para calcular faces; isso não bastava para a
+  // edição, porque selecionar/mover a parede continuava tratando-a como
+  // um único segmento. Esta normalização cria os trechos reais, conserva
+  // acabamentos e transfere portas/janelas para o trecho correspondente.
+  splitWallsAtTJunctions(): string[] {
+    const walls = currentWalls();
+    const openings = currentOpenings();
+    const splitIds: string[] = [];
+    const plans = Core.findWallTJunctionSplits(walls);
+
+    plans.forEach((plan) => {
+      const original = findWall(plan.wallId);
+      if (!original) return;
+      const dx = original.x2 - original.x1;
+      const dy = original.y2 - original.y1;
+      const originalLength = Math.hypot(dx, dy);
+      if (originalLength < 1e-6) return;
+
+      const boundaries = [
+        { x: original.x1, y: original.y1, t: 0 },
+        ...plan.points,
+        { x: original.x2, y: original.y2, t: 1 },
+      ];
+      const pieces: { wall: Wall; startT: number; endT: number }[] = [];
+
+      for (let index = 0; index < boundaries.length - 1; index++) {
+        const p1 = boundaries[index]!;
+        const p2 = boundaries[index + 1]!;
+        let piece: Wall;
+        if (index === 0) {
+          piece = original;
+          piece.x1 = p1.x; piece.y1 = p1.y; piece.x2 = p2.x; piece.y2 = p2.y;
+        } else {
+          piece = Core.createWallEntity(p1.x, p1.y, p2.x, p2.y);
+          if (original.finishA !== undefined) piece.finishA = original.finishA;
+          if (original.finishB !== undefined) piece.finishB = original.finishB;
+          walls.push(piece);
+        }
+        pieces.push({ wall: piece, startT: p1.t, endT: p2.t });
+      }
+
+      openings.filter((opening) => opening.wallId === plan.wallId).forEach((opening) => {
+        const centerUnits = opening.offset * Core.GRID;
+        const centerT = centerUnits / originalLength;
+        const owner = pieces.find((piece, index) => (
+          centerT >= piece.startT - 1e-6 &&
+          (centerT < piece.endT - 1e-6 || index === pieces.length - 1)
+        ));
+        if (!owner) return;
+        opening.wallId = owner.wall.id;
+        opening.offset = (centerUnits - owner.startT * originalLength) / Core.GRID;
+      });
+
+      splitIds.push(plan.wallId);
+    });
+
+    if (splitIds.length) emit({ type: 'WallsSplitAtTJunctions', wallIds: splitIds });
+    return splitIds;
+  },
+
   beginTransaction(): void { pushUndoSnapshot(); },
+
+  // Descarta integralmente a transacao em curso e remove do historico o
+  // snapshot criado por beginTransaction. Usado pelo protetor topologico:
+  // uma operacao recusada nao pode deixar alteracoes parciais nem consumir
+  // um passo de Ctrl+Z.
+  rollbackTransaction(): void {
+    if (!undoStack.length) return;
+    project = undoStack.pop()!;
+    emit({ type: 'TransactionRolledBack' });
+  },
 
   // Rede de segurança geral: remove qualquer parede que tenha zerado de
   // comprimento (sujeira invisível que pode sobrar de qualquer operação
