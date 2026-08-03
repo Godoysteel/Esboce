@@ -129,3 +129,40 @@ export interface Interval {
   min: number;
   max: number;
 }
+// ---- Catalog (materiais/produtos) ----
+
+export interface Manufacturer {
+  id: string;
+  name: string;
+}
+
+export type ProductCategory = 'paint' | 'floor_tile' | 'roof_tile' | 'trim';
+
+export interface ProductCommercial {
+  sku: string;
+  price: number;
+  unit: string;
+}
+
+export interface ProductTextures {
+  map?: string;
+  normalMap?: string;
+  roughnessMap?: string;
+  aoMap?: string;
+}
+
+export interface ProductAssets {
+  colorHex: string;
+  textureUrl: string | null;
+  tileMeters?: number;
+  textures?: ProductTextures;
+}
+
+export interface Product {
+  id: string;
+  name: string;
+  manufacturer: string;
+  category: ProductCategory;
+  commercial: ProductCommercial;
+  assets: ProductAssets;
+}
