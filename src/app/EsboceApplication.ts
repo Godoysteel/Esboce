@@ -1,4 +1,5 @@
 import { Core } from "../core/Core.js";
+import { Store, commands } from "../core/Store.js";
 
 export class EsboceApplication {
 
@@ -8,11 +9,14 @@ export class EsboceApplication {
         console.log("      ESBOCE INITIALIZED");
         console.log("==================================");
 
-        // Prova de integração: Core já está migrado e funcionando dentro
-        // do app real (não só isolado em teste). Próximo módulo a entrar
-        // aqui é Catalog, depois Store.
-        const project = Core.createProject();
-        console.log(`Core carregado — projeto inicial com ${project.floors.length} pavimento(s), GRID=${Core.GRID}`);
+        // Prova de integração: Core + Store já migrados e funcionando
+        // dentro do app real. Próximo módulo a entrar aqui é
+        // Scene3DRenderer.
+        const project = Store.getProject();
+        console.log(`Core+Store carregados — projeto com ${project.floors.length} pavimento(s), GRID=${Core.GRID}`);
+
+        Store.onChange((event) => console.log('[Store]', event.type));
+        commands.createWall(0, 0, 200, 0);
 
     }
 

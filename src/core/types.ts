@@ -12,6 +12,9 @@ export interface Wall {
   y1: number;
   x2: number;
   y2: number;
+  // Acabamento de cada face da parede (lado A / lado B) — id de Produto do Catalog.
+  finishA?: string;
+  finishB?: string;
 }
 
 export type ColumnShape = 'quadrada' | 'redonda';
@@ -35,6 +38,7 @@ export interface Roof {
   type: RoofType;
   pitchDeg: number;
   ridgeAxis: RidgeAxis;
+  finishProductId?: string;
 }
 
 export type VarandaFrontSide = 'minZ' | 'maxZ' | 'minX' | 'maxX';
@@ -68,7 +72,7 @@ export interface Floor {
   roofs: Roof[];
   openings: Opening[];
   varandas: Varanda[];
-  roomFinishes: Record<string, unknown>;
+  roomFinishes: Record<string, string>;
 }
 
 export interface ProjectLayers {
@@ -129,6 +133,7 @@ export interface Interval {
   min: number;
   max: number;
 }
+
 // ---- Catalog (materiais/produtos) ----
 
 export interface Manufacturer {
@@ -165,4 +170,33 @@ export interface Product {
   category: ProductCategory;
   commercial: ProductCommercial;
   assets: ProductAssets;
+}
+
+// ---- Store (estado/comandos/undo) ----
+
+// Os eventos emitidos pelo Store têm formatos variados por tipo (mesmo
+// padrão do original — um "type" mais campos extras conforme o evento).
+// Tipagem pragmática: campos extras ficam livres, "type" é sempre string.
+// TODO: refinar pra union discriminada por "type" quando fizer sentido.
+export interface StoreEvent {
+  type: string;
+  live?: boolean;
+  [key: string]: unknown;
+}
+
+export type StoreListener = (event: StoreEvent, project: Project) => void;
+
+export interface WallSnapshot {
+  id: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
+export interface LinkedWallUpdate {
+  id: string;
+  which: 1 | 2;
+  x: number;
+  y: number;
 }
