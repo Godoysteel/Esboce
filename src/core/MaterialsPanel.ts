@@ -7,11 +7,8 @@ import { Core } from './Core.js';
 import { Store } from './Store.js';
 import { Catalog } from './Catalog.js';
 import { Scene3DRenderer } from './Scene3DRenderer.js';
+import { MaterialsSheet } from './MaterialsSheet.js';
 import type { Point, Wall, Roof, Column } from './types.js';
-
-// MaterialsSheet ainda não foi migrado pra TypeScript (é o próximo da
-// fila) — declarado como global ambiente nesse meio-tempo.
-declare const MaterialsSheet: { open: () => void };
 
 let bodyEl: HTMLElement | null, panelEl: HTMLElement | null;
 
