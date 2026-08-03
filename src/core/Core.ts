@@ -306,6 +306,62 @@ function splitWallsAtTJunctions(wallList: Wall[]): RectLike[] {
   return result;
 }
 
+export interface WallTJunctionSplit {
+  wallId: string;
+  points: (Point & { t: number })[];
+}
+
+// Localiza as divisões que precisam existir de verdade no modelo. A
+// versão usada por detectRooms acima é deliberadamente virtual, mas a
+// edição exige uma topologia persistente: quando a ponta de uma parede
+// perpendicular termina no corpo de outra, a parede passante deve virar
+// dois trechos que compartilham aquele mesmo nó.
+export function findWallTJunctionSplits(wallList: Wall[]): WallTJunctionSplit[] {
+  const result: WallTJunctionSplit[] = [];
+
+  wallList.forEach((support) => {
+    const sdx = support.x2 - support.x1;
+    const sdy = support.y2 - support.y1;
+    const supportLenSq = sdx * sdx + sdy * sdy;
+    const supportLen = Math.sqrt(supportLenSq);
+    if (supportLen < 1e-6) return;
+
+    const points: (Point & { t: number })[] = [];
+    wallList.forEach((branch) => {
+      if (branch.id === support.id) return;
+      const bdx = branch.x2 - branch.x1;
+      const bdy = branch.y2 - branch.y1;
+      const branchLen = Math.hypot(bdx, bdy);
+      if (branchLen < 1e-6) return;
+
+      // Segmentos colineares são tratados pela fusão. Aqui interessam
+      // apenas encontros com mudança real de direção (L ou T).
+      const cross = Math.abs((sdx / supportLen) * (bdy / branchLen) - (sdy / supportLen) * (bdx / branchLen));
+      if (cross < 0.05) return;
+
+      [{ x: branch.x1, y: branch.y1 }, { x: branch.x2, y: branch.y2 }].forEach((endpoint) => {
+        const projected = projectOnSegment(
+          endpoint.x, endpoint.y,
+          support.x1, support.y1, support.x2, support.y2,
+        );
+        if (!projected || projected.dist > COINCIDENCE_TOL) return;
+        const t = ((projected.x - support.x1) * sdx + (projected.y - support.y1) * sdy) / supportLenSq;
+        const endpointMargin = COINCIDENCE_TOL / supportLen;
+        if (t <= endpointMargin || t >= 1 - endpointMargin) return;
+        if (points.some((point) => Math.abs(point.t - t) * supportLen <= COINCIDENCE_TOL)) return;
+        points.push({ x: projected.x, y: projected.y, t });
+      });
+    });
+
+    if (points.length) {
+      points.sort((a, b) => a.t - b.t);
+      result.push({ wallId: support.id, points });
+    }
+  });
+
+  return result;
+}
+
 interface GraphNode extends Point { id: string; }
 interface HalfEdge {
   id: string;
@@ -431,11 +487,25 @@ export function detectRooms(wallList: Wall[]): Room[] {
     facesByComponent[compId]!
       .map((faceEdges) => {
         const points = faceEdges.map((he) => ({ x: he.from.x, y: he.from.y }));
-        return { points, area: Math.abs(signedArea(points)) };
+        // Uma aresta pendurada faz o percurso da face passar duas vezes
+        // pelo mesmo nó (vai até a ponta aberta e volta). Antes esse
+        // contorno não-simples ainda virava Room, produzindo pisos
+        // atravessados ou deformados durante a edição de paredes.
+        let simple = true;
+        for (let i = 0; i < points.length && simple; i++) {
+          for (let j = i + 1; j < points.length; j++) {
+            if (dist(points[i]!, points[j]!) <= SNAP) { simple = false; break; }
+          }
+        }
+        return { points, area: Math.abs(signedArea(points)), simple };
       })
+      // A maior face de cada componente é o exterior. Das restantes,
+      // aceita somente ciclos simples; uma ponta aberta aparece no
+      // percurso como um nó repetido e não pode gerar piso.
       .sort((a, b) => b.area - a.area)
       .slice(1)
-      .forEach((room) => rooms.push(room));
+      .filter((face) => face.simple)
+      .forEach(({ points, area }) => rooms.push({ points, area }));
   });
 
   return rooms;
@@ -490,6 +560,243 @@ export function findRoomWallIds(wallList: Wall[], room: Room): string[] {
     if (bestWall && bestDist <= TOL && ids.indexOf(bestWall.id) === -1) ids.push(bestWall.id);
   }
   return ids;
+}
+
+// Devolve o contorno inteiro apenas quando a parede clicada pertence a um
+// unico comodo fechado e esse contorno ainda nao tem nenhuma ligacao com
+// paredes externas. Essa e a fronteira entre dois modos de edicao:
+//
+// - modulo isolado: um clique pode selecionar/mover o comodo inteiro;
+// - construcao incorporada: um clique seleciona somente a parede.
+//
+// Contar apenas quantos comodos possuem a parede clicada nao basta. Uma
+// parede externa do mesmo comodo pode ter recebido uma juncao em T, por
+// exemplo, enquanto a parede clicada continua pertencendo a apenas uma
+// face. Por isso verificamos o contorno completo contra todas as paredes
+// que ficaram fora dele.
+export function findIsolatedRoomWallIds(wallList: Wall[], wallId: string): string[] | null {
+  const owningRooms = detectRooms(wallList).filter((room) => (
+    findRoomWallIds(wallList, room).indexOf(wallId) !== -1
+  ));
+  if (owningRooms.length !== 1) return null;
+
+  const roomWallIds = findRoomWallIds(wallList, owningRooms[0]!);
+  if (!roomWallIds.length) return null;
+  const roomIdSet = new Set(roomWallIds);
+  const roomWalls = wallList.filter((wall) => roomIdSet.has(wall.id));
+  const externalWalls = wallList.filter((wall) => !roomIdSet.has(wall.id));
+
+  const connectedToExternalWall = roomWalls.some((roomWall) => (
+    externalWalls.some((externalWall) => wallsMeetAtEndpoint(roomWall, externalWall))
+  ));
+  return connectedToExternalWall ? null : roomWallIds;
+}
+
+export interface WallEndpointLink {
+  id: string;
+  which: 1 | 2;
+}
+
+export interface WallResizeTopology {
+  ownerCount: number;
+  start: WallEndpointLink[];
+  end: WallEndpointLink[];
+  startSlidingSupports: string[];
+  endSlidingSupports: string[];
+}
+
+export interface WallResizeOffsetResolution {
+  offset: number;
+  limited: boolean;
+  blockingWallId?: string;
+}
+
+// Impede que uma parede de um comodo atravesse outra parede paralela
+// durante o empurrao perpendicular. O limite conserva uma celula principal
+// da grade (0,50 m) entre os dois eixos: alem de evitar a inversao do
+// contorno, isso impede que o ambiente colapse ate largura zero antes que o
+// protetor topologico final tenha a chance de validar a transacao.
+//
+// A funcao usa sempre a fotografia do INICIO do gesto. Assim o obstaculo nao
+// muda de lugar conforme as paredes vizinhas alongam/encurtam na previa.
+export function resolveWallResizeOffset(
+  target: Wall,
+  wallsAtDragStart: Wall[],
+  requestedOffset: number,
+  nx: number,
+  ny: number,
+  minimumSeparation = SNAP_UNIT,
+): WallResizeOffsetResolution {
+  const requested = snap(requestedOffset);
+  if (!target || Math.abs(requested) < 1e-6) return { offset: 0, limited: false };
+
+  const dx = target.x2 - target.x1;
+  const dy = target.y2 - target.y1;
+  const length = Math.hypot(dx, dy);
+  if (length < 1e-6) return { offset: requested, limited: false };
+  const ux = dx / length;
+  const uy = dy / length;
+  let allowed = requested;
+  let blockingWallId: string | undefined;
+
+  for (const other of wallsAtDragStart) {
+    if (!other || other.id === target.id) continue;
+    const odx = other.x2 - other.x1;
+    const ody = other.y2 - other.y1;
+    const otherLength = Math.hypot(odx, ody);
+    if (otherLength < 1e-6) continue;
+
+    // Apenas outra parede paralela pode ser "atravessada" pelo corpo
+    // inteiro da parede movida. Vizinhas perpendiculares sao as quinas que
+    // alongam/encurtam e nao constituem barreira para este gesto.
+    const parallelCross = Math.abs(ux * (ody / otherLength) - uy * (odx / otherLength));
+    if (parallelCross > 0.05) continue;
+
+    const project = (x: number, y: number) => (x - target.x1) * ux + (y - target.y1) * uy;
+    const otherA = project(other.x1, other.y1);
+    const otherB = project(other.x2, other.y2);
+    const overlap = Math.min(length, Math.max(otherA, otherB)) - Math.max(0, Math.min(otherA, otherB));
+    if (overlap <= COINCIDENCE_TOL) continue;
+
+    const otherMidX = (other.x1 + other.x2) / 2;
+    const otherMidY = (other.y1 + other.y2) / 2;
+    const signedDistance = (otherMidX - target.x1) * nx + (otherMidY - target.y1) * ny;
+    if (Math.abs(signedDistance) <= COINCIDENCE_TOL) continue;
+
+    if (requested > 0 && signedDistance > 0 && requested >= signedDistance - minimumSeparation) {
+      const candidate = Math.max(0, snap(signedDistance - minimumSeparation));
+      if (candidate < allowed) {
+        allowed = candidate;
+        blockingWallId = other.id;
+      }
+    } else if (requested < 0 && signedDistance < 0 && requested <= signedDistance + minimumSeparation) {
+      const candidate = Math.min(0, snap(signedDistance + minimumSeparation));
+      if (candidate > allowed) {
+        allowed = candidate;
+        blockingWallId = other.id;
+      }
+    }
+  }
+
+  return blockingWallId
+    ? { offset: allowed, limited: true, blockingWallId }
+    : { offset: requested, limited: false };
+}
+
+// Decide se uma extremidade precisa ganhar uma parede curta ligando o no
+// antigo ao novo durante o "empurrar parede". Comparar apenas a quantidade
+// de comodos da parede nao e suficiente: um trecho compartilhado pode ter,
+// no mesmo no, vizinhas perpendiculares que acompanham o movimento E uma
+// continuacao colinear que deve permanecer no lugar. Essa continuacao e uma
+// conexao original nao movida e, portanto, exige a ponte.
+export function wallResizeEndpointNeedsBridge(
+  originalLinks: WallEndpointLink[],
+  movingLinks: WallEndpointLink[],
+  connectionAlreadyCovered: boolean,
+): boolean {
+  if (connectionAlreadyCovered) return false;
+  if (!originalLinks.length) return true;
+  return originalLinks.some((original) => !movingLinks.some(
+    (moving) => moving.id === original.id && moving.which === original.which,
+  ));
+}
+
+// Ao empurrar uma parede, as quinas que pertencem aos cômodos dos dois
+// lados são um único nó topológico. Uma parede fundida não pode escolher
+// somente um dos cômodos: isso moveria a vizinha de um lado e deixaria a
+// do outro no ponto antigo, abrindo uma fresta unilateral.
+//
+// A busca usa apenas as vizinhas imediatas da parede em cada contorno de
+// cômodo. Assim, mesmo que várias paredes coincidam no mesmo ponto, não
+// arrastamos por engano uma parede distante que apenas toca essa quina.
+export function wallResizeTopology(wallList: Wall[], wallId: string): WallResizeTopology {
+  const target = wallList.find((wall) => wall.id === wallId);
+  if (!target) return {
+    ownerCount: 0,
+    start: [],
+    end: [],
+    startSlidingSupports: [],
+    endSlidingSupports: [],
+  };
+
+  const dx = target.x2 - target.x1;
+  const dy = target.y2 - target.y1;
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len;
+  const uy = dy / len;
+  const start: WallEndpointLink[] = [];
+  const end: WallEndpointLink[] = [];
+  const startSlidingSupports: string[] = [];
+  const endSlidingSupports: string[] = [];
+  let ownerCount = 0;
+
+  const addUnique = (list: WallEndpointLink[], link: WallEndpointLink) => {
+    if (!list.some((item) => item.id === link.id && item.which === link.which)) list.push(link);
+  };
+  const addMatchingEndpoint = (neighbor: Wall, x: number, y: number, list: WallEndpointLink[]) => {
+    const ndx = neighbor.x2 - neighbor.x1;
+    const ndy = neighbor.y2 - neighbor.y1;
+    const nlen = Math.hypot(ndx, ndy) || 1;
+    const cross = Math.abs(ux * (ndy / nlen) - uy * (ndx / nlen));
+    if (cross < 0.05) return;
+    if (Math.hypot(neighbor.x1 - x, neighbor.y1 - y) <= COINCIDENCE_TOL) addUnique(list, { id: neighbor.id, which: 1 });
+    if (Math.hypot(neighbor.x2 - x, neighbor.y2 - y) <= COINCIDENCE_TOL) addUnique(list, { id: neighbor.id, which: 2 });
+  };
+
+  // Uma ponta pode formar uma junção em T no MEIO de uma parede passante.
+  // Nesse caso não há endpoint vizinho para mover. Como o redimensionamento
+  // acontece na normal da parede-alvo (paralela à parede passante), a ponta
+  // deve deslizar sobre esse segmento. Guardamos esse apoio separadamente
+  // para que a UI não crie uma parede-rastro no vértice antigo.
+  wallList.forEach((neighbor) => {
+    if (neighbor.id === wallId) return;
+    const ndx = neighbor.x2 - neighbor.x1;
+    const ndy = neighbor.y2 - neighbor.y1;
+    const nlen = Math.hypot(ndx, ndy) || 1;
+    const cross = Math.abs(ux * (ndy / nlen) - uy * (ndx / nlen));
+    if (cross < 0.95) return;
+
+    const collectSupport = (x: number, y: number, list: string[]) => {
+      const projected = projectOnSegment(x, y, neighbor.x1, neighbor.y1, neighbor.x2, neighbor.y2);
+      if (!projected || projected.dist > COINCIDENCE_TOL) return;
+      const t = ((projected.x - neighbor.x1) * ndx + (projected.y - neighbor.y1) * ndy) / (nlen * nlen);
+      if (t <= 0.02 || t >= 0.98) return;
+      if (list.indexOf(neighbor.id) === -1) list.push(neighbor.id);
+    };
+
+    collectSupport(target.x1, target.y1, startSlidingSupports);
+    collectSupport(target.x2, target.y2, endSlidingSupports);
+  });
+
+  // Depois que uma junção em T é materializada, a parede passante vira
+  // dois trechos e o ponto do encontro passa a reunir três endpoints
+  // reais. Esses vínculos não podem depender apenas de detectRooms: em
+  // uma construção já fundida/dividida, a inferência do contorno pode
+  // escolher somente um dos trechos e o segundo arraste abre o outro.
+  // Endpoint coincidente é o próprio nó topológico; portanto, todas as
+  // paredes não colineares que terminam nele devem acompanhá-lo.
+  wallList.forEach((neighbor) => {
+    if (neighbor.id === wallId) return;
+    addMatchingEndpoint(neighbor, target.x1, target.y1, start);
+    addMatchingEndpoint(neighbor, target.x2, target.y2, end);
+  });
+
+  detectRooms(wallList).forEach((room) => {
+    const ids = findRoomWallIds(wallList, room);
+    const index = ids.indexOf(wallId);
+    if (index === -1 || ids.length < 2) return;
+    ownerCount++;
+    const neighborIds = [ids[(index - 1 + ids.length) % ids.length], ids[(index + 1) % ids.length]];
+    neighborIds.forEach((neighborId) => {
+      if (!neighborId || neighborId === wallId) return;
+      const neighbor = wallList.find((wall) => wall.id === neighborId);
+      if (!neighbor) return;
+      addMatchingEndpoint(neighbor, target.x1, target.y1, start);
+      addMatchingEndpoint(neighbor, target.x2, target.y2, end);
+    });
+  });
+
+  return { ownerCount, start, end, startSlidingSupports, endSlidingSupports };
 }
 
 // Corte de canto por interseção de RETA com RETA, por face, separadamente
@@ -646,7 +953,10 @@ export function wallOBB(w: Wall): WallOBB {
   const dx = w.x2 - w.x1, dy = w.y2 - w.y1;
   const len = Math.hypot(dx, dy) || 1e-6;
   const ux = dx / len, uy = dy / len;
-  return { cx, cy, ux, uy, nx: -uy, ny: ux, halfLen: len / 2, halfThick: WALL_THICK / 2 };
+  // Os pontos da parede estão em unidades de modelo (GRID por metro).
+  // A espessura precisa estar na mesma unidade; usar WALL_THICK / 2 aqui
+  // deixava a caixa de colisão 20x mais fina do que a parede renderizada.
+  return { cx, cy, ux, uy, nx: -uy, ny: ux, halfLen: len / 2, halfThick: WALL_THICK * GRID / 2 };
 }
 
 function projectOBB(o: WallOBB, axisX: number, axisY: number): Interval {
@@ -680,6 +990,100 @@ export function obbOverlapMTV(a: WallOBB, b: WallOBB): MTV | null {
   return { x: minAxisX * minOverlap, y: minAxisY * minOverlap };
 }
 
+// Duas paredes podem ocupar o mesmo eixo somente quando esse encontro
+// representa uma fusão real: direções paralelas, linhas coincidentes e
+// um trecho compartilhado com comprimento suficiente. Essa exceção é
+// importante no arraste de cômodos: a caixa de colisão não pode expulsar
+// a parede móvel justamente da linha onde ela deve se fundir à existente.
+export function wallsCanFuse(
+  a: Wall,
+  b: Wall,
+  toleranceDistance = COINCIDENCE_TOL,
+  toleranceAngle = 0.05,
+  minimumOverlap = SNAP_UNIT * 0.5,
+): boolean {
+  if (!a || !b || a.id === b.id) return false;
+  const aLen = Math.hypot(a.x2 - a.x1, a.y2 - a.y1);
+  const bLen = Math.hypot(b.x2 - b.x1, b.y2 - b.y1);
+  if (aLen < 1e-6 || bLen < 1e-6) return false;
+
+  const aAngle = Math.atan2(a.y2 - a.y1, a.x2 - a.x1);
+  const bAngle = Math.atan2(b.y2 - b.y1, b.x2 - b.x1);
+  let angleDiff = Math.abs(aAngle - bAngle) % Math.PI;
+  if (angleDiff > Math.PI / 2) angleDiff = Math.PI - angleDiff;
+  if (angleDiff > toleranceAngle) return false;
+
+  const lineDistance = distPointToLine(
+    (a.x1 + a.x2) / 2,
+    (a.y1 + a.y2) / 2,
+    b.x1,
+    b.y1,
+    b.x2,
+    b.y2,
+  );
+  if (lineDistance > toleranceDistance) return false;
+
+  const ux = (b.x2 - b.x1) / bLen;
+  const uy = (b.y2 - b.y1) / bLen;
+  const ta1 = (a.x1 - b.x1) * ux + (a.y1 - b.y1) * uy;
+  const ta2 = (a.x2 - b.x1) * ux + (a.y2 - b.y1) * uy;
+  const overlap = Math.min(Math.max(ta1, ta2), bLen) - Math.max(Math.min(ta1, ta2), 0);
+  return overlap >= minimumOverlap;
+}
+
+// Contatos exatos de ponta tambem sao juncoes validas. Ao encaixar dois
+// comodos completos, a parede compartilhada fica colinear, mas as paredes
+// perpendiculares do contorno encostam nela pelas pontas (quinas/juncoes em
+// T). As caixas orientadas se sobrepoem nessas quinas por causa da espessura
+// da parede; isso nao pode ser confundido com uma parede atravessando outra.
+export function wallsMeetAtEndpoint(
+  a: Wall,
+  b: Wall,
+  toleranceDistance = COINCIDENCE_TOL,
+): boolean {
+  if (!a || !b || a.id === b.id) return false;
+  return (
+    distToSegment(a.x1, a.y1, b.x1, b.y1, b.x2, b.y2) <= toleranceDistance ||
+    distToSegment(a.x2, a.y2, b.x1, b.y1, b.x2, b.y2) <= toleranceDistance ||
+    distToSegment(b.x1, b.y1, a.x1, a.y1, a.x2, a.y2) <= toleranceDistance ||
+    distToSegment(b.x2, b.y2, a.x1, a.y1, a.x2, a.y2) <= toleranceDistance
+  );
+}
+
+// Resolve o movimento de um cômodo exclusivamente em passos do grid.
+// Se a posição pedida colidir com uma parede externa sem formar um
+// encaixe fundível, conserva a última posição válida. Nunca devolve o
+// pequeno deslocamento contínuo de uma MTV, que colocaria o eixo da
+// parede entre duas linhas da malha.
+export function resolveWallGroupGridDelta(
+  group: Wall[],
+  others: Wall[],
+  requestedDx: number,
+  requestedDy: number,
+  lastValidDx = 0,
+  lastValidDy = 0,
+): Point {
+  const dx = snap(requestedDx);
+  const dy = snap(requestedDy);
+  for (const source of group) {
+    const candidate: Wall = {
+      ...source,
+      x1: source.x1 + dx,
+      y1: source.y1 + dy,
+      x2: source.x2 + dx,
+      y2: source.y2 + dy,
+    };
+    for (const other of others) {
+      if (wallsCanFuse(candidate, other)) continue;
+      if (wallsMeetAtEndpoint(candidate, other)) continue;
+      if (obbOverlapMTV(wallOBB(candidate), wallOBB(other))) {
+        return { x: snap(lastValidDx), y: snap(lastValidDy) };
+      }
+    }
+  }
+  return { x: dx, y: dy };
+}
+
 // Namespace de compatibilidade — permite chamar `Core.snap(...)` igual ao
 // código legado, útil enquanto os outros módulos (Store, ViewportController
 // etc.) ainda não foram migrados e continuam chamando no formato antigo.
@@ -691,8 +1095,10 @@ export const Core = {
   snap, nextId,
   createOpeningEntity, wallLengthMeters, wallOffsetAtPoint, findValidOpeningOffset,
   roofRidgeHeightMeters, roofPitchForRidgeHeight, roofsCanFuse, fusedRoofBounds,
-  rectsNearby, pointInPolygon, roomModelBounds, findRoomWallIds, computeWallFootprints,
-  distPointToLine, wallOBB, obbOverlapMTV,
+  rectsNearby, pointInPolygon, roomModelBounds, findRoomWallIds, findIsolatedRoomWallIds, wallResizeTopology, resolveWallResizeOffset, computeWallFootprints,
+  wallResizeEndpointNeedsBridge,
+  distPointToLine, wallOBB, obbOverlapMTV, wallsCanFuse, wallsMeetAtEndpoint, resolveWallGroupGridDelta,
+  findWallTJunctionSplits,
   createWallEntity, createColumnEntity, createRoofEntity, createVarandaEntity, createFloorEntity,
   createProject, distToSegment, projectOnSegment, detectRooms
 };

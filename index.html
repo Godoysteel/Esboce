@@ -254,6 +254,35 @@
     white-space: nowrap;
   }
 
+  .wall-diagnostics {
+    position: absolute;
+    top: 78px;
+    right: 10px;
+    z-index: 8;
+    display: none;
+    width: min(390px, calc(100% - 125px));
+    max-height: calc(100% - 100px);
+    overflow: auto;
+    box-sizing: border-box;
+    border: 2px solid #817B70;
+    border-radius: 10px;
+    background: rgba(27, 28, 30, 0.92);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    pointer-events: none;
+  }
+  .wall-diagnostics.visible { display: block; }
+  .wall-diagnostics.ok { border-color: #58A66A; }
+  .wall-diagnostics.warning { border-color: #E4B341; }
+  .wall-diagnostics.error { border-color: #E0645A; }
+  .wall-diagnostics pre {
+    margin: 0;
+    padding: 12px 14px;
+    color: #F4F1EA;
+    font: 600 11px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
   .dim-label {
     position: absolute;
     display: none;
@@ -391,6 +420,7 @@
     <button id="undoBtn" title="Ctrl+Z">↶ Desfazer</button>
     <button id="materialsToggleBtn" title="Lista de materiais">📦 Materiais</button>
     <button id="dimensionsToggleBtn" title="Mostrar/ocultar cotas de parede (largura e altura)">📏 Cotas</button>
+    <button id="wallDiagnosticsToggleBtn" title="Mostrar diagnóstico técnico dos arrastes de parede">🩺 Diagnóstico</button>
   </div>
 </div>
 
@@ -652,6 +682,12 @@
     <div id="materialsPanelBody"></div>
   </div>
   <div class="viewport-hint" id="viewportHint">Clique um ambiente na barra ao lado pra criá-lo. Clique direito + arraste pra girar a câmera. Shift + arraste desloca a câmera (igual Blender).</div>
+  <div class="wall-diagnostics" id="wallDiagnosticsPanel" aria-live="polite">
+    <pre id="wallDiagnosticsOutput">DIAGNÓSTICO DE PAREDES
+
+Modo de observação ativo.
+Mova uma parede para registrar a operação.</pre>
+  </div>
   <div class="viewport-stats" id="viewportStats">
     <span id="statWalls" title="Paredes — comprimento total e área líquida (descontando portas/janelas)">Paredes: 0,00 m · 0,00 m²</span>
     <span id="statFloor" title="Área de piso dos cômodos fechados">Área: 0,00 m²</span>

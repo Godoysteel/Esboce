@@ -1347,7 +1347,6 @@ export function hashColorHex(key: string): number {
           // se encontram exatas com a face da parede vizinha no canto,
           // sem sobrepor (a mesma correção que já vale pra caixa toda).
           var wallDefaultColor = 0xB5D4F4;
-          var idNum = parseInt(String(w.id).split('_').pop()!, 10) || 0;
           ['a', 'b'].forEach(function (side) {
             var productId = side === 'a' ? w.finishA : w.finishB;
             var product = productId && Catalog.getProduct(productId);
@@ -1358,7 +1357,11 @@ export function hashColorHex(key: string): number {
               flatShading: true,
               side: THREE.DoubleSide,
               polygonOffset: true,
-              polygonOffsetFactor: 1 + (idNum % 50) * 0.5,
+              // Todas as faces usam o mesmo viés. Variar pelo id da
+              // parede fazia trechos colineares ganharem profundidades
+              // diferentes e a costura aparecia como uma faixa/rasgo.
+              // Sobreposições reais são eliminadas ao concluir o gesto.
+              polygonOffsetFactor: 1,
               polygonOffsetUnits: 1
             });
             // Sem tagCategory/wallId de propósito: a face não é alvo de

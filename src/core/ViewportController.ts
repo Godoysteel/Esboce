@@ -18,6 +18,14 @@ import { Catalog } from './Catalog.js';
 import { Store } from './Store.js';
 import { Scene3DRenderer, DEBUG_COLOR_MODE } from './Scene3DRenderer.js';
 import { NavGizmo } from './NavGizmo.js';
+import {
+  analyzeWallResize,
+  cloneWallsForDiagnostics,
+  findNewDegenerateWallResidues,
+  formatWallDiagnosticReport,
+  isWallResizeReportBlocking,
+  type WallResizeDiagnosticReport,
+} from './WallDiagnostics.js';
 
 
   var container: any, camera: any, scene: any, renderer: any;
@@ -48,10 +56,8 @@ import { NavGizmo } from './NavGizmo.js';
   // ter algo selecionado no primeiro clique.
   var currentPaintProductId = Catalog.getProductsByCategory('paint')[0] ? Catalog.getProductsByCategory('paint')[0]!.id : null;
   var selectedWallId: any = null, selectedColumnId: any = null, selectedRoofId: any = null, selectedOpeningId: any = null, selectedVarandaId: any = null;
-  var selectedRoomWallIds: any = null; // paredes do "módulo" (cômodo) agarrado com um clique único
-  var resizeWallId: any = null; // parede em modo de redimensionar (duplo clique), empurra perpendicular
-  var lastWallClickTime = 0, lastWallClickId: any = null;
-  var DBLCLICK_MS = 350;
+  var selectedRoomWallIds: any = null; // cômodo isolado selecionado como módulo; após qualquer junção o clique volta a ser individual
+  var resizeWallId: any = null; // parede em modo de deslocamento perpendicular, iniciado no primeiro clique/arraste
   var gizmoMenuOpen = false;
   var highlightedCategory: any = null; // categoria "de outro andar" ou sem seleção individual (fundação, laje...)
 
@@ -85,6 +91,9 @@ import { NavGizmo } from './NavGizmo.js';
   var dimensionsVisible = false;
   var dimCotaLayerEl: any;
   var dimCotaEntries: any[] = [];
+  var wallDiagnosticsVisible = false;
+  var wallDiagnosticsPanelEl: any;
+  var wallDiagnosticsOutputEl: any;
 
   var CATEGORY_LABELS: Record<string, string> = {
     fundacao: 'Fundação', calcada: 'Calçada', paredesTerreo: 'Paredes — térreo',
@@ -106,6 +115,30 @@ import { NavGizmo } from './NavGizmo.js';
 
   function modelToWorld(mx: any, my: any) { return { x: (mx - offsetX) * scale, z: (my - offsetY) * scale }; }
   function worldToModel(wx: any, wz: any) { return { x: wx / scale + offsetX, y: wz / scale + offsetY }; }
+
+  function showWallDiagnostic(report: WallResizeDiagnosticReport) {
+    if (!wallDiagnosticsVisible || !wallDiagnosticsPanelEl || !wallDiagnosticsOutputEl) return;
+    wallDiagnosticsPanelEl.classList.remove('ok', 'warning', 'error');
+    wallDiagnosticsPanelEl.classList.add(report.severity);
+    wallDiagnosticsOutputEl.textContent = formatWallDiagnosticReport(report);
+  }
+
+  function addWallCrossingPrevention(report: WallResizeDiagnosticReport, blockingWallId: string | null) {
+    if (!blockingWallId) return report;
+    report.issues.push({
+      code: 'WALL-CROSSING-PREVENTED',
+      message: 'O movimento parou antes de atravessar outra parede.',
+      wallIds: [report.wallId, blockingWallId]
+    });
+    if (report.severity === 'ok') report.severity = 'warning';
+    return report;
+  }
+
+  export function toggleWallDiagnostics() {
+    wallDiagnosticsVisible = !wallDiagnosticsVisible;
+    if (wallDiagnosticsPanelEl) wallDiagnosticsPanelEl.classList.toggle('visible', wallDiagnosticsVisible);
+    return wallDiagnosticsVisible;
+  }
 
   function updateCam() {
     camera.position.set(
@@ -426,7 +459,7 @@ import { NavGizmo } from './NavGizmo.js';
     gizmoEl.classList.add('visible');
   }
 
-  function renderFinishSwatches(category: any, currentProductId: any, roomKey?: any) {
+  function renderFinishSwatches(category: any, currentProductId: any) {
     finishPanelEl.innerHTML = '';
     Catalog.getProductsByCategory(category).forEach(function (p) {
       var btn = document.createElement('button');
@@ -434,42 +467,14 @@ import { NavGizmo } from './NavGizmo.js';
       btn.title = p.name;
       btn.style.background = p.assets.colorHex;
       btn.dataset.product = p.id;
-      if (roomKey) btn.dataset.roomKey = roomKey;
       finishPanelEl.appendChild(btn);
     });
   }
 
-  // Parede tem duas faces independentes (ver Store.commands.
-  // setWallFinishFace) — duas fileiras de pastilhas na mesma paleta de
-  // tinta, uma pra cada lado, com uma linha fina separando pra ficar
-  // claro que são coisas diferentes.
-  function renderWallFaceSwatches(productIdA: any, productIdB: any) {
-    finishPanelEl.innerHTML = '';
-    var products = Catalog.getProductsByCategory('paint');
-    function addRow(face: any, currentProductId: any) {
-      products.forEach(function (p) {
-        var btn = document.createElement('button');
-        btn.className = 'fn' + (p.id === currentProductId ? ' active' : '');
-        btn.title = p.name + ' — face ' + face.toUpperCase();
-        btn.style.background = p.assets.colorHex;
-        btn.dataset.product = p.id;
-        btn.dataset.face = face;
-        finishPanelEl.appendChild(btn);
-      });
-    }
-    addRow('a', productIdA);
-    var divider = document.createElement('div');
-    divider.className = 'finish-divider';
-    finishPanelEl.appendChild(divider);
-    addRow('b', productIdB);
-  }
-
-  // Painel de acabamento (pastilhas de cor): pintura numa parede
-  // selecionada, telha num telhado selecionado, revestimento de piso
-  // num cômodo agarrado. Parede e telhado só mostram o painel junto do
-  // menu de clique direito (mesmo gatilho do gizmo); cômodo mostra assim
-  // que é agarrado com um clique único, já que grupo de cômodo não tem
-  // gizmo próprio.
+  // Painel de acabamento contextual. A pintura de paredes pertence
+  // exclusivamente à ferramenta paintBucket e à sua paleta fixa; uma
+  // seleção comum de parede/cômodo nunca deve exibir cores. O painel
+  // contextual permanece apenas para materiais de telhado.
   function refreshFinishPanel() {
     var yOffset = currentFloorYOffset();
     if (gizmoMenuOpen && selectedRoofId) {
@@ -479,36 +484,6 @@ import { NavGizmo } from './NavGizmo.js';
         var topY2 = yOffset + Scene3DRenderer.FLOOR_STACK_HEIGHT_GETTER();
         positionFloatingPanel(finishPanelEl, mid2.x, topY2, mid2.z, -100);
         renderFinishSwatches('roof_tile', r.finishProductId);
-        finishPanelEl.classList.add('visible');
-        return;
-      }
-    }
-    if (gizmoMenuOpen && selectedWallId && !selectedColumnId) {
-      var w2 = Store.findWall(selectedWallId);
-      if (w2) {
-        var mid3 = modelToWorld((w2.x1 + w2.x2) / 2, (w2.y1 + w2.y2) / 2);
-        positionFloatingPanel(finishPanelEl, mid3.x, yOffset + Scene3DRenderer.FLOOR_STACK_HEIGHT_GETTER(), mid3.z, -95);
-        renderWallFaceSwatches(w2.finishA, w2.finishB);
-        finishPanelEl.classList.add('visible');
-        return;
-      }
-    }
-    if (selectedRoomWallIds && selectedRoomWallIds.length) {
-      var walls = Store.currentWalls();
-      var rooms = Core.detectRooms(walls);
-      var matchRoom = rooms.filter(function (rm) {
-        var ids = Core.findRoomWallIds(walls, rm);
-        return ids.length === selectedRoomWallIds.length && ids.every(function (id) { return selectedRoomWallIds.indexOf(id) !== -1; });
-      })[0];
-      if (matchRoom) {
-        var cx = 0, cy = 0;
-        matchRoom.points.forEach(function (p) { cx += p.x; cy += p.y; });
-        cx /= matchRoom.points.length; cy /= matchRoom.points.length;
-        var wp2 = modelToWorld(cx, cy);
-        positionFloatingPanel(finishPanelEl, wp2.x, yOffset + 0.1, wp2.z, 0);
-        var key = Core.findRoomWallIds(walls, matchRoom).slice().sort().join(',');
-        var currentFinish = (Store.currentFloor().roomFinishes || {})[key];
-        renderFinishSwatches('floor_tile', currentFinish, key);
         finishPanelEl.classList.add('visible');
         return;
       }
@@ -685,6 +660,7 @@ import { NavGizmo } from './NavGizmo.js';
     var p = drawPreview;
     if (currentTool === 'room') {
       Store.commands.createRoom(p.x1, p.y1, p.x2, p.y2);
+      Store.commands.splitWallsAtTJunctions();
     } else if (currentTool === 'wall') {
       // gruda no corpo de outra parede se estiver perto — fecha uma
       // junção em T sem precisar de nenhuma tecla extra, já que o clique
@@ -692,6 +668,7 @@ import { NavGizmo } from './NavGizmo.js';
       var snapPt = findWallPointNear(p.x2, p.y2);
       var endX = snapPt ? snapPt.x : p.x2, endY = snapPt ? snapPt.y : p.y2;
       Store.commands.createWall(p.x1, p.y1, endX, endY);
+      Store.commands.splitWallsAtTJunctions();
     }
     placingDraw = false;
     drawStart = null; drawPreview = null;
@@ -787,7 +764,20 @@ import { NavGizmo } from './NavGizmo.js';
         return;
       }
       dragMode = handle; // 'endpoint1' | 'endpoint2' | 'roofRidge' | 'roofEdge*' | 'varandaEdge*'
-      if (handle === 'roofRidge') {
+      if (handle === 'endpoint1' || handle === 'endpoint2') {
+        var endpointWall = Store.findWall(selectedWallId);
+        if (endpointWall) {
+          var endpointWhich = handle === 'endpoint1' ? 1 : 2;
+          var endpointX = endpointWhich === 1 ? endpointWall.x1 : endpointWall.x2;
+          var endpointY = endpointWhich === 1 ? endpointWall.y1 : endpointWall.y2;
+          // Congela a rede conectada no início do gesto. Procurar de novo
+          // depois do primeiro movimento não funcionaria: as pontas já
+          // estariam separadas e a relação topológica teria sido perdida.
+          dragElementStart = {
+            linkedEndpoints: findLinkedEndpoints(selectedWallId, endpointX, endpointY)
+          };
+        }
+      } else if (handle === 'roofRidge') {
         var rr = Store.findRoof(selectedRoofId);
         dragElementStart = { pitchDeg: rr ? rr.pitchDeg : 28, startScreenY: e.clientY };
       } else if (handle.indexOf('roofEdge') === 0) {
@@ -871,53 +861,28 @@ import { NavGizmo } from './NavGizmo.js';
       if (isEditableMesh(mesh)) {
         if (mesh.userData.wallId) {
           var clickedWallId = mesh.userData.wallId;
-          var nowClick = Date.now();
-          var isDoubleClick = (clickedWallId === lastWallClickId) && (nowClick - lastWallClickTime < DBLCLICK_MS);
-          lastWallClickTime = nowClick;
-          lastWallClickId = clickedWallId;
           var w = Store.findWall(clickedWallId);
           if (!w) return;
 
-          if (isDoubleClick) {
-            // Duplo clique: modo "redimensionar" — empurra só essa
-            // parede, na perpendicular dela mesma; qualquer ponta de
-            // outra parede encostada nela vem junto, pra nunca abrir
-            // vão no canto. Se a parede for compartilhada entre dois
-            // cômodos, um cresce e o outro encolhe sozinho, porque os
-            // dois só existem como leitura da mesma geometria.
-            startWallResizeDrag(clickedWallId, e.clientX, e.clientY);
-            return;
-          }
-
-          // Clique único: se essa parede fecha exatamente um cômodo,
-          // agarra o cômodo inteiro (todas as paredes dele arrastam
-          // juntas, meio transparentes). Parede compartilhada entre dois
-          // cômodos, ou que não fecha nenhum, cai pro comportamento
-          // antigo de mover só ela mesma.
-          var wallsNow = Store.currentWalls();
-          var roomsHere = Core.detectRooms(wallsNow);
-          var owningRoom: any = null, owningCount = 0;
-          roomsHere.forEach(function (r: any) {
-            if (Core.findRoomWallIds(wallsNow, r).indexOf(clickedWallId) !== -1) { owningCount++; owningRoom = r; }
-          });
-
-          if (owningCount === 1) {
-            var groupIds = Core.findRoomWallIds(wallsNow, owningRoom);
-            var snapshots = groupIds.map(function (id) {
-              var gw = Store.findWall(id)!;
-              return { id: id, x1: gw.x1, y1: gw.y1, x2: gw.x2, y2: gw.y2 };
+          // Um comodo ainda isolado funciona como modulo: clicar em
+          // qualquer parede seleciona e prepara o arraste do conjunto
+          // inteiro. Assim que qualquer ponto do contorno se conecta a
+          // outra parede (parede compartilhada, T ou simples encontro),
+          // ele passa a fazer parte da construcao e o mesmo clique edita
+          // somente a parede atingida, com o protetor topologico da v11.
+          var isolatedRoomWallIds = Core.findIsolatedRoomWallIds(Store.currentWalls(), clickedWallId);
+          if (isolatedRoomWallIds) {
+            var snapshots = isolatedRoomWallIds.map(function (id: any) {
+              var groupWall = Store.findWall(id)!;
+              return { id: id, x1: groupWall.x1, y1: groupWall.y1, x2: groupWall.x2, y2: groupWall.y2 };
             });
-            selectRoomGroup(groupIds);
-            dragElementStart = { snapshots: snapshots };
+            selectRoomGroup(isolatedRoomWallIds);
+            dragElementStart = { snapshots: snapshots, lastValidDx: 0, lastValidDy: 0 };
             dragGroundStart = getGroundModelPoint(e.clientX, e.clientY);
             dragMode = 'roomGroup';
             Store.commands.beginTransaction();
           } else {
-            select(clickedWallId);
-            dragMode = 'wallBody';
-            dragElementStart = { x1: w.x1, y1: w.y1, x2: w.x2, y2: w.y2 };
-            dragGroundStart = getGroundModelPoint(e.clientX, e.clientY);
-            Store.commands.beginTransaction();
+            startWallResizeDrag(clickedWallId, e.clientX, e.clientY);
           }
         } else if (mesh.userData.columnId) {
           selectColumn(mesh.userData.columnId);
@@ -1082,7 +1047,13 @@ import { NavGizmo } from './NavGizmo.js';
 
     if (dragMode === 'endpoint1' || dragMode === 'endpoint2') {
       var gp1 = getGroundModelPoint(e.clientX, e.clientY);
-      if (gp1) Store.commands.updateWallEndpointLive(selectedWallId, dragMode === 'endpoint1' ? 1 : 2, gp1.x, gp1.y);
+      if (gp1) Store.commands.updateWallEndpointLive(
+        selectedWallId,
+        dragMode === 'endpoint1' ? 1 : 2,
+        gp1.x,
+        gp1.y,
+        dragElementStart && dragElementStart.linkedEndpoints ? dragElementStart.linkedEndpoints : []
+      );
       return;
     }
     if (dragMode === 'wallBody') {
@@ -1093,17 +1064,17 @@ import { NavGizmo } from './NavGizmo.js';
       }
       return;
     }
-    // Arrastando o cômodo inteiro (clique único no módulo) — livre pra
-    // qualquer direção, mas nunca atravessa a parede de outro cômodo:
-    // antes de aplicar a posição, empurra o delta pra fora de qualquer
-    // sobreposição (resolveRoomGroupCollision). Quando encosta bem
-    // rente, o empurrão vira ~zero — é assim que "gruda" sem cruzar,
-    // sem precisar de nenhuma trava separada.
+    // Arrastando o cômodo inteiro (clique único no módulo): o delta é
+    // quantizado pela mesma malha das paredes. Uma posição colidente só
+    // é aceita quando representa duas paredes no mesmo eixo prontas
+    // para fusão; nos demais casos conserva o último passo válido.
     if (dragMode === 'roomGroup') {
       var gpR = getGroundModelPoint(e.clientX, e.clientY);
       if (gpR && dragGroundStart && dragElementStart) {
-        var gdx = Core.snap(gpR.x - dragGroundStart.x), gdy = Core.snap(gpR.y - dragGroundStart.y);
+        var gdx = gpR.x - dragGroundStart.x, gdy = gpR.y - dragGroundStart.y;
         var resolved = resolveRoomGroupCollision(dragElementStart.snapshots, gdx, gdy);
+        dragElementStart.lastValidDx = resolved.x;
+        dragElementStart.lastValidDy = resolved.y;
         Store.commands.updateWallsGroupBodyLive(dragElementStart.snapshots, resolved.x, resolved.y);
       }
       return;
@@ -1115,21 +1086,75 @@ import { NavGizmo } from './NavGizmo.js';
       var gpZ = getGroundModelPoint(e.clientX, e.clientY);
       if (gpZ && dragGroundStart && dragElementStart) {
         var rawDx = gpZ.x - dragGroundStart.x, rawDy = gpZ.y - dragGroundStart.y;
-        var offset = Core.snap(rawDx * dragElementStart.nx + rawDy * dragElementStart.ny);
+        var requestedOffset = Core.snap(rawDx * dragElementStart.nx + rawDy * dragElementStart.ny);
+        var offsetResolution = dragElementStart.ownerCount > 0
+          ? Core.resolveWallResizeOffset(
+              dragElementStart.originalWall,
+              dragElementStart.diagnosticBefore,
+              requestedOffset,
+              dragElementStart.nx,
+              dragElementStart.ny
+            )
+          : { offset: requestedOffset, limited: false };
+        var offset = offsetResolution.offset;
+        dragElementStart.resizeLimitWallId = offsetResolution.limited ? offsetResolution.blockingWallId : null;
+        if (offsetResolution.limited) {
+          hintEl.textContent = 'Limite atingido: a parede não pode atravessar outra parede da planta.';
+        }
         var rx1 = dragElementStart.x1 + dragElementStart.nx * offset, ry1 = dragElementStart.y1 + dragElementStart.ny * offset;
         var rx2 = dragElementStart.x2 + dragElementStart.nx * offset, ry2 = dragElementStart.y2 + dragElementStart.ny * offset;
         var linked = dragElementStart.linksStart.map(function (l: any) { return { id: l.id, which: l.which, x: rx1, y: ry1 }; })
           .concat(dragElementStart.linksEnd.map(function (l: any) { return { id: l.id, which: l.which, x: rx2, y: ry2 }; }));
         Store.commands.updateWallResizeLive(resizeWallId, rx1, ry1, rx2, ry2, linked);
 
-        // Precisa de rastro se sobrou QUALQUER conexão original que não
-        // está sendo seguida — seja porque não tinha nenhuma (ponta
-        // solta, caso do L) ou porque tinha mais de uma e só a do
-        // cômodo que cresce está sendo seguida (caso do U: a ponta toca
-        // a parede do cômodo que cresce E a do que encolhe ao mesmo
-        // tempo — a primeira segue, a segunda precisa do rastro).
-        var needsBridgeStart = dragElementStart.rawStart.length === 0 || dragElementStart.linksStart.length < dragElementStart.rawStart.length;
-        var needsBridgeEnd = dragElementStart.rawEnd.length === 0 || dragElementStart.linksEnd.length < dragElementStart.rawEnd.length;
+        // Precisa de rastro somente quando uma conexão original realmente
+        // ficou no nó antigo. Uma parede compartilhada pode ter todas as
+        // vizinhas perpendiculares acompanhando o arraste e, ainda assim,
+        // possuir uma continuação colinear que deve ficar parada. Nesse
+        // caso o rastro fecha o degrau entre os dois nós. Usar apenas
+        // ownerCount escondia essa continuação e rompia o grafo.
+        var endpointStillOnSupport = function (supportIds: any[], x: number, y: number) {
+          return supportIds.some(function (supportId: any) {
+            var support = Store.findWall(supportId);
+            return support && Core.distToSegment(x, y, support.x1, support.y1, support.x2, support.y2) <= Core.COINCIDENCE_TOL;
+          });
+        };
+        var startSlides = endpointStillOnSupport(dragElementStart.startSlidingSupports, rx1, ry1);
+        var endSlides = endpointStillOnSupport(dragElementStart.endSlidingSupports, rx2, ry2);
+        // Uma vizinha perpendicular que alongou pode ligar sozinha o no
+        // antigo ao novo. Nesse sentido do arraste, criar outra parede por
+        // cima dela duplicaria o trecho. No sentido oposto ela encurta e
+        // deixa de cobrir o no antigo; ai a ponte continua necessaria.
+        var oldNodeCoveredByMovedLink = function (links: any[], oldX: number, oldY: number) {
+          return links.some(function (link: any) {
+            var linkedWall = Store.findWall(link.id);
+            return linkedWall && Core.distToSegment(
+              oldX, oldY,
+              linkedWall.x1, linkedWall.y1,
+              linkedWall.x2, linkedWall.y2
+            ) <= Core.COINCIDENCE_TOL;
+          });
+        };
+        var startCovered = oldNodeCoveredByMovedLink(
+          dragElementStart.linksStart,
+          dragElementStart.x1,
+          dragElementStart.y1
+        );
+        var endCovered = oldNodeCoveredByMovedLink(
+          dragElementStart.linksEnd,
+          dragElementStart.x2,
+          dragElementStart.y2
+        );
+        var needsBridgeStart = Core.wallResizeEndpointNeedsBridge(
+          dragElementStart.rawStart,
+          dragElementStart.linksStart,
+          startSlides || startCovered
+        );
+        var needsBridgeEnd = Core.wallResizeEndpointNeedsBridge(
+          dragElementStart.rawEnd,
+          dragElementStart.linksEnd,
+          endSlides || endCovered
+        );
 
         if (needsBridgeStart) {
           if (Math.hypot(rx1 - dragElementStart.x1, ry1 - dragElementStart.y1) > 0.5) {
@@ -1154,6 +1179,18 @@ import { NavGizmo } from './NavGizmo.js';
             Store.commands.removeBridgeWallSilent(dragElementStart.bridgeEndId);
             dragElementStart.bridgeEndId = null;
           }
+        }
+        dragElementStart.diagnosticDeltaX = rx1 - dragElementStart.x1;
+        dragElementStart.diagnosticDeltaY = ry1 - dragElementStart.y1;
+        if (dragElementStart.diagnosticBefore) {
+          showWallDiagnostic(addWallCrossingPrevention(analyzeWallResize(
+            dragElementStart.diagnosticBefore,
+            cloneWallsForDiagnostics(Store.currentWalls()),
+            resizeWallId,
+            dragElementStart.diagnosticDeltaX,
+            dragElementStart.diagnosticDeltaY,
+            'preview'
+          ), dragElementStart.resizeLimitWallId));
         }
       }
       return;
@@ -1314,21 +1351,42 @@ import { NavGizmo } from './NavGizmo.js';
           if (fuseAllOverlaps(resizeGroup)) {
             hintEl.textContent = 'Paredes fundidas — o trecho compartilhado agora é uma parede só.';
           }
+          if (Store.commands.splitWallsAtTJunctions().length) {
+            hintEl.textContent = 'Junção criada — a parede transversal foi dividida no encontro.';
+          }
+          if (dragElementStart.diagnosticBefore) {
+            var beforeCleanup = cloneWallsForDiagnostics(Store.currentWalls());
+            var newResidues = findNewDegenerateWallResidues(
+              dragElementStart.diagnosticBefore,
+              beforeCleanup
+            );
+            Store.commands.pruneDegenerateWallsLive(newResidues.map(function (residue) { return residue.wallId; }));
+            var finalDiagnostic = addWallCrossingPrevention(analyzeWallResize(
+              dragElementStart.diagnosticBefore,
+              cloneWallsForDiagnostics(Store.currentWalls()),
+              resizeWallId,
+              dragElementStart.diagnosticDeltaX || 0,
+              dragElementStart.diagnosticDeltaY || 0,
+              'final',
+              newResidues
+            ), dragElementStart.resizeLimitWallId);
+            if (isWallResizeReportBlocking(finalDiagnostic)) {
+              Store.commands.rollbackTransaction();
+              finalDiagnostic.blocked = true;
+              hintEl.textContent = 'Movimento cancelado: a parede romperia uma junção da planta.';
+            }
+            showWallDiagnostic(finalDiagnostic);
+          }
         }
       }
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }
 
-    // As duas únicas rotas que aplicam posição CONTÍNUA (não alinhada ao
-    // grid) durante o arrasto — mover o corpo de uma parede solta, e
-    // arrastar um cômodo inteiro (que depende de colisão contínua pra
-    // encostar exatamente sem abrir vão nem sobrepor demais) — precisam
-    // de um arredondamento final pro grid assim que o mouse solta. Sem
-    // isso, a posição "quase certa" da colisão ficava permanente, e
-    // qualquer operação futura (redimensionar, fundir, criar rastro)
-    // herdava e podia amplificar esse resíduo — foi exatamente essa a
-    // causa dos desalinhamentos de 0,12/0,06 vistos nos testes.
+    // Rede de segurança no fim do arraste. O cômodo inteiro já se move
+    // discretamente no grid, mas o corpo de uma parede solta ainda usa
+    // coordenadas contínuas durante o gesto. Normalizar os dois fluxos
+    // aqui impede que qualquer resíduo numérico sobreviva ao pointerup.
     function snapWallToGridExact(wallId: any) {
       var w = Store.findWall(wallId);
       if (!w) return;
@@ -1343,6 +1401,12 @@ import { NavGizmo } from './NavGizmo.js';
     if (dragMode === 'roomGroup') {
       if (dragElementStart && dragElementStart.snapshots) {
         dragElementStart.snapshots.forEach(function (s: any) { snapWallToGridExact(s.id); });
+        if (fuseAllOverlaps(dragElementStart.snapshots.map(function (s: any) { return s.id; }))) {
+          hintEl.textContent = 'Paredes encaixadas e fundidas no eixo do grid.';
+        }
+        if (Store.commands.splitWallsAtTJunctions().length) {
+          hintEl.textContent = 'Junções criadas — paredes transversais divididas nos encontros.';
+        }
       }
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
@@ -1364,7 +1428,17 @@ import { NavGizmo } from './NavGizmo.js';
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }
-    if (dragMode === 'endpoint1' || dragMode === 'endpoint2' || dragMode === 'columnBody' || dragMode === 'openingSlide' || (dragMode && dragMode.indexOf('varandaEdge') === 0)) {
+    if (dragMode === 'endpoint1' || dragMode === 'endpoint2') {
+      if (selectedWallId && fuseAllOverlaps([selectedWallId])) {
+        hintEl.textContent = 'Paredes fundidas — sem faces sobrepostas.';
+      }
+      if (Store.commands.splitWallsAtTJunctions().length) {
+        hintEl.textContent = 'Junção criada — a parede transversal foi dividida no encontro.';
+      }
+      dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
+      return;
+    }
+    if (dragMode === 'columnBody' || dragMode === 'openingSlide' || (dragMode && dragMode.indexOf('varandaEdge') === 0)) {
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }
@@ -1400,38 +1474,6 @@ import { NavGizmo } from './NavGizmo.js';
     return links;
   }
 
-  // Acha as paredes do cômodo que deve "esticar de verdade" quando essa
-  // parede é empurrada. Se ela fecha só 1 cômodo, é ele. Se for
-  // compartilhada entre 2 (parede fundida), o dono é o cômodo que está
-  // CRESCENDO com esse empurrão específico — a direção do empurrão
-  // aponta pra FORA do centro dele (se apontasse pra dentro, o cômodo
-  // estaria encolhendo, não esticando). O outro cômodo nunca é
-  // arrastado — ganha o degrau/rastro (ver bridgeStartId/bridgeEndId).
-  function sameRoomWallIds(wallId: any, pushNx: any, pushNy: any) {
-    var walls = Store.currentWalls();
-    var rooms = Core.detectRooms(walls);
-    var owning = rooms.filter(function (r) { return Core.findRoomWallIds(walls, r).indexOf(wallId) !== -1; });
-    if (owning.length === 0) return null;
-    if (owning.length === 1) return Core.findRoomWallIds(walls, owning[0]!);
-
-    var w = Store.findWall(wallId)!;
-    var midX = (w.x1 + w.x2) / 2, midY = (w.y1 + w.y2) / 2;
-    function centroid(r: any) {
-      var cx = 0, cy = 0;
-      r.points.forEach(function (p: any) { cx += p.x; cy += p.y; });
-      return { x: cx / r.points.length, y: cy / r.points.length };
-    }
-    // dot negativo = o empurrão aponta pra LONGE do centro desse cômodo
-    // = ele está crescendo (a parede dele avança). Pega o mais negativo.
-    var best = null, bestDot = Infinity;
-    owning.forEach(function (r) {
-      var c = centroid(r);
-      var dot = (c.x - midX) * pushNx + (c.y - midY) * pushNy;
-      if (dot < bestDot) { bestDot = dot; best = r; }
-    });
-    return best ? Core.findRoomWallIds(walls, best) : null;
-  }
-
   // Começa o modo "empurrar a parede na perpendicular" — usado tanto
   // pelo duplo clique quanto pela alça branca visível no meio da
   // parede. Um único lugar pra montar o estado do arraste, pra os dois
@@ -1439,7 +1481,6 @@ import { NavGizmo } from './NavGizmo.js';
   function startWallResizeDrag(wallId: any, clientX: any, clientY: any) {
     var w = Store.findWall(wallId);
     if (!w) return;
-    var w2 = w; // TS não propaga a checagem de null pra dentro de closures — alias já estreitado
     select(wallId);
     resizeWallId = wallId;
     var dxw = w.x2 - w.x1, dyw = w.y2 - w.y1;
@@ -1462,70 +1503,31 @@ import { NavGizmo } from './NavGizmo.js';
     else if (Math.abs(Math.abs(pushNx) - 1) < AXIS_SNAP_TOL) pushNx = pushNx > 0 ? 1 : -1;
     if (Math.abs(pushNy) < AXIS_SNAP_TOL) pushNy = 0;
     else if (Math.abs(Math.abs(pushNy) - 1) < AXIS_SNAP_TOL) pushNy = pushNy > 0 ? 1 : -1;
-    // "Seguir o canto" só vale pro cômodo que está crescendo com esse
-    // empurrão (ver sameRoomWallIds) — nunca pra parede de um cômodo
-    // que está encolhendo, mesmo que compartilhem um ponto.
-    var roomIds = sameRoomWallIds(wallId, pushNx, pushNy); // já vem em ordem de contorno (Core.findRoomWallIds)
     var rawStart = findLinkedEndpoints(wallId, w.x1, w.y1);
     var rawEnd = findLinkedEndpoints(wallId, w.x2, w.y2);
-    // Antes: "qualquer parede do cômodo que crescer com ponta encostada
-    // nesse ponto" — funciona com 2 paredes se tocando, mas quando 3+
-    // cômodos convergem no mesmo ponto físico (ex.: cozinha+banheiro+
-    // quarto fundidos num canto só), mais de uma parede do MESMO cômodo
-    // pode ter ponta ali (a vizinha de verdade e, por coincidência, uma
-    // parede bem mais distante do cômodo, como a externa oposta) — e a
-    // parede errada acabava sendo arrastada junto.
-    // Correção: nunca perguntar "quem mais está nesse ponto"; perguntar
-    // só "quem é minha vizinha IMEDIATA no contorno desse cômodo" — a
-    // parede anterior e a seguinte na lista já ordenada de roomIds. Isso
-    // vale igual pra 2, 3 ou N cômodos convergindo, sem checar quantos
-    // são: a vizinha de contorno nunca é a parede errada.
-    var linksStart: any[] = [], linksEnd: any[] = [];
-    if (roomIds && roomIds.length > 1) {
-      var selfIdx = roomIds.indexOf(wallId);
-      if (selfIdx !== -1) {
-        var TOL = Core.COINCIDENCE_TOL;
-        var ux = dxw / lenw, uy = dyw / lenw; // direção da própria parede arrastada
-        var neighborIds = [
-          roomIds[(selfIdx - 1 + roomIds.length) % roomIds.length],
-          roomIds[(selfIdx + 1) % roomIds.length]
-        ];
-        neighborIds.forEach(function (nid: any) {
-          if (!nid || nid === wallId) return;
-          var ow = Store.findWall(nid);
-          if (!ow) return;
-          // Só faz sentido "seguir o canto" arrastando UMA ponta da
-          // vizinha quando ela é perpendicular (ou pelo menos não-
-          // colinear) à parede arrastada: mover uma ponta na direção do
-          // empurrão só estica/encolhe o comprimento dela, nunca inclina.
-          // Se a vizinha for COLINEAR (mesma linha reta, caso clássico:
-          // a parede externa que continua reto além do canto fundido),
-          // mover só uma ponta dela a transformaria de reta em diagonal
-          // — uma deformação de verdade, não um redimensionamento. Nesse
-          // caso é melhor NÃO arrastar essa vizinha (ela permanece como
-          // "raw" mas não "linked" — o mecanismo de parede-rastro já
-          // existente cobre o vão sozinho, sem deformar nada).
-          var odx = ow.x2 - ow.x1, ody = ow.y2 - ow.y1;
-          var olen = Math.hypot(odx, ody) || 1;
-          var cross = Math.abs(ux * (ody / olen) - uy * (odx / olen));
-          if (cross < 0.05) return; // colinear/paralela — deixa pro rastro
-          // Descobre em qual ponta (1 ou 2) da vizinha o encontro
-          // realmente acontece — a ordem no contorno não garante que
-          // "anterior" bate com x1 e "seguinte" com x2.
-          if (Math.hypot(ow.x1 - w2.x1, ow.y1 - w2.y1) <= TOL) linksStart.push({ id: nid, which: 1 });
-          else if (Math.hypot(ow.x2 - w2.x1, ow.y2 - w2.y1) <= TOL) linksStart.push({ id: nid, which: 2 });
-          if (Math.hypot(ow.x1 - w2.x2, ow.y1 - w2.y2) <= TOL) linksEnd.push({ id: nid, which: 1 });
-          else if (Math.hypot(ow.x2 - w2.x2, ow.y2 - w2.y2) <= TOL) linksEnd.push({ id: nid, which: 2 });
-        });
-      }
-    }
+    // Uma parede fundida pertence aos dois cômodos. As vizinhas imediatas
+    // dos DOIS contornos precisam acompanhar as duas extremidades; mover
+    // apenas o lado que cresce abre uma fresta no lado que encolhe.
+    var topology = Core.wallResizeTopology(Store.currentWalls(), wallId);
+    var linksStart = topology.start;
+    var linksEnd = topology.end;
     dragElementStart = {
       x1: w.x1, y1: w.y1, x2: w.x2, y2: w.y2,
+      originalWall: { ...w },
       nx: pushNx, ny: pushNy,
       linksStart: linksStart,
       linksEnd: linksEnd,
       rawStart: rawStart,
       rawEnd: rawEnd,
+      ownerCount: topology.ownerCount,
+      startSlidingSupports: topology.startSlidingSupports,
+      endSlidingSupports: topology.endSlidingSupports,
+      // A copia tambem alimenta o protetor quando o painel esta oculto.
+      // O diagnostico visual e opcional; a integridade da planta nao e.
+      diagnosticBefore: cloneWallsForDiagnostics(Store.currentWalls()),
+      diagnosticDeltaX: 0,
+      diagnosticDeltaY: 0,
+      resizeLimitWallId: null,
       // Ponta sem ninguém do mesmo cômodo seguindo junto: em vez de
       // deixar essa ponta boiar (ou arrastar parede de outro cômodo),
       // uma parede-rastro nasce ligando de onde ela começou até onde
@@ -1538,37 +1540,33 @@ import { NavGizmo } from './NavGizmo.js';
     dragGroundStart = getGroundModelPoint(clientX, clientY);
     dragMode = 'wallResize';
     Store.commands.beginTransaction();
+    if (dragElementStart.diagnosticBefore) {
+      showWallDiagnostic(analyzeWallResize(
+        dragElementStart.diagnosticBefore,
+        dragElementStart.diagnosticBefore,
+        wallId,
+        0,
+        0,
+        'started'
+      ));
+    }
     render();
   }
 
-  // Empurra o delta do arraste pra fora de qualquer sobreposição real
-  // entre uma parede do grupo (na posição CANDIDATA, snapshot+delta) e
-  // uma parede de fora — testando como retângulos orientados, então
-  // funciona em qualquer ângulo, não só parede paralela. Várias
-  // passadas porque empurrar pra resolver uma colisão pode encostar em
-  // outra parede diferente (ex.: canto de um cômodo em L).
-  var COLLISION_MAX_PASSES = 6;
+  // O cômodo só pode parar em linhas do grid. Paredes colineares com
+  // sobreposição suficiente são um encaixe válido e serão fundidas ao
+  // soltar; qualquer outra colisão conserva o último passo válido.
   function resolveRoomGroupCollision(snapshots: any, dx: any, dy: any) {
     var groupIds = snapshots.map(function (s: any) { return s.id; });
     var others = Store.currentWalls().filter(function (w) { return groupIds.indexOf(w.id) === -1; });
-    if (!others.length) return { x: dx, y: dy };
-    for (var pass = 0; pass < COLLISION_MAX_PASSES; pass++) {
-      var worstMTV = null, worstDepth = 0;
-      for (var i = 0; i < snapshots.length; i++) {
-        var s = snapshots[i]!;
-        var aObb = Core.wallOBB({ id: s.id, x1: s.x1 + dx, y1: s.y1 + dy, x2: s.x2 + dx, y2: s.y2 + dy });
-        for (var j = 0; j < others.length; j++) {
-          var mtv = Core.obbOverlapMTV(aObb, Core.wallOBB(others[j]!));
-          if (mtv) {
-            var depth = Math.hypot(mtv.x, mtv.y);
-            if (depth > worstDepth) { worstDepth = depth; worstMTV = mtv; }
-          }
-        }
-      }
-      if (!worstMTV) break; // nenhuma sobreposição — delta atual já é válido
-      dx += worstMTV.x; dy += worstMTV.y;
-    }
-    return { x: dx, y: dy };
+    return Core.resolveWallGroupGridDelta(
+      snapshots,
+      others,
+      dx,
+      dy,
+      dragElementStart && dragElementStart.lastValidDx || 0,
+      dragElementStart && dragElementStart.lastValidDy || 0
+    );
   }
 
   // Alguma parede do grupo arrastado pousou em cima da parede de outro
@@ -1590,37 +1588,19 @@ import { NavGizmo } from './NavGizmo.js';
     var others = Store.currentWalls();
     var best: any = null;
     groupWalls.forEach(function (a: any) {
-      var aLen = Math.hypot(a.x2 - a.x1, a.y2 - a.y1);
-      if (aLen < 1e-6) return;
-      var aAngle = Math.atan2(a.y2 - a.y1, a.x2 - a.x1);
       others.forEach(function (b) {
-        if (b.id === a.id) return;
-        var bLen = Math.hypot(b.x2 - b.x1, b.y2 - b.y1);
-        if (bLen < 1e-6) return;
-        var bAngle = Math.atan2(b.y2 - b.y1, b.x2 - b.x1);
-        var diff = Math.abs(aAngle - bAngle) % Math.PI;
-        if (diff > Math.PI / 2) diff = Math.PI - diff;
-        if (diff > MERGE_TOL_ANGLE) return; // não são paralelas (nem opostas)
+        if (!Core.wallsCanFuse(a, b, MERGE_TOL_DIST, MERGE_TOL_ANGLE, MERGE_MIN_OVERLAP)) return;
         var dMid = Core.distPointToLine((a.x1 + a.x2) / 2, (a.y1 + a.y2) / 2, b.x1, b.y1, b.x2, b.y2);
-        if (dMid > MERGE_TOL_DIST) return; // não estão na mesma linha
-        var ux = (b.x2 - b.x1) / bLen, uy = (b.y2 - b.y1) / bLen;
-        var ta1 = (a.x1 - b.x1) * ux + (a.y1 - b.y1) * uy;
-        var ta2 = (a.x2 - b.x1) * ux + (a.y2 - b.y1) * uy;
-        var overlap = Math.min(Math.max(ta1, ta2), bLen) - Math.max(Math.min(ta1, ta2), 0);
-        if (overlap < MERGE_MIN_OVERLAP) return; // sobreposição real demais pequena
         if (!best || dMid < best.dist) best = { wallAId: a.id, wallBId: b.id, dist: dMid };
       });
     });
     return best;
   }
 
-  // O cômodo em "modo deslocamento" (selectedRoomWallIds) pode ser
-  // arrastado livremente, sobrepondo outros cômodos à vontade, sem
-  // nenhuma verificação durante o movimento — igual ao Sims. A fusão só
-  // é decidida no momento em que a pessoa CLICA FORA do objeto (chão
-  // vazio, outra ferramenta, outro elemento): se alguma parede dele
-  // ficou coincidente com a de outro cômodo naquele instante, funde;
-  // senão, só solta o cômodo onde estiver, sem mexer em mais nada.
+  // O cômodo em "modo deslocamento" (selectedRoomWallIds) avança em
+  // passos do grid e pode pousar no eixo de uma parede vizinha. A fusão
+  // acontece ao soltar o arraste; esta mesma função também permanece
+  // como garantia quando a seleção é encerrada por outro caminho.
   //
   // Um cômodo pode encostar em MAIS DE UM vizinho ao mesmo tempo (ex.:
   // fica espremido entre dois outros cômodos, um de cada lado). Fundir
@@ -2001,6 +1981,8 @@ import { NavGizmo } from './NavGizmo.js';
     objectPanelTitleEl = document.getElementById('objectPanelTitle');
     objectPanelBodyEl = document.getElementById('objectPanelBody');
     hintEl = document.getElementById('viewportHint');
+    wallDiagnosticsPanelEl = document.getElementById('wallDiagnosticsPanel');
+    wallDiagnosticsOutputEl = document.getElementById('wallDiagnosticsOutput');
     dimLabelAEl = document.getElementById('dimLabelA');
     dimLabelBEl = document.getElementById('dimLabelB');
     dimCotaLayerEl = document.getElementById('dimCotaLayer');
@@ -2041,8 +2023,6 @@ import { NavGizmo } from './NavGizmo.js';
       if (!btn) return;
       var productId = btn.dataset.product;
       if (selectedRoofId) { Store.commands.setRoofFinish(selectedRoofId, productId); return; }
-      if (selectedWallId && btn.dataset.face) { Store.commands.setWallFinishFace(selectedWallId, btn.dataset.face, productId); return; }
-      if (btn.dataset.roomKey) { Store.commands.setRoomFinish(btn.dataset.roomKey, productId); return; }
     });
     paintPickerPanelEl.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
     paintPickerPanelEl.addEventListener('click', function (e: any) {
@@ -2079,7 +2059,11 @@ import { NavGizmo } from './NavGizmo.js';
     });
     container.addEventListener('pointerdown', onPointerDown);
     window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', onPointerUp);
+    // Captura antes dos paineis flutuantes. Eles interrompem a propagacao
+    // para nao clicar no 3D por baixo, mas o fim de um arraste iniciado no
+    // canvas precisa ser registrado mesmo quando o mouse e solto sobre UI.
+    window.addEventListener('pointerup', onPointerUp, true);
+    window.addEventListener('pointercancel', onPointerUp, true);
     container.addEventListener('pointermove', function (e: any) { updateHoverMarker(e.clientX, e.clientY); });
     container.addEventListener('pointerleave', function () { hoverMarker.visible = false; });
     container.addEventListener('wheel', onWheel, { passive: false });
@@ -2105,5 +2089,6 @@ export const ViewportController = {
   getSelectedWallId, getSelectedColumnId, getSelectedRoofId,
   getSelectedOpeningId, getSelectedVarandaId, getSelectedRoomWallIds,
   toggleDimensions,
+  toggleWallDiagnostics,
   repositionDimensions: repositionDimensionCotas
 };

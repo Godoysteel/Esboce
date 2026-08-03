@@ -130,6 +130,10 @@ export class EsboceApplication {
       const isVisible = ViewportController.toggleDimensions();
       (event.currentTarget as HTMLElement).classList.toggle("active", isVisible);
     });
+    this.requireElement("wallDiagnosticsToggleBtn").addEventListener("click", (event) => {
+      const isVisible = ViewportController.toggleWallDiagnostics();
+      (event.currentTarget as HTMLElement).classList.toggle("active", isVisible);
+    });
 
     window.addEventListener("keydown", (event) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
