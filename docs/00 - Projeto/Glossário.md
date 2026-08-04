@@ -42,6 +42,22 @@ Inclui telhados, lajes, estruturas de cobertura e seus respectivos componentes.
 
 ---
 
+## Cobertura Composta
+
+Conjunto de duas ou mais coberturas paramétricas relacionadas por engaste.
+
+As coberturas preservam seus parâmetros individuais, mas seus recortes, movimento e quantitativos passam a considerar o conjunto.
+
+---
+
+## Engaste de Cobertura
+
+Confirmação de que coberturas transversais devem formar um conjunto composto.
+
+Somente após o engaste são ativados o recorte definitivo, o movimento conjunto e a metragem líquida.
+
+---
+
 ## Componente
 
 Elemento reutilizável da plataforma.
@@ -137,6 +153,14 @@ Modelo baseado em propriedades e relações, permitindo que alterações em um e
 
 ---
 
+## Oitão
+
+Fechamento vertical triangular ou poligonal sob uma cobertura inclinada de duas águas.
+
+No Esboce, o oitão é uma superfície de parede derivada da cobertura e recebe acabamento e quantitativos de parede.
+
+---
+
 ## Parede
 
 Elemento construtivo vertical utilizado para delimitar ambientes.
@@ -166,6 +190,22 @@ Um projeto pode conter múltiplos pavimentos, ambientes, componentes, materiais 
 Módulo responsável exclusivamente pela representação gráfica do Modelo de Domínio.
 
 O Renderer não contém regras de negócio.
+
+---
+
+## Snap Estrutural
+
+Regra que converte uma posição contínua em um passo válido de edição da construção.
+
+É independente da aparência ou da visibilidade do grid. Na v19, o passo estrutural é de 500 mm.
+
+---
+
+## Água-furtada
+
+Linha de encontro côncava entre duas águas de telhado, pela qual a água tende a escoar.
+
+Em coberturas compostas, sua geometria é derivada da interseção dos planos das águas.
 
 ---
 

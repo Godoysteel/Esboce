@@ -35,7 +35,11 @@ export const WINDOW_DEFAULT_WIDTH = 1.2;
 export const WINDOW_DEFAULT_HEIGHT = 1.2;
 export const WINDOW_DEFAULT_SILL = 1.0;
 export const OPENING_MARGIN = 0.25;
-export const OPENING_GAP = 0.10;
+// Distancia livre minima entre as bordas de duas esquadrias na mesma parede.
+export const OPENING_GAP = 0.15;
+// Afastamento minimo entre a borda de uma esquadria e uma parede
+// transversal que esteja sendo empurrada em direcao a ela.
+export const OPENING_WALL_CLEARANCE = 0.05;
 
 export function snap(v: number): number {
   return Math.round(v / SNAP_UNIT) * SNAP_UNIT;
@@ -73,7 +77,7 @@ export function createVarandaEntity(
 }
 
 export function createFloorEntity(name: string): Floor {
-  return { id: nextId('floor'), name, walls: [], columns: [], roofs: [], openings: [], varandas: [], roomFinishes: {} };
+  return { id: nextId('floor'), name, walls: [], columns: [], roofs: [], openings: [], varandas: [], roomFinishes: {}, roomFinishSettings: {} };
 }
 
 // offset: distância em metros do x1,y1 da parede até o CENTRO da
@@ -220,7 +224,7 @@ export function createProject(): Project {
     floors: [createFloorEntity('Térreo')],
     currentFloorIndex: 0,
     layers: {
-      fundacao: false,
+      fundacao: true,
       calcada: false,
       marquise: false,
       telhado: true,
@@ -231,7 +235,7 @@ export function createProject(): Project {
       aberturas: true,
       varanda: true
     },
-    foundationType: 'radier'
+    foundationType: 'baldrame'
   };
 }
 
@@ -965,6 +969,75 @@ export function wallOBB(w: Wall): WallOBB {
   return { cx, cy, ux, uy, nx: -uy, ny: ux, halfLen: len / 2, halfThick: WALL_THICK * GRID / 2 };
 }
 
+// A abertura ocupa um trecho real da parede hospedeira. Esse retangulo e
+// usado durante arrastes para impedir que outra parede atravesse uma porta
+// ou janela, mesmo que visualmente o vao nao tenha geometria de parede ali.
+export function openingOBB(opening: Opening, owner: Wall): WallOBB {
+  const dx = owner.x2 - owner.x1, dy = owner.y2 - owner.y1;
+  const len = Math.hypot(dx, dy) || 1e-6;
+  const ux = dx / len, uy = dy / len;
+  const centerDistance = opening.offset * GRID;
+  return {
+    cx: owner.x1 + ux * centerDistance,
+    cy: owner.y1 + uy * centerDistance,
+    ux,
+    uy,
+    nx: -uy,
+    ny: ux,
+    halfLen: (opening.width / 2 + OPENING_WALL_CLEARANCE) * GRID,
+    halfThick: WALL_THICK * GRID / 2,
+  };
+}
+
+export function wallOverlapsForeignOpening(
+  candidate: Wall,
+  movedWallIds: string[],
+  openings: Opening[],
+  walls: Wall[],
+): boolean {
+  const candidateBox = wallOBB(candidate);
+  for (const opening of openings) {
+    if (movedWallIds.indexOf(opening.wallId) !== -1) continue;
+    const owner = walls.find((wall) => wall.id === opening.wallId);
+    if (owner && obbOverlapMTV(candidateBox, openingOBB(opening, owner))) return true;
+  }
+  return false;
+}
+
+// Verifica todo o caminho do empurrao, e nao apenas a posicao final. Eventos
+// de ponteiro podem saltar varias celulas entre dois frames; sem essa
+// varredura uma parede atravessava a largura inteira do vao sem jamais ser
+// observada exatamente sobre ele.
+export function resolveWallOffsetAgainstOpenings(
+  source: Wall,
+  requestedOffset: number,
+  nx: number,
+  ny: number,
+  movedWallIds: string[],
+  openings: Opening[],
+  walls: Wall[],
+): { offset: number; limited: boolean } {
+  const requested = snap(requestedOffset);
+  if (Math.abs(requested) < 1e-6) return { offset: 0, limited: false };
+  const direction = requested > 0 ? 1 : -1;
+  let lastSafe = 0;
+  for (let distance = SNAP_UNIT; distance <= Math.abs(requested); distance += SNAP_UNIT) {
+    const offset = Math.min(distance, Math.abs(requested)) * direction;
+    const candidate: Wall = {
+      ...source,
+      x1: source.x1 + nx * offset,
+      y1: source.y1 + ny * offset,
+      x2: source.x2 + nx * offset,
+      y2: source.y2 + ny * offset,
+    };
+    if (wallOverlapsForeignOpening(candidate, movedWallIds, openings, walls)) {
+      return { offset: lastSafe, limited: true };
+    }
+    lastSafe = offset;
+  }
+  return { offset: requested, limited: false };
+}
+
 function projectOBB(o: WallOBB, axisX: number, axisY: number): Interval {
   const ex = o.ux * o.halfLen, ey = o.uy * o.halfLen;
   const fx = o.nx * o.halfThick, fy = o.ny * o.halfThick;
@@ -1068,9 +1141,12 @@ export function resolveWallGroupGridDelta(
   requestedDy: number,
   lastValidDx = 0,
   lastValidDy = 0,
+  openings: Opening[] = [],
+  allWalls: Wall[] = [],
 ): Point {
   const dx = snap(requestedDx);
   const dy = snap(requestedDy);
+  const groupIds = group.map((wall) => wall.id);
   for (const source of group) {
     const candidate: Wall = {
       ...source,
@@ -1079,6 +1155,9 @@ export function resolveWallGroupGridDelta(
       x2: source.x2 + dx,
       y2: source.y2 + dy,
     };
+    if (wallOverlapsForeignOpening(candidate, groupIds, openings, allWalls)) {
+      return { x: snap(lastValidDx), y: snap(lastValidDy) };
+    }
     for (const other of others) {
       if (wallsCanFuse(candidate, other)) continue;
       if (wallsMeetAtEndpoint(candidate, other)) continue;
@@ -1097,13 +1176,13 @@ export const Core = {
   GRID, SNAP_UNIT, WALL_THICK, COINCIDENCE_TOL, COLUMN_SIZE,
   DOOR_DEFAULT_WIDTH, DOOR_DEFAULT_HEIGHT,
   WINDOW_DEFAULT_WIDTH, WINDOW_DEFAULT_HEIGHT, WINDOW_DEFAULT_SILL,
-  OPENING_MARGIN, OPENING_GAP,
+  OPENING_MARGIN, OPENING_GAP, OPENING_WALL_CLEARANCE,
   snap, nextId,
   createOpeningEntity, wallLengthMeters, wallOffsetAtPoint, findValidOpeningOffset,
   roofRidgeHeightMeters, roofPitchForRidgeHeight, roofsCanFuse, fusedRoofBounds,
   rectsNearby, pointInPolygon, roomModelBounds, findRoomWallIds, findIsolatedRoomWallIds, wallResizeTopology, resolveWallResizeOffset, computeWallFootprints,
   wallResizeEndpointNeedsBridge,
-  distPointToLine, wallOBB, obbOverlapMTV, wallsCanFuse, wallsMeetAtEndpoint, resolveWallGroupGridDelta,
+  distPointToLine, wallOBB, openingOBB, obbOverlapMTV, wallOverlapsForeignOpening, resolveWallOffsetAgainstOpenings, wallsCanFuse, wallsMeetAtEndpoint, resolveWallGroupGridDelta,
   findWallTJunctionSplits,
   createWallEntity, createColumnEntity, createRoofEntity, createVarandaEntity, createFloorEntity,
   createProject, distToSegment, projectOnSegment, detectRooms

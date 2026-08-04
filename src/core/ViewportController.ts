@@ -30,6 +30,7 @@ import {
 
   var container: any, camera: any, scene: any, renderer: any;
   var raycaster = new THREE.Raycaster();
+  var dimensionRaycaster = new THREE.Raycaster();
   var groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 
   // offsetX/offsetY existiam como uma "âncora" fixa de 190 unidades,
@@ -55,6 +56,10 @@ import {
   // paintPickerPanelEl). Começa na primeira tinta do catálogo pra já
   // ter algo selecionado no primeiro clique.
   var currentPaintProductId = Catalog.getProductsByCategory('paint')[0] ? Catalog.getProductsByCategory('paint')[0]!.id : null;
+  var currentPaintSurface: any = null;
+  var selectedPaintRoomKey: any = null;
+  var floorFinishScale = 1;
+  var floorFinishRotation = 0;
   var selectedWallId: any = null, selectedColumnId: any = null, selectedRoofId: any = null, selectedOpeningId: any = null, selectedVarandaId: any = null;
   var selectedRoomWallIds: any = null; // cômodo isolado selecionado como módulo; após qualquer junção o clique volta a ser individual
   var resizeWallId: any = null; // parede em modo de deslocamento perpendicular, iniciado no primeiro clique/arraste
@@ -82,7 +87,7 @@ import {
   var MIN_DIST = 3, MAX_DIST = 35;
 
   var gizmoEl: any, openingGizmoEl: any, roomGizmoEl: any, columnShapePanelEl: any, roofTypePanelEl: any, finishPanelEl: any, paintPickerPanelEl: any, objectPanelEl: any, objectPanelTitleEl: any, objectPanelBodyEl: any, hintEl: any, layersContextMenuEl: any;
-  var dimLabelAEl: any, dimLabelBEl: any;
+  var dimLabelAEl: any, dimLabelBEl: any, liveRoomDimensionLineEl: any, liveRoomDimensionLineBEl: any;
   // Cotas persistentes de largura/altura de parede (ligar/desligar) —
   // ver rebuildDimensionCotas mais abaixo. Diferente do dimLabelA/B
   // (que só aparece durante o arraste de criação), essas ficam na tela
@@ -110,7 +115,7 @@ import {
     window: 'Clique sobre uma parede pra inserir uma janela ali. Selecione uma janela colocada pra deslizar ou excluir.',
     varanda: 'Clique no chão pra colocar uma varanda. Selecione uma já colocada, clique direito nela pra girar qual lado é a frente ou excluir.',
     demolish: 'Clique numa parede pra quebrar ela. Os cantos vizinhos se fecham sozinhos, sem deixar vão.',
-    paintBucket: 'Escolha uma cor na paleta acima e clique num lado da parede pra pintar só aquele lado.'
+    paintBucket: 'Escolha a superfície no menu acima e siga o fluxo indicado para aplicar o acabamento.'
   };
 
   function modelToWorld(mx: any, my: any) { return { x: (mx - offsetX) * scale, z: (my - offsetY) * scale }; }
@@ -189,7 +194,10 @@ import {
     var rect = container.getBoundingClientRect();
     var mouse = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
     raycaster.setFromCamera(mouse, camera);
-    var targets = scene.children.filter(function (o: any) { return o.isMesh && o.userData && o.userData.category && o.userData.category !== 'laje'; });
+    var targets = scene.children.filter(function (o: any) {
+      return o.isMesh && o.userData && o.userData.category &&
+        (o.userData.category !== 'laje' || (currentTool === 'paintBucket' && (currentPaintSurface === 'floors' || currentPaintSurface === 'ceilings')));
+    });
     var hits = raycaster.intersectObjects(targets, false);
     return hits.length ? hits[0] : null;
   }
@@ -232,6 +240,30 @@ import {
   }
   function selectColumn(columnId: any) { selectedWallId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedColumnId = columnId; gizmoMenuOpen = false; render(); }
   function selectRoof(roofId: any) { selectedWallId = null; selectedColumnId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedRoofId = roofId; gizmoMenuOpen = false; render(); }
+
+  function connectedRoofIds(startId: any) {
+    var selected = Store.findRoof(startId);
+    if (!selected || !selected.compoundGroupId) return [startId];
+    return Store.currentRoofs().filter(function (roof) {
+      return roof.compoundGroupId === selected!.compoundGroupId;
+    }).map(function (roof) { return roof.id; });
+  }
+
+  function roofCompoundCandidateIds(startId: any) {
+    var roofs = Store.currentRoofs();
+    var found: any[] = [startId], queue: any[] = [startId];
+    while (queue.length) {
+      var current = Store.findRoof(queue.shift());
+      if (!current) continue;
+      roofs.forEach(function (candidate) {
+        if (found.indexOf(candidate.id) !== -1 || candidate.ridgeAxis === current!.ridgeAxis) return;
+        if (Core.rectsNearby(current!, candidate, Core.SNAP_UNIT)) {
+          found.push(candidate.id); queue.push(candidate.id);
+        }
+      });
+    }
+    return found;
+  }
   // "Agarra" o cômodo inteiro (clique único numa parede que fecha só um
   // cômodo) — sem seleção de parede individual, sem gizmo de parede.
   function selectRoomGroup(wallIds: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedRoomWallIds = wallIds; gizmoMenuOpen = false; render(); }
@@ -344,6 +376,30 @@ import {
     repositionDimensionCotas();
   }
 
+  function dimensionPointIsVisible(entry: any) {
+    var target = new THREE.Vector3(entry.x, entry.y, entry.z);
+    var projected = target.clone().project(camera);
+    if (projected.z < -1 || projected.z > 1 || Math.abs(projected.x) > 1 || Math.abs(projected.y) > 1) return false;
+    var direction = target.clone().sub(camera.position);
+    var targetDistance = direction.length();
+    if (targetDistance < 1e-6) return true;
+    direction.normalize();
+    dimensionRaycaster.set(camera.position, direction);
+    dimensionRaycaster.far = targetDistance;
+    var blockers: THREE.Object3D[] = [];
+    scene.traverse(function (object: any) {
+      if (!object.isMesh || !object.visible || !object.userData || !object.userData.category) return;
+      var material = object.material;
+      if (material && material.transparent && material.opacity < 0.35) return;
+      blockers.push(object);
+    });
+    var hit = dimensionRaycaster.intersectObjects(blockers, false)[0];
+    // A própria parede da cota pode estar alguns centímetros antes do
+    // ponto central. A tolerância aceita essa face, mas não uma parede
+    // distinta situada entre a câmera e a medida.
+    return !hit || hit.distance >= targetDistance - 0.22;
+  }
+
   // Chamada a cada frame do loop de animação (ver animate() no fim do
   // arquivo) — só projeta em tela, não recalcula nada do modelo, então
   // é barato mesmo rodando 60x/s; sai de imediato se a camada estiver
@@ -351,6 +407,9 @@ import {
   function repositionDimensionCotas() {
     if (!dimensionsVisible || !dimCotaEntries.length) return;
     dimCotaEntries.forEach(function (entry) {
+      var visible = dimensionPointIsVisible(entry);
+      entry.el.style.display = visible ? 'block' : 'none';
+      if (!visible) return;
       positionFloatingPanel(entry.el, entry.x, entry.y, entry.z, 0);
     });
   }
@@ -359,6 +418,63 @@ import {
     dimensionsVisible = !dimensionsVisible;
     rebuildDimensionCotas();
     return dimensionsVisible;
+  }
+
+  function findLiveRoomDimensions(wall: any) {
+    var walls = Store.currentWalls();
+    var ux = wall.x2 - wall.x1, uy = wall.y2 - wall.y1;
+    var wallLen = Math.hypot(ux, uy);
+    if (wallLen < 1e-6) return [];
+    ux /= wallLen; uy /= wallLen;
+    var nx = -uy, ny = ux;
+    var wallMidX = (wall.x1 + wall.x2) / 2, wallMidY = (wall.y1 + wall.y2) / 2;
+    var owners = Core.detectRooms(walls).filter(function (room) {
+      return Core.findRoomWallIds(walls, room).indexOf(wall.id) !== -1;
+    });
+    if (!owners.length) return [];
+    function tangentRange(w: any) {
+      var a = w.x1 * ux + w.y1 * uy, b = w.x2 * ux + w.y2 * uy;
+      return { min: Math.min(a, b), max: Math.max(a, b) };
+    }
+    return owners.map(function (room) {
+      var ids = Core.findRoomWallIds(walls, room);
+      var opposite: any = null, bestDistance = Infinity;
+      ids.forEach(function (id) {
+        if (id === wall.id) return;
+        var candidate = Store.findWall(id); if (!candidate) return;
+        var cx = candidate.x2 - candidate.x1, cy = candidate.y2 - candidate.y1;
+        var clen = Math.hypot(cx, cy); if (clen < 1e-6) return;
+        if (Math.abs((cx / clen) * uy - (cy / clen) * ux) > 0.01) return;
+        var candidateMidX = (candidate.x1 + candidate.x2) / 2, candidateMidY = (candidate.y1 + candidate.y2) / 2;
+        var distance = Math.abs((candidateMidX - wallMidX) * nx + (candidateMidY - wallMidY) * ny);
+        if (distance < bestDistance) { bestDistance = distance; opposite = candidate; }
+      });
+      if (!opposite) return null;
+      var rangeA = tangentRange(wall), rangeB = tangentRange(opposite);
+      var overlapMin = Math.max(rangeA.min, rangeB.min), overlapMax = Math.min(rangeA.max, rangeB.max);
+      if (overlapMax <= overlapMin) return null;
+      var tangentMid = (overlapMin + overlapMax) / 2;
+      function pointOnWall(w: any) {
+        var baseT = w.x1 * ux + w.y1 * uy;
+        return { x: w.x1 + ux * (tangentMid - baseT), y: w.y1 + uy * (tangentMid - baseT) };
+      }
+      var a = pointOnWall(wall), b = pointOnWall(opposite);
+      return { a: a, b: b, clearMeters: Math.max(0, (Math.hypot(b.x - a.x, b.y - a.y) - Core.WALL_THICK) / Core.GRID) };
+    }).filter(Boolean).slice(0, 2);
+  }
+
+  function positionLiveRoomDimension(lineEl: any, a: any, b: any, y: number) {
+    var wa = modelToWorld(a.x, a.y), wb = modelToWorld(b.x, b.y);
+    var va = new THREE.Vector3(wa.x, y, wa.z).project(camera);
+    var vb = new THREE.Vector3(wb.x, y, wb.z).project(camera);
+    var rect = container.getBoundingClientRect();
+    var ax = (va.x + 1) / 2 * rect.width, ay = (1 - va.y) / 2 * rect.height;
+    var bx = (vb.x + 1) / 2 * rect.width, by = (1 - vb.y) / 2 * rect.height;
+    lineEl.style.left = ax + 'px';
+    lineEl.style.top = ay + 'px';
+    lineEl.style.width = Math.hypot(bx - ax, by - ay) + 'px';
+    lineEl.style.transform = 'rotate(' + Math.atan2(by - ay, bx - ax) + 'rad)';
+    lineEl.style.display = 'block';
   }
 
   function positionGizmoAndShapePanel() {
@@ -495,7 +611,36 @@ import {
   // arrastar um cômodo, mostra largura e profundidade; ao arrastar uma
   // parede solta, mostra o comprimento. Some assim que o arraste termina.
   function updateDimLabels() {
-    if (!drawPreview) { dimLabelAEl.classList.remove('visible'); dimLabelBEl.classList.remove('visible'); return; }
+    if (!drawPreview) {
+      var liveWall = dragMode === 'wallResize' && selectedWallId ? Store.findWall(selectedWallId) : null;
+      var roomDimensions = liveWall ? findLiveRoomDimensions(liveWall) : [];
+      if (roomDimensions.length) {
+        var liveLabelY = currentFloorYOffset() + 0.12;
+        var liveLabels = [dimLabelAEl, dimLabelBEl];
+        var liveLines = [liveRoomDimensionLineEl, liveRoomDimensionLineBEl];
+        liveLabels.forEach(function (label) { label.classList.remove('visible'); label.style.display = ''; });
+        liveLines.forEach(function (line) { line.style.display = 'none'; });
+        roomDimensions.forEach(function (roomDimension: any, index: number) {
+          var lineMid = modelToWorld((roomDimension.a.x + roomDimension.b.x) / 2, (roomDimension.a.y + roomDimension.b.y) / 2);
+          var midpointVisible = dimensionPointIsVisible({ x: lineMid.x, y: liveLabelY, z: lineMid.z });
+          var label = liveLabels[index]!, line = liveLines[index]!;
+          label.textContent = roomDimension.clearMeters.toFixed(2).replace('.', ',') + ' m';
+          positionFloatingPanel(label, lineMid.x, liveLabelY, lineMid.z, 0);
+          label.classList.add('visible');
+          positionLiveRoomDimension(line, roomDimension.a, roomDimension.b, liveLabelY);
+          label.style.display = midpointVisible ? 'block' : 'none';
+          line.style.display = midpointVisible ? 'block' : 'none';
+        });
+        return;
+      }
+      dimLabelAEl.style.display = '';
+      dimLabelBEl.style.display = '';
+      liveRoomDimensionLineEl.style.display = 'none';
+      liveRoomDimensionLineBEl.style.display = 'none';
+      dimLabelAEl.classList.remove('visible'); dimLabelBEl.classList.remove('visible'); return;
+    }
+    liveRoomDimensionLineEl.style.display = 'none';
+    liveRoomDimensionLineBEl.style.display = 'none';
     var p = drawPreview;
     var labelY = p.yOffset + 0.08;
 
@@ -630,14 +775,61 @@ import {
       return;
     }
     paintPickerPanelEl.innerHTML = '';
-    Catalog.getProductsByCategory('paint').forEach(function (p) {
+    var surfaces: [string, string][] = [
+      ['walls', 'Paredes'], ['floors', 'Pisos'], ['ceilings', 'Teto/forro'],
+      ['roofs', 'Telhado'], ['external', 'Áreas externas']
+    ];
+    var nav = document.createElement('div');
+    nav.className = 'paint-surface-nav';
+    surfaces.forEach(function (item) {
+      var surfaceBtn = document.createElement('button');
+      surfaceBtn.className = 'paint-surface' + (currentPaintSurface === item[0] ? ' active' : '');
+      surfaceBtn.dataset.surface = item[0];
+      surfaceBtn.textContent = item[1];
+      nav.appendChild(surfaceBtn);
+    });
+    paintPickerPanelEl.appendChild(nav);
+    if (!currentPaintSurface) {
+      var prompt = document.createElement('div');
+      prompt.className = 'paint-help';
+      prompt.textContent = 'Escolha o tipo de superfície.';
+      paintPickerPanelEl.appendChild(prompt);
+      paintPickerPanelEl.classList.add('visible');
+      return;
+    }
+    var category: any = currentPaintSurface === 'roofs' ? 'roof_tile'
+      : (currentPaintSurface === 'floors' || currentPaintSurface === 'external') ? 'floor_tile' : 'paint';
+    var products = Catalog.getProductsByCategory(category);
+    if (currentPaintSurface === 'walls') products = Catalog.getProductsByCategory('paint').concat(Catalog.getProductsByCategory('floor_tile'));
+    var swatches = document.createElement('div');
+    swatches.className = 'paint-swatches';
+    products.forEach(function (p) {
       var btn = document.createElement('button');
       btn.className = 'fn' + (p.id === currentPaintProductId ? ' active' : '');
       btn.title = p.name;
       btn.style.background = p.assets.colorHex;
       btn.dataset.product = p.id;
-      paintPickerPanelEl.appendChild(btn);
+      swatches.appendChild(btn);
     });
+    paintPickerPanelEl.appendChild(swatches);
+    if (currentPaintSurface === 'floors') {
+      var controls = document.createElement('div');
+      controls.className = 'floor-finish-controls';
+      controls.innerHTML = '<label>Escala <input data-floor-scale type="range" min="0.25" max="4" step="0.25" value="' + floorFinishScale + '"><span>' + floorFinishScale.toFixed(2).replace('.', ',') + '×</span></label>' +
+        '<label>Rotação <select data-floor-rotation><option value="0">0°</option><option value="45">45°</option><option value="90">90°</option><option value="135">135°</option></select></label>' +
+        '<button class="paint-apply"' + (selectedPaintRoomKey ? '' : ' disabled') + '>Aplicar no cômodo</button>';
+      (controls.querySelector('[data-floor-rotation]') as HTMLSelectElement).value = String(floorFinishRotation);
+      paintPickerPanelEl.appendChild(controls);
+      var floorHelp = document.createElement('div');
+      floorHelp.className = 'paint-help';
+      floorHelp.textContent = selectedPaintRoomKey ? 'Cômodo selecionado. Ajuste e aplique.' : 'Clique no piso do cômodo que deseja revestir.';
+      paintPickerPanelEl.appendChild(floorHelp);
+    } else if (currentPaintSurface === 'ceilings' || currentPaintSurface === 'external') {
+      var unavailable = document.createElement('div');
+      unavailable.className = 'paint-help';
+      unavailable.textContent = 'Clique na face desejada para aplicar somente nela.';
+      paintPickerPanelEl.appendChild(unavailable);
+    }
     paintPickerPanelEl.classList.add('visible');
   }
 
@@ -849,10 +1041,26 @@ import {
     // o painel de acabamento por clique direito primeiro.
     if (currentTool === 'paintBucket') {
       var paintHit = pickMeshHit(e.clientX, e.clientY);
-      if (paintHit && paintHit.object.userData.wallId && currentPaintProductId) {
+      if (currentPaintSurface === 'walls' && paintHit && paintHit.object.userData.wallId && currentPaintProductId) {
         var faceHit = wallFaceAtPoint(paintHit.object.userData.wallId, paintHit.point);
         Store.commands.setWallFinishFace(paintHit.object.userData.wallId, faceHit as any, currentPaintProductId);
         hintEl.textContent = 'Lado ' + faceHit.toUpperCase() + ' pintado. Clique em outra pra continuar.';
+        return;
+      }
+      if (currentPaintSurface === 'walls' && paintHit && paintHit.object.userData.gableSide && paintHit.object.userData.roofId && currentPaintProductId) {
+        Store.commands.setRoofGableFinish(paintHit.object.userData.roofId, paintHit.object.userData.gableSide, currentPaintProductId);
+        hintEl.textContent = 'Acabamento aplicado somente à face clicada do oitão.';
+        return;
+      }
+      if (currentPaintSurface === 'floors' && paintHit && paintHit.object.userData.roomKey) {
+        selectedPaintRoomKey = paintHit.object.userData.roomKey;
+        refreshPaintPickerPanel();
+        hintEl.textContent = 'Piso selecionado. Escolha o material, ajuste escala e rotação e clique em Aplicar.';
+        return;
+      }
+      if (currentPaintSurface === 'roofs' && paintHit && paintHit.object.userData.roofId && currentPaintProductId) {
+        Store.commands.setRoofFinish(paintHit.object.userData.roofId, currentPaintProductId);
+        hintEl.textContent = 'Revestimento aplicado somente ao telhado clicado.';
         return;
       }
     }
@@ -893,6 +1101,15 @@ import {
           Store.commands.beginTransaction();
         } else if (mesh.userData.roofId) {
           selectRoof(mesh.userData.roofId);
+          var connectedIds = connectedRoofIds(mesh.userData.roofId);
+          var roofSnapshots = connectedIds.map(function (id) {
+            var roof = Store.findRoof(id)!;
+            return { id: id, x1: roof.x1, y1: roof.y1, x2: roof.x2, y2: roof.y2 };
+          });
+          dragMode = 'roofGroup';
+          dragElementStart = { snapshots: roofSnapshots };
+          dragGroundStart = getGroundModelPoint(e.clientX, e.clientY);
+          Store.commands.beginTransaction();
         } else if (mesh.userData.varandaId) {
           selectVaranda(mesh.userData.varandaId);
         } else if (mesh.userData.openingId) {
@@ -1060,7 +1277,12 @@ import {
       var gp2 = getGroundModelPoint(e.clientX, e.clientY);
       if (gp2 && dragGroundStart) {
         var dx = gp2.x - dragGroundStart.x, dy = gp2.y - dragGroundStart.y;
-        Store.commands.updateWallBodyLive(selectedWallId, dragElementStart.x1 + dx, dragElementStart.y1 + dy, dragElementStart.x2 + dx, dragElementStart.y2 + dy);
+        var bodyCandidate = { id: selectedWallId, x1: dragElementStart.x1 + dx, y1: dragElementStart.y1 + dy, x2: dragElementStart.x2 + dx, y2: dragElementStart.y2 + dy };
+        if (!Core.wallOverlapsForeignOpening(bodyCandidate, [selectedWallId], Store.currentOpenings(), Store.currentWalls())) {
+          Store.commands.updateWallBodyLive(selectedWallId, bodyCandidate.x1, bodyCandidate.y1, bodyCandidate.x2, bodyCandidate.y2);
+        } else {
+          hintEl.textContent = 'Movimento bloqueado: a parede não pode atravessar uma porta ou janela.';
+        }
       }
       return;
     }
@@ -1076,6 +1298,15 @@ import {
         dragElementStart.lastValidDx = resolved.x;
         dragElementStart.lastValidDy = resolved.y;
         Store.commands.updateWallsGroupBodyLive(dragElementStart.snapshots, resolved.x, resolved.y);
+      }
+      return;
+    }
+    if (dragMode === 'roofGroup') {
+      var gpRoofGroup = getGroundModelPoint(e.clientX, e.clientY);
+      if (gpRoofGroup && dragGroundStart && dragElementStart) {
+        var roofDx = Core.snap(gpRoofGroup.x - dragGroundStart.x);
+        var roofDy = Core.snap(gpRoofGroup.y - dragGroundStart.y);
+        Store.commands.updateRoofsGroupBodyLive(dragElementStart.snapshots, roofDx, roofDy);
       }
       return;
     }
@@ -1097,6 +1328,21 @@ import {
             )
           : { offset: requestedOffset, limited: false };
         var offset = offsetResolution.offset;
+        var openingResolution = Core.resolveWallOffsetAgainstOpenings(
+          dragElementStart.originalWall,
+          offset,
+          dragElementStart.nx,
+          dragElementStart.ny,
+          [resizeWallId],
+          Store.currentOpenings(),
+          dragElementStart.diagnosticBefore
+        );
+        if (openingResolution.limited) {
+          offset = openingResolution.offset;
+          hintEl.textContent = 'Movimento bloqueado: a parede não pode atravessar uma porta ou janela.';
+        } else {
+          offset = openingResolution.offset;
+        }
         dragElementStart.resizeLimitWallId = offsetResolution.limited ? offsetResolution.blockingWallId : null;
         if (offsetResolution.limited) {
           hintEl.textContent = 'Limite atingido: a parede não pode atravessar outra parede da planta.';
@@ -1411,6 +1657,11 @@ import {
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }
+    if (dragMode === 'roofGroup') {
+      dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
+      hintEl.textContent = 'Cobertura conectada movida como um conjunto.';
+      return;
+    }
     // Telhado (cumeeira ou borda): solta e, se o footprint dele agora
     // encosta/sobrepõe um vizinho do MESMO tipo, MESMA inclinação e
     // MESMO eixo de cumeeira, com a extensão perpendicular batendo
@@ -1565,7 +1816,9 @@ import {
       dx,
       dy,
       dragElementStart && dragElementStart.lastValidDx || 0,
-      dragElementStart && dragElementStart.lastValidDy || 0
+      dragElementStart && dragElementStart.lastValidDy || 0,
+      Store.currentOpenings(),
+      Store.currentWalls()
     );
   }
 
@@ -1985,6 +2238,8 @@ import {
     wallDiagnosticsOutputEl = document.getElementById('wallDiagnosticsOutput');
     dimLabelAEl = document.getElementById('dimLabelA');
     dimLabelBEl = document.getElementById('dimLabelB');
+    liveRoomDimensionLineEl = document.getElementById('liveRoomDimensionLine');
+    liveRoomDimensionLineBEl = document.getElementById('liveRoomDimensionLineB');
     dimCotaLayerEl = document.getElementById('dimCotaLayer');
 
     // A barra lateral fica DENTRO do #viewport (pedido explícito), mas
@@ -2013,6 +2268,18 @@ import {
     });
     roofTypePanelEl.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
     roofTypePanelEl.addEventListener('click', function (e: any) {
+      var commitBtn = e.target.closest('button.roof-commit');
+      if (commitBtn && selectedRoofId) {
+        var candidates = roofCompoundCandidateIds(selectedRoofId);
+        if (candidates.length < 2) {
+          hintEl.textContent = 'Encoste ou sobreponha uma cobertura transversal antes de engastar.';
+          return;
+        }
+        Store.commands.commitRoofCompound(candidates);
+        hintEl.textContent = 'Cobertura engastada: recorte, metragem líquida e movimento conjunto ativados.';
+        render();
+        return;
+      }
       var btn = e.target.closest('button.rt');
       if (!btn || !selectedRoofId) return;
       Store.commands.setRoofPieceType(selectedRoofId, btn.dataset.rooftype);
@@ -2026,10 +2293,36 @@ import {
     });
     paintPickerPanelEl.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
     paintPickerPanelEl.addEventListener('click', function (e: any) {
+      var surfaceBtn = e.target.closest('button.paint-surface');
+      if (surfaceBtn) {
+        currentPaintSurface = surfaceBtn.dataset.surface;
+        selectedPaintRoomKey = null;
+        var category: any = currentPaintSurface === 'roofs' ? 'roof_tile' : (currentPaintSurface === 'floors' || currentPaintSurface === 'external') ? 'floor_tile' : 'paint';
+        var firstProduct = Catalog.getProductsByCategory(category)[0];
+        currentPaintProductId = firstProduct ? firstProduct.id : null;
+        refreshPaintPickerPanel();
+        return;
+      }
+      var applyBtn = e.target.closest('button.paint-apply');
+      if (applyBtn && selectedPaintRoomKey && currentPaintProductId) {
+        Store.commands.setRoomFinish(selectedPaintRoomKey, currentPaintProductId, floorFinishScale, floorFinishRotation);
+        hintEl.textContent = 'Revestimento aplicado somente ao piso do cômodo selecionado.';
+        return;
+      }
       var btn = e.target.closest('button.fn');
       if (!btn) return;
       currentPaintProductId = btn.dataset.product;
       refreshPaintPickerPanel();
+    });
+    paintPickerPanelEl.addEventListener('input', function (e: any) {
+      if (e.target.matches('[data-floor-scale]')) {
+        floorFinishScale = Number(e.target.value);
+        refreshPaintPickerPanel();
+      }
+      if (e.target.matches('[data-floor-rotation]')) {
+        floorFinishRotation = Number(e.target.value);
+        refreshPaintPickerPanel();
+      }
     });
     gizmoEl.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
     openingGizmoEl.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });

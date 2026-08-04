@@ -23,3 +23,14 @@ Incluído:
 ## Governança
 
 Criada a primeira baseline de engenharia do projeto.
+
+---
+
+# Não lançado — consolidação v19
+
+## Documentação
+
+- criada a SPEC-001 com o comportamento validado do editor v19;
+- registrada a decisão de coberturas compostas e engaste explícito na ADR-005;
+- registrado o experimento rejeitado de snapping em 100 mm na ADR-R001;
+- atualizados arquitetura, modelo de domínio, índice oficial e roadmap de migração.

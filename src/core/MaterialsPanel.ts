@@ -88,6 +88,51 @@ function roofAreaMeters(roof: Roof): number {
   return (extWidth * extDepth) / Math.cos(pitchRad);
 }
 
+function roofExtendedFootprintMeters(roof: Roof) {
+  const ridgeAlongX = roof.ridgeAxis === 'x';
+  const eave = Scene3DRenderer.ROOF_OVERHANG_GETTER();
+  const rake = Scene3DRenderer.RAKE_OVERHANG_GETTER();
+  const marginX = roof.type === 'quatroAguas' ? eave : (ridgeAlongX ? rake : eave);
+  const marginY = roof.type === 'quatroAguas' ? eave : (ridgeAlongX ? eave : rake);
+  return {
+    minX: Math.min(roof.x1, roof.x2) / Core.GRID - marginX,
+    maxX: Math.max(roof.x1, roof.x2) / Core.GRID + marginX,
+    minY: Math.min(roof.y1, roof.y2) / Core.GRID - marginY,
+    maxY: Math.max(roof.y1, roof.y2) / Core.GRID + marginY
+  };
+}
+
+function roofBodyFootprintMeters(roof: Roof) {
+  return {
+    minX: Math.min(roof.x1, roof.x2) / Core.GRID,
+    maxX: Math.max(roof.x1, roof.x2) / Core.GRID,
+    minY: Math.min(roof.y1, roof.y2) / Core.GRID,
+    maxY: Math.max(roof.y1, roof.y2) / Core.GRID
+  };
+}
+
+function roofNetAreas(roofs: Roof[]): Record<string, number> {
+  const result: Record<string, number> = {};
+  roofs.forEach((roof) => { result[roof.id] = roofAreaMeters(roof); });
+  for (let i = 0; i < roofs.length; i++) for (let j = i + 1; j < roofs.length; j++) {
+    const a = roofs[i]!, b = roofs[j]!;
+    if (!a.compoundGroupId || a.compoundGroupId !== b.compoundGroupId || a.ridgeAxis === b.ridgeAxis) continue;
+    const ra = roofExtendedFootprintMeters(a), rb = roofExtendedFootprintMeters(b);
+    const areaA = (ra.maxX - ra.minX) * (ra.maxY - ra.minY);
+    const areaB = (rb.maxX - rb.minX) * (rb.maxY - rb.minY);
+    const secondary = areaA < areaB || (Math.abs(areaA - areaB) <= 1e-9 && a.id > b.id) ? a : b;
+    const primary = secondary === a ? b : a;
+    const secondaryFootprint = secondary === a ? ra : rb;
+    const primaryBody = roofBodyFootprintMeters(primary);
+    const overlap = Math.max(0, Math.min(secondaryFootprint.maxX, primaryBody.maxX) - Math.max(secondaryFootprint.minX, primaryBody.minX)) *
+      Math.max(0, Math.min(secondaryFootprint.maxY, primaryBody.maxY) - Math.max(secondaryFootprint.minY, primaryBody.minY));
+    if (overlap <= 1e-9) continue;
+    const slopeFactor = secondary.type === 'platibanda' ? 1 : 1 / Math.cos((secondary.pitchDeg || 0) * Math.PI / 180);
+    result[secondary.id] = Math.max(0, result[secondary.id]! - overlap * slopeFactor);
+  }
+  return result;
+}
+
 // Volume estruturral de uma coluna (pilar), em m³ — lado/diâmetro fixo
 // (Core.COLUMN_SIZE) vezes a altura do pé-direito do pavimento.
 function columnVolumeM3(col: Column, wallHeight: number): number {
@@ -229,10 +274,24 @@ export function compute(): ComputeResult {
 
     // Telhado: área REAL da água (considerando a inclinação de cada
     // telhado, não só a projeção horizontal — ver roofAreaMeters).
+    const netRoofAreas = roofNetAreas(floor.roofs || []);
     (floor.roofs || []).forEach(function (roof) {
-      const areaM2 = roofAreaMeters(roof);
+      const areaM2 = netRoofAreas[roof.id] ?? roofAreaMeters(roof);
       totals.roofArea += areaM2;
       if (roof.finishProductId) addTo(roofTile, roof.finishProductId, areaM2);
+      // O oitão é alvenaria derivada do telhado: entra como parede, mas
+      // não participa do contorno dos cômodos. Duas águas possui duas
+      // faces triangulares/retangulares iguais, uma em cada empena.
+      if (roof.type === 'duasAguas') {
+        const widthM = (roof.ridgeAxis === 'x' ? Math.abs(roof.y2 - roof.y1) : Math.abs(roof.x2 - roof.x1)) / Core.GRID;
+        const pitchRad = (roof.pitchDeg || 0) * Math.PI / 180;
+        const baseRise = Scene3DRenderer.ROOF_OVERHANG_GETTER() * Math.tan(pitchRad);
+        const triangleRise = widthM / 2 * Math.tan(pitchRad);
+        const oneGableArea = widthM * baseRise + widthM * triangleRise / 2;
+        totals.wallAreaNet += oneGableArea * 2;
+        if (roof.gableFinishA) addTo(paint, roof.gableFinishA, oneGableArea);
+        if (roof.gableFinishB) addTo(paint, roof.gableFinishB, oneGableArea);
+      }
     });
 
     // Estrutura: colunas (pilares) — quantidade e volume de

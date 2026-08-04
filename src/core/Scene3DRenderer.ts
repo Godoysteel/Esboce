@@ -59,14 +59,41 @@ export function hashColorHex(key: string): number {
   var FLOOR_STACK_HEIGHT = WALL_HEIGHT + LAJE_THICKNESS;
   var RADIER_THICKNESS = 0.18, RADIER_MARGIN = 0.15;
   var BALDRAME_WIDTH = 0.25, BALDRAME_THICKNESS = 0.2;
+  var BALDRAME_OUTSET = 0.05;
+  // O piso acabado ocupa de y=0 ate y=0,03 m. A fundacao termina 5 mm
+  // abaixo dele: fica integralmente sob as paredes e as faces nunca sao
+  // coplanares, eliminando o z-fighting sem criar um vao visual relevante.
+  var FOUNDATION_FLOOR_GAP = 0.005;
   var CALCADA_WIDTH = 0.6, CALCADA_THICKNESS = 0.05;
   var MARQUISE_DEPTH = 0.5, MARQUISE_THICKNESS = 0.06;
   var ROOF_PITCH_DEG = 28, ROOF_OVERHANG = 0.4, RAKE_OVERHANG = 0.2, ROOF_THICKNESS = 0.12;
   var ROOF_COLOR = 0xB5573A, GABLE_COLOR = 0xE7E1D2;
   var HIGHLIGHT_ACCENT = 0xE8963C, HIGHLIGHT_MIX = 0.55;
   var SELECTED_ACCENT = 0xE8963C;
-  var WALL_TOP_COLOR = 0x4A4945;
+  var WALL_TOP_COLOR = GABLE_COLOR;
+  var WALL_EDGE_COLOR = 0x6F879C;
   var OPENING_FRAME_COLOR = 0xF4F1E8;
+  var WALL_PLASTER_TILE_METERS = 1.25;
+  var wallPlasterMaps: { map: THREE.Texture; normalMap: THREE.Texture; roughnessMap: THREE.Texture } | null = null;
+
+  function getWallPlasterMaps() {
+    if (wallPlasterMaps) return wallPlasterMaps;
+    var loader = new THREE.TextureLoader();
+    function load(path: string, isColor: boolean) {
+      var texture = loader.load(path);
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      texture.anisotropy = 4;
+      if (isColor) texture.colorSpace = THREE.SRGBColorSpace;
+      return texture;
+    }
+    wallPlasterMaps = {
+      map: load('/textures/reboco/albedo.png', true),
+      normalMap: load('/textures/reboco/normal.png', false),
+      roughnessMap: load('/textures/reboco/roughness.png', false)
+    };
+    return wallPlasterMaps;
+  }
 
   interface Registry {
     wallMeshes: THREE.Object3D[];
@@ -85,6 +112,136 @@ export function hashColorHex(key: string): number {
 
   function tagCategory(mesh: any, category: any) {
     mesh.userData.category = category;
+    return mesh;
+  }
+
+  function roofWorldFootprint(roof: any, scale: number, offsetX: number, offsetY: number) {
+    var ridgeAlongX = roof.ridgeAxis === 'x';
+    var marginX = roof.type === 'quatroAguas' ? ROOF_OVERHANG : (ridgeAlongX ? RAKE_OVERHANG : ROOF_OVERHANG);
+    var marginZ = roof.type === 'quatroAguas' ? ROOF_OVERHANG : (ridgeAlongX ? ROOF_OVERHANG : RAKE_OVERHANG);
+    return {
+      minX: (Math.min(roof.x1, roof.x2) - offsetX) * scale - marginX,
+      maxX: (Math.max(roof.x1, roof.x2) - offsetX) * scale + marginX,
+      minZ: (Math.min(roof.y1, roof.y2) - offsetY) * scale - marginZ,
+      maxZ: (Math.max(roof.y1, roof.y2) - offsetY) * scale + marginZ
+    };
+  }
+
+  function rectsOverlapArea(a: any, b: any) {
+    return Math.max(0, Math.min(a.maxX, b.maxX) - Math.max(a.minX, b.minX)) *
+      Math.max(0, Math.min(a.maxZ, b.maxZ) - Math.max(a.minZ, b.minZ));
+  }
+
+  function roofCutRegions(roof: any, scale: number, offsetX: number, offsetY: number, topY: number) {
+    var fp = roofWorldFootprint(roof, scale, offsetX, offsetY);
+    if (roof.type !== 'duasAguas') return [fp];
+    var slope = Math.tan((roof.pitchDeg || ROOF_PITCH_DEG) * Math.PI / 180);
+    if (roof.ridgeAxis === 'x') {
+      var ridgeZ = (fp.minZ + fp.maxZ) / 2;
+      return [
+        { minX: fp.minX, maxX: fp.maxX, minZ: fp.minZ, maxZ: ridgeZ, plane: { ax: 0, az: slope, c: topY - slope * fp.minZ } },
+        { minX: fp.minX, maxX: fp.maxX, minZ: ridgeZ, maxZ: fp.maxZ, plane: { ax: 0, az: -slope, c: topY + slope * fp.maxZ } }
+      ];
+    }
+    var ridgeX = (fp.minX + fp.maxX) / 2;
+    return [
+      { minX: fp.minX, maxX: ridgeX, minZ: fp.minZ, maxZ: fp.maxZ, plane: { ax: slope, az: 0, c: topY - slope * fp.minX } },
+      { minX: ridgeX, maxX: fp.maxX, minZ: fp.minZ, maxZ: fp.maxZ, plane: { ax: -slope, az: 0, c: topY + slope * fp.maxX } }
+    ];
+  }
+
+  // Recorta cada triângulo contra um retângulo em planta e conserva só a
+  // parte externa. A interpolação mantém altura e UV, portanto funciona
+  // tanto nas águas inclinadas quanto nas tabeiras/cumeeiras.
+  function clipMeshOutsideRects(mesh: any, rects: any[]) {
+    if (!mesh || !mesh.isMesh || !mesh.geometry || !rects.length) return mesh;
+    var source = mesh.geometry.index ? mesh.geometry.toNonIndexed() : mesh.geometry.clone();
+    var pos = source.getAttribute('position');
+    var uvAttr = source.getAttribute('uv');
+    type CV = { x: number; y: number; z: number; u: number; v: number };
+    var triangles: CV[][] = [];
+    for (var i = 0; i < pos.count; i += 3) {
+      var tri: CV[] = [];
+      for (var j = 0; j < 3; j++) tri.push({
+        x: pos.getX(i + j), y: pos.getY(i + j), z: pos.getZ(i + j),
+        u: uvAttr ? uvAttr.getX(i + j) : 0, v: uvAttr ? uvAttr.getY(i + j) : 0
+      });
+      triangles.push(tri);
+    }
+    function split(poly: CV[], axis: 'x' | 'z', value: number, keepGreater: boolean) {
+      var inside: CV[] = [], outside: CV[] = [];
+      function isInside(p: CV) { return keepGreater ? p[axis] >= value : p[axis] <= value; }
+      function add(list: CV[], p: CV) { list.push({ ...p }); }
+      for (var k = 0; k < poly.length; k++) {
+        var a = poly[k]!, b = poly[(k + 1) % poly.length]!;
+        var ai = isInside(a), bi = isInside(b);
+        if (ai) add(inside, a); else add(outside, a);
+        if (ai !== bi) {
+          var denom = b[axis] - a[axis];
+          var t = Math.abs(denom) < 1e-9 ? 0 : (value - a[axis]) / denom;
+          var p: CV = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t, u: a.u + (b.u - a.u) * t, v: a.v + (b.v - a.v) * t };
+          add(inside, p); add(outside, p);
+        }
+      }
+      return { inside, outside };
+    }
+    function splitBelowPlane(poly: CV[], plane: any) {
+      var inside: CV[] = [], outside: CV[] = [];
+      function signed(p: CV) { return p.y - (plane.ax * p.x + plane.az * p.z + plane.c); }
+      function add(list: CV[], p: CV) { list.push({ ...p }); }
+      for (var k = 0; k < poly.length; k++) {
+        var a = poly[k]!, b = poly[(k + 1) % poly.length]!;
+        var fa = signed(a), fb = signed(b), ai = fa <= 1e-5, bi = fb <= 1e-5;
+        if (ai) add(inside, a); else add(outside, a);
+        if (ai !== bi) {
+          var denom = fa - fb;
+          var t = Math.abs(denom) < 1e-9 ? 0 : fa / denom;
+          var p: CV = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t, u: a.u + (b.u - a.u) * t, v: a.v + (b.v - a.v) * t };
+          add(inside, p); add(outside, p);
+        }
+      }
+      return { inside, outside };
+    }
+    rects.forEach(function (rect) {
+      var nextTriangles: CV[][] = [];
+      triangles.forEach(function (triangle) {
+        var remaining: CV[][] = [triangle], kept: CV[][] = [];
+        ([['x', rect.minX, true], ['x', rect.maxX, false], ['z', rect.minZ, true], ['z', rect.maxZ, false]] as any[]).forEach(function (edge) {
+          var nextRemaining: CV[][] = [];
+          remaining.forEach(function (poly) {
+            var parts = split(poly, edge[0], edge[1], edge[2]);
+            if (parts.outside.length >= 3) kept.push(parts.outside);
+            if (parts.inside.length >= 3) nextRemaining.push(parts.inside);
+          });
+          remaining = nextRemaining;
+        });
+        if (rect.plane) {
+          var aboveRoof: CV[][] = [];
+          remaining.forEach(function (poly) {
+            var planeParts = splitBelowPlane(poly, rect.plane);
+            if (planeParts.outside.length >= 3) kept.push(planeParts.outside);
+            if (planeParts.inside.length >= 3) aboveRoof.push(planeParts.inside);
+          });
+          // `aboveRoof` representa a parcela coberta pela água principal
+          // e é descartada. O limite fa=0 forma a linha da água-furtada.
+          remaining = aboveRoof;
+        }
+        nextTriangles.push.apply(nextTriangles, kept);
+      });
+      triangles = nextTriangles;
+    });
+    var verts: number[] = [], uvs: number[] = [];
+    triangles.forEach(function (poly) {
+      for (var k = 1; k < poly.length - 1; k++) [poly[0], poly[k], poly[k + 1]].forEach(function (p) {
+        verts.push(p!.x, p!.y, p!.z); uvs.push(p!.u, p!.v);
+      });
+    });
+    var geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geo.setAttribute('uv2', new THREE.Float32BufferAttribute(uvs, 2));
+    geo.computeVertexNormals();
+    mesh.geometry.dispose(); mesh.geometry = geo;
     return mesh;
   }
 
@@ -139,6 +296,28 @@ export function hashColorHex(key: string): number {
     geo.setAttribute('position', new THREE.BufferAttribute(v, 3));
     geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
     geo.setAttribute('uv2', new THREE.BufferAttribute(uvs, 2));
+    geo.computeVertexNormals();
+    return new THREE.Mesh(geo, r.mat);
+  }
+
+  // Face pentagonal contínua do oitão (faixa baixa + triângulo). Manter
+  // tudo na mesma geometria evita a costura horizontal entre duas malhas
+  // coplanares que antes aparecia como um risco fino.
+  function buildGableMesh(points: any[], colorOrMat: any) {
+    var pts = points.map(function (p) { return new THREE.Vector3(p.x, p.y, p.z); });
+    var r = resolveFaceMaterial(colorOrMat);
+    var uvOf = facePlaneUV(pts);
+    var verts: number[] = [], uvs: number[] = [];
+    for (var i = 1; i < pts.length - 1; i++) {
+      [pts[0], pts[i], pts[i + 1]].forEach(function (p) {
+        verts.push(p!.x, p!.y, p!.z);
+        var uv = uvOf(p!, r.tileMeters); uvs.push(uv[0]!, uv[1]!);
+      });
+    }
+    var geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geo.setAttribute('uv2', new THREE.Float32BufferAttribute(uvs, 2));
     geo.computeVertexNormals();
     return new THREE.Mesh(geo, r.mat);
   }
@@ -361,25 +540,64 @@ export function hashColorHex(key: string): number {
     else quad(base[2], base[3], top[3], top[2]);
     var geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+    var sideStart = side === 'a' ? fp.p1a : fp.p2b;
+    var sideEnd = side === 'a' ? fp.p2a : fp.p1b;
+    var u = Math.hypot(sideEnd.x - sideStart.x, sideEnd.z - sideStart.z) / WALL_PLASTER_TILE_METERS;
+    var v = height / WALL_PLASTER_TILE_METERS;
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, u, 0, u, v, 0, 0, u, v, 0, v], 2));
     geo.computeVertexNormals();
     return new THREE.Mesh(geo, mat);
   }
 
-  // Contorno de uma parede SEM as arestas das pontas — só as 4 arestas
-  // que correm ao longo do comprimento (topo/base, lado a/lado b). Se
-  // desenhássemos as arestas das pontas também, num canto mitrado elas
-  // cairiam bem em cima da parede vizinha, criando uma costura falsa.
-  function buildWallFootprintEdgeLines(fp: any, height: any, yOffset: any) {
+  // Contorno arquitetônico discreto: somente bordas superiores e quinas
+  // verticais. A geometria é explícita para nunca expor a base nem as
+  // diagonais internas usadas para triangular as faces da parede.
+  function buildWallFootprintEdgeLines(fp: any, height: any, yOffset: any, showTop = true) {
     var y0 = yOffset, y1 = yOffset + height;
-    var pts = [
+    var pts = showTop ? [
       fp.p1a.x, y1, fp.p1a.z, fp.p2a.x, y1, fp.p2a.z,
-      fp.p1b.x, y1, fp.p1b.z, fp.p2b.x, y1, fp.p2b.z,
-      fp.p1a.x, y0, fp.p1a.z, fp.p2a.x, y0, fp.p2a.z,
-      fp.p1b.x, y0, fp.p1b.z, fp.p2b.x, y0, fp.p2b.z
-    ];
+      fp.p1b.x, y1, fp.p1b.z, fp.p2b.x, y1, fp.p2b.z
+    ] : [];
+    function vertical(p: any) { pts.push(p.x, y0, p.z, p.x, y1, p.z); }
+    // Uma ponta conectada e não estendida fica dentro da continuidade de
+    // outra parede. Desenhar sua vertical expõe a emenda interna depois
+    // da fusão. Pontas livres e a parede que fecha a quina permanecem.
+    if (fp.p1Free !== false || fp.p1Extended) {
+      vertical(fp.p1a);
+      vertical(fp.p1b);
+    }
+    if (fp.p2Free !== false || fp.p2Extended) {
+      vertical(fp.p2a);
+      vertical(fp.p2b);
+    }
     var geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
-    return new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0x1B1C1E }));
+    var lines = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({
+      color: WALL_EDGE_COLOR,
+      transparent: true,
+      opacity: 0.58,
+      depthWrite: false
+    }));
+    lines.renderOrder = 2;
+    return lines;
+  }
+
+  function wallSupportsRoofGable(wall: any, roofs: any[]) {
+    return (roofs || []).some(function (roof: any) {
+      if (roof.type !== 'duasAguas') return false;
+      var minX = Math.min(roof.x1, roof.x2), maxX = Math.max(roof.x1, roof.x2);
+      var minY = Math.min(roof.y1, roof.y2), maxY = Math.max(roof.y1, roof.y2);
+      var wallMinX = Math.min(wall.x1, wall.x2), wallMaxX = Math.max(wall.x1, wall.x2);
+      var wallMinY = Math.min(wall.y1, wall.y2), wallMaxY = Math.max(wall.y1, wall.y2);
+      if (roof.ridgeAxis === 'x') {
+        var onEndX = Math.abs(wall.x1 - wall.x2) <= Core.COINCIDENCE_TOL &&
+          (Math.abs(wall.x1 - minX) <= Core.COINCIDENCE_TOL || Math.abs(wall.x1 - maxX) <= Core.COINCIDENCE_TOL);
+        return onEndX && Math.min(wallMaxY, maxY) - Math.max(wallMinY, minY) > Core.COINCIDENCE_TOL;
+      }
+      var onEndY = Math.abs(wall.y1 - wall.y2) <= Core.COINCIDENCE_TOL &&
+        (Math.abs(wall.y1 - minY) <= Core.COINCIDENCE_TOL || Math.abs(wall.y1 - maxY) <= Core.COINCIDENCE_TOL);
+      return onEndY && Math.min(wallMaxX, maxX) - Math.max(wallMinX, minX) > Core.COINCIDENCE_TOL;
+    });
   }
 
   // =====================================================================
@@ -438,6 +656,9 @@ export function hashColorHex(key: string): number {
     }
     var geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+    var u = Math.abs(dB - dA) / WALL_PLASTER_TILE_METERS;
+    var v = Math.abs(y1 - y0) / WALL_PLASTER_TILE_METERS;
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, u, 0, u, v, 0, 0, u, v, 0, v], 2));
     geo.computeVertexNormals();
     return new THREE.Mesh(geo, mat);
   }
@@ -559,11 +780,13 @@ export function hashColorHex(key: string): number {
   // uma fresta visível até a face de fora dela.
   var GABLE_WALL_EXTEND = Core.WALL_THICK / 2;
 
-  function buildRoofDuasAguas(topBounds: any, topY: any, roofColor: any, gableColor: any, pitchDeg: any, ridgeAxis: any, tabeiraColor: any) {
+  function buildRoofDuasAguas(topBounds: any, topY: any, roofColor: any, gableColors: any, pitchDeg: any, ridgeAxis: any, tabeiraColor: any) {
     var meshes: any[] = [];
+    function addGable(mesh: any, side: string) { mesh.userData.gableSide = side; meshes.push(mesh); }
     var ridgeAlongX = ridgeAxis === 'x';
     var pitchRad = pitchDeg * Math.PI / 180;
     var verticalDrop = ROOF_THICKNESS / Math.cos(pitchRad);
+    var gableRoofClearance = verticalDrop + 0.006;
     // Onde a água já subiu até a face do oitão (que fica ENCOSTADA na
     // parede, sem avançar) — o oitão não pode ser um triângulo simples
     // da altura da parede até a cumeeira, porque isso percorre uma
@@ -581,7 +804,10 @@ export function hashColorHex(key: string): number {
       var halfSpan = (eMaxZ - eMinZ) / 2;
       var ridgeY = topY + halfSpan * Math.tan(pitchRad);
       var gableBaseY = topY + gableBaseRise;
+      var gableBaseUnderY = gableBaseY - gableRoofClearance;
+      var gableRidgeUnderY = ridgeY - gableRoofClearance;
       var gMinX = topBounds.minX - GABLE_WALL_EXTEND, gMaxX = topBounds.maxX + GABLE_WALL_EXTEND;
+      var gMinZ = topBounds.minZ - GABLE_WALL_EXTEND, gMaxZ = topBounds.maxZ + GABLE_WALL_EXTEND;
       meshes.push.apply(meshes, extrudeSlopeDown([
         { x: eMinX, y: topY, z: eMinZ }, { x: eMaxX, y: topY, z: eMinZ },
         { x: eMaxX, y: ridgeY, z: ridgeZ }, { x: eMinX, y: ridgeY, z: ridgeZ }
@@ -590,14 +816,16 @@ export function hashColorHex(key: string): number {
         { x: eMaxX, y: topY, z: eMaxZ }, { x: eMinX, y: topY, z: eMaxZ },
         { x: eMinX, y: ridgeY, z: ridgeZ }, { x: eMaxX, y: ridgeY, z: ridgeZ }
       ], verticalDrop, roofColor, tabeiraColor));
-      meshes.push(buildQuadMesh(
-        { x: gMinX, y: topY, z: topBounds.minZ }, { x: gMinX, y: topY, z: topBounds.maxZ },
-        { x: gMinX, y: gableBaseY, z: topBounds.maxZ }, { x: gMinX, y: gableBaseY, z: topBounds.minZ }, gableColor));
-      meshes.push(buildTriMesh({ x: gMinX, y: gableBaseY, z: topBounds.minZ }, { x: gMinX, y: gableBaseY, z: topBounds.maxZ }, { x: gMinX, y: ridgeY, z: ridgeZ }, gableColor));
-      meshes.push(buildQuadMesh(
-        { x: gMaxX, y: topY, z: topBounds.maxZ }, { x: gMaxX, y: topY, z: topBounds.minZ },
-        { x: gMaxX, y: gableBaseY, z: topBounds.minZ }, { x: gMaxX, y: gableBaseY, z: topBounds.maxZ }, gableColor));
-      meshes.push(buildTriMesh({ x: gMaxX, y: gableBaseY, z: topBounds.maxZ }, { x: gMaxX, y: gableBaseY, z: topBounds.minZ }, { x: gMaxX, y: ridgeY, z: ridgeZ }, gableColor));
+      addGable(buildGableMesh([
+        { x: gMinX, y: topY, z: gMinZ }, { x: gMinX, y: topY, z: gMaxZ },
+        { x: gMinX, y: gableBaseUnderY, z: gMaxZ }, { x: gMinX, y: gableRidgeUnderY, z: ridgeZ },
+        { x: gMinX, y: gableBaseUnderY, z: gMinZ }
+      ], gableColors.a), 'a');
+      addGable(buildGableMesh([
+        { x: gMaxX, y: topY, z: gMaxZ }, { x: gMaxX, y: topY, z: gMinZ },
+        { x: gMaxX, y: gableBaseUnderY, z: gMinZ }, { x: gMaxX, y: gableRidgeUnderY, z: ridgeZ },
+        { x: gMaxX, y: gableBaseUnderY, z: gMaxZ }
+      ], gableColors.b), 'b');
       meshes.push(buildRidgeCapMesh({ x: eMinX, y: ridgeY, z: ridgeZ }, { x: eMaxX, y: ridgeY, z: ridgeZ }, roofColor, pitchRad));
     } else {
       var eMinX2 = topBounds.minX - ROOF_OVERHANG, eMaxX2 = topBounds.maxX + ROOF_OVERHANG;
@@ -606,7 +834,10 @@ export function hashColorHex(key: string): number {
       var halfSpan2 = (eMaxX2 - eMinX2) / 2;
       var ridgeY2 = topY + halfSpan2 * Math.tan(pitchRad);
       var gableBaseY2 = topY + gableBaseRise;
+      var gableBaseUnderY2 = gableBaseY2 - gableRoofClearance;
+      var gableRidgeUnderY2 = ridgeY2 - gableRoofClearance;
       var gMinZ2 = topBounds.minZ - GABLE_WALL_EXTEND, gMaxZ2 = topBounds.maxZ + GABLE_WALL_EXTEND;
+      var gMinX2 = topBounds.minX - GABLE_WALL_EXTEND, gMaxX2 = topBounds.maxX + GABLE_WALL_EXTEND;
       meshes.push.apply(meshes, extrudeSlopeDown([
         { x: eMinX2, y: topY, z: eMinZ2 }, { x: eMinX2, y: topY, z: eMaxZ2 },
         { x: ridgeX, y: ridgeY2, z: eMaxZ2 }, { x: ridgeX, y: ridgeY2, z: eMinZ2 }
@@ -615,14 +846,16 @@ export function hashColorHex(key: string): number {
         { x: eMaxX2, y: topY, z: eMaxZ2 }, { x: eMaxX2, y: topY, z: eMinZ2 },
         { x: ridgeX, y: ridgeY2, z: eMinZ2 }, { x: ridgeX, y: ridgeY2, z: eMaxZ2 }
       ], verticalDrop, roofColor, tabeiraColor));
-      meshes.push(buildQuadMesh(
-        { x: topBounds.minX, y: topY, z: gMinZ2 }, { x: topBounds.maxX, y: topY, z: gMinZ2 },
-        { x: topBounds.maxX, y: gableBaseY2, z: gMinZ2 }, { x: topBounds.minX, y: gableBaseY2, z: gMinZ2 }, gableColor));
-      meshes.push(buildTriMesh({ x: topBounds.minX, y: gableBaseY2, z: gMinZ2 }, { x: topBounds.maxX, y: gableBaseY2, z: gMinZ2 }, { x: ridgeX, y: ridgeY2, z: gMinZ2 }, gableColor));
-      meshes.push(buildQuadMesh(
-        { x: topBounds.maxX, y: topY, z: gMaxZ2 }, { x: topBounds.minX, y: topY, z: gMaxZ2 },
-        { x: topBounds.minX, y: gableBaseY2, z: gMaxZ2 }, { x: topBounds.maxX, y: gableBaseY2, z: gMaxZ2 }, gableColor));
-      meshes.push(buildTriMesh({ x: topBounds.maxX, y: gableBaseY2, z: gMaxZ2 }, { x: topBounds.minX, y: gableBaseY2, z: gMaxZ2 }, { x: ridgeX, y: ridgeY2, z: gMaxZ2 }, gableColor));
+      addGable(buildGableMesh([
+        { x: gMinX2, y: topY, z: gMinZ2 }, { x: gMaxX2, y: topY, z: gMinZ2 },
+        { x: gMaxX2, y: gableBaseUnderY2, z: gMinZ2 }, { x: ridgeX, y: gableRidgeUnderY2, z: gMinZ2 },
+        { x: gMinX2, y: gableBaseUnderY2, z: gMinZ2 }
+      ], gableColors.a), 'a');
+      addGable(buildGableMesh([
+        { x: gMaxX2, y: topY, z: gMaxZ2 }, { x: gMinX2, y: topY, z: gMaxZ2 },
+        { x: gMinX2, y: gableBaseUnderY2, z: gMaxZ2 }, { x: ridgeX, y: gableRidgeUnderY2, z: gMaxZ2 },
+        { x: gMaxX2, y: gableBaseUnderY2, z: gMaxZ2 }
+      ], gableColors.b), 'b');
       meshes.push(buildRidgeCapMesh({ x: ridgeX, y: ridgeY2, z: eMinZ2 }, { x: ridgeX, y: ridgeY2, z: eMaxZ2 }, roofColor, pitchRad));
     }
     return meshes;
@@ -807,6 +1040,29 @@ export function hashColorHex(key: string): number {
     return mat;
   }
 
+  function buildGableWallMaterial(productId: any, viewState: any) {
+    var product = productId ? Catalog.getProduct(productId) : null;
+    if (product && product.category === 'floor_tile') {
+      return new THREE.MeshStandardMaterial({
+        color: 0xFFFFFF,
+        map: buildCeramicTexture(product.assets.colorHex, 1, 0),
+        roughness: 0.78,
+        side: THREE.DoubleSide
+      });
+    }
+    var maps = getWallPlasterMaps();
+    var color = product ? parseInt(product.assets.colorHex.slice(1), 16) : GABLE_COLOR;
+    return new THREE.MeshStandardMaterial({
+      color: pickColor(color, 'paredesTerreo', viewState),
+      map: maps.map,
+      normalMap: maps.normalMap,
+      roughnessMap: maps.roughnessMap,
+      roughness: 0.92,
+      normalScale: new THREE.Vector2(0.28, 0.28),
+      side: THREE.DoubleSide
+    });
+  }
+
   // Constrói UM telhado colocado (objeto persistente), convertendo do
   // espaço de modelo pro de mundo e despachando pro tipo certo.
   function buildRoofPiece(roof: any, scale: any, offsetX: any, offsetY: any, floorTopY: any, viewState: any) {
@@ -822,7 +1078,10 @@ export function hashColorHex(key: string): number {
     // baixo) continua cor lisa — a textura de madeira é da TESTEIRA/
     // TABEIRA (a faixa de borda exposta do telhado, construída dentro
     // de extrudeSlopeDown), não do oitão.
-    var gableColor = pickColor(GABLE_COLOR, 'telhado', viewState);
+    var gableColors = {
+      a: buildGableWallMaterial(roof.gableFinishA, viewState),
+      b: buildGableWallMaterial(roof.gableFinishB, viewState)
+    };
     var tabeiraColor = buildTabeiraMaterial(viewState);
     var bounds = {
       minX: (roof.x1 - offsetX) * scale, maxX: (roof.x2 - offsetX) * scale,
@@ -843,7 +1102,7 @@ export function hashColorHex(key: string): number {
     if (roof.type === 'quatroAguas') return buildRoofQuatroAguas(bounds, floorTopY, roofColor, pitchDeg, ridgeAxis, tabeiraColor);
     if (roof.type === 'umaAgua') return buildRoofUmaAgua(bounds, floorTopY, roofColor, pitchDeg, ridgeAxis, tabeiraColor);
     if (roof.type === 'platibanda') return buildRoofPlatibanda(bounds, floorTopY, roofColor);
-    return buildRoofDuasAguas(bounds, floorTopY, roofColor, gableColor, pitchDeg, ridgeAxis, tabeiraColor);
+    return buildRoofDuasAguas(bounds, floorTopY, roofColor, gableColors, pitchDeg, ridgeAxis, tabeiraColor);
   }
 
   var VARANDA_SLAB_THICK = 0.12;
@@ -912,9 +1171,9 @@ export function hashColorHex(key: string): number {
     return meshes;
   }
 
-  function makeSlabMesh(shape: any, thickness: any, topY: any, color: any, opacity: any, polyOffset?: any) {
+  function makeSlabMesh(shape: any, thickness: any, topY: any, color: any, opacity: any, polyOffset?: any, texture?: THREE.Texture | null) {
     var geo = new THREE.ExtrudeGeometry(shape, { depth: thickness, bevelEnabled: false });
-    var matOpts: any = { color: color, side: THREE.DoubleSide, transparent: opacity < 1, opacity: opacity };
+    var matOpts: any = { color: color, map: texture || null, side: THREE.DoubleSide, transparent: opacity < 1, opacity: opacity };
     // Onde a borda da laje é EXATAMENTE coplanar com a face de uma
     // parede vizinha (ex.: o piso do cômodo, que agora encosta exato na
     // face corrigida da parede — nunca mais no eixo), as duas brigam
@@ -926,6 +1185,28 @@ export function hashColorHex(key: string): number {
     mesh.rotation.x = Math.PI / 2;
     mesh.position.y = topY;
     return mesh;
+  }
+
+  function buildCeramicTexture(colorHex: string, scale: number, rotationDeg: number) {
+    var canvas = document.createElement('canvas');
+    canvas.width = 128; canvas.height = 128;
+    var ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = colorHex;
+    ctx.fillRect(0, 0, 128, 128);
+    ctx.strokeStyle = 'rgba(70,70,66,0.42)';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(1.5, 1.5, 125, 125);
+    ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(4, 4, 120, 120);
+    var texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    var safeScale = Math.max(0.25, Math.min(4, scale || 1));
+    texture.repeat.set(2 / safeScale, 2 / safeScale);
+    texture.center.set(0.5, 0.5);
+    texture.rotation = (rotationDeg || 0) * Math.PI / 180;
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
   }
 
   function rectShape(bounds: any) {
@@ -974,14 +1255,23 @@ export function hashColorHex(key: string): number {
 
   function buildFoundationPiece(type: any, bounds: any, color: any) {
     if (type === 'baldrame') {
-      var shape = buildInsetFrameShape(bounds, BALDRAME_WIDTH);
-      return makeSlabMesh(shape, BALDRAME_THICKNESS, BALDRAME_THICKNESS, color, 1);
+      // O eixo estrutural continua sob as paredes, mas uma aba externa de
+      // 50 mm deixa a fundação identificável na vista 3D. Sem essa aba, a
+      // parede ocultava integralmente o baldrame rebaixado sob o piso.
+      var visibleBounds = {
+        minX: bounds.minX - BALDRAME_OUTSET,
+        maxX: bounds.maxX + BALDRAME_OUTSET,
+        minZ: bounds.minZ - BALDRAME_OUTSET,
+        maxZ: bounds.maxZ + BALDRAME_OUTSET
+      };
+      var shape = buildInsetFrameShape(visibleBounds, BALDRAME_WIDTH + BALDRAME_OUTSET);
+      return makeSlabMesh(shape, BALDRAME_THICKNESS, -FOUNDATION_FLOOR_GAP, color, 1);
     }
     var radierShape = rectShape({
       minX: bounds.minX - RADIER_MARGIN, maxX: bounds.maxX + RADIER_MARGIN,
       minZ: bounds.minZ - RADIER_MARGIN, maxZ: bounds.maxZ + RADIER_MARGIN
     });
-    return makeSlabMesh(radierShape, RADIER_THICKNESS, RADIER_THICKNESS, color, 1);
+    return makeSlabMesh(radierShape, RADIER_THICKNESS, -FOUNDATION_FLOOR_GAP, color, 1);
   }
 
   // Os pontos de um cômodo (Core.detectRooms) são cruzamentos do EIXO das
@@ -1355,17 +1645,7 @@ export function hashColorHex(key: string): number {
             refMesh.userData.wallId = w.id; refMesh.userData.floorIndex = floorIdx;
             scene.add(refMesh);
             registry.wallMeshes.push(refMesh);
-
-            var edgeLines = buildWallFootprintEdgeLines(fp, WALL_HEIGHT, yOffset);
-            scene.add(edgeLines);
-            registry.wallMeshes.push(edgeLines);
           } else {
-            // Sem contorno de aresta único aqui de propósito: uma parede
-            // com vão não tem mais um retângulo simples de silhueta —
-            // cada banda desenha a própria caixa (com tampa nas pontas
-            // novas), o que já basta pra leitura visual do vão. Uma
-            // limitação conhecida do MVP: sem a linha fina de contorno
-            // que as paredes cegas têm.
             bands.forEach(function (band) {
               var capA = band.edgeA ? (fp.p1Free !== false || fp.p1Extended) : true;
               var capB = band.edgeB ? (fp.p2Free !== false || fp.p2Extended) : true;
@@ -1376,9 +1656,16 @@ export function hashColorHex(key: string): number {
             });
           }
 
-          // Cinta/acabamento superior escuro independente do volume de
-          // referência transparente. Como usa o mesmo fp, não cria blocos
-          // extras nas quinas nem invade a parede vizinha.
+          // O contorno representa somente a silhueta externa da parede.
+          // As bandas internas usadas para recortar portas e janelas não
+          // são quinas reais e, portanto, nunca recebem linhas próprias.
+          var edgeLines = buildWallFootprintEdgeLines(fp, WALL_HEIGHT, yOffset, !wallSupportsRoofGable(w, floorData.roofs || []));
+          scene.add(edgeLines);
+          registry.wallMeshes.push(edgeLines);
+
+          // A face superior acompanha o azul-claro padrão da parede. Ela
+          // permanece separada apenas para fechar o volume, sem formar a
+          // antiga faixa escura no topo.
           var topMat = new THREE.MeshStandardMaterial({
             color: highlighted ? SELECTED_ACCENT : WALL_TOP_COLOR,
             side: THREE.DoubleSide,
@@ -1394,14 +1681,23 @@ export function hashColorHex(key: string): number {
           // acabamento do Catálogo — mesmo contorno fp de cima, então
           // se encontram exatas com a face da parede vizinha no canto,
           // sem sobrepor (a mesma correção que já vale pra caixa toda).
-          var wallDefaultColor = 0xB5D4F4;
+          var wallDefaultColor = GABLE_COLOR;
+          var plasterMaps = getWallPlasterMaps();
           ['a', 'b'].forEach(function (side) {
             var productId = side === 'a' ? w.finishA : w.finishB;
-            var product = productId && Catalog.getProduct(productId);
+            var product = productId ? Catalog.getProduct(productId) : null;
+            var isCeramic = product && product.category === 'floor_tile';
+            var ceramicMap = isCeramic ? buildCeramicTexture(product!.assets.colorHex, 1, 0) : null;
             var faceColorHex = product ? parseInt(product.assets.colorHex.slice(1), 16) : wallDefaultColor;
+            if (isCeramic) faceColorHex = 0xFFFFFF;
             var faceColor = highlighted ? SELECTED_ACCENT : (DEBUG_COLOR_MODE ? hashColorHex(w.id + '-' + side) : faceColorHex);
             var faceMat = new THREE.MeshStandardMaterial({
               color: (floorIdx === editingIdx && !DEBUG_COLOR_MODE) ? pickColor(faceColor, wallCategory, viewState) : faceColor,
+              map: DEBUG_COLOR_MODE ? null : (ceramicMap || plasterMaps.map),
+              normalMap: DEBUG_COLOR_MODE || isCeramic ? null : plasterMaps.normalMap,
+              roughnessMap: DEBUG_COLOR_MODE || isCeramic ? null : plasterMaps.roughnessMap,
+              roughness: 0.92,
+              normalScale: new THREE.Vector2(0.28, 0.28),
               flatShading: true,
               side: THREE.DoubleSide,
               polygonOffset: true,
@@ -1487,8 +1783,17 @@ export function hashColorHex(key: string): number {
         var roofTopY = yOffset + WALL_HEIGHT;
         floorData.roofs.forEach(function (roof) {
           var pieces = buildRoofPiece(roof, scale, offsetX, offsetY, roofTopY, viewState);
+          var ownFootprint = roofWorldFootprint(roof, scale, offsetX, offsetY);
+          var trimRects = floorData.roofs.filter(function (other) {
+            if (!roof.compoundGroupId || other.compoundGroupId !== roof.compoundGroupId || other.id === roof.id || other.ridgeAxis === roof.ridgeAxis) return false;
+            var otherFootprint = roofWorldFootprint(other, scale, offsetX, offsetY);
+            return rectsOverlapArea(ownFootprint, otherFootprint) > 1e-6;
+          }).reduce(function (regions: any[], other) {
+            return regions.concat(roofCutRegions(other, scale, offsetX, offsetY, roofTopY));
+          }, []);
           pieces.forEach(function (m) {
-            tagCategory(m, 'telhado');
+            clipMeshOutsideRects(m, trimRects);
+            tagCategory(m, m.userData.gableSide ? 'paredesTerreo' : 'telhado');
             m.userData.roofId = roof.id; m.userData.floorIndex = floorIdx;
             scene.add(m);
             registry.structureMeshes.push(m);
@@ -1558,11 +1863,16 @@ export function hashColorHex(key: string): number {
         var roomKey = Core.findRoomWallIds(floorData.walls, room).slice().sort().join(',');
         var roomFinishId = (floorData.roomFinishes || {})[roomKey];
         var roomFinish = roomFinishId && Catalog.getProduct(roomFinishId);
+        var roomFinishSettings = (floorData.roomFinishSettings || {})[roomKey] || { scale: 1, rotation: 0 };
         var pisoBaseColor = roomFinish ? parseInt(roomFinish.assets.colorHex.slice(1), 16) : 0xCFE8CF;
         var pisoColorFinal = DEBUG_COLOR_MODE ? hashColorHex('room:' + roomKey) : pisoBaseColor;
         var color = DEBUG_COLOR_MODE ? pisoColorFinal : pickColor(pisoColorFinal, 'laje', viewState);
-        var mesh = tagCategory(makeSlabMesh(shape, thickness, pisoTopY, color, 1, true), 'laje');
+        var pisoTexture = roomFinish && roomFinish.category === 'floor_tile'
+          ? buildCeramicTexture(roomFinish.assets.colorHex, roomFinishSettings.scale, roomFinishSettings.rotation)
+          : null;
+        var mesh = tagCategory(makeSlabMesh(shape, thickness, pisoTopY, color, 1, true, pisoTexture), 'laje');
         mesh.userData.debugRoomKey = roomKey;
+        mesh.userData.roomKey = roomKey;
         scene.add(mesh);
         registry.roomMeshes.push(mesh);
         var roomEdges = new THREE.EdgesGeometry(mesh.geometry);

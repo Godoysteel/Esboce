@@ -580,3 +580,40 @@ Estrutura de pastas	Organização por camada técnica	Organização por Bounded 
 Simulation	Ausente	Novo Bounded Context
 Invariantes	10 regras	11 regras
 11 regras
+
+---
+
+# Atualização v2.2 — Regras consolidadas do Editor v19
+
+Esta atualização registra as invariantes já implementadas no editor v19 sem transformar detalhes de renderização em entidades do domínio.
+
+## Parede, junções e aberturas
+
+- Junções entre paredes são relações topológicas; linhas de contorno são apenas representação.
+- Porta e janela continuam pertencendo obrigatoriamente a uma parede.
+- Uma abertura deve manter 50 mm de uma parede transversal e 150 mm de outra abertura na mesma parede.
+- Uma operação inválida é rejeitada antes de substituir o estado confirmado.
+- Cômodos, cotas e superfícies continuam derivados da topologia das paredes.
+
+## Cobertura composta
+
+Uma cobertura mantém seus parâmetros próprios e pode participar opcionalmente de um conjunto composto por meio de `compoundGroupId`. O engaste é uma relação confirmada entre coberturas transversais. Recortes, água-furtada e área líquida são derivados dessa relação e não são persistidos como malha.
+
+## Oitão
+
+O oitão é uma superfície de parede derivada da cobertura de duas águas. Ele usa acabamento e quantitativos de parede, embora sua forma e altura sejam calculadas a partir da cobertura.
+
+## Fundação
+
+Baldrame e radier são tipos de fundação do projeto. Na v19, baldrame é o padrão de novos projetos. Sua geometria visível e seus quantitativos são derivados das paredes do térreo.
+
+## Materiais
+
+Acabamentos podem ser associados à superfície lógica atingida. Paredes e oitões aceitam acabamento por face; pisos pertencem ao cômodo e armazenam material, escala e rotação. A textura renderizada é uma consequência desses parâmetros.
+
+## Invariantes adicionais
+
+12. Uma prévia de arraste nunca substitui o último estado válido.
+13. Uma cobertura só participa de recortes compostos depois da confirmação do engaste.
+14. Quantitativos de coberturas compostas usam a área líquida das superfícies derivadas.
+15. Ocultar o grid visual não altera o snapping estrutural.

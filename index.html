@@ -59,6 +59,7 @@
   }
   button:hover { background: #F1EFE8; }
   #dimensionsToggleBtn.active { background: #D7263D; border-color: #D7263D; color: #FFFFFF; }
+  #gridToggleBtn.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
 
   .floor-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
   .floor-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -161,6 +162,7 @@
   .shape-panel button.sp.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
   .shape-panel button.rt { margin: 0; padding: 0; width: 30px; height: 30px; font-size: 14px; border-radius: 6px; line-height: 1; }
   .shape-panel button.rt.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
+  .shape-panel button.roof-commit { grid-column: 1 / -1; width: 64px; min-height: 28px; margin: 2px 0 0; padding: 3px 5px; font-size: 11px; border-radius: 6px; }
   .finish-panel { grid-template-columns: repeat(4, 26px); }
   .finish-panel button.fn { margin: 0; padding: 0; width: 26px; height: 26px; border-radius: 50%; border: 2px solid #FFFFFF; box-shadow: 0 0 0 1px #D3D1C7; cursor: pointer; }
   .finish-panel button.fn.active { box-shadow: 0 0 0 2px #534AB7; }
@@ -170,7 +172,21 @@
      então fica fixa no topo do viewport, sempre visível enquanto a
      ferramenta estiver ligada — diferente do finishPanel normal, que
      segue a parede/telhado/cômodo selecionado. */
-  .finish-panel.tool-picker { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); }
+  .finish-panel.tool-picker { position: absolute; left: auto; right: 12px; top: 100px; transform: none; width: 250px; max-height: calc(100% - 118px); overflow-y: auto; grid-template-columns: 1fr; border-radius: 12px; padding: 10px; gap: 9px; z-index: 7; }
+  .paint-surface-nav { display: grid; grid-template-columns: 1fr; gap: 5px; }
+  .paint-surface { width: 100%; padding: 8px 10px; border-radius: 7px; font-size: 12px; text-align: left; background: #F7F6F2; }
+  .paint-surface.active { color: #FFFFFF; background: #534AB7; border-color: #534AB7; }
+  .paint-swatches { display: flex; flex-wrap: wrap; gap: 9px; justify-content: flex-start; align-items: center; min-height: 30px; padding: 2px; }
+  .floor-finish-controls { display: grid; gap: 9px; align-items: center; font-size: 12px; }
+  .floor-finish-controls label { display: grid; grid-template-columns: 52px 1fr auto; align-items: center; gap: 6px; }
+  .floor-finish-controls input { width: 100%; min-width: 0; }
+  .floor-finish-controls select { padding: 4px; border: 1px solid #D3D1C7; border-radius: 6px; }
+  .paint-apply { width: 100%; padding: 8px 10px; border-radius: 7px; background: #534AB7; color: #FFFFFF; border-color: #534AB7; }
+  .paint-apply:disabled { opacity: .45; cursor: not-allowed; }
+  .paint-help { text-align: left; font-size: 11px; line-height: 1.35; color: #6B6963; }
+  @media (max-width: 700px) {
+    .finish-panel.tool-picker { right: 8px; top: 92px; width: min(230px, calc(100% - 130px)); max-height: calc(100% - 104px); }
+  }
 
   .object-panel {
     position: absolute;
@@ -299,6 +315,26 @@
     white-space: nowrap;
   }
   .dim-label.visible { display: block; }
+  .live-room-dimension-line {
+    position: absolute;
+    display: none;
+    height: 0;
+    border-top: 2px dashed #534AB7;
+    transform-origin: 0 50%;
+    z-index: 6;
+    pointer-events: none;
+  }
+  .live-room-dimension-line::before,
+  .live-room-dimension-line::after {
+    content: '';
+    position: absolute;
+    top: -6px;
+    width: 2px;
+    height: 10px;
+    background: #534AB7;
+  }
+  .live-room-dimension-line::before { left: 0; }
+  .live-room-dimension-line::after { right: 0; }
 
   /* Cotas persistentes (largura da base + altura da parede),
      vermelhas, ligadas/desligadas por botão — ver ViewportController.
@@ -418,9 +454,10 @@
     <button id="addFloorBtn">+ Novo pavimento</button>
     <button id="clearBtn">Limpar pavimento atual</button>
     <button id="undoBtn" title="Ctrl+Z">↶ Desfazer</button>
+    <button id="gridToggleBtn" class="active" title="Mostrar ou ocultar o grid do terreno">▦ Grid</button>
     <button id="materialsToggleBtn" title="Lista de materiais">📦 Materiais</button>
     <button id="dimensionsToggleBtn" title="Mostrar/ocultar cotas de parede (largura e altura)">📏 Cotas</button>
-    <button id="wallDiagnosticsToggleBtn" title="Mostrar diagnóstico técnico dos arrastes de parede">🩺 Diagnóstico</button>
+    <button id="wallDiagnosticsToggleBtn" hidden title="Mostrar diagnóstico técnico dos arrastes de parede">🩺 Diagnóstico</button>
   </div>
 </div>
 
@@ -660,6 +697,7 @@
     <button class="rt" data-rooftype="quatroAguas" title="Quatro águas">⛰</button>
     <button class="rt" data-rooftype="umaAgua" title="Uma água">◺</button>
     <button class="rt" data-rooftype="platibanda" title="Platibanda">▭</button>
+    <button class="roof-commit" title="Concluir e recortar o engaste entre coberturas">Engastar</button>
   </div>
   <div id="finishPanel" class="shape-panel finish-panel"></div>
   <div id="paintPickerPanel" class="shape-panel finish-panel tool-picker"></div>
@@ -695,6 +733,8 @@ Mova uma parede para registrar a operação.</pre>
   </div>
   <div id="dimLabelA" class="dim-label"></div>
   <div id="dimLabelB" class="dim-label"></div>
+  <div id="liveRoomDimensionLine" class="live-room-dimension-line"></div>
+  <div id="liveRoomDimensionLineB" class="live-room-dimension-line"></div>
   <div id="dimCotaLayer" class="dim-cota-layer"></div>
 </div>
 
