@@ -695,7 +695,13 @@ export function wallResizeEndpointNeedsBridge(
   connectionAlreadyCovered: boolean,
 ): boolean {
   if (connectionAlreadyCovered) return false;
-  if (!originalLinks.length) return true;
+  // Uma ponta livre nao deixa nenhuma ligacao para tras quando a parede
+  // se move. Criar uma ponte nesse caso transforma o arraste em um U:
+  // ficam a parede nova e dois rastros partindo da posicao antiga. Alem
+  // da copia visual, esses rastros passam a ser materializados como novas
+  // juncoes em T nos arrastes seguintes. Ponte so existe para preservar
+  // uma conexao real que permaneceu no no antigo.
+  if (!originalLinks.length) return false;
   return originalLinks.some((original) => !movingLinks.some(
     (moving) => moving.id === original.id && moving.which === original.which,
   ));
