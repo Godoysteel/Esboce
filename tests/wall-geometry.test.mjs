@@ -24,6 +24,13 @@ import {
   formatWallDiagnosticReport,
   isWallResizeReportBlocking,
 } from '../src/core/WallDiagnostics.ts';
+import {
+  OPENING_FRAME_FACE_WIDTH,
+  OPENING_FRAME_SEAL_OVERLAP,
+  computeOpeningAssemblyLayout,
+  wallBandSideParameters,
+  wallTopTriangleVertices,
+} from '../src/core/Scene3DGeometry.ts';
 
 const viewportControllerSource = await readFile(
   new URL('../src/core/ViewportController.ts', import.meta.url),
@@ -75,6 +82,115 @@ test('paleta de pintura de parede fica restrita ao balde de tinta', () => {
 
   assert.doesNotMatch(finishPanelFlow, /selectedWallId|selectedRoomWallIds|category\('paint'\)/);
   assert.match(bucketFlow, /setWallFinishFace/);
+});
+
+test('cinta superior reutiliza exatamente o footprint sem criar volume extra', () => {
+  const footprint = {
+    p1a: { x: 0, y: -1.2 },
+    p2a: { x: 80, y: -1.2 },
+    p2b: { x: 80, y: 1.2 },
+    p1b: { x: 0, y: 1.2 },
+  };
+
+  assert.deepEqual(wallTopTriangleVertices(footprint, 2.7), [
+    0, 2.7, -1.2,
+    80, 2.7, -1.2,
+    80, 2.7, 1.2,
+    0, 2.7, -1.2,
+    80, 2.7, 1.2,
+    0, 2.7, 1.2,
+  ]);
+});
+
+test('cinta superior aceita o formato x/z usado de verdade pelo renderizador', () => {
+  const sceneFootprint = {
+    p1a: { x: 0, z: -0.06 },
+    p2a: { x: 4, z: -0.06 },
+    p2b: { x: 4, z: 0.06 },
+    p1b: { x: 0, z: 0.06 },
+  };
+
+  assert.deepEqual(wallTopTriangleVertices(sceneFootprint, 2.7), [
+    0, 2.7, -0.06,
+    4, 2.7, -0.06,
+    4, 2.7, 0.06,
+    0, 2.7, -0.06,
+    4, 2.7, 0.06,
+    0, 2.7, 0.06,
+  ]);
+});
+
+test('implantar porta preserva os prolongamentos que fecham os dois cantos da parede', () => {
+  const footprint = {
+    p1a: { x: -0.06, z: -0.06 },
+    p2a: { x: 4, z: -0.06 },
+    p2b: { x: 4.06, z: 0.06 },
+    p1b: { x: 0, z: 0.06 },
+  };
+
+  const beforeDoor = wallBandSideParameters(
+    footprint,
+    { x: 0, z: 0 },
+    { x: 4, z: 0 },
+    0,
+    1.6,
+  );
+  const afterDoor = wallBandSideParameters(
+    footprint,
+    { x: 0, z: 0 },
+    { x: 4, z: 0 },
+    2.4,
+    4,
+  );
+
+  assert.equal(beforeDoor.aStart, 0);
+  assert.equal(beforeDoor.bStart, 0);
+  assert.equal(afterDoor.aEnd, 1);
+  assert.equal(afterDoor.bEnd, 1);
+});
+
+test('recorte do vao permanece alinhado ao eixo quando o footprint e prolongado nas quinas', () => {
+  const params = wallBandSideParameters({
+    p1a: { x: -0.06, z: -0.06 },
+    p2a: { x: 4.06, z: -0.06 },
+    p2b: { x: 4.06, z: 0.06 },
+    p1b: { x: -0.06, z: 0.06 },
+  }, { x: 0, z: 0 }, { x: 4, z: 0 }, 1.1, 1.9);
+
+  const interpolateX = (start, end, t) => start + (end - start) * t;
+  assert.ok(Math.abs(interpolateX(-0.06, 4.06, params.aStart) - 1.1) < 1e-9);
+  assert.ok(Math.abs(interpolateX(-0.06, 4.06, params.aEnd) - 1.9) < 1e-9);
+  assert.ok(Math.abs(interpolateX(-0.06, 4.06, params.bStart) - 1.1) < 1e-9);
+  assert.ok(Math.abs(interpolateX(-0.06, 4.06, params.bEnd) - 1.9) < 1e-9);
+});
+
+test('porta recebe batentes laterais e superior sem soleira', () => {
+  const layout = computeOpeningAssemblyLayout({
+    kind: 'door', width: 0.8, height: 2.1, sillHeight: 0,
+  }, 0.12);
+
+  assert.equal(layout.frameBars.length, 3);
+  assert.equal(layout.infillWidth, 0.8 - OPENING_FRAME_FACE_WIDTH * 2);
+  assert.equal(layout.infillHeight, 2.1 - OPENING_FRAME_FACE_WIDTH);
+  assert.equal(layout.infillCenterY - layout.infillHeight / 2, 0);
+  assert.ok(layout.frameBars.every((bar) => bar.depth === 0.12 + OPENING_FRAME_SEAL_OVERLAP * 2));
+});
+
+test('janela recebe marco sólido nos quatro lados e vidro ocupa o interior', () => {
+  const layout = computeOpeningAssemblyLayout({
+    kind: 'window', width: 1.2, height: 1.2, sillHeight: 1,
+  }, 0.12);
+
+  assert.equal(layout.frameBars.length, 4);
+  assert.equal(layout.infillWidth, 1.2 - OPENING_FRAME_FACE_WIDTH * 2);
+  assert.equal(layout.infillHeight, 1.2 - OPENING_FRAME_FACE_WIDTH * 2);
+  assert.ok(Math.abs(
+    (layout.infillCenterY - layout.infillHeight / 2) - (1 + OPENING_FRAME_FACE_WIDTH),
+  ) < 1e-9);
+  assert.ok(Math.abs(
+    (layout.infillCenterY + layout.infillHeight / 2) - (1 + 1.2 - OPENING_FRAME_FACE_WIDTH),
+  ) < 1e-9);
+  assert.ok(layout.frameBars.every((bar) => bar.depth === 0.12 + OPENING_FRAME_SEAL_OVERLAP * 2));
 });
 
 test('parede de comodo para a 0,50 m antes de atravessar parede paralela', () => {
@@ -371,6 +487,24 @@ test('trecho intermediario fecha o no somente no sentido em que a vizinha nao co
     wallResizeEndpointNeedsBridge(originalLinks, topology.end, true),
     false,
     'um apoio deslizante ainda valido tambem fecha o no sem ponte',
+  );
+});
+
+test('ponta livre acompanha a parede sem criar copia ou parede-rastro', () => {
+  assert.equal(
+    wallResizeEndpointNeedsBridge([], [], false),
+    false,
+    'sem ligacao no no antigo nao existe conexao para uma ponte preservar',
+  );
+});
+
+test('ponte continua obrigatoria quando uma ligacao real fica no no antigo', () => {
+  const originalLinks = [{ id: 'vizinha', which: 2 }];
+
+  assert.equal(
+    wallResizeEndpointNeedsBridge(originalLinks, [], false),
+    true,
+    'a ligacao real que nao acompanhou o arraste precisa permanecer fechada',
   );
 });
 

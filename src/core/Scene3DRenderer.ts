@@ -18,6 +18,7 @@
 import * as THREE from 'three';
 import { Core } from './Core.js';
 import { Catalog } from './Catalog.js';
+import { computeOpeningAssemblyLayout, wallBandSideParameters, wallTopTriangleVertices } from './Scene3DGeometry.js';
 import type { Project, Wall, Column, Roof, Varanda, Opening } from './types.js';
 
 export interface ViewState {
@@ -64,6 +65,8 @@ export function hashColorHex(key: string): number {
   var ROOF_COLOR = 0xB5573A, GABLE_COLOR = 0xE7E1D2;
   var HIGHLIGHT_ACCENT = 0xE8963C, HIGHLIGHT_MIX = 0.55;
   var SELECTED_ACCENT = 0xE8963C;
+  var WALL_TOP_COLOR = 0x4A4945;
+  var OPENING_FRAME_COLOR = 0xF4F1E8;
 
   interface Registry {
     wallMeshes: THREE.Object3D[];
@@ -330,6 +333,17 @@ export function hashColorHex(key: string): number {
     return new THREE.Mesh(geo, mat);
   }
 
+  // Face superior visível da parede. Ela reutiliza o footprint resolvido
+  // pelo Core sem aumentar comprimento, largura ou altura; assim a cinta
+  // acompanha quinas, fusões e junções da v14 sem criar outro volume.
+  function buildWallTopCapMesh(fp: any, y: any, mat: any) {
+    var vertices = wallTopTriangleVertices(fp, y);
+    var geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    geo.computeVertexNormals();
+    return new THREE.Mesh(geo, mat);
+  }
+
   // Uma FACE só da parede (lado A = p1a-p2a, lado B = p2b-p1b) — cada
   // lado agora é um objeto pintável independente (acabamento por face,
   // ver Store.commands.setWallFinishFace). Reaproveita o MESMO contorno
@@ -389,9 +403,10 @@ export function hashColorHex(key: string): number {
   // batente/verga/peitoril visível de dentro do vão); só as pontas que
   // coincidem com a ponta DE VERDADE da parede (t=0 ou t=1) seguem a
   // regra condicional original (ponta livre/esticou == tem tampa).
-  function buildWallBandMesh(fp: any, y0: any, y1: any, tA: any, tB: any, mat: any, capA: any, capB: any) {
-    var pA0 = lerpPt(fp.p1a, fp.p2a, tA), pA1 = lerpPt(fp.p1a, fp.p2a, tB);
-    var pB0 = lerpPt(fp.p1b, fp.p2b, tA), pB1 = lerpPt(fp.p1b, fp.p2b, tB);
+  function buildWallBandMesh(fp: any, axisStart: any, axisEnd: any, y0: any, y1: any, dA: any, dB: any, mat: any, capA: any, capB: any) {
+    var sideT = wallBandSideParameters(fp, axisStart, axisEnd, dA, dB);
+    var pA0 = lerpPt(fp.p1a, fp.p2a, sideT.aStart), pA1 = lerpPt(fp.p1a, fp.p2a, sideT.aEnd);
+    var pB0 = lerpPt(fp.p1b, fp.p2b, sideT.bStart), pB1 = lerpPt(fp.p1b, fp.p2b, sideT.bEnd);
     var base = [[pA0.x, y0, pA0.z], [pA1.x, y0, pA1.z], [pB1.x, y0, pB1.z], [pB0.x, y0, pB0.z]];
     var top = [[pA0.x, y1, pA0.z], [pA1.x, y1, pA1.z], [pB1.x, y1, pB1.z], [pB0.x, y1, pB0.z]];
     var verts: any[] = [];
@@ -410,14 +425,15 @@ export function hashColorHex(key: string): number {
 
   // Equivalente em banda da buildFaceStripMesh (a face pintável de um
   // lado só) — mesmo raciocínio de lerp.
-  function buildFaceBandMesh(fp: any, y0: any, y1: any, tA: any, tB: any, mat: any, side: any) {
+  function buildFaceBandMesh(fp: any, axisStart: any, axisEnd: any, y0: any, y1: any, dA: any, dB: any, mat: any, side: any) {
     var verts: any[] = [];
     function quad(a: any, b: any, c: any, d: any) { [a, b, c, a, c, d].forEach(function (v) { verts.push(v[0], v[1], v[2]); }); }
+    var sideT = wallBandSideParameters(fp, axisStart, axisEnd, dA, dB);
     if (side === 'a') {
-      var pA0 = lerpPt(fp.p1a, fp.p2a, tA), pA1 = lerpPt(fp.p1a, fp.p2a, tB);
+      var pA0 = lerpPt(fp.p1a, fp.p2a, sideT.aStart), pA1 = lerpPt(fp.p1a, fp.p2a, sideT.aEnd);
       quad([pA0.x, y0, pA0.z], [pA1.x, y0, pA1.z], [pA1.x, y1, pA1.z], [pA0.x, y1, pA0.z]);
     } else {
-      var pB0 = lerpPt(fp.p1b, fp.p2b, tA), pB1 = lerpPt(fp.p1b, fp.p2b, tB);
+      var pB0 = lerpPt(fp.p1b, fp.p2b, sideT.bStart), pB1 = lerpPt(fp.p1b, fp.p2b, sideT.bEnd);
       quad([pB1.x, y0, pB1.z], [pB0.x, y0, pB0.z], [pB0.x, y1, pB0.z], [pB1.x, y1, pB1.z]);
     }
     var geo = new THREE.BufferGeometry();
@@ -437,28 +453,28 @@ export function hashColorHex(key: string): number {
       // abertura nasceu (ver limitações conhecidas), o t podia cair fora
       // de 0..1 — trava dentro da parede em vez de gerar geometria
       // invertida ou fora do volume.
-      var tStart = Math.max(0, Math.min(1, (o.offset - o.width / 2) / wallLenM));
-      var tEnd = Math.max(tStart, Math.min(1, (o.offset + o.width / 2) / wallLenM));
-      return { tStart: tStart, tEnd: tEnd, sill: o.sillHeight, top: o.sillHeight + o.height };
-    }).sort(function (a: any, b: any) { return a.tStart - b.tStart; });
+      var dStart = Math.max(0, Math.min(wallLenM, o.offset - o.width / 2));
+      var dEnd = Math.max(dStart, Math.min(wallLenM, o.offset + o.width / 2));
+      return { dStart: dStart, dEnd: dEnd, sill: o.sillHeight, top: o.sillHeight + o.height };
+    }).sort(function (a: any, b: any) { return a.dStart - b.dStart; });
 
     var bands: any[] = [];
     var cursor = 0;
     list.forEach(function (op: any) {
-      if (op.tStart > cursor + 1e-4) bands.push({ tA: cursor, tB: op.tStart, y0: 0, y1: WALL_HEIGHT });
+      if (op.dStart > cursor + 1e-4) bands.push({ dA: cursor, dB: op.dStart, y0: 0, y1: WALL_HEIGHT });
       // Peitoril (só janela — porta tem sill=0, sem banda embaixo).
-      if (op.sill > 0.02) bands.push({ tA: op.tStart, tB: op.tEnd, y0: 0, y1: op.sill });
+      if (op.sill > 0.02) bands.push({ dA: op.dStart, dB: op.dEnd, y0: 0, y1: op.sill });
       // Verga (o "lintel" acima do vão).
-      if (op.top < WALL_HEIGHT - 0.02) bands.push({ tA: op.tStart, tB: op.tEnd, y0: op.top, y1: WALL_HEIGHT });
-      cursor = op.tEnd;
+      if (op.top < WALL_HEIGHT - 0.02) bands.push({ dA: op.dStart, dB: op.dEnd, y0: op.top, y1: WALL_HEIGHT });
+      cursor = op.dEnd;
     });
-    if (cursor < 1 - 1e-4) bands.push({ tA: cursor, tB: 1, y0: 0, y1: WALL_HEIGHT });
+    if (cursor < wallLenM - 1e-4) bands.push({ dA: cursor, dB: wallLenM, y0: 0, y1: WALL_HEIGHT });
     if (!bands.length) return null;
     // Só a primeira/última banda (se realmente tocam a ponta de verdade
     // da parede) herdam a regra condicional de tampa do canto; todas as
     // outras são faces novas criadas pela abertura, sempre tampadas.
-    bands[0].edgeA = bands[0].tA <= 1e-4;
-    bands[bands.length - 1].edgeB = bands[bands.length - 1].tB >= 1 - 1e-4;
+    bands[0].edgeA = bands[0].dA <= 1e-4;
+    bands[bands.length - 1].edgeB = bands[bands.length - 1].dB >= wallLenM - 1e-4;
     return bands;
   }
 
@@ -477,31 +493,47 @@ export function hashColorHex(key: string): number {
     var angle = -Math.atan2(uy, ux);
 
     var pieces: any[] = [];
-    function addPiece(mesh: any, localY: any) {
-      mesh.position.set(sx, yOffset + localY, sz);
+    function addPiece(mesh: any, localY: any, localX?: any) {
+      var along = localX || 0;
+      mesh.position.set(sx + ux * along, yOffset + localY, sz + uy * along);
       mesh.rotation.y = angle;
       pieces.push(mesh);
     }
 
     var isDoor = op.kind === 'door';
-    var leafWidth = Math.max(0.1, op.width - 0.06);
+    var layout = computeOpeningAssemblyLayout(op, WALL_THICK);
+    var leafWidth = layout.infillWidth;
     var thick = WALL_THICK * 0.7;
+    var frameMat = new THREE.MeshStandardMaterial({
+      color: isSelected ? SELECTED_ACCENT : OPENING_FRAME_COLOR,
+      flatShading: true
+    });
+
+    // Batentes/marcos sólidos ocupam a folga entre esquadria e alvenaria
+    // e atravessam toda a espessura da parede. A folha/vidro continua
+    // sendo o primeiro Mesh e, portanto, o alvo de seleção da abertura.
+    function addFrameBars() {
+      layout.frameBars.forEach(function (bar: any) {
+        var frameGeo = new THREE.BoxGeometry(bar.width, bar.height, bar.depth);
+        addPiece(new THREE.Mesh(frameGeo, frameMat), bar.centerY, bar.centerX);
+      });
+    }
 
     if (isDoor) {
       var doorColor = isSelected ? SELECTED_ACCENT : 0x8B5E3C;
-      var leafGeo = new THREE.BoxGeometry(leafWidth, op.height, thick);
+      var leafGeo = new THREE.BoxGeometry(leafWidth, layout.infillHeight, thick);
       var leafMat = new THREE.MeshStandardMaterial({ color: doorColor, flatShading: true });
-      addPiece(new THREE.Mesh(leafGeo, leafMat), op.height / 2);
-      addPiece(new THREE.LineSegments(new THREE.EdgesGeometry(leafGeo), new THREE.LineBasicMaterial({ color: 0x1B1C1E })), op.height / 2);
+      addPiece(new THREE.Mesh(leafGeo, leafMat), layout.infillCenterY);
+      addPiece(new THREE.LineSegments(new THREE.EdgesGeometry(leafGeo), new THREE.LineBasicMaterial({ color: 0x1B1C1E })), layout.infillCenterY);
+      addFrameBars();
     } else {
       var glassColor = isSelected ? SELECTED_ACCENT : 0xBFE3F0;
-      var glassHeight = Math.max(0.1, op.height - 0.06);
-      var midY = op.sillHeight + op.height / 2;
+      var glassHeight = layout.infillHeight;
+      var midY = layout.infillCenterY;
       var glassGeo = new THREE.BoxGeometry(leafWidth, glassHeight, thick * 0.5);
       var glassMat = new THREE.MeshStandardMaterial({ color: glassColor, flatShading: true, transparent: true, opacity: isSelected ? 0.75 : 0.45 });
       addPiece(new THREE.Mesh(glassGeo, glassMat), midY);
-      var frameGeo = new THREE.BoxGeometry(op.width, op.height, thick);
-      addPiece(new THREE.LineSegments(new THREE.EdgesGeometry(frameGeo), new THREE.LineBasicMaterial({ color: isSelected ? SELECTED_ACCENT : 0x5F5E5A })), midY);
+      addFrameBars();
       var mullMat = new THREE.MeshStandardMaterial({ color: 0xFFFFFF, flatShading: true });
       addPiece(new THREE.Mesh(new THREE.BoxGeometry(0.03, glassHeight, thick * 0.55), mullMat), midY);
       addPiece(new THREE.Mesh(new THREE.BoxGeometry(leafWidth, 0.03, thick * 0.55), mullMat), midY);
@@ -1315,6 +1347,8 @@ export function hashColorHex(key: string): number {
           var wallOpenings = (floorData.openings || []).filter(function (o) { return o.wallId === w.id; });
           var wallLenM = Core.wallLengthMeters(w);
           var bands = wallOpenings.length ? computeWallOpeningBands(wallLenM, wallOpenings) : null;
+          var wallAxisStart = { x: x1, z: z1 };
+          var wallAxisEnd = { x: x2, z: z2 };
 
           if (!bands) {
             var refMesh = tagCategory(buildWallMeshFromFootprint(fp, WALL_HEIGHT, yOffset, refMat), wallCategory);
@@ -1335,12 +1369,26 @@ export function hashColorHex(key: string): number {
             bands.forEach(function (band) {
               var capA = band.edgeA ? (fp.p1Free !== false || fp.p1Extended) : true;
               var capB = band.edgeB ? (fp.p2Free !== false || fp.p2Extended) : true;
-              var bandMesh = tagCategory(buildWallBandMesh(fp, yOffset + band.y0, yOffset + band.y1, band.tA, band.tB, refMat, capA, capB), wallCategory);
+              var bandMesh = tagCategory(buildWallBandMesh(fp, wallAxisStart, wallAxisEnd, yOffset + band.y0, yOffset + band.y1, band.dA, band.dB, refMat, capA, capB), wallCategory);
               bandMesh.userData.wallId = w.id; bandMesh.userData.floorIndex = floorIdx;
               scene.add(bandMesh);
               registry.wallMeshes.push(bandMesh);
             });
           }
+
+          // Cinta/acabamento superior escuro independente do volume de
+          // referência transparente. Como usa o mesmo fp, não cria blocos
+          // extras nas quinas nem invade a parede vizinha.
+          var topMat = new THREE.MeshStandardMaterial({
+            color: highlighted ? SELECTED_ACCENT : WALL_TOP_COLOR,
+            side: THREE.DoubleSide,
+            flatShading: true
+          });
+          var topCapMesh = tagCategory(buildWallTopCapMesh(fp, yOffset + WALL_HEIGHT, topMat), wallCategory);
+          topCapMesh.userData.wallId = w.id;
+          topCapMesh.userData.floorIndex = floorIdx;
+          scene.add(topCapMesh);
+          registry.wallMeshes.push(topCapMesh);
 
           // As duas faces (lado A / lado B), cada uma com seu próprio
           // acabamento do Catálogo — mesmo contorno fp de cima, então
@@ -1376,7 +1424,7 @@ export function hashColorHex(key: string): number {
               registry.wallMeshes.push(faceMesh);
             } else {
               bands.forEach(function (band) {
-                var faceBandMesh = buildFaceBandMesh(fp, yOffset + band.y0, yOffset + band.y1, band.tA, band.tB, faceMat, side);
+                var faceBandMesh = buildFaceBandMesh(fp, wallAxisStart, wallAxisEnd, yOffset + band.y0, yOffset + band.y1, band.dA, band.dB, faceMat, side);
                 faceBandMesh.userData.floorIndex = floorIdx;
                 faceBandMesh.userData.debugWallId = w.id;
                 faceBandMesh.userData.debugSide = side;
@@ -1385,6 +1433,7 @@ export function hashColorHex(key: string): number {
               });
             }
           });
+
         });
       }
 
@@ -1398,8 +1447,11 @@ export function hashColorHex(key: string): number {
           if (!w) return;
           var isSelected = viewState.selectedOpening && viewState.selectedOpening.id === op.id;
           var pieces = buildOpeningPieces(op, w, scale, offsetX, offsetY, yOffset, isSelected);
-          pieces.forEach(function (m, i) {
-            if (i === 0 && m.isMesh) {
+          pieces.forEach(function (m) {
+            // Folha/vidro e todos os novos marcos sólidos pertencem à
+            // mesma abertura. Assim clicar no batente também seleciona a
+            // porta/janela, preservando o comportamento esperado.
+            if (m.isMesh) {
               tagCategory(m, 'aberturas');
               m.userData.openingId = op.id;
               m.userData.floorIndex = floorIdx;
