@@ -239,8 +239,25 @@ export const commands = {
   // histórico completo em legacy/index-monolito-original.html.
   fuseOverlappingWalls(wallAId: string, wallBId: string): void {
     const walls = currentWalls();
+    const openings = currentOpenings();
     const a = findWall(wallAId), b = findWall(wallBId);
     if (!a || !b) return;
+    // O offset da esquadria pertence ao sentido e ao ponto inicial da
+    // parede. A fusao pode encurtar, inverter ou remover esse segmento;
+    // portanto, preservamos primeiro a posicao absoluta de cada vao.
+    const openingPositions = openings
+      .filter((opening) => opening.wallId === wallAId || opening.wallId === wallBId)
+      .map((opening) => {
+        const owner = opening.wallId === wallAId ? a : b;
+        const ownerDx = owner.x2 - owner.x1, ownerDy = owner.y2 - owner.y1;
+        const ownerLen = Math.hypot(ownerDx, ownerDy) || 1e-6;
+        const distance = opening.offset * Core.GRID;
+        return {
+          opening,
+          x: owner.x1 + ownerDx / ownerLen * distance,
+          y: owner.y1 + ownerDy / ownerLen * distance,
+        };
+      });
     const dx = b.x2 - b.x1, dy = b.y2 - b.y1;
     const bLen = Math.hypot(dx, dy);
     if (bLen < 1e-6) return;
@@ -265,6 +282,7 @@ export const commands = {
 
     const MIN_WALL_LEN = 1;
     let usedA = false, usedB = false;
+    const resultingWalls: Wall[] = [];
     segments.forEach((seg) => {
       const p1 = toPoint(seg.lo), p2 = toPoint(seg.hi);
       if (Math.hypot(p2.x - p1.x, p2.y - p1.y) < MIN_WALL_LEN) return;
@@ -278,13 +296,25 @@ export const commands = {
       if (id) {
         const w = findWall(id)!;
         w.x1 = p1.x; w.y1 = p1.y; w.x2 = p2.x; w.y2 = p2.y;
+        resultingWalls.push(w);
       } else {
-        walls.push(Core.createWallEntity(p1.x, p1.y, p2.x, p2.y));
+        const piece = Core.createWallEntity(p1.x, p1.y, p2.x, p2.y);
+        walls.push(piece);
+        resultingWalls.push(piece);
       }
     });
 
     if (!usedA) { const ia = walls.indexOf(a); if (ia >= 0) walls.splice(ia, 1); }
     if (!usedB) { const ib = walls.indexOf(b); if (ib >= 0) walls.splice(ib, 1); }
+
+    openingPositions.forEach(({ opening, x, y }) => {
+      const owner = resultingWalls.find((wall) => (
+        Core.distToSegment(x, y, wall.x1, wall.y1, wall.x2, wall.y2) <= Core.COINCIDENCE_TOL
+      ));
+      if (!owner) return;
+      opening.wallId = owner.id;
+      opening.offset = Core.wallOffsetAtPoint(owner, x, y);
+    });
     emit({ type: 'WallsFused', wallAId, wallBId });
   },
 
@@ -422,13 +452,21 @@ export const commands = {
     r.finishProductId = productId;
     emit({ type: 'RoofFinishSet', roofId, productId });
   },
-  setRoomFinish(roomKey: string, productId: string): void {
+  setRoofGableFinish(roofId: string, face: 'a' | 'b', productId: string): void {
+    const r = findRoof(roofId); if (!r) return;
+    pushUndoSnapshot();
+    if (face === 'a') r.gableFinishA = productId; else r.gableFinishB = productId;
+    emit({ type: 'RoofGableFinishSet', roofId, face, productId });
+  },
+  setRoomFinish(roomKey: string, productId: string, scale = 1, rotation = 0): void {
     if (!roomKey) return;
     pushUndoSnapshot();
     const f = currentFloor();
     f.roomFinishes = f.roomFinishes || {};
+    f.roomFinishSettings = f.roomFinishSettings || {};
     f.roomFinishes[roomKey] = productId;
-    emit({ type: 'RoomFinishSet', roomKey, productId });
+    f.roomFinishSettings[roomKey] = { scale, rotation };
+    emit({ type: 'RoomFinishSet', roomKey, productId, scale, rotation });
   },
 
   duplicateWall(wallId: string): Wall | null {
@@ -658,6 +696,24 @@ export const commands = {
     const r = findRoof(roofId); if (!r) return;
     r.x1 = x1; r.y1 = y1; r.x2 = x2; r.y2 = y2;
     emit({ type: 'RoofBoundsChanged', roofId, live: true });
+  },
+  updateRoofsGroupBodyLive(snapshots: { id: string; x1: number; y1: number; x2: number; y2: number }[], dx: number, dy: number): void {
+    snapshots.forEach((snapshot) => {
+      const roof = findRoof(snapshot.id); if (!roof) return;
+      roof.x1 = snapshot.x1 + dx; roof.y1 = snapshot.y1 + dy;
+      roof.x2 = snapshot.x2 + dx; roof.y2 = snapshot.y2 + dy;
+    });
+    emit({ type: 'RoofGroupDragged', roofIds: snapshots.map((snapshot) => snapshot.id), live: true });
+  },
+
+  commitRoofCompound(roofIds: string[]): string | null {
+    const roofs = roofIds.map((id) => findRoof(id)).filter((roof): roof is Roof => !!roof);
+    if (roofs.length < 2) return null;
+    pushUndoSnapshot();
+    const groupId = Core.nextId('roof-group');
+    roofs.forEach((roof) => { roof.compoundGroupId = groupId; });
+    emit({ type: 'RoofCompoundCommitted', roofIds: roofs.map((roof) => roof.id), groupId });
+    return groupId;
   },
 
   // Varanda: mesmo padrão do telhado — objeto independente, nasce de um

@@ -15,6 +15,7 @@ export class EsboceApplication {
   private camera?: THREE.PerspectiveCamera;
   private renderer?: THREE.WebGLRenderer;
   private viewport?: HTMLElement;
+  private readonly terrainGrid = new THREE.Group();
   private storeUpdateScheduled = false;
 
   public start(): void {
@@ -68,10 +69,23 @@ export class EsboceApplication {
     fillLight.position.set(-6, 4, -4);
     this.scene.add(fillLight);
 
+    const textureLoader = new THREE.TextureLoader();
+    const configureTerrainMap = (path: string, isColor = false): THREE.Texture => {
+      const texture = textureLoader.load(path);
+      texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+      texture.repeat.set(15, 15);
+      texture.anisotropy = Math.min(8, this.renderer!.capabilities.getMaxAnisotropy());
+      if (isColor) texture.colorSpace = THREE.SRGBColorSpace;
+      return texture;
+    };
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(30, 30),
       new THREE.MeshStandardMaterial({
-        color: 0x6fa84a,
+        color: 0xffffff,
+        map: configureTerrainMap('/textures/grama/albedo.png', true),
+        normalMap: configureTerrainMap('/textures/grama/normal.png'),
+        roughnessMap: configureTerrainMap('/textures/grama/roughness.png'),
+        normalScale: new THREE.Vector2(0.62, 0.62),
         roughness: 1,
         side: THREE.DoubleSide,
       }),
@@ -85,7 +99,7 @@ export class EsboceApplication {
     majorMaterial.transparent = true;
     majorMaterial.opacity = 0.55;
     majorGrid.position.y = 0.003;
-    this.scene.add(majorGrid);
+    this.terrainGrid.add(majorGrid);
 
     const minorGrid = new THREE.GridHelper(30, 240, 0xffffff, 0xffffff);
     minorGrid.material = new THREE.LineDashedMaterial({
@@ -97,7 +111,8 @@ export class EsboceApplication {
     });
     minorGrid.computeLineDistances();
     minorGrid.position.y = 0.0015;
-    this.scene.add(minorGrid);
+    this.terrainGrid.add(minorGrid);
+    this.scene.add(this.terrainGrid);
   }
 
   private initializeControllers(): void {
@@ -126,6 +141,10 @@ export class EsboceApplication {
       ViewportController.deselect();
     });
     this.requireElement("undoBtn").addEventListener("click", () => Store.commands.undo());
+    this.requireElement("gridToggleBtn").addEventListener("click", (event) => {
+      this.terrainGrid.visible = !this.terrainGrid.visible;
+      (event.currentTarget as HTMLElement).classList.toggle("active", this.terrainGrid.visible);
+    });
     this.requireElement("dimensionsToggleBtn").addEventListener("click", (event) => {
       const isVisible = ViewportController.toggleDimensions();
       (event.currentTarget as HTMLElement).classList.toggle("active", isVisible);

@@ -39,6 +39,10 @@ export interface Roof {
   pitchDeg: number;
   ridgeAxis: RidgeAxis;
   finishProductId?: string;
+  gableFinishA?: string;
+  gableFinishB?: string;
+  /** Identifica uma cobertura composta confirmada pelo usuário. */
+  compoundGroupId?: string;
 }
 
 export type VarandaFrontSide = 'minZ' | 'maxZ' | 'minX' | 'maxX';
@@ -73,6 +77,7 @@ export interface Floor {
   openings: Opening[];
   varandas: Varanda[];
   roomFinishes: Record<string, string>;
+  roomFinishSettings?: Record<string, { scale: number; rotation: number }>;
 }
 
 export interface ProjectLayers {

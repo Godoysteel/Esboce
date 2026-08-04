@@ -24,7 +24,7 @@ O Esboce manterá um registro permanente das decisões arquiteturais rejeitadas.
 
 Cada decisão rejeitada será documentada individualmente na pasta:
 
-docs/06 - Desenvolvimento/ADR-Rejeitadas
+docs/07 - Desenvolvimento/ADR-Rejeitadas
 
 utilizando a nomenclatura:
 
