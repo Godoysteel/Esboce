@@ -87,10 +87,11 @@ export function hashColorHex(key: string): number {
       if (isColor) texture.colorSpace = THREE.SRGBColorSpace;
       return texture;
     }
+      var base = import.meta.env.BASE_URL;
     wallPlasterMaps = {
-      map: load('/textures/reboco/albedo.png', true),
-      normalMap: load('/textures/reboco/normal.png', false),
-      roughnessMap: load('/textures/reboco/roughness.png', false)
+      map: load(base + 'textures/reboco/albedo.png', true),
+      normalMap: load(base + 'textures/reboco/normal.png', false),
+      roughnessMap: load(base + 'textures/reboco/roughness.png', false)
     };
     return wallPlasterMaps;
   }
