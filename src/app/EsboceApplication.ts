@@ -82,11 +82,9 @@ export class EsboceApplication {
       new THREE.PlaneGeometry(30, 30),
       new THREE.MeshStandardMaterial({
         color: 0xffffff,
-        map: configureTerrainMap('/textures/grama/albedo.png', true),
-        normalMap: configureTerrainMap('/textures/grama/normal.png'),
-        roughnessMap: configureTerrainMap('/textures/grama/roughness.png'),
-        normalScale: new THREE.Vector2(0.62, 0.62),
-        roughness: 1,
+         map: configureTerrainMap(import.meta.env.BASE_URL + 'textures/grama/albedo.png', true),
+        normalMap: configureTerrainMap(import.meta.env.BASE_URL + 'textures/grama/normal.png'),
+        roughnessMap: configureTerrainMap(import.meta.env.BASE_URL + 'textures/grama/roughness.png'),
         side: THREE.DoubleSide,
       }),
     );
