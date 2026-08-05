@@ -10,7 +10,7 @@
     "module": "nodenext",
     "target": "esnext",
     "allowImportingTsExtensions": true,
-    "types": [],
+    "types": ["vite/client"],
     // For nodejs:
     // "lib": ["esnext"],
     // "types": ["node"],
