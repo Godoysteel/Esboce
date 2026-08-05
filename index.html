@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Esboce — construtor de casas online</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSI1MCIgZmlsbD0iI0MxNjczRiIvPjxwYXRoIGQ9Ik0yMCw4MCBMMjAsNTAgTDUwLDIyIEw4MCw1MCBMODAsODAgWiIgZmlsbD0iI0YxRUFEOSIvPjxyZWN0IHg9IjQyIiB5PSI2NCIgd2lkdGg9IjE2IiBoZWlnaHQ9IjE2IiBmaWxsPSIjMkMyQzJBIi8+PC9zdmc+Cg==">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    margin: 0;
+    padding: 24px;
+    background: #F4F1EA;
+    color: #2C2C2A;
+  }
+  h1 { font-size: 22px; font-weight: 600; margin: 0 0 4px; }
+  p.subtitle { color: #5F5E5A; margin: 0 0 20px; font-size: 14px; }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  .brand-header { display: flex; align-items: center; gap: 10px; margin-bottom: 2px; }
+  .brand-header h1 { margin: 0; line-height: 1.1; }
+  .brand-logo { flex-shrink: 0; }
+  p.brand-tagline { margin: 1px 0 0; font-size: 12px; font-weight: 500; color: #C1673F; }
+
+  .panel-card {
+    background: #FFFFFF;
+    border: 1px solid #D3D1C7;
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 14px;
+  }
+
+  .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+  .tool-group { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tool-btn {
+    display: flex; align-items: center; gap: 6px;
+    padding: 9px 14px;
+    border: 1px solid #D3D1C7;
+    border-radius: 8px;
+    background: #FFFFFF;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  .tool-btn:hover { background: #F1EFE8; }
+  .tool-btn.active {
+    background: #534AB7;
+    border-color: #534AB7;
+    color: #FFFFFF;
+  }
+  .tool-btn .hint { font-size: 10px; opacity: .75; }
+
+  button {
+    padding: 8px 14px;
+    border: 1px solid #D3D1C7;
+    border-radius: 8px;
+    background: #FFFFFF;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  button:hover { background: #F1EFE8; }
+  #dimensionsToggleBtn.active { background: #D7263D; border-color: #D7263D; color: #FFFFFF; }
+  #gridToggleBtn.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
+
+  .floor-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+  .floor-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+  .floor-tab { padding: 7px 13px; font-size: 13px; border-radius: 7px; }
+  .floor-tab.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
+
+
+
+  #viewport {
+    position: relative;
+    width: 100%;
+    height: 560px;
+    border: 1px solid #D3D1C7;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #1B1C1E;
+    touch-action: none;
+    cursor: crosshair;
+  }
+  #viewport.tool-select { cursor: default; }
+  /* Marretinha e lata de tinta seguem o cursor pra deixar claro, sem
+     precisar de texto, o que vai acontecer no próximo clique. */
+  #viewport.tool-demolish {
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><g transform="rotate(45 16 16)" fill="none" stroke="%232C2C2A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="10" y="4" width="12" height="8" rx="1.5" fill="%23D7263D" stroke="%23861222"/><line x1="16" y1="12" x2="16" y2="27"/></g></svg>') 6 4, crosshair;
+  }
+  #viewport.tool-paintBucket {
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><g fill="none" stroke="%232C2C2A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17 15 6l11 11-11 11z" fill="%23F1EEE7"/><path d="M8 13l11 11"/><path d="M23 20c0 2.2-1.3 4-2.6 4s-2.6-1.8-2.6-4c0-1.7 2.6-4.6 2.6-4.6s2.6 2.9 2.6 4.6z" fill="%23534AB7"/></g></svg>') 4 14, crosshair;
+  }
+
+  /* Casinha de orientação — canto superior direito, mostra pra qual
+     lado da casa a câmera está olhando. Só decorativa por enquanto
+     (não intercepta clique). */
+  #navGizmoCanvas {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 58px;
+    height: 58px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.55);
+    pointer-events: none;
+    z-index: 5;
+  }
+
+  /* Menu de camadas — some por padrão, só aparece no clique direito em
+     área vazia (Lei 2: tela limpa por padrão, controle avançado fica
+     escondido até a pessoa pedir). */
+  .ctx-menu {
+    position: fixed;
+    display: none;
+    background: #FFFFFF;
+    border: 1px solid #E5DFD1;
+    border-radius: 10px;
+    box-shadow: 0 10px 28px rgba(44,44,42,0.18);
+    padding: 8px 4px;
+    z-index: 50;
+    min-width: 210px;
+  }
+  .ctx-menu.visible { display: block; }
+  .ctx-menu-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: #8A8578; padding: 4px 12px 6px; }
+  .ctx-menu label { display: flex; align-items: center; gap: 9px; padding: 7px 12px; font-size: 14px; color: #2C2C2A; cursor: pointer; border-radius: 6px; }
+  .ctx-menu label:hover { background: #F4F1EA; }
+  .ctx-menu input[type="checkbox"] { width: 15px; height: 15px; flex-shrink: 0; }
+  .ctx-menu-sep { height: 1px; background: #EDEAE1; margin: 6px 8px; }
+
+  .gizmo {
+    position: absolute;
+    display: none;
+    background: rgba(255,255,255,0.97);
+    border: 1px solid #D3D1C7;
+    border-radius: 10px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+    padding: 6px;
+    gap: 4px;
+    transform: translate(-50%, -120%);
+    z-index: 6;
+  }
+  .gizmo.visible { display: grid; grid-template-columns: repeat(3, 28px); grid-template-rows: repeat(3, 28px); }
+  .gizmo button.gz { margin: 0; padding: 0; width: 28px; height: 28px; font-size: 13px; border-radius: 6px; line-height: 1; }
+  .gizmo button.gz.danger:hover { background: #F6D9D6; border-color: #D98C86; }
+  /* Gizmo de esquadria (porta/janela): só desliza ao longo da parede —
+     não precisa da grade 3x3 cheia usada por parede/coluna/telhado. */
+  .gizmo.opening-gizmo.visible { display: flex; gap: 4px; grid-template-columns: none; grid-template-rows: none; }
+
+  .shape-panel {
+    position: absolute;
+    display: none;
+    grid-template-columns: repeat(2, 30px);
+    gap: 4px;
+    background: rgba(255,255,255,0.97);
+    border: 1px solid #D3D1C7;
+    border-radius: 10px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+    padding: 6px;
+    transform: translate(-50%, -120%);
+    z-index: 6;
+  }
+  .shape-panel.visible { display: grid; }
+  .shape-panel button.sp { margin: 0; padding: 0; width: 30px; height: 30px; font-size: 14px; border-radius: 6px; line-height: 1; }
+  .shape-panel button.sp.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
+  .shape-panel button.rt { margin: 0; padding: 0; width: 30px; height: 30px; font-size: 14px; border-radius: 6px; line-height: 1; }
+  .shape-panel button.rt.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
+  .shape-panel button.roof-commit { grid-column: 1 / -1; width: 64px; min-height: 28px; margin: 2px 0 0; padding: 3px 5px; font-size: 11px; border-radius: 6px; }
+  .finish-panel { grid-template-columns: repeat(4, 26px); }
+  .finish-panel button.fn { margin: 0; padding: 0; width: 26px; height: 26px; border-radius: 50%; border: 2px solid #FFFFFF; box-shadow: 0 0 0 1px #D3D1C7; cursor: pointer; }
+  .finish-panel button.fn.active { box-shadow: 0 0 0 2px #534AB7; }
+  .finish-panel .finish-divider { grid-column: 1 / -1; height: 1px; background: #D3D1C7; margin: 3px 0; }
+  /* Paleta da ferramenta "Lata de tinta": não é ancorada em nenhum
+     objeto 3D (nada está selecionado enquanto a ferramenta está ativa),
+     então fica fixa no topo do viewport, sempre visível enquanto a
+     ferramenta estiver ligada — diferente do finishPanel normal, que
+     segue a parede/telhado/cômodo selecionado. */
+  .finish-panel.tool-picker { position: absolute; left: auto; right: 12px; top: 100px; transform: none; width: 250px; max-height: calc(100% - 118px); overflow-y: auto; grid-template-columns: 1fr; border-radius: 12px; padding: 10px; gap: 9px; z-index: 7; }
+  .paint-surface-nav { display: grid; grid-template-columns: 1fr; gap: 5px; }
+  .paint-surface { width: 100%; padding: 8px 10px; border-radius: 7px; font-size: 12px; text-align: left; background: #F7F6F2; }
+  .paint-surface.active { color: #FFFFFF; background: #534AB7; border-color: #534AB7; }
+  .paint-swatches { display: flex; flex-wrap: wrap; gap: 9px; justify-content: flex-start; align-items: center; min-height: 30px; padding: 2px; }
+  .floor-finish-controls { display: grid; gap: 9px; align-items: center; font-size: 12px; }
+  .floor-finish-controls label { display: grid; grid-template-columns: 52px 1fr auto; align-items: center; gap: 6px; }
+  .floor-finish-controls input { width: 100%; min-width: 0; }
+  .floor-finish-controls select { padding: 4px; border: 1px solid #D3D1C7; border-radius: 6px; }
+  .paint-apply { width: 100%; padding: 8px 10px; border-radius: 7px; background: #534AB7; color: #FFFFFF; border-color: #534AB7; }
+  .paint-apply:disabled { opacity: .45; cursor: not-allowed; }
+  .paint-help { text-align: left; font-size: 11px; line-height: 1.35; color: #6B6963; }
+  @media (max-width: 700px) {
+    .finish-panel.tool-picker { right: 8px; top: 92px; width: min(230px, calc(100% - 130px)); max-height: calc(100% - 104px); }
+  }
+
+  .object-panel {
+    position: absolute;
+    top: 10px; right: 10px;
+    display: none;
+    background: rgba(255,255,255,0.97);
+    border: 1px solid #D3D1C7;
+    border-radius: 10px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+    padding: 10px 12px;
+    min-width: 170px;
+    z-index: 6;
+  }
+  .object-panel.visible { display: block; }
+  .object-panel-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #EDEAE1; }
+  .object-panel-header strong { font-size: 13px; color: #2C2C2A; }
+  .object-panel-header button { margin: 0; padding: 2px 7px; font-size: 12px; border-radius: 5px; }
+  .object-panel-section-label { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: #9C9A92; font-weight: 700; margin: 8px 0 4px; }
+  .object-panel-section-label:first-child { margin-top: 0; }
+  .type-option { display: flex; align-items: center; gap: 7px; font-size: 13px; color: #2C2C2A; padding: 3px 0; cursor: pointer; }
+
+  /* Aba "Materiais" — lista viva de quantitativos, sempre derivada do
+     modelo atual (nunca um valor solto guardado à parte). Docada no
+     canto oposto ao object-panel (que aparece só com seleção) pra não
+     brigar de espaço quando as duas estão visíveis ao mesmo tempo. */
+  .materials-panel {
+    position: absolute;
+    top: 10px; left: 10px;
+    display: none;
+    background: rgba(255,255,255,0.97);
+    border: 1px solid #D3D1C7;
+    border-radius: 10px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+    padding: 10px 12px;
+    width: 240px;
+    max-height: calc(100% - 20px);
+    overflow-y: auto;
+    z-index: 6;
+  }
+  .materials-panel.visible { display: block; }
+  .materials-line { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; color: #2C2C2A; padding: 2px 0; }
+  .materials-line span:first-child { color: #5F5E5A; }
+  .materials-line span:last-child { font-weight: 600; text-align: right; white-space: nowrap; }
+  .materials-empty { font-size: 12.5px; color: #9C9A92; padding: 4px 0; }
+
+  .viewport-hint {
+    position: absolute;
+    left: 50%; bottom: 10px;
+    transform: translateX(-50%);
+    background: rgba(27,28,30,0.72);
+    color: #F4F1EA;
+    font-size: 12px;
+    padding: 6px 10px;
+    border-radius: 7px;
+    z-index: 5;
+    pointer-events: none;
+    max-width: 60%;
+    text-align: center;
+  }
+
+  /* Leitura rápida de metragem — bem pequena, canto oposto à barra de
+     ferramentas (que fica à esquerda) e fora da faixa central da dica,
+     pra nunca disputar espaço com a visualização 3D. */
+  .viewport-stats {
+    position: absolute;
+    right: 10px; bottom: 10px;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 3px;
+    pointer-events: none;
+  }
+  .viewport-stats span {
+    background: rgba(27,28,30,0.72);
+    color: #F4F1EA;
+    font-size: 10.5px;
+    line-height: 1.3;
+    padding: 3px 7px;
+    border-radius: 6px;
+    white-space: nowrap;
+  }
+
+  .wall-diagnostics {
+    position: absolute;
+    top: 78px;
+    right: 10px;
+    z-index: 8;
+    display: none;
+    width: min(390px, calc(100% - 125px));
+    max-height: calc(100% - 100px);
+    overflow: auto;
+    box-sizing: border-box;
+    border: 2px solid #817B70;
+    border-radius: 10px;
+    background: rgba(27, 28, 30, 0.92);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    pointer-events: none;
+  }
+  .wall-diagnostics.visible { display: block; }
+  .wall-diagnostics.ok { border-color: #58A66A; }
+  .wall-diagnostics.warning { border-color: #E4B341; }
+  .wall-diagnostics.error { border-color: #E0645A; }
+  .wall-diagnostics pre {
+    margin: 0;
+    padding: 12px 14px;
+    color: #F4F1EA;
+    font: 600 11px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .dim-label {
+    position: absolute;
+    display: none;
+    transform: translate(-50%, -50%);
+    background: #534AB7;
+    color: #FFFFFF;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 12px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+    z-index: 7;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  .dim-label.visible { display: block; }
+  .live-room-dimension-line {
+    position: absolute;
+    display: none;
+    height: 0;
+    border-top: 2px dashed #534AB7;
+    transform-origin: 0 50%;
+    z-index: 6;
+    pointer-events: none;
+  }
+  .live-room-dimension-line::before,
+  .live-room-dimension-line::after {
+    content: '';
+    position: absolute;
+    top: -6px;
+    width: 2px;
+    height: 10px;
+    background: #534AB7;
+  }
+  .live-room-dimension-line::before { left: 0; }
+  .live-room-dimension-line::after { right: 0; }
+
+  /* Cotas persistentes (largura da base + altura da parede),
+     vermelhas, ligadas/desligadas por botão — ver ViewportController.
+     toggleDimensions. A camada cobre o viewport inteiro mas não
+     intercepta clique/arraste nenhum (pointer-events: none); cada
+     pílula em si também não, então nunca atrapalha desenhar/selecionar
+     por baixo delas. */
+  .dim-cota-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 6;
+    pointer-events: none;
+  }
+  .dim-cota {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    background: #D7263D;
+    color: #FFFFFF;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 10px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.35);
+    white-space: nowrap;
+    pointer-events: none;
+  }
+
+  .actions-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+
+  /* ---- Painel lateral visual (dentro do viewport) ---- */
+  .tool-sidebar {
+    position: absolute;
+    left: 10px; top: 10px; bottom: 10px;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: rgba(255,255,255,0.97);
+    border: 1px solid #D3D1C7;
+    border-radius: 12px;
+    padding: 10px 8px;
+    overflow-y: auto;
+    width: 84px;
+  }
+  .ts-group { display: flex; flex-direction: column; gap: 6px; }
+  .ts-group-label {
+    font-size: 9px; text-transform: uppercase; letter-spacing: .05em;
+    color: #9C9A92; font-weight: 700; padding: 0 2px; margin-top: 2px;
+  }
+  .ts-btn {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 8px 4px 6px;
+    border: 1.5px solid #D3D1C7;
+    border-radius: 10px;
+    background: #FFFFFF;
+    cursor: pointer;
+    font-size: 10.5px;
+    color: #2C2C2A;
+    line-height: 1.15;
+    text-align: center;
+  }
+  .ts-btn:hover { background: #F1EFE8; border-color: #B9B6AA; }
+  .ts-btn.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
+  .ts-icon { width: 30px; height: 30px; color: #6b6398; }
+  .ts-btn.active .ts-icon { color: #FFFFFF; }
+  .ts-btn.ts-disabled {
+    cursor: not-allowed;
+    opacity: .45;
+  }
+  .ts-btn.ts-disabled:hover { background: #FFFFFF; border-color: #D3D1C7; }
+  .ts-badge-soon {
+    font-size: 8px; color: #9C9A92; font-weight: 700; letter-spacing: .02em;
+  }
+  .ts-divider { height: 1px; background: #EDEAE1; margin: 2px 0; }
+  .ts-small-group { display: flex; flex-direction: column; gap: 4px; }
+  .ts-small-btn {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 6px;
+    border: 1px solid #D3D1C7;
+    border-radius: 8px;
+    background: #FFFFFF;
+    cursor: pointer;
+    font-size: 10px;
+    color: #5F5E5A;
+  }
+  .ts-small-btn:hover { background: #F1EFE8; }
+  .ts-small-btn.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
+  .ts-small-btn .ts-small-icon { width: 16px; height: 16px; flex-shrink: 0; }
+</style>
+  <script type="module" crossorigin src="/Esboce/assets/index-DzRo5sxJ.js"></script>
+</head>
+<body>
+
+<div class="wrap">
+<div class="brand-header">
+  <svg class="brand-logo" width="34" height="34" viewBox="0 0 100 100" aria-hidden="true">
+    <g fill="none" stroke="#2C2C2A" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12,94 L11,59 L50,14 L89,58 L88,95" opacity="0.85"/>
+      <path d="M14,93 L13,60 L51,17 L90,59 L86,93" opacity="0.7"/>
+      <path d="M50,14 L55,9" opacity="0.8"/>
+      <path d="M12,58 L5,55" opacity="0.8"/>
+      <path d="M89,58 L96,54" opacity="0.8"/>
+      <path d="M12,94 L4,96" opacity="0.7"/>
+      <path d="M88,95 L96,97" opacity="0.7"/>
+    </g>
+    <path d="M41,94 L40,72 L60,72 L61,94" fill="none" stroke="#C1673F" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+  </svg>
+  <div>
+    <h1>Esboce</h1>
+    <p class="brand-tagline">Sonhe, esboce, construa!</p>
+  </div>
+</div>
+<p class="subtitle">Clique num ambiente na barra lateral pra criá-lo na cena. Ferramentas de desenho livre ficam em "Avançado".</p>
+
+<div class="panel-card">
+  <div class="floor-row">
+    <div class="floor-tabs" id="floorTabs"></div>
+    <button id="addFloorBtn">+ Novo pavimento</button>
+    <button id="clearBtn">Limpar pavimento atual</button>
+    <button id="undoBtn" title="Ctrl+Z">↶ Desfazer</button>
+    <button id="gridToggleBtn" class="active" title="Mostrar ou ocultar o grid do terreno">▦ Grid</button>
+    <button id="materialsToggleBtn" title="Lista de materiais">📦 Materiais</button>
+    <button id="dimensionsToggleBtn" title="Mostrar/ocultar cotas de parede (largura e altura)">📏 Cotas</button>
+    <button id="wallDiagnosticsToggleBtn" hidden title="Mostrar diagnóstico técnico dos arrastes de parede">🩺 Diagnóstico</button>
+  </div>
+</div>
+
+<div id="viewport">
+  <canvas id="navGizmoCanvas" title="Orientação da câmera"></canvas>
+  <div id="layersContextMenu" class="ctx-menu">
+    <div class="ctx-menu-title">Camadas visíveis</div>
+    <label><input type="checkbox" id="radierToggle"> Fundação</label>
+    <label><input type="checkbox" id="calcadaToggle"> Calçada</label>
+    <div class="ctx-menu-sep"></div>
+    <label><input type="checkbox" id="paredesTerreoToggle" checked> Paredes — térreo</label>
+    <label><input type="checkbox" id="colunasToggle" checked> Colunas</label>
+    <label><input type="checkbox" id="lajeToggle" checked> Laje</label>
+    <label><input type="checkbox" id="paredesSuperioresToggle" checked> Paredes — superiores</label>
+    <label><input type="checkbox" id="aberturasToggle" checked> Portas e janelas</label>
+    <div class="ctx-menu-sep"></div>
+    <label><input type="checkbox" id="marquiseToggle"> Marquise</label>
+    <label><input type="checkbox" id="telhadoToggle" checked> Telhado</label>
+    <label><input type="checkbox" id="varandaToggle" checked> Varanda</label>
+  </div>
+  <div class="tool-sidebar" id="toolSidebar">
+    <div class="ts-group-label">Cômodos</div>
+    <div class="ts-group">
+      <button class="ts-btn" data-room-preset="banheiro" title="Banheiro — clique pra criar">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 20h28v4a8 8 0 0 1-8 8H14a8 8 0 0 1-8-8v-4z"/>
+          <path d="M6 20v-6a3 3 0 0 1 3-3"/>
+          <circle cx="11" cy="12" r="1.6" fill="currentColor" stroke="none"/>
+          <path d="M14 32v2M26 32v2"/>
+        </svg>
+        <span>Banheiro</span>
+      </button>
+      <button class="ts-btn" data-room-preset="cozinha" title="Cozinha — clique pra criar">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="7" y="10" width="26" height="22" rx="2"/>
+          <circle cx="14" cy="17" r="3"/>
+          <circle cx="26" cy="17" r="3"/>
+          <rect x="11" y="24" width="18" height="5" rx="1"/>
+        </svg>
+        <span>Cozinha</span>
+      </button>
+      <button class="ts-btn" data-room-preset="quarto" title="Quarto — clique pra criar">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 22v10M34 22v10M6 22h28v-4a3 3 0 0 0-3-3H9a3 3 0 0 0-3 3v4z"/>
+          <path d="M6 22v-3a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v3"/>
+          <path d="M6 27h28"/>
+        </svg>
+        <span>Quarto</span>
+      </button>
+      <button class="ts-btn" data-room-preset="sala" title="Sala — clique pra criar">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M7 22a3 3 0 0 1 3-3h20a3 3 0 0 1 3 3v4H7v-4z"/>
+          <path d="M8 26v6M32 26v6M7 22v-5a2 2 0 0 1 2-2h2v7M31 22v-5a2 2 0 0 0-2-2h-2v7"/>
+        </svg>
+        <span>Sala</span>
+      </button>
+      <button class="ts-btn" data-room-preset="garagem" title="Garagem — clique pra criar">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 24l2.5-7a3 3 0 0 1 2.8-2h19.4a3 3 0 0 1 2.8 2l2.5 7"/>
+          <rect x="4" y="24" width="32" height="7" rx="2"/>
+          <circle cx="12" cy="31" r="2.4" fill="currentColor" stroke="none"/>
+          <circle cx="28" cy="31" r="2.4" fill="currentColor" stroke="none"/>
+        </svg>
+        <span>Garagem</span>
+      </button>
+      <button class="ts-btn" data-room-preset="lavanderia" title="Lavanderia — clique pra criar">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="8" y="6" width="24" height="28" rx="2"/>
+          <circle cx="20" cy="21" r="8"/>
+          <circle cx="20" cy="21" r="4"/>
+          <circle cx="12" cy="10" r="1.2" fill="currentColor" stroke="none"/>
+          <circle cx="16" cy="10" r="1.2" fill="currentColor" stroke="none"/>
+        </svg>
+        <span>Lavanderia</span>
+      </button>
+      <button class="ts-btn" data-room-preset="escritorio" title="Escritório — clique pra criar">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="14" y="7" width="12" height="9" rx="1"/>
+          <path d="M20 16v4"/>
+          <path d="M6 27h28"/>
+          <path d="M9 27v6M31 27v6"/>
+          <path d="M6 27v-4a2 2 0 0 1 2-2h24a2 2 0 0 1 2 2v4"/>
+        </svg>
+        <span>Escritório</span>
+      </button>
+    </div>
+
+    <div class="ts-divider"></div>
+    <div class="ts-group-label">Cobertura</div>
+    <div class="ts-group">
+      <button class="ts-btn tool-btn" id="toolTelhado" data-tool="telhado" title="Telhado">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 22 20 8l16 14"/>
+          <path d="M9 20v12h22V20"/>
+          <path d="M17 32v-8h6v8"/>
+        </svg>
+        <span>Telhado</span>
+      </button>
+      <button class="ts-btn" data-room-preset="varanda" title="Varanda — clique pra criar, encaixada como um cômodo">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 30h28"/>
+          <path d="M8 30V16M14 30V16M20 30V16M26 30V16M32 30V16"/>
+          <path d="M6 16h28"/>
+        </svg>
+        <span>Varanda</span>
+      </button>
+    </div>
+
+    <div class="ts-divider"></div>
+    <div class="ts-group-label">Aberturas</div>
+    <div class="ts-group">
+      <button class="ts-btn tool-btn" id="toolJanela" data-tool="window" title="Janela — clique sobre uma parede">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="8" y="8" width="24" height="24" rx="1.5"/>
+          <path d="M20 8v24M8 20h24"/>
+        </svg>
+        <span>Janela</span>
+      </button>
+      <button class="ts-btn tool-btn" id="toolPorta" data-tool="door" title="Porta — clique sobre uma parede">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="11" y="6" width="18" height="28" rx="1"/>
+          <circle cx="25" cy="20" r="1.4" fill="currentColor" stroke="none"/>
+        </svg>
+        <span>Porta</span>
+      </button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Escada" title="Escada — em breve">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 32h6v-6h6v-6h6v-6h6v-6"/>
+        </svg>
+        <span>Escada</span>
+        <span class="ts-badge-soon">em breve</span>
+      </button>
+    </div>
+
+    <div class="ts-divider"></div>
+    <div class="ts-group-label">Acabamentos</div>
+    <div class="ts-group">
+      <button class="ts-btn ts-disabled" data-disabled-label="Piso" title="Piso — em breve (já dá pra trocar pelo painel do cômodo)">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="6" y="6" width="28" height="28" rx="2"/>
+          <path d="M6 15h28M6 24h28M15 6v28M24 6v28"/>
+        </svg>
+        <span>Piso</span>
+        <span class="ts-badge-soon">em breve</span>
+      </button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Revestimento" title="Revestimento — em breve">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="6" y="6" width="10" height="10" rx="1"/>
+          <rect x="18" y="6" width="10" height="10" rx="1"/>
+          <rect x="6" y="18" width="10" height="10" rx="1"/>
+          <rect x="18" y="18" width="10" height="10" rx="1"/>
+        </svg>
+        <span>Revestimento</span>
+        <span class="ts-badge-soon">em breve</span>
+      </button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Iluminação" title="Iluminação — em breve">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="20" cy="16" r="9"/>
+          <path d="M16 30h8M17 34h6"/>
+          <path d="M20 25v5"/>
+        </svg>
+        <span>Iluminação</span>
+        <span class="ts-badge-soon">em breve</span>
+      </button>
+    </div>
+
+    <div class="ts-divider"></div>
+    <div class="ts-group-label">Mobiliário</div>
+    <div class="ts-group">
+      <button class="ts-btn ts-disabled" data-disabled-label="Móveis" title="Móveis — em breve">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8 20a3 3 0 0 1 3-3h18a3 3 0 0 1 3 3v6H8v-6z"/>
+          <path d="M8 26v5M32 26v5"/>
+          <path d="M10 17v-3a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v3"/>
+        </svg>
+        <span>Móveis</span>
+        <span class="ts-badge-soon">em breve</span>
+      </button>
+    </div>
+
+    <div class="ts-divider"></div>
+    <div class="ts-group-label">Avançado</div>
+    <div class="ts-small-group">
+      <button class="ts-small-btn tool-btn" id="toolWall" data-tool="wall" title="Parede livre">
+        <svg class="ts-small-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20 20 4"/></svg>
+        Parede
+      </button>
+      <button class="ts-small-btn tool-btn" id="toolRoom" data-tool="room" title="Cômodo de tamanho livre (2 cliques)">
+        <svg class="ts-small-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="1"/></svg>
+        Cômodo livre
+      </button>
+      <button class="ts-small-btn tool-btn" id="toolColumnQuadrada" data-tool="columnQuadrada" title="Coluna quadrada">
+        <svg class="ts-small-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="6" width="12" height="12"/></svg>
+        Coluna
+      </button>
+      <button class="ts-small-btn tool-btn" id="toolColumnRedonda" data-tool="columnRedonda" title="Coluna redonda">
+        <svg class="ts-small-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="12" r="7"/></svg>
+        Coluna
+      </button>
+      <button class="ts-small-btn tool-btn" id="toolDemolish" data-tool="demolish" title="Quebrar parede — clique numa parede pra demolir">
+        <svg class="ts-small-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 6l4 4-7 7-4-4z"/><path d="M12.5 7.5l3-3 4 4-3 3"/><path d="M6 17l-2 2 3 3 2-2"/></svg>
+        Quebrar parede
+      </button>
+      <button class="ts-small-btn tool-btn" id="toolPaintBucket" data-tool="paintBucket" title="Lata de tinta — clique numa parede pra pintar">
+        <svg class="ts-small-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12l8-8 9 9-8 8z"/><path d="M6 9l9 9"/><path d="M19 16c0 1.7-1 3-2 3s-2-1.3-2-3c0-1.3 2-3.5 2-3.5s2 2.2 2 3.5z"/></svg>
+        Pintar
+      </button>
+    </div>
+  </div>
+  <div id="wallGizmo" class="gizmo">
+    <button class="gz" data-action="rotateCcw" title="Girar anti-horário">↺</button>
+    <button class="gz" data-action="up" title="Mover pra cima">↑</button>
+    <button class="gz" data-action="rotateCw" title="Girar horário">↻</button>
+    <button class="gz" data-action="left" title="Mover pra esquerda">←</button>
+    <button class="gz" data-action="duplicate" title="Duplicar">⧉</button>
+    <button class="gz" data-action="right" title="Mover pra direita">→</button>
+    <button class="gz" data-action="delete" title="Excluir">🗑</button>
+    <button class="gz" data-action="down" title="Mover pra baixo">↓</button>
+    <button class="gz" data-action="close" title="Fechar">✕</button>
+  </div>
+  <div id="openingGizmo" class="gizmo opening-gizmo">
+    <button class="gz" data-action="slideLeft" title="Deslizar pra esquerda">←</button>
+    <button class="gz danger" data-action="delete" title="Excluir">🗑</button>
+    <button class="gz" data-action="slideRight" title="Deslizar pra direita">→</button>
+    <button class="gz" data-action="close" title="Fechar">✕</button>
+  </div>
+  <div id="roomGizmo" class="gizmo opening-gizmo">
+    <button class="gz danger" data-action="delete" title="Excluir cômodo">🗑</button>
+    <button class="gz" data-action="close" title="Fechar">✕</button>
+  </div>
+  <div id="columnShapePanel" class="shape-panel">
+    <button class="sp" data-shape="quadrada" title="Coluna quadrada">▢</button>
+    <button class="sp" data-shape="redonda" title="Coluna redonda">◯</button>
+  </div>
+  <div id="roofTypePanel" class="shape-panel roof-type-panel">
+    <button class="rt" data-rooftype="duasAguas" title="Duas águas">⩓</button>
+    <button class="rt" data-rooftype="quatroAguas" title="Quatro águas">⛰</button>
+    <button class="rt" data-rooftype="umaAgua" title="Uma água">◺</button>
+    <button class="rt" data-rooftype="platibanda" title="Platibanda">▭</button>
+    <button class="roof-commit" title="Concluir e recortar o engaste entre coberturas">Engastar</button>
+  </div>
+  <div id="finishPanel" class="shape-panel finish-panel"></div>
+  <div id="paintPickerPanel" class="shape-panel finish-panel tool-picker"></div>
+  <div id="objectPanel" class="object-panel">
+    <div class="object-panel-header">
+      <strong id="objectPanelTitle"></strong>
+      <button id="objectPanelClose">✕</button>
+    </div>
+    <div id="objectPanelBody"></div>
+  </div>
+  <div id="materialsPanel" class="materials-panel">
+    <div class="object-panel-header">
+      <strong>Lista de materiais</strong>
+      <span style="display:flex; gap:4px;">
+        <button id="materialsSheetBtn" title="Abrir em planilha (página separada)">🗂️</button>
+        <button id="materialsExportBtn" title="Baixar lista (.csv)">⬇</button>
+        <button id="materialsPanelClose">✕</button>
+      </span>
+    </div>
+    <div id="materialsPanelBody"></div>
+  </div>
+  <div class="viewport-hint" id="viewportHint">Clique um ambiente na barra ao lado pra criá-lo. Clique direito + arraste pra girar a câmera. Shift + arraste desloca a câmera (igual Blender).</div>
+  <div class="wall-diagnostics" id="wallDiagnosticsPanel" aria-live="polite">
+    <pre id="wallDiagnosticsOutput">DIAGNÓSTICO DE PAREDES
+
+Modo de observação ativo.
+Mova uma parede para registrar a operação.</pre>
+  </div>
+  <div class="viewport-stats" id="viewportStats">
+    <span id="statWalls" title="Paredes — comprimento total e área líquida (descontando portas/janelas)">Paredes: 0,00 m · 0,00 m²</span>
+    <span id="statFloor" title="Área de piso dos cômodos fechados">Área: 0,00 m²</span>
+    <span id="statRoof" title="Telhado — área real da água (com inclinação e beiral)">Telhado: 0,00 m²</span>
+  </div>
+  <div id="dimLabelA" class="dim-label"></div>
+  <div id="dimLabelB" class="dim-label"></div>
+  <div id="liveRoomDimensionLine" class="live-room-dimension-line"></div>
+  <div id="liveRoomDimensionLineB" class="live-room-dimension-line"></div>
+  <div id="dimCotaLayer" class="dim-cota-layer"></div>
+</div>
+
+<div class="actions-row">
+  <span style="font-size:12px; color:#9C9A92; align-self:center;">Clique numa parede/coluna do pavimento atual pra selecionar. Clique direito nela abre girar/duplicar/excluir.</span>
+</div>
+
+</div>
+
+</body>
+</html>
