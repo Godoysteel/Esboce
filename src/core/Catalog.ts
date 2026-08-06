@@ -99,7 +99,10 @@ export const products: Product[] = [
       assets: { colorHex: '#E8E8E8', textureUrl: null, modelUrl: 'models/geladeira.glb' } },
     { id: 'vortice.movel.mesa', name: 'Mesa de Jantar', manufacturer: 'vortice', category: 'furniture',
       commercial: { sku: 'VOR-MOV-012', price: 0, unit: 'peca' },
-      assets: { colorHex: '#8A6B4A', textureUrl: null, modelUrl: 'models/mesa.glb' } }
+      assets: { colorHex: '#8A6B4A', textureUrl: null, modelUrl: 'models/mesa.glb' } },
+    { id: 'vortice.movel.armario-cozinha', name: 'Armário de Cozinha', manufacturer: 'vortice', category: 'furniture',
+      commercial: { sku: 'VOR-MOV-013', price: 0, unit: 'peca' },
+      assets: { colorHex: '#D9D5C7', textureUrl: null, modelUrl: 'models/armario.glb' } }
   ];
 export function getProductsByCategory(cat: ProductCategory): Product[] { return products.filter((p) => p.category === cat); }
 export function getProduct(id: string): Product | null { return products.find((p) => p.id === id) || null; }

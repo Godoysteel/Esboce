@@ -57,6 +57,11 @@ export function hashColorHex(key: string): number {
 
   var WALL_HEIGHT = 2.7, WALL_THICK = Core.WALL_THICK;
   var LAJE_THICKNESS = 0.15;
+  // Acabamento de piso que todo cômodo nasce usando, antes de qualquer
+  // escolha manual em Materiais — assim já vem com fuga desenhada em
+  // vez de um verde liso sem textura. Escolha manual do usuário
+  // (roomFinishId) sempre sobrescreve isso.
+  var DEFAULT_FLOOR_FINISH_ID = 'vortice.ceramica.bege-amanhecer';
   var FLOOR_STACK_HEIGHT = WALL_HEIGHT + LAJE_THICKNESS;
   var RADIER_THICKNESS = 0.18, RADIER_MARGIN = 0.15;
   var BALDRAME_WIDTH = 0.25, BALDRAME_THICKNESS = 0.2;
@@ -1278,6 +1283,65 @@ export function hashColorHex(key: string): number {
     return mesh;
   }
 
+  // Rodapé — faixa vertical de 10cm de altura, colada na face interna
+  // das paredes do cômodo, no MESMO contorno já resolvido pro piso
+  // (insetPoints — face real da parede, não o eixo). Um segmento reto
+  // por trecho do contorno, igual à filosofia de parede da DEC-12: cada
+  // segmento se sobrepõe um pouco no canto, sem juntas matemáticas —
+  // suficiente pra um detalhe fino de acabamento. UV em METROS reais
+  // (distância acumulada ao longo do perímetro x altura) — mesma
+  // convenção do piso (ExtrudeGeometry gera UV em unidade de mundo, não
+  // normalizada 0-1), pra a textura cerâmica (buildCeramicTexture) bater
+  // no mesmo passo de fuga do piso em vez de esticar/repetir errado.
+  function buildRoomBaseboardMesh(insetPoints: any[], centerX: number, centerY: number, offsetX: number, offsetY: number, scale: number, y0: number, color: any, texture: THREE.Texture | null) {
+    var HEIGHT_M = 0.10; // altura fixa do rodapé, 10cm
+    var DEPTH_M = 0.015; // quanto avança pra dentro do cômodo — não especificado, valor típico de mercado
+    var y1 = y0 + HEIGHT_M; // vertical já é metro direto, sem o fator scale (esse só vale pra X/Z)
+    var verts: number[] = [];
+    var uvs: number[] = [];
+    function quad(a: number[], b: number[], c: number[], d: number[], uvA: number[], uvB: number[], uvC: number[], uvD: number[]) {
+      [[a, uvA], [b, uvB], [c, uvC], [a, uvA], [c, uvC], [d, uvD]].forEach(function (pair) {
+        var v = pair[0]!, uv = pair[1]!;
+        verts.push(v[0]!, v[1]!, v[2]!);
+        uvs.push(uv[0]!, uv[1]!);
+      });
+    }
+    var n = insetPoints.length;
+    var cWx = (centerX - offsetX) * scale, cWz = (centerY - offsetY) * scale;
+    var distAccum = 0;
+    for (var i = 0; i < n; i++) {
+      var p1 = insetPoints[i], p2 = insetPoints[(i + 1) % n];
+      var wx1 = (p1.x - offsetX) * scale, wz1 = (p1.y - offsetY) * scale;
+      var wx2 = (p2.x - offsetX) * scale, wz2 = (p2.y - offsetY) * scale;
+      var dx = wx2 - wx1, dz = wz2 - wz1;
+      var len = Math.hypot(dx, dz) || 1e-6;
+      var nx = -dz / len, nz = dx / len;
+      // Garante que a normal aponta pra DENTRO do cômodo (em direção ao
+      // centroide) — sem isso metade dos trechos nasceria virada pro
+      // lado errado, atravessando a parede.
+      var midX = (wx1 + wx2) / 2, midZ = (wz1 + wz2) / 2;
+      if ((cWx - midX) * nx + (cWz - midZ) * nz < 0) { nx = -nx; nz = -nz; }
+      var depth = DEPTH_M * scale;
+      var ix1 = wx1 + nx * depth, iz1 = wz1 + nz * depth;
+      var ix2 = wx2 + nx * depth, iz2 = wz2 + nz * depth;
+      var outerBase1 = [wx1, y0, wz1], outerBase2 = [wx2, y0, wz2];
+      var innerBase1 = [ix1, y0, iz1], innerBase2 = [ix2, y0, iz2];
+      var outerTop1 = [wx1, y1, wz1], outerTop2 = [wx2, y1, wz2];
+      var innerTop1 = [ix1, y1, iz1], innerTop2 = [ix2, y1, iz2];
+      var u0 = distAccum, u1 = distAccum + len;
+      quad(outerBase1, outerBase2, outerTop2, outerTop1, [u0, 0], [u1, 0], [u1, HEIGHT_M], [u0, HEIGHT_M]); // face colada na parede
+      quad(innerBase2, innerBase1, innerTop1, innerTop2, [u1, 0], [u0, 0], [u0, HEIGHT_M], [u1, HEIGHT_M]); // face voltada pro cômodo
+      quad(outerTop1, outerTop2, innerTop2, innerTop1, [u0, 0], [u1, 0], [u1, DEPTH_M], [u0, DEPTH_M]);     // topo
+      distAccum = u1;
+    }
+    var geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geo.computeVertexNormals();
+    var mat = new THREE.MeshStandardMaterial({ color: color, map: texture || null, side: THREE.DoubleSide });
+    return new THREE.Mesh(geo, mat);
+  }
+
   function buildCeramicTexture(colorHex: string, scale: number, rotationDeg: number) {
     var canvas = document.createElement('canvas');
     canvas.width = 128; canvas.height = 128;
@@ -1971,11 +2035,19 @@ export function hashColorHex(key: string): number {
         var roomFinishId = (floorData.roomFinishes || {})[roomKey];
         var roomFinish = roomFinishId && Catalog.getProduct(roomFinishId);
         var roomFinishSettings = (floorData.roomFinishSettings || {})[roomKey] || { scale: 1, rotation: 0 };
-        var pisoBaseColor = roomFinish ? parseInt(roomFinish.assets.colorHex.slice(1), 16) : 0xCFE8CF;
+        // Cômodo nasce direto com cerâmica (fugas já desenhadas) — antes
+        // só aparecia depois do usuário escolher um piso manualmente em
+        // Materiais, e até lá ficava um verde liso sem fuga nenhuma.
+        // DEFAULT_FLOOR_FINISH_ID é só o ponto de partida; a escolha
+        // manual em Materiais (roomFinishId) sempre tem prioridade.
+        var effectiveFinish = (roomFinish && roomFinish.category === 'floor_tile')
+          ? roomFinish
+          : Catalog.getProduct(DEFAULT_FLOOR_FINISH_ID);
+        var pisoBaseColor = effectiveFinish ? parseInt(effectiveFinish.assets.colorHex.slice(1), 16) : 0xCFE8CF;
         var pisoColorFinal = DEBUG_COLOR_MODE ? hashColorHex('room:' + roomKey) : pisoBaseColor;
         var color = DEBUG_COLOR_MODE ? pisoColorFinal : pickColor(pisoColorFinal, 'laje', viewState);
-        var pisoTexture = roomFinish && roomFinish.category === 'floor_tile'
-          ? buildCeramicTexture(roomFinish.assets.colorHex, roomFinishSettings.scale, roomFinishSettings.rotation)
+        var pisoTexture = effectiveFinish
+          ? buildCeramicTexture(effectiveFinish.assets.colorHex, roomFinishSettings.scale, roomFinishSettings.rotation)
           : null;
         var mesh = tagCategory(makeSlabMesh(shape, thickness, pisoTopY, color, 1, true, pisoTexture), 'laje');
         mesh.userData.debugRoomKey = roomKey;
@@ -1987,6 +2059,17 @@ export function hashColorHex(key: string): number {
         roomEdgeLines.rotation.copy(mesh.rotation); roomEdgeLines.position.copy(mesh.position);
         scene.add(roomEdgeLines);
         registry.roomMeshes.push(roomEdgeLines);
+
+        // Rodapé — nasce automático junto com o piso, mesmo contorno
+        // (insetPoints, já na face real da parede) e mesmo acabamento
+        // (roomFinish), sem depender de nenhuma entidade nova no modelo.
+        var baseboardMesh = tagCategory(
+          buildRoomBaseboardMesh(insetPoints, cx, cy, offsetX, offsetY, scale, pisoTopY, pisoColorFinal, pisoTexture),
+          'rodape'
+        );
+        baseboardMesh.userData.roomKey = roomKey;
+        scene.add(baseboardMesh);
+        registry.roomMeshes.push(baseboardMesh);
       });
     });
 

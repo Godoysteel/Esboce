@@ -48,7 +48,9 @@ export class EsboceApplication {
     this.buildEnvironment();
     this.initializeControllers();
     this.bindApplicationEvents();
-    this.createInitialRoom();
+    // createInitialRoom() removido de propósito — viewport deve começar
+    // vazia, sem nenhum cômodo pré-criado; o método continua disponível
+    // abaixo caso essa decisão mude no futuro.
 
     ViewportController.render();
     FloorTabsController.refresh();
@@ -119,6 +121,9 @@ export class EsboceApplication {
     minorGrid.position.y = 0.0015;
     this.terrainGrid.add(minorGrid);
     this.scene.add(this.terrainGrid);
+    // Grid começa escondido — botão "Grid" na barra (index.html) precisa
+    // nascer sem a classe "active" pra acompanhar esse estado inicial.
+    this.terrainGrid.visible = false;
   }
 
   private initializeControllers(): void {
