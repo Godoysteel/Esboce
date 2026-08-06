@@ -65,6 +65,10 @@ export interface Furniture {
   x: number;
   y: number;
   rotationDeg: number;
+  // Altura do "pé" da peça acima do chão, em METROS — só usada por
+  // peças montadas na parede (TV, quadro etc). 0 = apoiada no chão,
+  // que é o padrão pra quase tudo (sofá, cama, vaso...).
+  elevationM?: number;
 }
 
 export type OpeningKind = 'door' | 'window';

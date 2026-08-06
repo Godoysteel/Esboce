@@ -190,7 +190,7 @@ export function hashColorHex(key: string): number {
     var instance = template.group.clone(true);
     var worldX = (item.x - offsetX) * scale;
     var worldZ = (item.y - offsetY) * scale;
-    instance.position.set(worldX, floorTopY, worldZ);
+    instance.position.set(worldX, floorTopY + (item.elevationM || 0), worldZ);
     instance.rotation.y = -(item.rotationDeg || 0) * Math.PI / 180;
     instance.userData.furnitureId = item.id;
     return instance;

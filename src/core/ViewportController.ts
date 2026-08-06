@@ -2242,7 +2242,7 @@ import {
   // absolutas — cada cômodo nasce em lugar diferente). Cômodos sem
   // catálogo de móvel ainda (garagem, lavanderia, escritório) ficam de
   // fora por enquanto — sem vaga/portão/tanque no catálogo hoje.
-  var ROOM_DEFAULT_FURNITURE: Record<string, { productId: string; xM: number; yM: number; rotationDeg?: number }[]> = {
+  var ROOM_DEFAULT_FURNITURE: Record<string, { productId: string; xM: number; yM: number; rotationDeg?: number; elevationM?: number }[]> = {
     banheiro: [
       { productId: 'vortice.movel.vaso-sanitario', xM: 0.35, yM: 1.15 },
       { productId: 'vortice.movel.lavatorio', xM: 1.6, yM: 0.35, rotationDeg: 90 },
@@ -2257,9 +2257,9 @@ import {
       { productId: 'vortice.movel.cama', xM: 2.45, yM: 1.56, rotationDeg: 180 }
     ],
     sala: [
-      { productId: 'vortice.movel.sofa', xM: 2.0, yM: 0.5 },
-      { productId: 'vortice.movel.mesinha-centro', xM: 2.0, yM: 2.0 },
-      { productId: 'vortice.movel.tv', xM: 2.0, yM: 3.6, rotationDeg: 180 }
+      { productId: 'vortice.movel.sofa', xM: 0.60, yM: 1.86 },
+      { productId: 'vortice.movel.mesinha-centro', xM: 1.96, yM: 1.57 },
+      { productId: 'vortice.movel.tv', xM: 3.88, yM: 1.66, rotationDeg: 180, elevationM: 1.0 }
     ],
     cozinha: [
       { productId: 'vortice.eletro.geladeira', xM: 0.4, yM: 0.4 },
@@ -2273,7 +2273,7 @@ import {
     defaults.forEach(function (item) {
       var x = rect.x1 + item.xM * Core.GRID;
       var y = rect.y1 + item.yM * Core.GRID;
-      Store.commands.createFurnitureSilent(x, y, item.productId, item.rotationDeg || 0);
+      Store.commands.createFurnitureSilent(x, y, item.productId, item.rotationDeg || 0, item.elevationM || 0);
     });
   }
 

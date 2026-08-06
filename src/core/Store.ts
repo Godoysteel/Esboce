@@ -766,9 +766,9 @@ export const commands = {
   // Móvel: mesmo padrão de Coluna — um único ponto (x,y), arrastável
   // livremente, mais rotação em passos de 90°. productId aponta pro
   // Catalog (categoria 'furniture'), que resolve qual .glb carregar.
-  createFurniture(x: number, y: number, productId: string, rotationDeg?: number): Furniture {
+  createFurniture(x: number, y: number, productId: string, rotationDeg?: number, elevationM?: number): Furniture {
     pushUndoSnapshot();
-    const item = Core.createFurnitureEntity(x, y, productId, rotationDeg);
+    const item = Core.createFurnitureEntity(x, y, productId, rotationDeg, undefined, elevationM);
     currentFurniture().push(item);
     emit({ type: 'FurnitureCreated', floorIndex: project.currentFloorIndex, furnitureId: item.id });
     return item;
@@ -778,8 +778,8 @@ export const commands = {
   // preenchimento automático ao nascer um cômodo, que já empilha UM
   // snapshot pra criação do cômodo inteiro (paredes + móveis juntos
   // desfazem como uma unidade só, não passo a passo).
-  createFurnitureSilent(x: number, y: number, productId: string, rotationDeg?: number): Furniture {
-    const item = Core.createFurnitureEntity(x, y, productId, rotationDeg);
+  createFurnitureSilent(x: number, y: number, productId: string, rotationDeg?: number, elevationM?: number): Furniture {
+    const item = Core.createFurnitureEntity(x, y, productId, rotationDeg, undefined, elevationM);
     currentFurniture().push(item);
     emit({ type: 'FurnitureCreated', floorIndex: project.currentFloorIndex, furnitureId: item.id });
     return item;

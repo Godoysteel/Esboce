@@ -82,8 +82,8 @@ export function createFloorEntity(name: string): Floor {
 
 // x,y: posição do "pé" do móvel no plano do pavimento. rotationDeg: passos
 // de 90° (mesmo espírito do frontSide da varanda).
-export function createFurnitureEntity(x: number, y: number, productId: string, rotationDeg?: number, id?: string): Furniture {
-  return { id: id || nextId('furniture'), productId, x, y, rotationDeg: rotationDeg || 0 };
+export function createFurnitureEntity(x: number, y: number, productId: string, rotationDeg?: number, id?: string, elevationM?: number): Furniture {
+  return { id: id || nextId('furniture'), productId, x, y, rotationDeg: rotationDeg || 0, elevationM: elevationM || 0 };
 }
 
 // offset: distância em metros do x1,y1 da parede até o CENTRO da
