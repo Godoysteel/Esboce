@@ -21,6 +21,7 @@ export class EsboceApplication {
   public start(): void {
     this.viewport = this.requireElement("viewport");
     this.scene.background = new THREE.Color(0xa9dff2);
+    (window as any).Store = Store; (window as any).Core = Core;
 
     this.camera = new THREE.PerspectiveCamera(
       50,
