@@ -2170,6 +2170,45 @@ import {
   };
   var ROOM_PLACEMENT_GAP_M = 1; // vão entre um cômodo novo e o que já existe, pra não nascerem grudados/sobrepostos
 
+  // Móveis padrão por tipo de ambiente — parte "híbrida" do MVP: nasce
+  // automático, mas cada peça pode ser movida/girada/removida depois
+  // (mesmo padrão de objeto avulso que coluna/varanda já usam). Posições
+  // em METROS a partir do canto x1,y1 do retângulo do cômodo (nunca
+  // absolutas — cada cômodo nasce em lugar diferente). Cômodos sem
+  // catálogo de móvel ainda (garagem, lavanderia, escritório) ficam de
+  // fora por enquanto — sem vaga/portão/tanque no catálogo hoje.
+  var ROOM_DEFAULT_FURNITURE: Record<string, { productId: string; xM: number; yM: number; rotationDeg?: number }[]> = {
+    banheiro: [
+      { productId: 'vortice.movel.vaso-sanitario', xM: 0.35, yM: 1.15 },
+      { productId: 'vortice.movel.lavatorio', xM: 1.6, yM: 0.35, rotationDeg: 90 },
+      { productId: 'vortice.movel.box-chuveiro', xM: 1.6, yM: 1.15, rotationDeg: 180 },
+      { productId: 'vortice.movel.chuveiro', xM: 1.6, yM: 1.15, rotationDeg: 180 }
+    ],
+    quarto: [
+      { productId: 'vortice.movel.cama', xM: 1.75, yM: 2.5, rotationDeg: 180 },
+      { productId: 'vortice.movel.guarda-roupa', xM: 0.5, yM: 0.5, rotationDeg: 90 }
+    ],
+    sala: [
+      { productId: 'vortice.movel.sofa', xM: 2.0, yM: 0.5 },
+      { productId: 'vortice.movel.mesinha-centro', xM: 2.0, yM: 2.0 },
+      { productId: 'vortice.movel.tv', xM: 2.0, yM: 3.6, rotationDeg: 180 }
+    ],
+    cozinha: [
+      { productId: 'vortice.eletro.geladeira', xM: 0.4, yM: 0.4 },
+      { productId: 'vortice.movel.mesa', xM: 1.8, yM: 1.8 }
+    ]
+  };
+
+  function placeDefaultFurniture(key: any, rect: { x1: number; y1: number; x2: number; y2: number }) {
+    var defaults = ROOM_DEFAULT_FURNITURE[key];
+    if (!defaults) return;
+    defaults.forEach(function (item) {
+      var x = rect.x1 + item.xM * Core.GRID;
+      var y = rect.y1 + item.yM * Core.GRID;
+      Store.commands.createFurnitureSilent(x, y, item.productId, item.rotationDeg || 0);
+    });
+  }
+
   // Acha um retângulo livre pro próximo cômodo: se o pavimento está
   // vazio, nasce centralizado na origem; se já tem coisa, nasce
   // encostado à direita de tudo que já existe, com um vão de respiro.
@@ -2213,6 +2252,7 @@ import {
     var rect = computeNextRoomSlot(preset.widthM, preset.depthM);
     deselect();
     Store.commands.createRoom(rect.x1, rect.y1, rect.x2, rect.y2);
+    placeDefaultFurniture(key, rect);
     hintEl.textContent = preset.label + ' criado(a) — arraste as paredes se quiser ajustar a posição ou o tamanho.';
   }
 
@@ -2222,6 +2262,7 @@ import {
 
   export function init(opts: { container: HTMLElement; camera: THREE.Camera; scene: THREE.Scene; renderer: THREE.WebGLRenderer }) {
     container = opts.container; camera = opts.camera; scene = opts.scene; renderer = opts.renderer;
+    Scene3DRenderer.setOnFurnitureAssetLoaded(render);
     gizmoEl = document.getElementById('wallGizmo');
     openingGizmoEl = document.getElementById('openingGizmo');
     roomGizmoEl = document.getElementById('roomGizmo');

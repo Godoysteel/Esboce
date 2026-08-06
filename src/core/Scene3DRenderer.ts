@@ -16,6 +16,7 @@
 // tipado — e estão. Refinar tipos internos é um TODO de baixo risco.
 
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { Core } from './Core.js';
 import { Catalog } from './Catalog.js';
 import { computeOpeningAssemblyLayout, wallBandSideParameters, wallTopTriangleVertices } from './Scene3DGeometry.js';
@@ -102,9 +103,73 @@ export function hashColorHex(key: string): number {
     structureMeshes: THREE.Object3D[];
     previewMeshes: THREE.Object3D[];
     handleMeshes: THREE.Object3D[];
+    furnitureMeshes: THREE.Object3D[];
     [key: string]: THREE.Object3D[];
   }
-  var registry: Registry = { wallMeshes: [], roomMeshes: [], structureMeshes: [], previewMeshes: [], handleMeshes: [] };
+  var registry: Registry = { wallMeshes: [], roomMeshes: [], structureMeshes: [], previewMeshes: [], handleMeshes: [], furnitureMeshes: [] };
+
+  // --- Móveis (glTF) ---------------------------------------------------
+  // Cada .glb é carregado uma única vez e cacheado; peças repetidas na
+  // cena (ex.: duas camas) reaproveitam o mesmo THREE.Group via clone(),
+  // que é barato (não recarrega a malha, só duplica os nós da cena).
+  // Carregamento é assíncrono — enquanto não chega, a peça simplesmente
+  // não aparece nesse rebuild(); quando o loader termina, chama de volta
+  // onFurnitureAssetLoaded (registrado pelo ViewportController) pra
+  // disparar um novo render e a peça aparecer sem precisar de ação do
+  // usuário.
+  var gltfLoader = new GLTFLoader();
+  var furnitureModelCache: { [url: string]: THREE.Group | 'loading' } = {};
+  var onFurnitureAssetLoaded: (() => void) | null = null;
+  export function setOnFurnitureAssetLoaded(cb: () => void) { onFurnitureAssetLoaded = cb; }
+
+  function getFurnitureModel(url: string): THREE.Group | null {
+    var cached = furnitureModelCache[url];
+    if (cached && cached !== 'loading') return cached;
+    if (cached === 'loading') return null;
+    furnitureModelCache[url] = 'loading';
+    gltfLoader.load(url, function (gltf) {
+      gltf.scene.traverse(function (child: any) {
+        if (child.isMesh) { child.castShadow = true; child.receiveShadow = true; }
+      });
+      furnitureModelCache[url] = gltf.scene;
+      if (onFurnitureAssetLoaded) onFurnitureAssetLoaded();
+    }, undefined, function (err) {
+      console.error('Falha ao carregar móvel ' + url, err);
+      delete furnitureModelCache[url];
+    });
+    return null;
+  }
+
+  function disposeObject3DTree(obj: any) {
+    obj.traverse(function (child: any) {
+      if (!child.isMesh) return;
+      if (child.geometry) child.geometry.dispose();
+      var mats = Array.isArray(child.material) ? child.material : (child.material ? [child.material] : []);
+      mats.forEach(function (mat: any) {
+        if (mat.map) mat.map.dispose();
+        mat.dispose();
+      });
+    });
+  }
+
+  // x,y do Furniture já estão no espaço de MODELO (mesma unidade das
+  // paredes) — convertidos pro mundo com o mesmo scale/offset de tudo
+  // mais. rotationDeg gira em torno do eixo Y (vertical).
+  function buildFurniturePiece(item: any, scale: any, offsetX: any, offsetY: any, floorTopY: any): THREE.Object3D | null {
+    var product = Catalog.getProduct(item.productId);
+    var modelUrl = product && product.assets && product.assets.modelUrl;
+    if (!modelUrl) return null;
+    var resolvedUrl = (import.meta as any).env.BASE_URL + modelUrl;
+    var template = getFurnitureModel(resolvedUrl);
+    if (!template) return null;
+    var instance = template.clone(true);
+    var worldX = (item.x - offsetX) * scale;
+    var worldZ = (item.y - offsetY) * scale;
+    instance.position.set(worldX, floorTopY, worldZ);
+    instance.rotation.y = -(item.rotationDeg || 0) * Math.PI / 180;
+    instance.userData.furnitureId = item.id;
+    return instance;
+  }
 
   function pickColor(baseHex: any, category: any, viewState: any) {
     if (!viewState || viewState.highlightedCategory !== category) return baseHex;
@@ -1374,6 +1439,11 @@ export function hashColorHex(key: string): number {
       });
       registry[key] = [];
     });
+    registry.furnitureMeshes.forEach(function (m) {
+      m.parent && m.parent.remove(m);
+      disposeObject3DTree(m);
+    });
+    registry.furnitureMeshes = [];
   }
 
   // Retângulo/parede em andamento (arrastando o mouse) — feedback visual
@@ -1814,6 +1884,17 @@ export function hashColorHex(key: string): number {
         });
       }
 
+      if (floorData.furniture) {
+        floorData.furniture.forEach(function (item) {
+          var piece = buildFurniturePiece(item, scale, offsetX, offsetY, yOffset);
+          if (!piece) return;
+          tagCategory(piece, 'furniture');
+          piece.userData.furnitureId = item.id; piece.userData.floorIndex = floorIdx;
+          scene.add(piece);
+          registry.furnitureMeshes.push(piece);
+        });
+      }
+
       rooms.forEach(function (room) {
         if (!layers.laje) return;
         // O piso usava o EIXO da parede (room.points, cruzamento de
@@ -1931,6 +2012,7 @@ export function hashColorHex(key: string): number {
 // ViewportController ainda não foi migrado).
 export const Scene3DRenderer = {
   rebuild,
+  setOnFurnitureAssetLoaded,
   FLOOR_STACK_HEIGHT_GETTER,
   WALL_HEIGHT_GETTER,
   ROOF_OVERHANG_GETTER,

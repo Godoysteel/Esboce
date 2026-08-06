@@ -6,7 +6,7 @@
 
 import { Core } from './Core.js';
 import type {
-  Project, Floor, Wall, Column, Roof, Opening, Varanda, ColumnShape, RoofType,
+  Project, Floor, Wall, Column, Roof, Opening, Varanda, Furniture, ColumnShape, RoofType,
   RidgeAxis, VarandaFrontSide, FoundationType, StoreEvent, StoreListener,
   WallSnapshot, LinkedWallUpdate
 } from './types.js';
@@ -78,6 +78,16 @@ export function findOpening(id: string): Opening | null {
 export function findVaranda(id: string): Varanda | null {
   const varandas = currentVarandas();
   for (let i = 0; i < varandas.length; i++) if (varandas[i]!.id === id) return varandas[i]!;
+  return null;
+}
+export function currentFurniture(): Furniture[] {
+  const f = currentFloor();
+  if (!f.furniture) f.furniture = [];
+  return f.furniture;
+}
+export function findFurniture(id: string): Furniture | null {
+  const list = currentFurniture();
+  for (let i = 0; i < list.length; i++) if (list[i]!.id === id) return list[i]!;
   return null;
 }
 
@@ -753,6 +763,67 @@ export const commands = {
     emit({ type: 'VarandaDeleted', varandaId });
   },
 
+  // Móvel: mesmo padrão de Coluna — um único ponto (x,y), arrastável
+  // livremente, mais rotação em passos de 90°. productId aponta pro
+  // Catalog (categoria 'furniture'), que resolve qual .glb carregar.
+  createFurniture(x: number, y: number, productId: string, rotationDeg?: number): Furniture {
+    pushUndoSnapshot();
+    const item = Core.createFurnitureEntity(x, y, productId, rotationDeg);
+    currentFurniture().push(item);
+    emit({ type: 'FurnitureCreated', floorIndex: project.currentFloorIndex, furnitureId: item.id });
+    return item;
+  },
+
+  // Criação silenciosa (sem snapshot de undo próprio) — usada só pelo
+  // preenchimento automático ao nascer um cômodo, que já empilha UM
+  // snapshot pra criação do cômodo inteiro (paredes + móveis juntos
+  // desfazem como uma unidade só, não passo a passo).
+  createFurnitureSilent(x: number, y: number, productId: string, rotationDeg?: number): Furniture {
+    const item = Core.createFurnitureEntity(x, y, productId, rotationDeg);
+    currentFurniture().push(item);
+    emit({ type: 'FurnitureCreated', floorIndex: project.currentFloorIndex, furnitureId: item.id });
+    return item;
+  },
+
+  moveFurnitureBody(furnitureId: string, x: number, y: number): void {
+    const item = findFurniture(furnitureId); if (!item) return;
+    pushUndoSnapshot();
+    item.x = Core.snap(x); item.y = Core.snap(y);
+    emit({ type: 'FurnitureMoved', furnitureId });
+  },
+  updateFurnitureBodyLive(furnitureId: string, x: number, y: number): void {
+    const item = findFurniture(furnitureId); if (!item) return;
+    item.x = x; item.y = y;
+    emit({ type: 'FurnitureMoved', furnitureId, live: true });
+  },
+
+  rotateFurniture(furnitureId: string, stepDeg?: number): void {
+    const item = findFurniture(furnitureId); if (!item) return;
+    pushUndoSnapshot();
+    const step = stepDeg || 90;
+    item.rotationDeg = (item.rotationDeg + step + 360) % 360;
+    emit({ type: 'FurnitureRotated', furnitureId });
+  },
+
+  duplicateFurniture(furnitureId: string): Furniture | null {
+    const item = findFurniture(furnitureId); if (!item) return null;
+    pushUndoSnapshot();
+    const copy = Core.createFurnitureEntity(item.x + Core.GRID, item.y + Core.GRID, item.productId, item.rotationDeg);
+    currentFurniture().push(copy);
+    emit({ type: 'FurnitureCreated', floorIndex: project.currentFloorIndex, furnitureId: copy.id, duplicatedFrom: furnitureId });
+    return copy;
+  },
+
+  deleteFurniture(furnitureId: string): void {
+    const list = currentFurniture();
+    let idx = -1;
+    for (let i = 0; i < list.length; i++) if (list[i]!.id === furnitureId) { idx = i; break; }
+    if (idx < 0) return;
+    pushUndoSnapshot();
+    list.splice(idx, 1);
+    emit({ type: 'FurnitureDeleted', furnitureId });
+  },
+
   addFloor(): void {
     pushUndoSnapshot();
     const floorNumber = project.floors.length;
@@ -800,11 +871,13 @@ export const Store = {
   currentRoofs,
   currentOpenings,
   currentVarandas,
+  currentFurniture,
   findWall,
   findColumn,
   findRoof,
   findOpening,
   findVaranda,
+  findFurniture,
   onChange,
   commands
 };

@@ -10,7 +10,7 @@
 import type {
   Point, Wall, Column, ColumnShape, Roof, RoofType, RidgeAxis,
   Varanda, VarandaFrontSide, Opening, OpeningKind, Floor, Project,
-  Room, WallFootprint, WallOBB, MTV, Interval
+  Room, WallFootprint, WallOBB, MTV, Interval, Furniture
 } from './types.js';
 
 export const GRID = 20; // unidade de grade do modelo (1 unidade = 1 metro)
@@ -77,7 +77,13 @@ export function createVarandaEntity(
 }
 
 export function createFloorEntity(name: string): Floor {
-  return { id: nextId('floor'), name, walls: [], columns: [], roofs: [], openings: [], varandas: [], roomFinishes: {}, roomFinishSettings: {} };
+  return { id: nextId('floor'), name, walls: [], columns: [], roofs: [], openings: [], varandas: [], furniture: [], roomFinishes: {}, roomFinishSettings: {} };
+}
+
+// x,y: posição do "pé" do móvel no plano do pavimento. rotationDeg: passos
+// de 90° (mesmo espírito do frontSide da varanda).
+export function createFurnitureEntity(x: number, y: number, productId: string, rotationDeg?: number, id?: string): Furniture {
+  return { id: id || nextId('furniture'), productId, x, y, rotationDeg: rotationDeg || 0 };
 }
 
 // offset: distância em metros do x1,y1 da parede até o CENTRO da
@@ -1185,5 +1191,6 @@ export const Core = {
   distPointToLine, wallOBB, openingOBB, obbOverlapMTV, wallOverlapsForeignOpening, resolveWallOffsetAgainstOpenings, wallsCanFuse, wallsMeetAtEndpoint, resolveWallGroupGridDelta,
   findWallTJunctionSplits,
   createWallEntity, createColumnEntity, createRoofEntity, createVarandaEntity, createFloorEntity,
+  createFurnitureEntity,
   createProject, distToSegment, projectOnSegment, detectRooms
 };

@@ -56,6 +56,17 @@ export interface Varanda {
   frontSide: VarandaFrontSide;
 }
 
+// Móvel colocado na cena — posição do "pé" (x,y) no plano do pavimento,
+// mais rotação em graus (passos de 90°, mesmo espírito do frontSide da
+// varanda). O objeto 3D real (glTF) vem do Catalog via productId.
+export interface Furniture {
+  id: string;
+  productId: string;
+  x: number;
+  y: number;
+  rotationDeg: number;
+}
+
 export type OpeningKind = 'door' | 'window';
 
 export interface Opening {
@@ -76,6 +87,7 @@ export interface Floor {
   roofs: Roof[];
   openings: Opening[];
   varandas: Varanda[];
+  furniture: Furniture[];
   roomFinishes: Record<string, string>;
   roomFinishSettings?: Record<string, { scale: number; rotation: number }>;
 }
@@ -146,7 +158,7 @@ export interface Manufacturer {
   name: string;
 }
 
-export type ProductCategory = 'paint' | 'floor_tile' | 'roof_tile' | 'trim';
+export type ProductCategory = 'paint' | 'floor_tile' | 'roof_tile' | 'trim' | 'furniture';
 
 export interface ProductCommercial {
   sku: string;
@@ -166,6 +178,10 @@ export interface ProductAssets {
   textureUrl: string | null;
   tileMeters?: number;
   textures?: ProductTextures;
+  // Caminho (relativo a public/, sem barra inicial) de um modelo glTF/GLB
+  // pronto — usado por produtos da categoria 'furniture'. Nunca um caminho
+  // absoluto fixo: o carregador sempre prefixa com import.meta.env.BASE_URL.
+  modelUrl?: string;
 }
 
 export interface Product {
