@@ -788,7 +788,11 @@ export const commands = {
   moveFurnitureBody(furnitureId: string, x: number, y: number): void {
     const item = findFurniture(furnitureId); if (!item) return;
     pushUndoSnapshot();
-    item.x = Core.snap(x); item.y = Core.snap(y);
+    // Sem Core.snap aqui de propósito: móvel se posiciona livre (não
+    // preso ao grid de 50cm), só travado contra parede — ver
+    // ViewportController.resolveFurniturePosition, que já resolve isso
+    // ANTES de chamar updateFurnitureBodyLive durante o arrasto.
+    item.x = x; item.y = y;
     emit({ type: 'FurnitureMoved', furnitureId });
   },
   updateFurnitureBodyLive(furnitureId: string, x: number, y: number): void {

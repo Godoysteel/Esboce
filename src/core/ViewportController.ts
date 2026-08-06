@@ -60,7 +60,7 @@ import {
   var selectedPaintRoomKey: any = null;
   var floorFinishScale = 1;
   var floorFinishRotation = 0;
-  var selectedWallId: any = null, selectedColumnId: any = null, selectedRoofId: any = null, selectedOpeningId: any = null, selectedVarandaId: any = null;
+  var selectedWallId: any = null, selectedColumnId: any = null, selectedRoofId: any = null, selectedOpeningId: any = null, selectedVarandaId: any = null, selectedFurnitureId: any = null;
   var selectedRoomWallIds: any = null; // cômodo isolado selecionado como módulo; após qualquer junção o clique volta a ser individual
   var resizeWallId: any = null; // parede em modo de deslocamento perpendicular, iniciado no primeiro clique/arraste
   var gizmoMenuOpen = false;
@@ -183,7 +183,18 @@ import {
     // é controlada pelo painel de camadas, não precisa ser clicável aqui.
     var targets = scene.children.filter(function (o: any) { return o.isMesh && o.userData && o.userData.category && o.userData.category !== 'laje'; });
     var hits = raycaster.intersectObjects(targets, false);
-    return hits.length ? hits[0]!.object : null;
+    var best = hits.length ? hits[0] : null;
+    // Móvel é um grupo glTF (várias malhas aninhadas, não um único
+    // Mesh direto em scene.children) — precisa de um raycast recursivo
+    // à parte, resolvido pro grupo-pai que carrega o furnitureId (ver
+    // Scene3DRenderer.buildFurniturePiece).
+    var furnitureHits = raycaster.intersectObjects(Scene3DRenderer.getFurnitureMeshes(), true);
+    if (furnitureHits.length && (!best || furnitureHits[0]!.distance < best.distance)) {
+      var node: any = furnitureHits[0]!.object;
+      while (node && !node.userData.furnitureId) node = node.parent;
+      if (node) return node;
+    }
+    return best ? best.object : null;
   }
 
   // Mesma coisa que pickMesh, mas devolve o hit completo (com o ponto
@@ -230,16 +241,16 @@ import {
     if (!mesh) return false;
     var editingIdx = Store.getProject().currentFloorIndex;
     if (mesh.userData.floorIndex !== editingIdx) return false;
-    return mesh.userData.category === 'paredesTerreo' || mesh.userData.category === 'paredesSuperiores' || mesh.userData.category === 'colunas' || mesh.userData.category === 'telhado' || mesh.userData.category === 'aberturas' || mesh.userData.category === 'varanda';
+    return mesh.userData.category === 'paredesTerreo' || mesh.userData.category === 'paredesSuperiores' || mesh.userData.category === 'colunas' || mesh.userData.category === 'telhado' || mesh.userData.category === 'aberturas' || mesh.userData.category === 'varanda' || mesh.userData.category === 'furniture';
   }
 
   function select(wallId: any) {
-    selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedWallId = wallId; gizmoMenuOpen = false;
+    selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedFurnitureId = null; selectedWallId = wallId; gizmoMenuOpen = false;
     if (DEBUG_COLOR_MODE && wallId) hintEl.textContent = 'Debug — parede selecionada: ' + wallId;
     render();
   }
-  function selectColumn(columnId: any) { selectedWallId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedColumnId = columnId; gizmoMenuOpen = false; render(); }
-  function selectRoof(roofId: any) { selectedWallId = null; selectedColumnId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedRoofId = roofId; gizmoMenuOpen = false; render(); }
+  function selectColumn(columnId: any) { selectedWallId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedFurnitureId = null; selectedColumnId = columnId; gizmoMenuOpen = false; render(); }
+  function selectRoof(roofId: any) { selectedWallId = null; selectedColumnId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedFurnitureId = null; selectedRoofId = roofId; gizmoMenuOpen = false; render(); }
 
   function connectedRoofIds(startId: any) {
     var selected = Store.findRoof(startId);
@@ -266,19 +277,22 @@ import {
   }
   // "Agarra" o cômodo inteiro (clique único numa parede que fecha só um
   // cômodo) — sem seleção de parede individual, sem gizmo de parede.
-  function selectRoomGroup(wallIds: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedRoomWallIds = wallIds; gizmoMenuOpen = false; render(); }
+  function selectRoomGroup(wallIds: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedFurnitureId = null; selectedRoomWallIds = wallIds; gizmoMenuOpen = false; render(); }
   // Porta/janela: gizmo próprio (deslizar/excluir), sempre visível assim
   // que seleciona — diferente de parede/coluna/telhado, não precisa de
   // um segundo clique (clique direito) pra "abrir o menu", porque não
   // existe aqui a ambiguidade de "agarrar o cômodo inteiro" que motivou
   // aquele gesto extra nos outros tipos.
-  function selectOpening(openingId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedVarandaId = null; selectedOpeningId = openingId; gizmoMenuOpen = false; render(); }
+  function selectOpening(openingId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedVarandaId = null; selectedFurnitureId = null; selectedOpeningId = openingId; gizmoMenuOpen = false; render(); }
   // Varanda: mesmo padrão do telhado (clique seleciona, clique direito
   // de novo abre o menu com girar/excluir).
-  function selectVaranda(varandaId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = varandaId; gizmoMenuOpen = false; render(); }
+  function selectVaranda(varandaId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedFurnitureId = null; selectedVarandaId = varandaId; gizmoMenuOpen = false; render(); }
+  // Móvel: mesmo padrão da coluna (clique seleciona e já mostra o gizmo
+  // completo — girar/duplicar/excluir — sem precisar de segundo clique).
+  function selectFurniture(furnitureId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedFurnitureId = furnitureId; gizmoMenuOpen = false; render(); }
   function deselect() {
     commitRoomGroupIfNeeded(); // "clicou fora do objeto" — decide agora se funde
-    selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null;
+    selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedFurnitureId = null;
     gizmoMenuOpen = false; closeObjectPanel(); render();
   }
 
@@ -563,6 +577,17 @@ import {
       if (!vG) { selectedVarandaId = null; gizmoEl.classList.remove('visible'); return; }
       var midV = modelToWorld((vG.x1 + vG.x2) / 2, (vG.y1 + vG.y2) / 2);
       positionFloatingPanel(gizmoEl, midV.x, yOffset + Scene3DRenderer.FLOOR_STACK_HEIGHT_GETTER(), midV.z, 0);
+      gizmoEl.classList.add('visible');
+      return;
+    }
+
+    // Móvel: mesmo padrão da varanda (girar/duplicar/excluir no gizmo
+    // genérico reaproveitado, sem painel extra próprio).
+    if (selectedFurnitureId) {
+      var fItem = Store.findFurniture(selectedFurnitureId);
+      if (!fItem) { selectedFurnitureId = null; gizmoEl.classList.remove('visible'); return; }
+      var midF = modelToWorld(fItem.x, fItem.y);
+      positionFloatingPanel(gizmoEl, midF.x, yOffset + Scene3DRenderer.FLOOR_STACK_HEIGHT_GETTER(), midF.z, 0);
       gizmoEl.classList.add('visible');
       return;
     }
@@ -1112,6 +1137,13 @@ import {
           Store.commands.beginTransaction();
         } else if (mesh.userData.varandaId) {
           selectVaranda(mesh.userData.varandaId);
+        } else if (mesh.userData.furnitureId) {
+          selectFurniture(mesh.userData.furnitureId);
+          dragMode = 'furnitureBody';
+          var fEnt = Store.findFurniture(mesh.userData.furnitureId)!;
+          dragElementStart = { x: fEnt.x, y: fEnt.y };
+          dragGroundStart = getGroundModelPoint(e.clientX, e.clientY);
+          Store.commands.beginTransaction();
         } else if (mesh.userData.openingId) {
           // Esquadria: arrasta livre (sem "segundo clique pra abrir
           // menu") desliza ao longo do EIXO da própria parede — mesma
@@ -1449,6 +1481,15 @@ import {
       }
       return;
     }
+    if (dragMode === 'furnitureBody') {
+      var gpF = getGroundModelPoint(e.clientX, e.clientY);
+      if (gpF && dragGroundStart) {
+        var dxF = gpF.x - dragGroundStart.x, dyF = gpF.y - dragGroundStart.y;
+        var resolvedF = resolveFurniturePosition(selectedFurnitureId, dragElementStart.x + dxF, dragElementStart.y + dyF);
+        Store.commands.updateFurnitureBodyLive(selectedFurnitureId, resolvedF.x, resolvedF.y);
+      }
+      return;
+    }
     // Esquadria: projeta o arraste do mouse no EIXO da parede (não na
     // perpendicular, como o redimensionar de parede) — só desliza pra
     // frente/trás ao longo dela mesma, nunca sai da parede.
@@ -1561,7 +1602,7 @@ import {
         // de camadas — essa regra simples evita qualquer ambiguidade
         // sobre qual menu vai aparecer.
         var mesh = pickMesh(e.clientX, e.clientY);
-        var hitsSelected = mesh && ((mesh.userData.wallId && mesh.userData.wallId === selectedWallId) || (mesh.userData.columnId && mesh.userData.columnId === selectedColumnId) || (mesh.userData.roofId && mesh.userData.roofId === selectedRoofId) || (mesh.userData.varandaId && mesh.userData.varandaId === selectedVarandaId));
+        var hitsSelected = mesh && ((mesh.userData.wallId && mesh.userData.wallId === selectedWallId) || (mesh.userData.columnId && mesh.userData.columnId === selectedColumnId) || (mesh.userData.roofId && mesh.userData.roofId === selectedRoofId) || (mesh.userData.varandaId && mesh.userData.varandaId === selectedVarandaId) || (mesh.userData.furnitureId && mesh.userData.furnitureId === selectedFurnitureId));
         if (hitsSelected) { hideLayersMenu(); gizmoMenuOpen = true; render(); }
         else { gizmoMenuOpen = false; render(); showLayersMenu(e.clientX, e.clientY); }
       }
@@ -1689,7 +1730,7 @@ import {
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }
-    if (dragMode === 'columnBody' || dragMode === 'openingSlide' || (dragMode && dragMode.indexOf('varandaEdge') === 0)) {
+    if (dragMode === 'columnBody' || dragMode === 'furnitureBody' || dragMode === 'openingSlide' || (dragMode && dragMode.indexOf('varandaEdge') === 0)) {
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }
@@ -2209,6 +2250,36 @@ import {
     });
   }
 
+  // Empurra o móvel pra fora de qualquer parede que ele esteja invadindo
+  // durante o arrasto — mesma técnica SAT/MTV que já resolve colisão
+  // entre paredes (ver Core.obbOverlapMTV), só que aqui o "retângulo A"
+  // é o próprio móvel (usando o tamanho real carregado do .glb) em vez
+  // de outra parede. Sem trava de grid: a posição resultante é livre,
+  // só não pode ficar dentro da espessura de uma parede.
+  function resolveFurniturePosition(furnitureId: any, x: any, y: any) {
+    var item = Store.findFurniture(furnitureId);
+    if (!item) return { x: x, y: y };
+    var product = Catalog.getProduct(item.productId);
+    var modelUrl = product && product.assets && product.assets.modelUrl;
+    var footprint = modelUrl ? Scene3DRenderer.getFurnitureFootprint(modelUrl) : null;
+    // Modelo ainda carregando (raro, só no primeiro arrasto logo após
+    // criar o cômodo) — sem tamanho conhecido não dá pra testar
+    // colisão; deixa mover livre por enquanto, sem travar a UI.
+    if (!footprint) return { x: x, y: y };
+    var cx = x, cy = y;
+    var walls = Store.currentWalls();
+    for (var pass = 0; pass < 3; pass++) {
+      var moved = false;
+      for (var i = 0; i < walls.length; i++) {
+        var box = Core.furnitureOBB({ x: cx, y: cy, rotationDeg: item.rotationDeg }, footprint.w, footprint.d);
+        var mtv = Core.obbOverlapMTV(box, Core.wallOBB(walls[i]!));
+        if (mtv) { cx += mtv.x; cy += mtv.y; moved = true; }
+      }
+      if (!moved) break;
+    }
+    return { x: cx, y: cy };
+  }
+
   // Acha um retângulo livre pro próximo cômodo: se o pavimento está
   // vazio, nasce centralizado na origem; se já tem coisa, nasce
   // encostado à direita de tudo que já existe, com um vão de respiro.
@@ -2413,15 +2484,16 @@ import {
   export function getSelectedRoofId() { return selectedRoofId; }
   export function getSelectedOpeningId() { return selectedOpeningId; }
   export function getSelectedVarandaId() { return selectedVarandaId; }
+  export function getSelectedFurnitureId() { return selectedFurnitureId; }
   export function getSelectedRoomWallIds() { return selectedRoomWallIds; }
 
 // Namespace de compatibilidade — mesma razão de Core.ts/Store.ts/Catalog.ts/
 // Scene3DRenderer.ts (chamadas ViewportController.xxx no código legado).
 export const ViewportController = {
   init, render, onModelChanged, deselect,
-  select, selectColumn, selectRoof, selectOpening, selectVaranda,
+  select, selectColumn, selectRoof, selectOpening, selectVaranda, selectFurniture,
   getSelectedWallId, getSelectedColumnId, getSelectedRoofId,
-  getSelectedOpeningId, getSelectedVarandaId, getSelectedRoomWallIds,
+  getSelectedOpeningId, getSelectedVarandaId, getSelectedFurnitureId, getSelectedRoomWallIds,
   toggleDimensions,
   toggleWallDiagnostics,
   repositionDimensions: repositionDimensionCotas

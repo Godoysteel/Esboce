@@ -59,6 +59,26 @@ function handleVarandaAction(varandaId: string, action: string): void {
   }
 }
 
+// Móvel: girar (90° por clique)/duplicar/excluir. Mover é só arrasto
+// livre direto na peça (ver ViewportController — dragMode
+// 'furnitureBody'); os botões de seta não fazem sentido aqui porque o
+// objetivo do móvel é justamente NÃO ficar preso ao grid de 50cm.
+function handleFurnitureAction(furnitureId: string, action: string): void {
+  const f = Store.findFurniture(furnitureId);
+  if (!f) return;
+  if (action === 'close') { ViewportController.deselect(); return; }
+  if (action === 'delete') { Store.commands.deleteFurniture(furnitureId); ViewportController.deselect(); return; }
+  if (action === 'duplicate') {
+    const copy = Store.commands.duplicateFurniture(furnitureId);
+    if (copy) ViewportController.selectFurniture(copy.id);
+    return;
+  }
+  if (action === 'rotateCw' || action === 'rotateCcw') {
+    Store.commands.rotateFurniture(furnitureId, action === 'rotateCw' ? 90 : -90);
+    return;
+  }
+}
+
 export function init(): void {
   const gizmoEl = document.getElementById('wallGizmo');
   gizmoEl?.addEventListener('click', function (e: any) {
@@ -74,6 +94,9 @@ export function init(): void {
 
     const varandaId = ViewportController.getSelectedVarandaId();
     if (varandaId) { handleVarandaAction(varandaId, action); return; }
+
+    const furnitureId = ViewportController.getSelectedFurnitureId();
+    if (furnitureId) { handleFurnitureAction(furnitureId, action); return; }
 
     const wallId = ViewportController.getSelectedWallId();
     if (!wallId) return;

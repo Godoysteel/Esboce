@@ -21,7 +21,14 @@ export class EsboceApplication {
   public start(): void {
     this.viewport = this.requireElement("viewport");
     this.scene.background = new THREE.Color(0xa9dff2);
-    (window as any).Store = Store; (window as any).Core = Core;
+
+    // Debug: acesso ao Store/Core pelo console do navegador, útil pra
+    // testar posição/rotação de móveis ao vivo (Store.currentFurniture(),
+    // Store.commands.moveFurnitureBody(id, x, y), etc). Sem risco de
+    // segurança real numa fase de protótipo — remover antes de expor a
+    // usuários finais reais, se um dia isso importar.
+    (window as any).Store = Store;
+    (window as any).Core = Core;
 
     this.camera = new THREE.PerspectiveCamera(
       50,

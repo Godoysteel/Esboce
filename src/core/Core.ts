@@ -975,6 +975,28 @@ export function wallOBB(w: Wall): WallOBB {
   return { cx, cy, ux, uy, nx: -uy, ny: ux, halfLen: len / 2, halfThick: WALL_THICK * GRID / 2 };
 }
 
+// Mesmo retângulo orientado, mas pro "rodapé" de um móvel — usado só
+// pra travar o arrasto livre contra parede (ver
+// ViewportController.resolveFurniturePosition). widthMeters/depthMeters
+// vêm da caixa delimitadora real do .glb carregado (largura/profundidade
+// no próprio eixo local do modelo, ANTES da rotação — a rotação entra
+// aqui via rotationDeg, não fica embutida no tamanho). Precisam virar
+// unidade de modelo (× GRID) pra comparar com wallOBB, que já está
+// nessa unidade.
+export function furnitureOBB(
+  item: { x: number; y: number; rotationDeg: number },
+  widthMeters: number,
+  depthMeters: number
+): WallOBB {
+  const angleRad = (item.rotationDeg || 0) * Math.PI / 180;
+  const ux = Math.cos(angleRad), uy = Math.sin(angleRad);
+  return {
+    cx: item.x, cy: item.y, ux, uy, nx: -uy, ny: ux,
+    halfLen: (widthMeters / 2) * GRID,
+    halfThick: (depthMeters / 2) * GRID,
+  };
+}
+
 // A abertura ocupa um trecho real da parede hospedeira. Esse retangulo e
 // usado durante arrastes para impedir que outra parede atravesse uma porta
 // ou janela, mesmo que visualmente o vao nao tenha geometria de parede ali.
@@ -1188,7 +1210,7 @@ export const Core = {
   roofRidgeHeightMeters, roofPitchForRidgeHeight, roofsCanFuse, fusedRoofBounds,
   rectsNearby, pointInPolygon, roomModelBounds, findRoomWallIds, findIsolatedRoomWallIds, wallResizeTopology, resolveWallResizeOffset, computeWallFootprints,
   wallResizeEndpointNeedsBridge,
-  distPointToLine, wallOBB, openingOBB, obbOverlapMTV, wallOverlapsForeignOpening, resolveWallOffsetAgainstOpenings, wallsCanFuse, wallsMeetAtEndpoint, resolveWallGroupGridDelta,
+  distPointToLine, wallOBB, furnitureOBB, openingOBB, obbOverlapMTV, wallOverlapsForeignOpening, resolveWallOffsetAgainstOpenings, wallsCanFuse, wallsMeetAtEndpoint, resolveWallGroupGridDelta,
   findWallTJunctionSplits,
   createWallEntity, createColumnEntity, createRoofEntity, createVarandaEntity, createFloorEntity,
   createFurnitureEntity,

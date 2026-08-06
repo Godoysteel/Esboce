@@ -118,11 +118,30 @@ export function hashColorHex(key: string): number {
   // disparar um novo render e a peça aparecer sem precisar de ação do
   // usuário.
   var gltfLoader = new GLTFLoader();
-  var furnitureModelCache: { [url: string]: THREE.Group | 'loading' } = {};
+  interface FurnitureModelEntry { group: THREE.Group; footprintW: number; footprintD: number; }
+  var furnitureModelCache: { [url: string]: FurnitureModelEntry | 'loading' } = {};
   var onFurnitureAssetLoaded: (() => void) | null = null;
   export function setOnFurnitureAssetLoaded(cb: () => void) { onFurnitureAssetLoaded = cb; }
 
-  function getFurnitureModel(url: string): THREE.Group | null {
+  // Todos os grupos de móvel atualmente na cena — usado pelo
+  // ViewportController pra um raycast recursivo à parte (o raycast
+  // genérico só testa Mesh direto em scene.children; móvel é um Group
+  // com filhos aninhados, ver pickMesh).
+  export function getFurnitureMeshes(): THREE.Object3D[] { return registry.furnitureMeshes; }
+
+  // Tamanho real (em metros, no plano do chão) do footprint de um
+  // móvel já carregado — null se ainda não carregou. Usado pra travar
+  // o arrasto livre contra parede (ViewportController.
+  // resolveFurniturePosition); sem isso não dá pra saber quanto espaço
+  // a peça realmente ocupa.
+  export function getFurnitureFootprint(modelUrl: string): { w: number; d: number } | null {
+    var resolvedUrl = (import.meta as any).env.BASE_URL + modelUrl;
+    var cached = furnitureModelCache[resolvedUrl];
+    if (!cached || cached === 'loading') return null;
+    return { w: cached.footprintW, d: cached.footprintD };
+  }
+
+  function getFurnitureModel(url: string): FurnitureModelEntry | null {
     var cached = furnitureModelCache[url];
     if (cached && cached !== 'loading') return cached;
     if (cached === 'loading') return null;
@@ -133,10 +152,11 @@ export function hashColorHex(key: string): number {
       });
       var box = new THREE.Box3().setFromObject(gltf.scene);
       var center = box.getCenter(new THREE.Vector3());
+      var size = box.getSize(new THREE.Vector3());
       gltf.scene.position.set(-center.x, -box.min.y, -center.z);
       var anchored = new THREE.Group();
       anchored.add(gltf.scene);
-      furnitureModelCache[url] = anchored;
+      furnitureModelCache[url] = { group: anchored, footprintW: size.x, footprintD: size.z };
       if (onFurnitureAssetLoaded) onFurnitureAssetLoaded();
     }, undefined, function (err) {
       console.error('Falha ao carregar móvel ' + url, err);
@@ -167,7 +187,7 @@ export function hashColorHex(key: string): number {
     var resolvedUrl = (import.meta as any).env.BASE_URL + modelUrl;
     var template = getFurnitureModel(resolvedUrl);
     if (!template) return null;
-    var instance = template.clone(true);
+    var instance = template.group.clone(true);
     var worldX = (item.x - offsetX) * scale;
     var worldZ = (item.y - offsetY) * scale;
     instance.position.set(worldX, floorTopY, worldZ);
@@ -2018,6 +2038,8 @@ export function hashColorHex(key: string): number {
 export const Scene3DRenderer = {
   rebuild,
   setOnFurnitureAssetLoaded,
+  getFurnitureMeshes,
+  getFurnitureFootprint,
   FLOOR_STACK_HEIGHT_GETTER,
   WALL_HEIGHT_GETTER,
   ROOF_OVERHANG_GETTER,
