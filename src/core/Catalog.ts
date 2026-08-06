@@ -61,42 +61,45 @@ export const products: Product[] = [
         }
       } },
     // --- Móveis (categoria 'furniture') — modelos .glb exportados do
-    // SketchUp/Blender pelo usuário, servidos de public/models/furniture/.
+    // SketchUp/Blender pelo usuário, servidos de public/models/.
     // Ver Scene3DRenderer.ts pra como modelUrl é resolvido em runtime
     // (sempre com import.meta.env.BASE_URL na frente, nunca caminho fixo).
     { id: 'vortice.movel.sofa', name: 'Sofá 3 lugares', manufacturer: 'vortice', category: 'furniture',
       commercial: { sku: 'VOR-MOV-001', price: 0, unit: 'peca' },
-      assets: { colorHex: '#C7B79A', textureUrl: null, modelUrl: 'models/furniture/sofa.glb' } },
+      assets: { colorHex: '#C7B79A', textureUrl: null, modelUrl: 'models/sofa.glb' } },
     { id: 'vortice.movel.mesinha-centro', name: 'Mesinha de Centro', manufacturer: 'vortice', category: 'furniture',
       commercial: { sku: 'VOR-MOV-002', price: 0, unit: 'peca' },
-      assets: { colorHex: '#8A6B4A', textureUrl: null, modelUrl: 'models/furniture/mesinha.glb' } },
+      assets: { colorHex: '#8A6B4A', textureUrl: null, modelUrl: 'models/mesinha.glb' } },
     { id: 'vortice.movel.tv', name: 'TV com Painel', manufacturer: 'vortice', category: 'furniture',
       commercial: { sku: 'VOR-MOV-003', price: 0, unit: 'peca' },
-      assets: { colorHex: '#2C2C2A', textureUrl: null, modelUrl: 'models/furniture/tv.glb' } },
+      assets: { colorHex: '#2C2C2A', textureUrl: null, modelUrl: 'models/tv.glb' } },
     { id: 'vortice.movel.cama', name: 'Cama de Casal', manufacturer: 'vortice', category: 'furniture',
       commercial: { sku: 'VOR-MOV-004', price: 0, unit: 'peca' },
-      assets: { colorHex: '#D9D5C7', textureUrl: null, modelUrl: 'models/furniture/cama.glb' } },
+      assets: { colorHex: '#D9D5C7', textureUrl: null, modelUrl: 'models/cama.glb' } },
     { id: 'vortice.movel.guarda-roupa', name: 'Guarda-Roupa', manufacturer: 'vortice', category: 'furniture',
       commercial: { sku: 'VOR-MOV-005', price: 0, unit: 'peca' },
-      assets: { colorHex: '#B9B6AA', textureUrl: null, modelUrl: 'models/furniture/armario.glb' } },
+      assets: { colorHex: '#B9B6AA', textureUrl: null, modelUrl: 'models/armario.glb' } },
     { id: 'vortice.movel.vaso-sanitario', name: 'Vaso Sanitário', manufacturer: 'vortice', category: 'furniture',
       commercial: { sku: 'VOR-MOV-006', price: 0, unit: 'peca' },
-      assets: { colorHex: '#F4F1E8', textureUrl: null, modelUrl: 'models/furniture/vaso-sanitario.glb' } },
+      assets: { colorHex: '#F4F1E8', textureUrl: null, modelUrl: 'models/vaso-sanitario.glb' } },
     { id: 'vortice.movel.lavatorio', name: 'Lavatório', manufacturer: 'vortice', category: 'furniture',
       commercial: { sku: 'VOR-MOV-007', price: 0, unit: 'peca' },
-      assets: { colorHex: '#F4F1E8', textureUrl: null, modelUrl: 'models/furniture/pia-banheiro.glb' } },
+      assets: { colorHex: '#F4F1E8', textureUrl: null, modelUrl: 'models/pia-banheiro.glb' } },
     { id: 'vortice.movel.box-chuveiro', name: 'Box de Chuveiro', manufacturer: 'vortice', category: 'furniture',
       commercial: { sku: 'VOR-MOV-008', price: 0, unit: 'peca' },
-      assets: { colorHex: '#D9E8EC', textureUrl: null, modelUrl: 'models/furniture/box-banheiro.glb' } },
+      assets: { colorHex: '#D9E8EC', textureUrl: null, modelUrl: 'models/box-banheiro.glb' } },
     { id: 'vortice.movel.chuveiro', name: 'Chuveiro', manufacturer: 'vortice', category: 'furniture',
       commercial: { sku: 'VOR-MOV-009', price: 0, unit: 'peca' },
-      assets: { colorHex: '#C7C7C7', textureUrl: null, modelUrl: 'models/furniture/chuveiro.glb' } },
+      assets: { colorHex: '#C7C7C7', textureUrl: null, modelUrl: 'models/chuveiro.glb' } },
     { id: 'vortice.movel.espelho', name: 'Espelho', manufacturer: 'vortice', category: 'furniture',
       commercial: { sku: 'VOR-MOV-010', price: 0, unit: 'peca' },
-      assets: { colorHex: '#DDE6E8', textureUrl: null, modelUrl: 'models/furniture/espelho.glb' } },
+      assets: { colorHex: '#DDE6E8', textureUrl: null, modelUrl: 'models/espelho.glb' } },
     { id: 'vortice.eletro.geladeira', name: 'Geladeira', manufacturer: 'vortice', category: 'furniture',
       commercial: { sku: 'VOR-MOV-011', price: 0, unit: 'peca' },
-      assets: { colorHex: '#E8E8E8', textureUrl: null, modelUrl: 'models/furniture/geladeira.glb' } }
+      assets: { colorHex: '#E8E8E8', textureUrl: null, modelUrl: 'models/geladeira.glb' } },
+    { id: 'vortice.movel.mesa', name: 'Mesa de Jantar', manufacturer: 'vortice', category: 'furniture',
+      commercial: { sku: 'VOR-MOV-012', price: 0, unit: 'peca' },
+      assets: { colorHex: '#8A6B4A', textureUrl: null, modelUrl: 'models/mesa.glb' } }
   ];
 export function getProductsByCategory(cat: ProductCategory): Product[] { return products.filter((p) => p.category === cat); }
 export function getProduct(id: string): Product | null { return products.find((p) => p.id === id) || null; }
