@@ -1109,8 +1109,24 @@ import {
               var groupWall = Store.findWall(id)!;
               return { id: id, x1: groupWall.x1, y1: groupWall.y1, x2: groupWall.x2, y2: groupWall.y2 };
             });
+            // Móvel não pertence a nenhuma parede — pra saber quais peças
+            // "moram" nesse cômodo isolado, usa a caixa delimitadora do
+            // contorno (mesma ideia usada pra encaixar um cômodo novo em
+            // computeNextRoomSlot). Guarda a posição original de cada um
+            // pra aplicar o MESMO delta do arraste das paredes, mantendo
+            // tudo junto até o cômodo se conectar a outro.
+            var roomMinX = Infinity, roomMaxX = -Infinity, roomMinY = Infinity, roomMaxY = -Infinity;
+            snapshots.forEach(function (s: any) {
+              [[s.x1, s.y1], [s.x2, s.y2]].forEach(function (p: any) {
+                if (p[0] < roomMinX) roomMinX = p[0]; if (p[0] > roomMaxX) roomMaxX = p[0];
+                if (p[1] < roomMinY) roomMinY = p[1]; if (p[1] > roomMaxY) roomMaxY = p[1];
+              });
+            });
+            var furnitureSnapshots = Store.currentFurniture()
+              .filter(function (f: any) { return f.x >= roomMinX && f.x <= roomMaxX && f.y >= roomMinY && f.y <= roomMaxY; })
+              .map(function (f: any) { return { id: f.id, x: f.x, y: f.y }; });
             selectRoomGroup(isolatedRoomWallIds);
-            dragElementStart = { snapshots: snapshots, lastValidDx: 0, lastValidDy: 0 };
+            dragElementStart = { snapshots: snapshots, furnitureSnapshots: furnitureSnapshots, lastValidDx: 0, lastValidDy: 0 };
             dragGroundStart = getGroundModelPoint(e.clientX, e.clientY);
             dragMode = 'roomGroup';
             Store.commands.beginTransaction();
@@ -1330,6 +1346,14 @@ import {
         dragElementStart.lastValidDx = resolved.x;
         dragElementStart.lastValidDy = resolved.y;
         Store.commands.updateWallsGroupBodyLive(dragElementStart.snapshots, resolved.x, resolved.y);
+        // Móveis do cômodo viajam junto, mesmo delta das paredes — sem
+        // isso a cama ficaria "presa no chão" enquanto o quarto desliza
+        // por cima dela.
+        if (dragElementStart.furnitureSnapshots) {
+          dragElementStart.furnitureSnapshots.forEach(function (fs: any) {
+            Store.commands.updateFurnitureBodyLive(fs.id, fs.x + resolved.x, fs.y + resolved.y);
+          });
+        }
       }
       return;
     }
@@ -2225,9 +2249,12 @@ import {
       { productId: 'vortice.movel.box-chuveiro', xM: 1.6, yM: 1.15, rotationDeg: 180 },
       { productId: 'vortice.movel.chuveiro', xM: 1.6, yM: 1.15, rotationDeg: 180 }
     ],
+    // Por enquanto só a cama — guarda-roupa/painel de TV/criado-mudo
+    // ficam de fora até ter modelos melhores pra essas peças (o
+    // guarda-roupa atual é provisório). Reativar aqui assim que os
+    // novos .glb chegarem.
     quarto: [
-      { productId: 'vortice.movel.cama', xM: 1.75, yM: 2.5, rotationDeg: 180 },
-      { productId: 'vortice.movel.guarda-roupa', xM: 0.5, yM: 0.5, rotationDeg: 90 }
+      { productId: 'vortice.movel.cama', xM: 2.45, yM: 1.56, rotationDeg: 180 }
     ],
     sala: [
       { productId: 'vortice.movel.sofa', xM: 2.0, yM: 0.5 },
