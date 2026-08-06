@@ -506,13 +506,44 @@ export const commands = {
   },
 
   // Exclui um cômodo inteiro — todas as paredes que fecham ele, numa
-  // tacada só (um clique, um passo de undo).
+  // tacada só (um clique, um passo de undo). Só é chamado enquanto o
+  // cômodo ainda está ISOLADO (ver findIsolatedRoomWallIds/selectRoomGroup
+  // no ViewportController) — depois que ele se funde com outro, essa
+  // ação deixa de existir na UI e vira exclusão de parede avulsa, que
+  // não deve tocar nos móveis.
   deleteRoomGroup(wallIds: string[]): void {
     if (!wallIds || !wallIds.length) return;
     const walls = currentWalls();
     const existing = wallIds.filter((id) => walls.some((w) => w.id === id));
     if (!existing.length) return;
     pushUndoSnapshot();
+
+    // Móvel não tem roomId — pertence ao cômodo por posição, igual ao
+    // arraste rígido (ver dragElementStart.furnitureSnapshots no
+    // ViewportController). Calcula a mesma caixa delimitadora ANTES de
+    // apagar as paredes, senão perde a referência de onde o cômodo
+    // estava, e apaga os móveis dentro dela junto — sem isso eles
+    // ficavam órfãos, soltos no vazio.
+    let roomMinX = Infinity, roomMaxX = -Infinity, roomMinY = Infinity, roomMaxY = -Infinity;
+    const growBounds = (px: number, py: number) => {
+      if (px < roomMinX) roomMinX = px; if (px > roomMaxX) roomMaxX = px;
+      if (py < roomMinY) roomMinY = py; if (py > roomMaxY) roomMaxY = py;
+    };
+    existing.forEach((id) => {
+      const w = walls.find((w2) => w2.id === id)!;
+      growBounds(w.x1, w.y1);
+      growBounds(w.x2, w.y2);
+    });
+    const furniture = currentFurniture();
+    const deletedFurnitureIds: string[] = [];
+    for (let k = furniture.length - 1; k >= 0; k--) {
+      const f = furniture[k]!;
+      if (f.x >= roomMinX && f.x <= roomMaxX && f.y >= roomMinY && f.y <= roomMaxY) {
+        deletedFurnitureIds.push(f.id);
+        furniture.splice(k, 1);
+      }
+    }
+
     const openings = currentOpenings();
     existing.forEach((id) => {
       let idx = -1;
@@ -522,7 +553,7 @@ export const commands = {
         if (openings[j]!.wallId === id) openings.splice(j, 1);
       }
     });
-    emit({ type: 'RoomDeleted', floorIndex: project.currentFloorIndex, wallIds: existing });
+    emit({ type: 'RoomDeleted', floorIndex: project.currentFloorIndex, wallIds: existing, furnitureIds: deletedFurnitureIds });
   },
 
   clearCurrentFloor(): void {
