@@ -131,7 +131,12 @@ export function hashColorHex(key: string): number {
       gltf.scene.traverse(function (child: any) {
         if (child.isMesh) { child.castShadow = true; child.receiveShadow = true; }
       });
-      furnitureModelCache[url] = gltf.scene;
+      var box = new THREE.Box3().setFromObject(gltf.scene);
+      var center = box.getCenter(new THREE.Vector3());
+      gltf.scene.position.set(-center.x, -box.min.y, -center.z);
+      var anchored = new THREE.Group();
+      anchored.add(gltf.scene);
+      furnitureModelCache[url] = anchored;
       if (onFurnitureAssetLoaded) onFurnitureAssetLoaded();
     }, undefined, function (err) {
       console.error('Falha ao carregar móvel ' + url, err);
