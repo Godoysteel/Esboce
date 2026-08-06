@@ -2261,9 +2261,12 @@ import {
       { productId: 'vortice.movel.mesinha-centro', xM: 1.96, yM: 1.57 },
       { productId: 'vortice.movel.tv', xM: 3.88, yM: 1.66, rotationDeg: 180, elevationM: 1.0 }
     ],
+    // Posições calibradas — testadas e ajustadas na 3D (mesmo padrão de
+    // Quarto e Sala).
     cozinha: [
-      { productId: 'vortice.eletro.geladeira', xM: 0.4, yM: 0.4 },
-      { productId: 'vortice.movel.mesa', xM: 1.8, yM: 1.8 }
+      { productId: 'vortice.eletro.geladeira', xM: 1.73, yM: 0.47 },
+      { productId: 'vortice.movel.mesa', xM: 0.96, yM: 1.54 },
+      { productId: 'vortice.movel.armario-cozinha', xM: 2.00, yM: 1.84, rotationDeg: 90 }
     ]
   };
 
