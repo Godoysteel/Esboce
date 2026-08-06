@@ -2243,11 +2243,14 @@ import {
   // catálogo de móvel ainda (garagem, lavanderia, escritório) ficam de
   // fora por enquanto — sem vaga/portão/tanque no catálogo hoje.
   var ROOM_DEFAULT_FURNITURE: Record<string, { productId: string; xM: number; yM: number; rotationDeg?: number; elevationM?: number }[]> = {
+    // Posições calibradas — testadas e ajustadas na 3D (mesmo padrão de
+    // Quarto, Sala e Cozinha). Lavatório e chuveiro montados na parede,
+    // 1m acima do chão — só o vaso e o box ficam apoiados no piso.
     banheiro: [
-      { productId: 'vortice.movel.vaso-sanitario', xM: 0.35, yM: 1.15 },
-      { productId: 'vortice.movel.lavatorio', xM: 1.6, yM: 0.35, rotationDeg: 90 },
-      { productId: 'vortice.movel.box-chuveiro', xM: 1.6, yM: 1.15, rotationDeg: 180 },
-      { productId: 'vortice.movel.chuveiro', xM: 1.6, yM: 1.15, rotationDeg: 180 }
+      { productId: 'vortice.movel.vaso-sanitario', xM: 0.58, yM: 1.19, rotationDeg: 180 },
+      { productId: 'vortice.movel.lavatorio', xM: 1.80, yM: 0.50, rotationDeg: 180, elevationM: 1.0 },
+      { productId: 'vortice.movel.box-chuveiro', xM: 1.66, yM: 1.21, rotationDeg: 180 },
+      { productId: 'vortice.movel.chuveiro', xM: 1.65, yM: 1.29, rotationDeg: 180, elevationM: 1.0 }
     ],
     // Por enquanto só a cama — guarda-roupa/painel de TV/criado-mudo
     // ficam de fora até ter modelos melhores pra essas peças (o
