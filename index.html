@@ -6,28 +6,47 @@
 <title>Esboce — construtor de casas online</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSI1MCIgZmlsbD0iI0MxNjczRiIvPjxwYXRoIGQ9Ik0yMCw4MCBMMjAsNTAgTDUwLDIyIEw4MCw1MCBMODAsODAgWiIgZmlsbD0iI0YxRUFEOSIvPjxyZWN0IHg9IjQyIiB5PSI2NCIgd2lkdGg9IjE2IiBoZWlnaHQ9IjE2IiBmaWxsPSIjMkMyQzJBIi8+PC9zdmc+Cg==">
 <style>
+  :root { --top-overlay-h: 210px; }
   * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    margin: 0;
-    padding: 24px;
-    background: #F4F1EA;
+    padding: 0;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+    background: #1B1C1E;
     color: #2C2C2A;
   }
   h1 { font-size: 22px; font-weight: 600; margin: 0 0 4px; }
-  p.subtitle { color: #5F5E5A; margin: 0 0 20px; font-size: 14px; }
-  .wrap { max-width: 980px; margin: 0 auto; }
+  p.subtitle { color: #5F5E5A; margin: 0 0 10px; font-size: 13px; }
+  /* Viewport ocupa a tela inteira — cabeçalho/barra/dica viram
+     overlays flutuando POR CIMA dela (ver .top-overlay/.actions-row),
+     em vez de empurrar o 3D pra baixo numa página que rola. O
+     Scene3DRenderer já lê width/height do próprio elemento #viewport
+     em tempo real (ResizeObserver/clientWidth), então não precisou
+     mudar nada de JS — só o CSS do container. */
+  .wrap { position: relative; width: 100%; height: 100%; overflow: hidden; }
+  .top-overlay {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 20;
+    background: #F4F1EA;
+    border-bottom: 1px solid #D3D1C7;
+    padding: 14px 20px 12px;
+    box-shadow: 0 2px 14px rgba(0,0,0,.18);
+    max-height: 45vh;
+    overflow-y: auto;
+  }
   .brand-header { display: flex; align-items: center; gap: 10px; margin-bottom: 2px; }
   .brand-header h1 { margin: 0; line-height: 1.1; }
   .brand-logo { flex-shrink: 0; }
   p.brand-tagline { margin: 1px 0 0; font-size: 12px; font-weight: 500; color: #C1673F; }
 
   .panel-card {
-    background: #FFFFFF;
-    border: 1px solid #D3D1C7;
-    border-radius: 10px;
-    padding: 14px 16px;
-    margin-bottom: 14px;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    margin-bottom: 0;
   }
 
   .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
@@ -69,11 +88,12 @@
 
 
   #viewport {
-    position: relative;
+    position: absolute;
+    inset: 0;
     width: 100%;
-    height: 560px;
-    border: 1px solid #D3D1C7;
-    border-radius: 10px;
+    height: 100%;
+    border: none;
+    border-radius: 0;
     overflow: hidden;
     background: #1B1C1E;
     touch-action: none;
@@ -94,7 +114,7 @@
      (não intercepta clique). */
   #navGizmoCanvas {
     position: absolute;
-    top: 10px;
+    top: calc(var(--top-overlay-h) + 10px);
     right: 10px;
     width: 58px;
     height: 58px;
@@ -172,7 +192,7 @@
      então fica fixa no topo do viewport, sempre visível enquanto a
      ferramenta estiver ligada — diferente do finishPanel normal, que
      segue a parede/telhado/cômodo selecionado. */
-  .finish-panel.tool-picker { position: absolute; left: auto; right: 12px; top: 100px; transform: none; width: 250px; max-height: calc(100% - 118px); overflow-y: auto; grid-template-columns: 1fr; border-radius: 12px; padding: 10px; gap: 9px; z-index: 7; }
+  .finish-panel.tool-picker { position: absolute; left: auto; right: 12px; top: calc(var(--top-overlay-h) + 10px); transform: none; width: 250px; max-height: calc(100% - var(--top-overlay-h) - 30px); overflow-y: auto; grid-template-columns: 1fr; border-radius: 12px; padding: 10px; gap: 9px; z-index: 7; }
   .paint-surface-nav { display: grid; grid-template-columns: 1fr; gap: 5px; }
   .paint-surface { width: 100%; padding: 8px 10px; border-radius: 7px; font-size: 12px; text-align: left; background: #F7F6F2; }
   .paint-surface.active { color: #FFFFFF; background: #534AB7; border-color: #534AB7; }
@@ -185,12 +205,12 @@
   .paint-apply:disabled { opacity: .45; cursor: not-allowed; }
   .paint-help { text-align: left; font-size: 11px; line-height: 1.35; color: #6B6963; }
   @media (max-width: 700px) {
-    .finish-panel.tool-picker { right: 8px; top: 92px; width: min(230px, calc(100% - 130px)); max-height: calc(100% - 104px); }
+    .finish-panel.tool-picker { right: 8px; top: calc(var(--top-overlay-h) + 10px); width: min(230px, calc(100% - 130px)); max-height: calc(100% - var(--top-overlay-h) - 20px); }
   }
 
   .object-panel {
     position: absolute;
-    top: 10px; right: 10px;
+    top: calc(var(--top-overlay-h) + 10px); right: 10px;
     display: none;
     background: rgba(255,255,255,0.97);
     border: 1px solid #D3D1C7;
@@ -214,7 +234,7 @@
      brigar de espaço quando as duas estão visíveis ao mesmo tempo. */
   .materials-panel {
     position: absolute;
-    top: 10px; left: 10px;
+    top: calc(var(--top-overlay-h) + 10px); left: 10px;
     display: none;
     background: rgba(255,255,255,0.97);
     border: 1px solid #D3D1C7;
@@ -362,12 +382,19 @@
     pointer-events: none;
   }
 
-  .actions-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .actions-row {
+    position: absolute; bottom: 0; left: 0; right: 0; z-index: 15;
+    display: flex; gap: 8px; flex-wrap: wrap;
+    margin: 0;
+    padding: 8px 16px;
+    background: rgba(27,28,30,0.72);
+    backdrop-filter: blur(4px);
+  }
 
   /* ---- Painel lateral visual (dentro do viewport) ---- */
   .tool-sidebar {
     position: absolute;
-    left: 10px; top: 10px; bottom: 10px;
+    left: 10px; top: calc(var(--top-overlay-h) + 10px); bottom: 10px;
     z-index: 5;
     display: flex;
     flex-direction: column;
@@ -473,6 +500,7 @@
 <body>
 
 <div class="wrap">
+<div class="top-overlay">
 <div class="brand-header">
   <svg class="brand-logo" width="34" height="34" viewBox="0 0 100 100" aria-hidden="true">
     <g fill="none" stroke="#2C2C2A" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
@@ -510,6 +538,7 @@
     <button id="accountBtn" title="Entrar">👤 Entrar</button>
     <button id="logoutBtn" style="display:none;" title="Sair da conta">🚪 Sair</button>
   </div>
+</div>
 </div>
 
 <div id="viewport">
@@ -873,6 +902,22 @@ Mova uma parede para registrar a operação.</pre>
   </div>
 </div>
 
+<script>
+  // Mede a altura real do overlay do topo (varia com o tamanho da tela
+  // — em telas estreitas os botões quebram em mais linhas) e mantém a
+  // variável CSS --top-overlay-h sincronizada, pra tudo que flutua
+  // dentro do viewport (painel de cômodos, gizmo de orientação, etc.)
+  // saber exatamente onde começar sem nunca ficar embaixo da barra.
+  (function () {
+    var overlay = document.querySelector('.top-overlay');
+    if (!overlay || !window.ResizeObserver) return;
+    var apply = function () {
+      document.documentElement.style.setProperty('--top-overlay-h', overlay.offsetHeight + 'px');
+    };
+    new ResizeObserver(apply).observe(overlay);
+    apply();
+  })();
+</script>
 <script type="module" src="/src/main.ts"></script>
 </body>
 </html>
