@@ -9,7 +9,7 @@ import { NavGizmo } from "../core/NavGizmo.js";
 import { Store } from "../core/Store.js";
 import { ViewportController } from "../core/ViewportController.js";
 import { ViewportStats } from "../core/ViewportStats.js";
-import { createSharedProject, loadSharedProject, updateSharedProject } from "../core/SupabaseClient.js";
+import { createSharedProject, loadSharedProject, updateSharedProject, signUpWithProfile, signIn, signOut, getCurrentUser, listMyProjects, type ProfileFields } from "../core/SupabaseClient.js";
 
 export class EsboceApplication {
   private readonly scene = new THREE.Scene();
@@ -23,6 +23,16 @@ export class EsboceApplication {
   // um link (?p=<id>). "Salvar" de novo depois disso atualiza o mesmo
   // registro em vez de criar um projeto novo a cada clique.
   private sharedProjectId: string | null = null;
+  // Sessão do usuário logado — null enquanto ninguém logou. Salvar e
+  // "Meus projetos" exigem isso (ver requireAuth()).
+  private currentUserId: string | null = null;
+  private currentUserEmail: string | null = null;
+  // Enquanto o modal de cadastro/login está aberto por causa de um
+  // "Salvar" (não por clique direto em "Entrar"), essas duas guardam
+  // como avisar quem estava esperando: resolve() quando loga com
+  // sucesso, reject() se a pessoa fechar o modal sem logar.
+  private pendingAuthResolve: ((userId: string) => void) | null = null;
+  private pendingAuthReject: ((err: Error) => void) | null = null;
 
   public async start(): Promise<void> {
     this.viewport = this.requireElement("viewport");
@@ -56,6 +66,15 @@ export class EsboceApplication {
       }
     }
 
+    // Sessão já ativa (voltou depois de já ter logado antes)? Recupera
+    // sem pedir login de novo.
+    try {
+      const user = await getCurrentUser();
+      if (user) { this.currentUserId = user.id; this.currentUserEmail = user.email ?? null; }
+    } catch (err) {
+      console.error("Falha ao checar sessão existente:", err);
+    }
+
     this.camera = new THREE.PerspectiveCamera(
       50,
       this.viewport.clientWidth / this.viewport.clientHeight,
@@ -74,6 +93,8 @@ export class EsboceApplication {
     this.buildEnvironment();
     this.initializeControllers();
     this.bindApplicationEvents();
+    this.setupAuthModal();
+    this.refreshAccountButton();
     // createInitialRoom() removido de propósito — viewport deve começar
     // vazia, sem nenhum cômodo pré-criado; o método continua disponível
     // abaixo caso essa decisão mude no futuro.
@@ -192,6 +213,8 @@ export class EsboceApplication {
     });
     this.requireElement("saveProjectBtn").addEventListener("click", () => this.saveProject());
     this.requireElement("shareProjectBtn").addEventListener("click", () => this.shareProject());
+    this.requireElement("myProjectsBtn").addEventListener("click", () => this.openMyProjects());
+    this.requireElement("accountBtn").addEventListener("click", () => this.handleAccountButtonClick());
 
     window.addEventListener("keydown", (event) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
@@ -245,6 +268,12 @@ export class EsboceApplication {
 
   private async saveProject(): Promise<void> {
     const btn = this.requireElement("saveProjectBtn");
+    let userId: string;
+    try {
+      userId = await this.requireAuth();
+    } catch {
+      return; // modal fechado sem logar — não é erro, só desiste em silêncio
+    }
     await this.flashButtonFeedback(btn, async () => {
       btn.textContent = "Salvando...";
       const project = Store.getProject();
@@ -254,9 +283,20 @@ export class EsboceApplication {
       // não string | null) no resto da função.
       const existingId = this.sharedProjectId;
       if (existingId) {
-        await updateSharedProject(existingId, project);
+        const updated = await updateSharedProject(existingId, project);
+        if (!updated) {
+          // Não é o dono desse projeto (abriu o link de outra pessoa)
+          // — a RLS bloqueou a atualização em silêncio. Em vez de
+          // fingir que salvou, salva como um projeto NOVO seu, e o
+          // link passa a apontar pra essa cópia.
+          const forkedId = await createSharedProject(project, userId);
+          this.sharedProjectId = forkedId;
+          this.setUrlProjectId(forkedId);
+          btn.textContent = "✅ Salvo como cópia sua";
+          return;
+        }
       } else {
-        const newId = await createSharedProject(project);
+        const newId = await createSharedProject(project, userId);
         this.sharedProjectId = newId;
         this.setUrlProjectId(newId);
       }
@@ -266,13 +306,19 @@ export class EsboceApplication {
 
   private async shareProject(): Promise<void> {
     const btn = this.requireElement("shareProjectBtn");
+    let userId: string;
+    try {
+      userId = await this.requireAuth();
+    } catch {
+      return;
+    }
     await this.flashButtonFeedback(btn, async () => {
       // Compartilhar sem ter salvo ainda: salva primeiro (senão o link
       // apontaria pra um projeto que não existe no banco).
       let id = this.sharedProjectId;
       if (!id) {
         btn.textContent = "Salvando...";
-        id = await createSharedProject(Store.getProject());
+        id = await createSharedProject(Store.getProject(), userId);
         this.sharedProjectId = id;
         this.setUrlProjectId(id);
       }
@@ -281,6 +327,211 @@ export class EsboceApplication {
       await navigator.clipboard.writeText(shareUrl.toString());
       btn.textContent = "🔗 Link copiado!";
     });
+  }
+
+  // Devolve o id do usuário logado. Se ninguém está logado, abre o
+  // modal de cadastro/login e só resolve quando a pessoa completar
+  // um dos dois com sucesso — ou rejeita se ela fechar o modal sem
+  // logar (quem chamar isso deve tratar esse cancelamento como "o
+  // usuário desistiu", não como uma falha real).
+  private requireAuth(): Promise<string> {
+    if (this.currentUserId) return Promise.resolve(this.currentUserId);
+    return new Promise((resolve, reject) => {
+      this.pendingAuthResolve = resolve;
+      this.pendingAuthReject = reject;
+      this.openAuthModal();
+    });
+  }
+
+  private setupAuthModal(): void {
+    const tabSignup = this.requireElement("authTabSignup");
+    const tabLogin = this.requireElement("authTabLogin");
+    const paneSignup = this.requireElement("authSignupPane");
+    const paneLogin = this.requireElement("authLoginPane");
+
+    const showTab = (which: "signup" | "login") => {
+      tabSignup.classList.toggle("active", which === "signup");
+      tabLogin.classList.toggle("active", which === "login");
+      paneSignup.style.display = which === "signup" ? "" : "none";
+      paneLogin.style.display = which === "login" ? "" : "none";
+      this.requireElement("authError").textContent = "";
+    };
+    tabSignup.addEventListener("click", () => showTab("signup"));
+    tabLogin.addEventListener("click", () => showTab("login"));
+
+    this.requireElement("authModalClose").addEventListener("click", () => this.closeAuthModal(true));
+    this.requireElement("authSignupSubmit").addEventListener("click", () => this.handleSignupSubmit());
+    this.requireElement("authLoginSubmit").addEventListener("click", () => this.handleLoginSubmit());
+    this.requireElement("myProjectsClose").addEventListener("click", () => {
+      this.requireElement("myProjectsOverlay").style.display = "none";
+    });
+  }
+
+  private openAuthModal(): void {
+    this.requireElement("authModalOverlay").classList.add("visible");
+  }
+
+  private closeAuthModal(cancelled: boolean): void {
+    this.requireElement("authModalOverlay").classList.remove("visible");
+    this.requireElement("authError").textContent = "";
+    if (cancelled && this.pendingAuthReject) this.pendingAuthReject(new Error("Cadastro/login cancelado pelo usuário."));
+    this.pendingAuthResolve = null;
+    this.pendingAuthReject = null;
+  }
+
+  private onAuthSuccess(userId: string, email: string): void {
+    this.currentUserId = userId;
+    this.currentUserEmail = email;
+    this.refreshAccountButton();
+    this.closeAuthModal(false);
+    if (this.pendingAuthResolve) {
+      const resolve = this.pendingAuthResolve;
+      this.pendingAuthResolve = null;
+      this.pendingAuthReject = null;
+      resolve(userId);
+    }
+  }
+
+  private refreshAccountButton(): void {
+    const btn = this.requireElement("accountBtn");
+    btn.textContent = this.currentUserEmail ? `👤 ${this.currentUserEmail}` : "👤 Entrar";
+  }
+
+  private async handleAccountButtonClick(): Promise<void> {
+    if (this.currentUserId) {
+      if (!confirm("Sair da conta?")) return;
+      try {
+        await signOut();
+      } catch (err) {
+        console.error("Falha ao sair:", err);
+      }
+      this.currentUserId = null;
+      this.currentUserEmail = null;
+      this.refreshAccountButton();
+    } else {
+      this.openAuthModal();
+    }
+  }
+
+  private friendlyAuthError(err: unknown): string {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/already registered|already exists|user already/i.test(msg)) return "Esse e-mail já tem conta — usa a aba \"Já tenho conta\".";
+    if (/invalid login credentials/i.test(msg)) return "E-mail ou senha incorretos.";
+    return msg;
+  }
+
+  private async handleSignupSubmit(): Promise<void> {
+    const errorEl = this.requireElement("authError");
+    const btn = this.requireElement("authSignupSubmit") as HTMLButtonElement;
+    const nome = (this.requireElement("authNome") as HTMLInputElement).value.trim();
+    const email = (this.requireElement("authSignupEmail") as HTMLInputElement).value.trim();
+    const telefone = (this.requireElement("authTelefone") as HTMLInputElement).value.trim();
+    const senha = (this.requireElement("authSignupSenha") as HTMLInputElement).value;
+    const profile: ProfileFields = {
+      nome, telefone,
+      cep: (this.requireElement("authCep") as HTMLInputElement).value.trim(),
+      estado: (this.requireElement("authEstado") as HTMLSelectElement).value,
+      cidade: (this.requireElement("authCidade") as HTMLInputElement).value.trim(),
+      rua: (this.requireElement("authRua") as HTMLInputElement).value.trim(),
+      numero: (this.requireElement("authNumero") as HTMLInputElement).value.trim(),
+      bairro: (this.requireElement("authBairro") as HTMLInputElement).value.trim(),
+    };
+
+    if (!nome || !email || !telefone || !senha) {
+      errorEl.textContent = "Nome, e-mail, telefone e senha são obrigatórios.";
+      return;
+    }
+    if (senha.length < 6) {
+      errorEl.textContent = "A senha precisa de pelo menos 6 caracteres.";
+      return;
+    }
+
+    errorEl.textContent = "";
+    btn.disabled = true;
+    btn.textContent = "Criando conta...";
+    try {
+      const result = await signUpWithProfile(email, senha, profile);
+      if (result.needsEmailConfirmation) {
+        errorEl.textContent = 'Conta criada! Confirme seu e-mail (chegou uma mensagem na sua caixa de entrada) e depois entra pela aba "Já tenho conta".';
+        return;
+      }
+      const user = await getCurrentUser();
+      if (!user) throw new Error("Não foi possível confirmar a sessão após o cadastro.");
+      this.onAuthSuccess(user.id, user.email ?? email);
+    } catch (err) {
+      errorEl.textContent = this.friendlyAuthError(err);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Criar conta e salvar projeto";
+    }
+  }
+
+  private async handleLoginSubmit(): Promise<void> {
+    const errorEl = this.requireElement("authError");
+    const btn = this.requireElement("authLoginSubmit") as HTMLButtonElement;
+    const email = (this.requireElement("authLoginEmail") as HTMLInputElement).value.trim();
+    const senha = (this.requireElement("authLoginSenha") as HTMLInputElement).value;
+    if (!email || !senha) { errorEl.textContent = "Preenche e-mail e senha."; return; }
+
+    errorEl.textContent = "";
+    btn.disabled = true;
+    btn.textContent = "Entrando...";
+    try {
+      const user = await signIn(email, senha);
+      if (!user) throw new Error("Login não retornou um usuário.");
+      this.onAuthSuccess(user.id, user.email ?? email);
+    } catch (err) {
+      errorEl.textContent = this.friendlyAuthError(err);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Entrar";
+    }
+  }
+
+  private async openMyProjects(): Promise<void> {
+    let userId: string;
+    try {
+      userId = await this.requireAuth();
+    } catch {
+      return;
+    }
+    const listEl = this.requireElement("myProjectsList");
+    const overlay = this.requireElement("myProjectsOverlay");
+    listEl.textContent = "Carregando...";
+    overlay.style.display = "flex";
+    try {
+      const projects = await listMyProjects(userId);
+      listEl.innerHTML = "";
+      if (!projects.length) {
+        listEl.innerHTML = '<p style="font-size:13px;color:#5F5E5A;">Você ainda não salvou nenhum projeto.</p>';
+        return;
+      }
+      projects.forEach((p) => {
+        const row = document.createElement("div");
+        row.style.cssText = "padding:10px;border:1px solid #D3D1C7;border-radius:8px;margin-bottom:8px;cursor:pointer;";
+        const updated = new Date(p.updated_at).toLocaleString("pt-BR");
+        row.innerHTML = `<strong>Projeto ${p.id}</strong><br><span style="font-size:12px;color:#5F5E5A;">Atualizado em ${updated}</span>`;
+        row.addEventListener("click", () => this.openProjectById(p.id));
+        listEl.appendChild(row);
+      });
+    } catch (err) {
+      listEl.innerHTML = '<p style="color:#D7263D;font-size:13px;">Falha ao carregar projetos.</p>';
+      console.error("Falha ao listar projetos:", err);
+    }
+  }
+
+  private async openProjectById(id: string): Promise<void> {
+    try {
+      const data = await loadSharedProject(id);
+      if (!data) { alert("Projeto não encontrado — pode ter sido apagado."); return; }
+      Store.setProject(data as ReturnType<typeof Store.getProject>);
+      this.sharedProjectId = id;
+      this.setUrlProjectId(id);
+      this.requireElement("myProjectsOverlay").style.display = "none";
+    } catch (err) {
+      console.error("Falha ao abrir projeto:", err);
+      alert("Falha ao abrir o projeto.");
+    }
   }
 
   private createInitialRoom(): void {
