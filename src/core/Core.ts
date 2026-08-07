@@ -596,6 +596,26 @@ export function pointInPolygon(x: number, y: number, points: Point[]): boolean {
   return inside;
 }
 
+// Acha o cômodo (se existir) de cada lado de uma abertura, "sondando"
+// um ponto um pouco além de cada face da parede, na direção
+// perpendicular. Usada tanto pelo renderer 3D (decidir soleira
+// escondida vs. peça própria) quanto pelo cálculo de quantitativos
+// (contar/somar soleiras externas) — um só lugar pra essa lógica, os
+// dois lados sempre concordam sobre onde tem soleira (DEC-30).
+export function findRoomsAdjacentToOpening(wall: Wall, opening: Opening, rooms: Room[]): { roomA: Room | null; roomB: Room | null } {
+  const wdx = wall.x2 - wall.x1, wdy = wall.y2 - wall.y1;
+  const wlen = Math.hypot(wdx, wdy) || 1e-6;
+  const wnx = -wdy / wlen, wny = wdx / wlen;
+  const midModel = opening.offset * GRID;
+  const baseX = wall.x1 + (wdx / wlen) * midModel, baseY = wall.y1 + (wdy / wlen) * midModel;
+  const probeDist = (WALL_THICK * GRID) / 2 + 0.3 * GRID;
+  const probeAX = baseX + wnx * probeDist, probeAY = baseY + wny * probeDist;
+  const probeBX = baseX - wnx * probeDist, probeBY = baseY - wny * probeDist;
+  const roomA = rooms.filter((r) => pointInPolygon(probeAX, probeAY, r.points))[0] || null;
+  const roomB = rooms.filter((r) => pointInPolygon(probeBX, probeBY, r.points))[0] || null;
+  return { roomA, roomB };
+}
+
 // Limites de um cômodo em unidades de MODELO, já com a meia-espessura da
 // parede somada — os pontos de detectRooms são cruzamentos do EIXO das
 // paredes, não da face externa.
@@ -1297,6 +1317,7 @@ export const Core = {
   snap, nextId,
   createOpeningEntity, wallLengthMeters, wallOffsetAtPoint, findValidOpeningOffset,
   resolveOpeningEdgeResize, resolveOpeningHeightResize,
+  findRoomsAdjacentToOpening,
   roofRidgeHeightMeters, roofPitchForRidgeHeight, roofsCanFuse, fusedRoofBounds,
   rectsNearby, pointInPolygon, roomModelBounds, findRoomWallIds, findIsolatedRoomWallIds, wallResizeTopology, resolveWallResizeOffset, computeWallFootprints,
   wallResizeEndpointNeedsBridge,

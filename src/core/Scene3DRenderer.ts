@@ -81,6 +81,7 @@ export function hashColorHex(key: string): number {
   var OPENING_FRAME_COLOR = 0xF4F1E8;
   var WALL_PLASTER_TILE_METERS = 1.25;
   var wallPlasterMaps: { map: THREE.Texture; normalMap: THREE.Texture; roughnessMap: THREE.Texture } | null = null;
+  var soleiraMarbleMaps: { map: THREE.Texture; normalMap: THREE.Texture; roughnessMap: THREE.Texture } | null = null;
 
   function getWallPlasterMaps() {
     if (wallPlasterMaps) return wallPlasterMaps;
@@ -100,6 +101,33 @@ export function hashColorHex(key: string): number {
       roughnessMap: load(base + 'textures/reboco/roughness.png', false)
     };
     return wallPlasterMaps;
+  }
+
+  // Mármore da soleira externa — textura PBR fornecida pelo usuário
+  // (Marble016), reduzida de 1K/16-bit pra 512x512/8-bit em JPG antes de
+  // entrar no projeto (os arquivos originais passavam de 3MB cada, o que
+  // pesaria bastante pro navegador baixar; a peça é pequena na cena, não
+  // precisa de resolução alta). Só usa o NormalGL (não o NormalDX — o
+  // Three.js espera a convenção OpenGL) e ignora o Displacement (não há
+  // deslocamento de vértice nesse renderer, só normal map de superfície).
+  function getSoleiraMarbleMaps() {
+    if (soleiraMarbleMaps) return soleiraMarbleMaps;
+    var loader = new THREE.TextureLoader();
+    function load(path: string, isColor: boolean) {
+      var texture = loader.load(path);
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      texture.anisotropy = 4;
+      if (isColor) texture.colorSpace = THREE.SRGBColorSpace;
+      return texture;
+    }
+    var base = import.meta.env.BASE_URL;
+    soleiraMarbleMaps = {
+      map: load(base + 'textures/soleira-marmore/albedo.jpg', true),
+      normalMap: load(base + 'textures/soleira-marmore/normal.jpg', false),
+      roughnessMap: load(base + 'textures/soleira-marmore/roughness.jpg', false)
+    };
+    return soleiraMarbleMaps;
   }
 
   interface Registry {
@@ -826,11 +854,24 @@ export function hashColorHex(key: string): number {
       color: isSelected ? SELECTED_ACCENT : OPENING_FRAME_COLOR,
       flatShading: true
     });
-    // Reveal do arco usa tom de parede (mesma cor do topo da parede,
-    // WALL_TOP_COLOR) — é só fechar o rasgo do corte, não parecer uma
-    // moldura de esquadria.
+    // Reveal do arco usa o MESMO acabamento real da parede (lado A,
+    // Catálogo/Materiais) — cor E textura, não só a cor. Sem isso ficava
+    // uma cor lisa/neutra enquanto a parede ao redor tem o relevo do
+    // reboco (ou a cerâmica, se for o caso) — mesma lógica de resolução
+    // de material usada na face de verdade da parede, reaproveitada aqui.
+    var arcoWallProduct = w.finishA ? Catalog.getProduct(w.finishA) : null;
+    var arcoIsCeramic = arcoWallProduct && arcoWallProduct.category === 'floor_tile';
+    var arcoCeramicMap = arcoIsCeramic ? buildCeramicTexture(arcoWallProduct!.assets.colorHex, 1, 0) : null;
+    var arcoWallColorHex = arcoWallProduct ? parseInt(arcoWallProduct.assets.colorHex.slice(1), 16) : GABLE_COLOR;
+    if (arcoIsCeramic) arcoWallColorHex = 0xFFFFFF;
+    var arcoPlasterMaps = getWallPlasterMaps();
     var arcoRevealMat = new THREE.MeshStandardMaterial({
-      color: isSelected ? SELECTED_ACCENT : WALL_TOP_COLOR,
+      color: isSelected ? SELECTED_ACCENT : arcoWallColorHex,
+      map: arcoCeramicMap || arcoPlasterMaps.map,
+      normalMap: arcoIsCeramic ? null : arcoPlasterMaps.normalMap,
+      roughnessMap: arcoIsCeramic ? null : arcoPlasterMaps.roughnessMap,
+      roughness: 0.92,
+      normalScale: new THREE.Vector2(0.28, 0.28),
       flatShading: true
     });
 
@@ -1351,6 +1392,123 @@ export function hashColorHex(key: string): number {
     });
     if (cursor < 1 - 1e-6) free.push([cursor, 1]);
     return free;
+  }
+
+  // Contorno preto do piso do cômodo — antes vinha de THREE.EdgesGeometry
+  // em cima da malha extrudada inteira, sem noção nenhuma de abertura:
+  // desenhava a linha atravessando o vão de qualquer arco/porta no nível
+  // do chão. Como o vão fica aberto (sem parede cobrindo), essa linha
+  // sobrava visível flutuando no ar — os "riscos" no meio do arco.
+  // Reaproveita os MESMOS intervalos de corte do rodapé (mesma regra:
+  // peitoril ≤ 2cm interrompe) pra pular o trecho certo.
+  function buildRoomFloorOutline(insetPoints: any[], insetWallIds: any[], wallsList: any[], openingsList: any[], offsetX: number, offsetY: number, scale: number, y: number) {
+    var n = insetPoints.length;
+    var verts: number[] = [];
+    for (var i = 0; i < n; i++) {
+      var p1 = insetPoints[i], p2 = insetPoints[(i + 1) % n];
+      var wx1 = (p1.x - offsetX) * scale, wz1 = (p1.y - offsetY) * scale;
+      var wx2 = (p2.x - offsetX) * scale, wz2 = (p2.y - offsetY) * scale;
+      var skip = computeBaseboardSkipIntervals(insetWallIds[i], wallsList, openingsList, p1, p2);
+      var freeRanges = skip.length ? invertIntervals(skip) : [[0, 1]];
+      freeRanges.forEach(function (range: any) {
+        var f0 = range[0], f1 = range[1];
+        var sx1 = wx1 + (wx2 - wx1) * f0, sz1 = wz1 + (wz2 - wz1) * f0;
+        var sx2 = wx1 + (wx2 - wx1) * f1, sz2 = wz1 + (wz2 - wz1) * f1;
+        verts.push(sx1, y, sz1, sx2, y, sz2);
+      });
+    }
+    var geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+    return new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: 0x1B1C1E }));
+  }
+
+  // Soleira — fecha o buraco que sobra no piso quando um arco (ou
+  // qualquer abertura no nível do chão) corta uma parede ENTRE dois
+  // cômodos. O piso de cada cômodo sempre para exatamente na face
+  // interna da própria parede (nunca invade a espessura dela — ver
+  // comentário logo acima do insetPoints) porque normalmente é a
+  // parede que cobre essa faixa. Com um vão aberto ali, sobra uma
+  // fresta do tamanho da espessura da parede, à mostra.
+  //
+  // Tentativa anterior recortava a soleira só na largura do vão,
+  // interpolando o canto em linha reta — perto da ponta da parede isso
+  // diverge da matemática de canto real (computeWallFootprints leva em
+  // conta parede vizinha, corte de esquadro etc.) e abria uma frincha
+  // visível. Corrigido: a soleira cobre a parede INTEIRA, usando os
+  // MESMOS 4 cantos (p1a/p1b/p2a/p2b) que o piso do cômodo também usa
+  // pra fechar contra essa parede — não uma aproximação, é o mesmo
+  // ponto de dado. Fora do vão, fica escondida embaixo da parede
+  // sólida, sem efeito nenhum; só aparece onde realmente há abertura.
+  //
+  // Só é chamada quando os DOIS lados têm cômodo (arco/porta ENTRE
+  // cômodos) — pro lado que dá pra área externa, uma peça de soleira de
+  // verdade (buildExteriorSoleira, logo abaixo) resolve melhor: soleira
+  // de verdade é uma peça própria, com relevo e material diferente do
+  // piso — não é o piso "esticando" por cima da parede. Tentativa
+  // anterior de fazer o piso alcançar a face externa também deu
+  // z-fighting com a aba da fundação (que fica bem perto do nível do
+  // piso ali); virar peça própria, mais alta, evita esse problema de
+  // vez, além de ficar mais fiel à realidade construtiva.
+  function buildThresholdSlab(wall: any, wallFootprintsMap: any, yOffset: any, offsetX: any, offsetY: any, scale: any) {
+    var fp = wallFootprintsMap[wall.id];
+    if (!fp) return null;
+    var shape = new THREE.Shape();
+    [fp.p1a, fp.p2a, fp.p2b, fp.p1b].forEach(function (p: any, i: any) {
+      var wx = (p.x - offsetX) * scale, wz = (p.y - offsetY) * scale;
+      if (i === 0) shape.moveTo(wx, wz); else shape.lineTo(wx, wz);
+    });
+    shape.closePath();
+    var thickness = 0.03;
+    var product = Catalog.getProduct(DEFAULT_FLOOR_FINISH_ID);
+    var colorHex = product ? parseInt(product.assets.colorHex.slice(1), 16) : 0xCFE8CF;
+    var texture = product ? buildCeramicTexture(product.assets.colorHex, 1, 0) : null;
+    return makeSlabMesh(shape, thickness, yOffset + thickness, colorHex, 1, true, texture);
+  }
+
+  // Soleira externa — peça de VERDADE (não o piso esticando por cima da
+  // parede): elevada alguns milímetros acima do piso, material de pedra
+  // distinto da cerâmica padrão, só na largura do vão (igual soleira
+  // real de porta/varanda pra fora). O nível dela fica bem acima de
+  // onde a aba da fundação vive (y ≈ -5mm), então não conflita com ela.
+  var SOLEIRA_RISE = 0.02; // 2cm acima do piso — típico de soleira externa
+  var SOLEIRA_PROTRUSION = 0.03; // avança 3cm além de cada face da parede
+  function buildExteriorSoleira(wall: any, opening: any, yOffset: any, offsetX: any, offsetY: any, scale: any) {
+    var wdx = wall.x2 - wall.x1, wdy = wall.y2 - wall.y1;
+    var wlen = Math.hypot(wdx, wdy) || 1e-6;
+    var ux = wdx / wlen, uy = wdy / wlen;
+    var nx = -uy, ny = ux;
+    var t0M = (opening.offset - opening.width / 2) * Core.GRID;
+    var t1M = (opening.offset + opening.width / 2) * Core.GRID;
+    var baseX0 = wall.x1 + ux * t0M, baseY0 = wall.y1 + uy * t0M;
+    var baseX1 = wall.x1 + ux * t1M, baseY1 = wall.y1 + uy * t1M;
+    var halfSpan = (Core.WALL_THICK / 2 + SOLEIRA_PROTRUSION) * Core.GRID;
+    var corners = [
+      { x: baseX0 + nx * halfSpan, y: baseY0 + ny * halfSpan },
+      { x: baseX1 + nx * halfSpan, y: baseY1 + ny * halfSpan },
+      { x: baseX1 - nx * halfSpan, y: baseY1 - ny * halfSpan },
+      { x: baseX0 - nx * halfSpan, y: baseY0 - ny * halfSpan }
+    ];
+    var shape = new THREE.Shape();
+    corners.forEach(function (p: any, i: any) {
+      var wx = (p.x - offsetX) * scale, wz = (p.y - offsetY) * scale;
+      if (i === 0) shape.moveTo(wx, wz); else shape.lineTo(wx, wz);
+    });
+    shape.closePath();
+    var pisoTopY = yOffset + 0.03;
+    var marbleMaps = getSoleiraMarbleMaps();
+    var mat = new THREE.MeshStandardMaterial({
+      map: marbleMaps.map,
+      normalMap: marbleMaps.normalMap,
+      roughnessMap: marbleMaps.roughnessMap,
+      roughness: 0.55,
+      normalScale: new THREE.Vector2(0.6, 0.6),
+      flatShading: false
+    });
+    var geo = new THREE.ExtrudeGeometry(shape, { depth: SOLEIRA_RISE, bevelEnabled: false });
+    var mesh = new THREE.Mesh(geo, mat);
+    mesh.rotation.x = Math.PI / 2;
+    mesh.position.y = pisoTopY + SOLEIRA_RISE;
+    return mesh;
   }
 
   function buildRoomBaseboardMesh(insetPoints: any[], insetWallIds: any[], wallsList: any[], openingsList: any[], centerX: number, centerY: number, offsetX: number, offsetY: number, scale: number, y0: number, color: any, texture: THREE.Texture | null) {
@@ -2156,9 +2314,7 @@ export function hashColorHex(key: string): number {
         mesh.userData.roomKey = roomKey;
         scene.add(mesh);
         registry.roomMeshes.push(mesh);
-        var roomEdges = new THREE.EdgesGeometry(mesh.geometry);
-        var roomEdgeLines = new THREE.LineSegments(roomEdges, new THREE.LineBasicMaterial({ color: 0x1B1C1E }));
-        roomEdgeLines.rotation.copy(mesh.rotation); roomEdgeLines.position.copy(mesh.position);
+        var roomEdgeLines = buildRoomFloorOutline(insetPoints, insetWallIds, floorData.walls, floorData.openings, offsetX, offsetY, scale, pisoTopY);
         scene.add(roomEdgeLines);
         registry.roomMeshes.push(roomEdgeLines);
 
@@ -2173,6 +2329,44 @@ export function hashColorHex(key: string): number {
         scene.add(baseboardMesh);
         registry.roomMeshes.push(baseboardMesh);
       });
+
+      // Soleira — depois de gerar o piso de TODOS os cômodos do
+      // pavimento (precisa da lista completa pra achar quem fica de
+      // cada lado da parede). Dois casos, tratados diferente:
+      // - Cômodo dos DOIS lados (arco/porta entre cômodos): buildThresholdSlab,
+      //   escondida por baixo da parede sólida, só some com a abertura.
+      // - Cômodo de UM lado só (arco pra área externa): buildExteriorSoleira,
+      //   peça própria elevada, só na largura do vão — soleira de
+      //   verdade, não o piso disfarçado de soleira.
+      // - Nenhum dos dois lados: nada pra fechar, ignora.
+      if (layers.laje) {
+        var thresholdWallIds: any = {};
+        (floorData.openings || []).forEach(function (op) {
+          if (op.sillHeight > 0.02) return;
+          var wall = floorData.walls.filter(function (w) { return w.id === op.wallId; })[0];
+          if (!wall) return;
+          var adj = Core.findRoomsAdjacentToOpening(wall, op, rooms);
+          var roomA = adj.roomA, roomB = adj.roomB;
+          if (roomA && roomB) {
+            if (thresholdWallIds[op.wallId]) return; // essa parede já vai ganhar soleira por outra abertura
+            thresholdWallIds[op.wallId] = true;
+          } else if (roomA || roomB) {
+            var soleira = tagCategory(buildExteriorSoleira(wall, op, yOffset, offsetX, offsetY, scale), 'laje');
+            soleira.userData.openingId = op.id;
+            scene.add(soleira);
+            registry.roomMeshes.push(soleira);
+          }
+        });
+        Object.keys(thresholdWallIds).forEach(function (wallId) {
+          var wall = floorData.walls.filter(function (w) { return w.id === wallId; })[0];
+          if (!wall) return;
+          var slab = buildThresholdSlab(wall, wallFootprints, yOffset, offsetX, offsetY, scale);
+          if (!slab) return;
+          tagCategory(slab, 'laje');
+          scene.add(slab);
+          registry.roomMeshes.push(slab);
+        });
+      }
     });
 
     var groundRooms = Core.detectRooms(project.floors[0]!.walls);
