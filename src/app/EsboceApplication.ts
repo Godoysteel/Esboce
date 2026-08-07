@@ -9,7 +9,7 @@ import { NavGizmo } from "../core/NavGizmo.js";
 import { Store } from "../core/Store.js";
 import { ViewportController } from "../core/ViewportController.js";
 import { ViewportStats } from "../core/ViewportStats.js";
-import { createSharedProject, loadSharedProject, updateSharedProject, deleteProject, signUpWithProfile, signIn, signOut, getCurrentUser, listMyProjects, type ProfileFields } from "../core/SupabaseClient.js";
+import { createSharedProject, loadSharedProject, updateSharedProject, deleteProject, signUpWithProfile, signIn, signOut, getCurrentUser, listMyProjects, ensureProfileExists, type ProfileFields } from "../core/SupabaseClient.js";
 
 export class EsboceApplication {
   private readonly scene = new THREE.Scene();
@@ -525,6 +525,16 @@ export class EsboceApplication {
     try {
       const result = await signUpWithProfile(email, senha, profile);
       if (result.needsEmailConfirmation) {
+        // Sem sessão ainda (confirmação pendente) — o perfil não foi
+        // gravado no banco (a RLS exige auth.uid(), que só existe com
+        // sessão ativa). Guarda os dados aqui pra completar no
+        // primeiro login pós-confirmação (ver handleLoginSubmit), pra
+        // não perder o que a pessoa já preencheu.
+        try {
+          localStorage.setItem("esboce_pending_profile", JSON.stringify({ email, profile }));
+        } catch (err) {
+          console.error("Falha ao guardar perfil pendente:", err);
+        }
         errorEl.textContent = 'Conta criada! Confirme seu e-mail (chegou uma mensagem na sua caixa de entrada) e depois entra pela aba "Já tenho conta".';
         return;
       }
@@ -536,6 +546,33 @@ export class EsboceApplication {
     } finally {
       btn.disabled = false;
       btn.textContent = "Criar conta e salvar projeto";
+    }
+  }
+
+  // Se essa pessoa cadastrou antes e a confirmação de e-mail impediu
+  // o perfil de ser gravado na hora (ver handleSignupSubmit), completa
+  // isso agora que ela tem sessão de verdade. Silencioso de propósito
+  // — se não achar nada pendente (ou o e-mail não bater), segue o
+  // login normal sem incomodar ninguém com isso.
+  private async completePendingProfileIfAny(userId: string, loggedInEmail: string): Promise<void> {
+    let raw: string | null;
+    try {
+      raw = localStorage.getItem("esboce_pending_profile");
+    } catch {
+      return;
+    }
+    if (!raw) return;
+    try {
+      const pending = JSON.parse(raw) as { email: string; profile: ProfileFields };
+      if (pending.email.toLowerCase() === loggedInEmail.toLowerCase()) {
+        await ensureProfileExists(userId, pending.profile);
+      }
+      localStorage.removeItem("esboce_pending_profile");
+    } catch (err) {
+      console.error("Falha ao completar perfil pendente:", err);
+      // Não remove do localStorage nesse caso — tenta de novo no
+      // próximo login, em vez de perder o dado por causa de um erro
+      // pontual (ex.: falha de rede).
     }
   }
 
@@ -552,6 +589,7 @@ export class EsboceApplication {
     try {
       const user = await signIn(email, senha);
       if (!user) throw new Error("Login não retornou um usuário.");
+      await this.completePendingProfileIfAny(user.id, email);
       this.onAuthSuccess(user.id, user.email ?? email);
     } catch (err) {
       errorEl.textContent = this.friendlyAuthError(err);
