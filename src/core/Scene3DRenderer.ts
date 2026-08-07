@@ -818,6 +818,7 @@ export function hashColorHex(key: string): number {
     }
 
     var isDoor = op.kind === 'door';
+    var isArco = op.kind === 'arco';
     var layout = computeOpeningAssemblyLayout(op, WALL_THICK);
     var leafWidth = layout.infillWidth;
     var thick = WALL_THICK * 0.7;
@@ -825,24 +826,41 @@ export function hashColorHex(key: string): number {
       color: isSelected ? SELECTED_ACCENT : OPENING_FRAME_COLOR,
       flatShading: true
     });
+    // Reveal do arco usa tom de parede (mesma cor do topo da parede,
+    // WALL_TOP_COLOR) — é só fechar o rasgo do corte, não parecer uma
+    // moldura de esquadria.
+    var arcoRevealMat = new THREE.MeshStandardMaterial({
+      color: isSelected ? SELECTED_ACCENT : WALL_TOP_COLOR,
+      flatShading: true
+    });
 
-    // Batentes/marcos sólidos ocupam a folga entre esquadria e alvenaria
-    // e atravessam toda a espessura da parede. A folha/vidro continua
-    // sendo o primeiro Mesh e, portanto, o alvo de seleção da abertura.
-    function addFrameBars() {
+    // Batentes/marcos sólidos (porta/janela) ou reveal do arco — os dois
+    // ocupam a folga entre esquadria/corte e a alvenaria, atravessando
+    // toda a espessura da parede. A folha/vidro/vão continua sendo o
+    // primeiro Mesh e, portanto, o alvo de seleção da abertura.
+    function addFrameBars(mat: any) {
       layout.frameBars.forEach(function (bar: any) {
         var frameGeo = new THREE.BoxGeometry(bar.width, bar.height, bar.depth);
-        addPiece(new THREE.Mesh(frameGeo, frameMat), bar.centerY, bar.centerX);
+        addPiece(new THREE.Mesh(frameGeo, mat), bar.centerY, bar.centerX);
       });
     }
 
-    if (isDoor) {
+    if (isArco) {
+      // Vão estrutural puro — nenhuma folha/vidro, só o reveal fechando
+      // o rasgo (addFrameBars com material de parede). Um Mesh INVISÍVEL
+      // do tamanho do vão ainda é necessário como alvo de clique/seleção
+      // (sem ele não haveria nada pra clicar dentro do buraco).
+      var arcoHitGeo = new THREE.BoxGeometry(leafWidth, layout.infillHeight, thick);
+      var arcoHitMat = new THREE.MeshBasicMaterial({ visible: false });
+      addPiece(new THREE.Mesh(arcoHitGeo, arcoHitMat), layout.infillCenterY);
+      addFrameBars(arcoRevealMat);
+    } else if (isDoor) {
       var doorColor = isSelected ? SELECTED_ACCENT : 0x8B5E3C;
       var leafGeo = new THREE.BoxGeometry(leafWidth, layout.infillHeight, thick);
       var leafMat = new THREE.MeshStandardMaterial({ color: doorColor, flatShading: true });
       addPiece(new THREE.Mesh(leafGeo, leafMat), layout.infillCenterY);
       addPiece(new THREE.LineSegments(new THREE.EdgesGeometry(leafGeo), new THREE.LineBasicMaterial({ color: 0x1B1C1E })), layout.infillCenterY);
-      addFrameBars();
+      addFrameBars(frameMat);
     } else {
       var glassColor = isSelected ? SELECTED_ACCENT : 0xBFE3F0;
       var glassHeight = layout.infillHeight;
@@ -850,7 +868,7 @@ export function hashColorHex(key: string): number {
       var glassGeo = new THREE.BoxGeometry(leafWidth, glassHeight, thick * 0.5);
       var glassMat = new THREE.MeshStandardMaterial({ color: glassColor, flatShading: true, transparent: true, opacity: isSelected ? 0.75 : 0.45 });
       addPiece(new THREE.Mesh(glassGeo, glassMat), midY);
-      addFrameBars();
+      addFrameBars(frameMat);
       var mullMat = new THREE.MeshStandardMaterial({ color: 0xFFFFFF, flatShading: true });
       addPiece(new THREE.Mesh(new THREE.BoxGeometry(0.03, glassHeight, thick * 0.55), mullMat), midY);
       addPiece(new THREE.Mesh(new THREE.BoxGeometry(leafWidth, 0.03, thick * 0.55), mullMat), midY);
@@ -1293,7 +1311,49 @@ export function hashColorHex(key: string): number {
   // convenção do piso (ExtrudeGeometry gera UV em unidade de mundo, não
   // normalizada 0-1), pra a textura cerâmica (buildCeramicTexture) bater
   // no mesmo passo de fuga do piso em vez de esticar/repetir errado.
-  function buildRoomBaseboardMesh(insetPoints: any[], centerX: number, centerY: number, offsetX: number, offsetY: number, scale: number, y0: number, color: any, texture: THREE.Texture | null) {
+  //
+  // insetWallIds: mesmo índice de insetPoints — qual parede originou
+  // cada ponto do contorno (ver rooms.forEach mais abaixo). Usado só
+  // pra achar aberturas que chegam ao chão (porta, ou arco sem
+  // peitoril) e pular o trecho do rodapé onde elas estão — não faz
+  // sentido rodapé atravessando um vão aberto.
+  function computeBaseboardSkipIntervals(wallId: any, wallsList: any[], openingsList: any[], p1: any, p2: any) {
+    if (!wallId) return [];
+    var wall: any = null;
+    for (var i = 0; i < wallsList.length; i++) if (wallsList[i].id === wallId) { wall = wallsList[i]; break; }
+    if (!wall) return [];
+    var offset1 = Core.wallOffsetAtPoint(wall, p1.x, p1.y);
+    var offset2 = Core.wallOffsetAtPoint(wall, p2.x, p2.y);
+    var span = offset2 - offset1;
+    if (Math.abs(span) < 1e-6) return [];
+    var intervals: any[] = [];
+    (openingsList || []).forEach(function (op: any) {
+      if (op.wallId !== wallId) return;
+      if (op.sillHeight > 0.02) return; // só vãos que chegam ao chão interrompem o rodapé
+      var oLo = op.offset - op.width / 2, oHi = op.offset + op.width / 2;
+      var tA = (oLo - offset1) / span, tB = (oHi - offset1) / span;
+      var tStart = Math.max(0, Math.min(1, Math.min(tA, tB)));
+      var tEnd = Math.max(0, Math.min(1, Math.max(tA, tB)));
+      if (tEnd > tStart + 1e-6) intervals.push([tStart, tEnd]);
+    });
+    intervals.sort(function (a: any, b: any) { return a[0] - b[0]; });
+    return intervals;
+  }
+
+  // A partir dos intervalos BLOQUEADOS (0..1), devolve os intervalos
+  // LIVRES complementares — onde o rodapé realmente deve ser desenhado.
+  function invertIntervals(skip: any[]) {
+    var free: any[] = [];
+    var cursor = 0;
+    skip.forEach(function (iv: any) {
+      if (iv[0] > cursor + 1e-6) free.push([cursor, iv[0]]);
+      cursor = Math.max(cursor, iv[1]);
+    });
+    if (cursor < 1 - 1e-6) free.push([cursor, 1]);
+    return free;
+  }
+
+  function buildRoomBaseboardMesh(insetPoints: any[], insetWallIds: any[], wallsList: any[], openingsList: any[], centerX: number, centerY: number, offsetX: number, offsetY: number, scale: number, y0: number, color: any, texture: THREE.Texture | null) {
     var HEIGHT_M = 0.10; // altura fixa do rodapé, 10cm
     var DEPTH_M = 0.015; // quanto avança pra dentro do cômodo — não especificado, valor típico de mercado
     var y1 = y0 + HEIGHT_M; // vertical já é metro direto, sem o fator scale (esse só vale pra X/Z)
@@ -1322,17 +1382,25 @@ export function hashColorHex(key: string): number {
       var midX = (wx1 + wx2) / 2, midZ = (wz1 + wz2) / 2;
       if ((cWx - midX) * nx + (cWz - midZ) * nz < 0) { nx = -nx; nz = -nz; }
       var depth = DEPTH_M * scale;
-      var ix1 = wx1 + nx * depth, iz1 = wz1 + nz * depth;
-      var ix2 = wx2 + nx * depth, iz2 = wz2 + nz * depth;
-      var outerBase1 = [wx1, y0, wz1], outerBase2 = [wx2, y0, wz2];
-      var innerBase1 = [ix1, y0, iz1], innerBase2 = [ix2, y0, iz2];
-      var outerTop1 = [wx1, y1, wz1], outerTop2 = [wx2, y1, wz2];
-      var innerTop1 = [ix1, y1, iz1], innerTop2 = [ix2, y1, iz2];
-      var u0 = distAccum, u1 = distAccum + len;
-      quad(outerBase1, outerBase2, outerTop2, outerTop1, [u0, 0], [u1, 0], [u1, HEIGHT_M], [u0, HEIGHT_M]); // face colada na parede
-      quad(innerBase2, innerBase1, innerTop1, innerTop2, [u1, 0], [u0, 0], [u0, HEIGHT_M], [u1, HEIGHT_M]); // face voltada pro cômodo
-      quad(outerTop1, outerTop2, innerTop2, innerTop1, [u0, 0], [u1, 0], [u1, DEPTH_M], [u0, DEPTH_M]);     // topo
-      distAccum = u1;
+
+      var skip = computeBaseboardSkipIntervals(insetWallIds[i], wallsList, openingsList, p1, p2);
+      var freeRanges = skip.length ? invertIntervals(skip) : [[0, 1]];
+      freeRanges.forEach(function (range: any) {
+        var f0 = range[0], f1 = range[1];
+        var swx1 = wx1 + dx * f0, swz1 = wz1 + dz * f0;
+        var swx2 = wx1 + dx * f1, swz2 = wz1 + dz * f1;
+        var six1 = swx1 + nx * depth, siz1 = swz1 + nz * depth;
+        var six2 = swx2 + nx * depth, siz2 = swz2 + nz * depth;
+        var outerBase1 = [swx1, y0, swz1], outerBase2 = [swx2, y0, swz2];
+        var innerBase1 = [six1, y0, siz1], innerBase2 = [six2, y0, siz2];
+        var outerTop1 = [swx1, y1, swz1], outerTop2 = [swx2, y1, swz2];
+        var innerTop1 = [six1, y1, siz1], innerTop2 = [six2, y1, siz2];
+        var su0 = distAccum + len * f0, su1 = distAccum + len * f1;
+        quad(outerBase1, outerBase2, outerTop2, outerTop1, [su0, 0], [su1, 0], [su1, HEIGHT_M], [su0, HEIGHT_M]); // face colada na parede
+        quad(innerBase2, innerBase1, innerTop1, innerTop2, [su1, 0], [su0, 0], [su0, HEIGHT_M], [su1, HEIGHT_M]); // face voltada pro cômodo
+        quad(outerTop1, outerTop2, innerTop2, innerTop1, [su0, 0], [su1, 0], [su1, DEPTH_M], [su0, DEPTH_M]);     // topo
+      });
+      distAccum += len;
     }
     var geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
@@ -1604,7 +1672,7 @@ export function hashColorHex(key: string): number {
   // depthTest:false + renderOrder alto: garante que a alça sempre desenha
   // por cima de qualquer coisa (parede, telhado...), nunca fica escondida
   // debaixo da própria superfície que ela ajusta.
-  function renderSelectionHandles(scene: any, viewState: any, scale: any, offsetX: any, offsetY: any) {
+  function renderSelectionHandles(scene: any, viewState: any, scale: any, offsetX: any, offsetY: any, walls: any) {
     if (viewState.selectedWall) {
       var w = viewState.selectedWall, yOffset = viewState.editingYOffset;
       [[w.x1, w.y1, 1], [w.x2, w.y2, 2]].forEach(function (pt) {
@@ -1713,6 +1781,38 @@ export function hashColorHex(key: string): number {
         scene.add(meshE);
         registry.handleMeshes.push(meshE);
       });
+    }
+
+    if (viewState.selectedOpening) {
+      var opSel = viewState.selectedOpening;
+      var wSel = (walls || []).filter(function (x: any) { return x.id === opSel.wallId; })[0];
+      if (wSel) {
+        var oDx = wSel.x2 - wSel.x1, oDy = wSel.y2 - wSel.y1;
+        var oLen = Math.hypot(oDx, oDy) || 1e-6;
+        var oUx = oDx / oLen, oUy = oDy / oLen;
+        var leftModel = (opSel.offset - opSel.width / 2) * Core.GRID;
+        var rightModel = (opSel.offset + opSel.width / 2) * Core.GRID;
+        var centerModel = opSel.offset * Core.GRID;
+        var opYOffset = viewState.editingYOffset;
+        var midHeightY = opYOffset + opSel.sillHeight + opSel.height / 2;
+        var topY2 = opYOffset + opSel.sillHeight + opSel.height;
+        [
+          ['openingEdgeLeft', leftModel, midHeightY],
+          ['openingEdgeRight', rightModel, midHeightY],
+          ['openingEdgeTop', centerModel, topY2]
+        ].forEach(function (h: any) {
+          var hx = wSel.x1 + oUx * h[1], hz = wSel.y1 + oUy * h[1];
+          var wx = (hx - offsetX) * scale, wz = (hz - offsetY) * scale;
+          var geoO = new THREE.SphereGeometry(0.09, 12, 12);
+          var matO = new THREE.MeshBasicMaterial({ color: 0xFFFFFF, depthTest: false });
+          var meshO = new THREE.Mesh(geoO, matO);
+          meshO.renderOrder = 999;
+          meshO.position.set(wx, h[2], wz);
+          meshO.userData.handle = h[0];
+          scene.add(meshO);
+          registry.handleMeshes.push(meshO);
+        });
+      }
     }
   }
 
@@ -1998,6 +2098,7 @@ export function hashColorHex(key: string): number {
         var cx = 0, cy = 0;
         room.points.forEach(function (p) { cx += p.x; cy += p.y; });
         cx /= room.points.length; cy /= room.points.length;
+        var insetWallIds: any[] = [];
         var insetPoints = room.points.map(function (p1: any, i: any) {
           var p2 = room.points[(i + 1) % room.points.length]!;
           var midX = (p1.x + p2.x) / 2, midY = (p1.y + p2.y) / 2;
@@ -2006,6 +2107,7 @@ export function hashColorHex(key: string): number {
             var d = Core.distToSegment(midX, midY, w.x1, w.y1, w.x2, w.y2);
             if (d < bestDist) { bestDist = d; bestWall = w; }
           });
+          insetWallIds.push(bestWall ? bestWall.id : null);
           var fp = bestWall && wallFootprints[bestWall.id];
           if (!fp) return p1;
           var d1 = Math.hypot(bestWall.x1 - p1.x, bestWall.y1 - p1.y);
@@ -2064,7 +2166,7 @@ export function hashColorHex(key: string): number {
         // (insetPoints, já na face real da parede) e mesmo acabamento
         // (roomFinish), sem depender de nenhuma entidade nova no modelo.
         var baseboardMesh = tagCategory(
-          buildRoomBaseboardMesh(insetPoints, cx, cy, offsetX, offsetY, scale, pisoTopY, pisoColorFinal, pisoTexture),
+          buildRoomBaseboardMesh(insetPoints, insetWallIds, floorData.walls, floorData.openings, cx, cy, offsetX, offsetY, scale, pisoTopY, pisoColorFinal, pisoTexture),
           'rodape'
         );
         baseboardMesh.userData.roomKey = roomKey;
@@ -2098,7 +2200,7 @@ export function hashColorHex(key: string): number {
     }
 
     renderDrawPreview(scene, viewState, scale, offsetX, offsetY);
-    renderSelectionHandles(scene, viewState, scale, offsetX, offsetY);
+    renderSelectionHandles(scene, viewState, scale, offsetX, offsetY, project.floors[editingIdx]!.walls);
   }
 
   export function FLOOR_STACK_HEIGHT_GETTER() { return FLOOR_STACK_HEIGHT; }

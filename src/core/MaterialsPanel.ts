@@ -210,7 +210,7 @@ const MASONRY_REF = {
 
 interface Totals {
   wallLength: number; wallAreaNet: number; floorArea: number; baseboard: number; roofArea: number;
-  doors: number; windows: number; columnCount: number; columnVolume: number; estimatedColumnCount: number;
+  doors: number; windows: number; arcos: number; columnCount: number; columnVolume: number; estimatedColumnCount: number;
 }
 interface Masonry { blocks: number; mortarM3: number; cementKg: number; calKg: number; sandM3: number; }
 interface Structure {
@@ -233,7 +233,7 @@ export function compute(): ComputeResult {
   const wallHeight = Scene3DRenderer.WALL_HEIGHT_GETTER();
   const totals: Totals = {
     wallLength: 0, wallAreaNet: 0, floorArea: 0, baseboard: 0, roofArea: 0,
-    doors: 0, windows: 0, columnCount: 0, columnVolume: 0, estimatedColumnCount: 0
+    doors: 0, windows: 0, arcos: 0, columnCount: 0, columnVolume: 0, estimatedColumnCount: 0
   };
   const paint: Record<string, number> = {}, floorTile: Record<string, number> = {}, roofTile: Record<string, number> = {};
 
@@ -254,9 +254,11 @@ export function compute(): ComputeResult {
       if (w.finishB) addTo(paint, w.finishB, faceArea);
     });
 
-    // Portas e janelas.
+    // Portas, janelas e arcos.
     floor.openings.forEach(function (op) {
-      if (op.kind === 'door') totals.doors++; else totals.windows++;
+      if (op.kind === 'door') totals.doors++;
+      else if (op.kind === 'arco') totals.arcos++;
+      else totals.windows++;
     });
 
     // Cômodos fechados: área de piso + comprimento de rodapé, e piso
@@ -422,6 +424,7 @@ export function render(): void {
   html += '<div class="materials-line"><span>Telhado (área real da água)</span><span>' + fmtM2(q.totals.roofArea) + '</span></div>';
   html += '<div class="materials-line"><span>Portas</span><span>' + q.totals.doors + ' un.</span></div>';
   html += '<div class="materials-line"><span>Janelas</span><span>' + q.totals.windows + ' un.</span></div>';
+  html += '<div class="materials-line"><span>Arcos</span><span>' + q.totals.arcos + ' un.</span></div>';
   if (q.foundation) {
     const f = q.foundation;
     html += '<div class="object-panel-section-label">Fundação (' + (f.type === 'baldrame' ? 'baldrame' : 'radier') + ' — ref. taxa de aço 70 kg/m³)</div>';
@@ -534,7 +537,7 @@ export function buildDetailRows(): (string | number)[][] {
       rows.push([label, 'Cômodo ' + (i + 1), areaM2.toFixed(2), 'm²']);
     });
     floor.openings.forEach(function (op, i) {
-      const kindLabel = op.kind === 'door' ? 'Porta' : 'Janela';
+      const kindLabel = op.kind === 'door' ? 'Porta' : op.kind === 'arco' ? 'Arco' : 'Janela';
       rows.push([label, kindLabel + ' ' + (i + 1) + ' (' + op.width.toFixed(2) + '×' + op.height.toFixed(2) + 'm)', 1, 'un']);
     });
     (floor.roofs || []).forEach(function (r, i) {
@@ -573,6 +576,7 @@ export function buildRows(): (string | number)[][] {
   push('Geral', 'Telhado (área real da água)', q.totals.roofArea, 'm²', null);
   push('Geral', 'Portas', q.totals.doors, 'un', null);
   push('Geral', 'Janelas', q.totals.windows, 'un', null);
+  push('Geral', 'Arcos', q.totals.arcos, 'un', null);
   if (q.foundation) {
     const f = q.foundation;
     const fLabel = 'Fundação (' + f.type + ')';

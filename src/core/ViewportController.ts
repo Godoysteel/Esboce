@@ -113,6 +113,7 @@ import {
     telhado: 'Passe o mouse sobre um cômodo fechado pra ver a prévia, clique pra colocar. Selecione um telhado colocado e arraste a alça da cumeeira pra ajustar a inclinação.',
     door: 'Clique sobre uma parede pra inserir uma porta ali. Selecione uma porta colocada pra deslizar ou excluir.',
     window: 'Clique sobre uma parede pra inserir uma janela ali. Selecione uma janela colocada pra deslizar ou excluir.',
+    arco: 'Clique sobre uma parede pra abrir um vão ali — sacada, garagem, conceito aberto. Selecione um arco colocado pra arrastar os lados ou o topo.',
     varanda: 'Clique no chão pra colocar uma varanda. Selecione uma já colocada, clique direito nela pra girar qual lado é a frente ou excluir.',
     demolish: 'Clique numa parede pra quebrar ela. Os cantos vizinhos se fecham sozinhos, sem deixar vão.',
     paintBucket: 'Escolha a superfície no menu acima e siga o fluxo indicado para aplicar o acabamento.'
@@ -1015,6 +1016,11 @@ import {
         // nenhuma aqui, só o retângulo de partida.
         var vrE = Store.findVaranda(selectedVarandaId);
         if (vrE) dragElementStart = { x1: vrE.x1, y1: vrE.y1, x2: vrE.x2, y2: vrE.y2 };
+      } else if (handle === 'openingEdgeTop') {
+        // Redimensionar altura arrasta na vertical — mesma técnica de
+        // roofRidge (delta de tela, não raycast contra plano vertical).
+        var opT = Store.findOpening(selectedOpeningId);
+        if (opT) dragElementStart = { sillHeight: opT.sillHeight, height: opT.height, startScreenY: e.clientY };
       }
       Store.commands.beginTransaction();
       return;
@@ -1023,15 +1029,18 @@ import {
     // 2) elemento existente
     var mesh = pickMesh(e.clientX, e.clientY);
 
-    // Ferramenta Porta/Janela ativa + clicou numa parede: insere a
+    // Ferramenta Porta/Janela/Arco ativa + clicou numa parede: insere a
     // abertura ali (não seleciona/arrasta a parede como o normal) —
     // igual a ferramenta Telhado nunca seleciona parede/coluna.
-    if ((currentTool === 'door' || currentTool === 'window') && mesh && mesh.userData.wallId) {
+    if ((currentTool === 'door' || currentTool === 'window' || currentTool === 'arco') && mesh && mesh.userData.wallId) {
       var gpIns = getGroundModelPoint(e.clientX, e.clientY);
       if (gpIns) {
         var newOpening = Store.commands.insertOpening(mesh.userData.wallId, currentTool, gpIns.x, gpIns.y);
         if (newOpening) selectOpening(newOpening.id);
-        else hintEl.textContent = 'Não cabe uma ' + (currentTool === 'door' ? 'porta' : 'janela') + ' aqui — parede curta demais ou sem espaço livre.';
+        else {
+          var openingLabel = currentTool === 'door' ? 'porta' : currentTool === 'window' ? 'janela' : 'arco';
+          hintEl.textContent = 'Não cabe um' + (currentTool === 'window' ? 'a' : '') + ' ' + openingLabel + ' aqui — parede curta demais ou sem espaço livre.';
+        }
       }
       return;
     }
@@ -1585,6 +1594,30 @@ import {
       }
       return;
     }
+    if (dragMode === 'openingEdgeLeft' || dragMode === 'openingEdgeRight') {
+      var opE = Store.findOpening(selectedOpeningId);
+      var gpOE = getGroundModelPoint(e.clientX, e.clientY);
+      if (opE && gpOE) {
+        var wOE = Store.findWall(opE.wallId);
+        if (wOE) {
+          var desiredOE = Core.wallOffsetAtPoint(wOE, gpOE.x, gpOE.y);
+          var edgeOE: 'left' | 'right' = dragMode === 'openingEdgeLeft' ? 'left' : 'right';
+          Store.commands.resizeOpeningEdgeLive(selectedOpeningId, edgeOE, desiredOE);
+        }
+      }
+      return;
+    }
+    if (dragMode === 'openingEdgeTop') {
+      if (dragElementStart) {
+        // Mesma técnica de roofRidge: delta de tela vertical vira delta
+        // de altura real, sem precisar de raycast contra plano vertical
+        // (o ground-point normal só funciona pra plano horizontal).
+        var deltaScreenO = dragElementStart.startScreenY - e.clientY; // positivo = arrastou pra cima
+        var candidateTopO = dragElementStart.sillHeight + dragElementStart.height + deltaScreenO * 0.01;
+        Store.commands.resizeOpeningHeightLive(selectedOpeningId, candidateTopO);
+      }
+      return;
+    }
     // Ferramenta Telhado: nenhum clique ainda, só passando o mouse — o
     // telhadinho fantasma (tamanho padrão) segue o cursor, já grudado na
     // grade, mostrando onde ele nasceria se clicasse agora.
@@ -1754,7 +1787,7 @@ import {
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }
-    if (dragMode === 'columnBody' || dragMode === 'furnitureBody' || dragMode === 'openingSlide' || (dragMode && dragMode.indexOf('varandaEdge') === 0)) {
+    if (dragMode === 'columnBody' || dragMode === 'furnitureBody' || dragMode === 'openingSlide' || dragMode === 'openingEdgeLeft' || dragMode === 'openingEdgeRight' || dragMode === 'openingEdgeTop' || (dragMode && dragMode.indexOf('varandaEdge') === 0)) {
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }

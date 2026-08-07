@@ -10,6 +10,8 @@ import {
   detectRooms,
   findIsolatedRoomWallIds,
   findWallTJunctionSplits,
+  resolveOpeningEdgeResize,
+  resolveOpeningHeightResize,
   resolveWallGroupGridDelta,
   resolveWallResizeOffset,
   wallOBB,
@@ -649,4 +651,57 @@ test('painel informa quando o protetor restaura a planta', () => {
   const text = formatWallDiagnosticReport(report);
   assert.match(text, /REPROVADA — MOVIMENTO CANCELADO/);
   assert.match(text, /planta original foi restaurada automaticamente/);
+});
+
+test('redimensionar borda esquerda da abertura mantem a direita fixa', () => {
+  const wall = { id: 'wall', x1: 0, y1: 0, x2: 400, y2: 0 };
+  const opening = { id: 'op', kind: 'window', wallId: 'wall', offset: 2, width: 1, height: 1.2, sillHeight: 1 };
+
+  const result = resolveOpeningEdgeResize(wall, [opening], 'op', 'left', 0.8);
+
+  assert.ok(result);
+  // Borda direita original: offset + width/2 = 2.5. Nova esquerda: 0.8.
+  assert.equal(result.width, 2.5 - 0.8);
+  assert.equal(result.offset, (0.8 + 2.5) / 2);
+});
+
+test('redimensionar abertura nao invade outra abertura na mesma parede', () => {
+  const wall = { id: 'wall', x1: 0, y1: 0, x2: 400, y2: 0 };
+  const opening = { id: 'op', kind: 'window', wallId: 'wall', offset: 2, width: 1, height: 1.2, sillHeight: 1 };
+  const neighbor = { id: 'neighbor', kind: 'window', wallId: 'wall', offset: 4.5, width: 1, height: 1.2, sillHeight: 1 };
+
+  // Tenta puxar a borda direita bem além da abertura vizinha.
+  const result = resolveOpeningEdgeResize(wall, [opening, neighbor], 'op', 'right', 6);
+
+  assert.ok(result);
+  var newRight = result.offset + result.width / 2;
+  var neighborLeft = neighbor.offset - neighbor.width / 2;
+  assert.ok(newRight <= neighborLeft, 'não deveria ultrapassar a vizinha');
+});
+
+test('redimensionar abertura respeita largura minima', () => {
+  const wall = { id: 'wall', x1: 0, y1: 0, x2: 400, y2: 0 };
+  const opening = { id: 'op', kind: 'door', wallId: 'wall', offset: 2, width: 0.8, height: 2.1, sillHeight: 0 };
+
+  // Tenta puxar a esquerda quase até a direita — deve travar na largura mínima.
+  const result = resolveOpeningEdgeResize(wall, [opening], 'op', 'left', 2.39);
+
+  assert.ok(result);
+  assert.ok(result.width >= 0.4 - 1e-9);
+});
+
+test('redimensionar altura da abertura mantem o peitoril fixo', () => {
+  const opening = { id: 'op', kind: 'window', wallId: 'wall', offset: 2, width: 1, height: 1.2, sillHeight: 1 };
+
+  const newHeight = resolveOpeningHeightResize(opening, 2.5);
+
+  assert.equal(newHeight, 2.5 - 1);
+});
+
+test('redimensionar altura da abertura nao passa do teto', () => {
+  const opening = { id: 'op', kind: 'window', wallId: 'wall', offset: 2, width: 1, height: 1.2, sillHeight: 1 };
+
+  const newHeight = resolveOpeningHeightResize(opening, 10);
+
+  assert.ok(opening.sillHeight + newHeight <= 2.7);
 });

@@ -31,6 +31,42 @@ export function computeOpeningAssemblyLayout(
   opening: Pick<Opening, 'kind' | 'width' | 'height' | 'sillHeight'>,
   wallThickness: number,
 ): OpeningAssemblyLayout {
+  // Arco é vão estrutural puro (sacada, garagem, conceito aberto) — sem
+  // marco/batente decorativo. Mas a REENTRÂNCIA do corte (a espessura da
+  // parede exposta nas laterais e no topo do vão) precisa de uma peça
+  // fechando ela, senão fica um vão "furado" — a face visível da parede
+  // (buildFaceBandMesh) nunca fecha essa reentrância sozinha, só o
+  // marco de porta/janela faz isso normalmente. Aqui devolve barras
+  // FLUSH (sem o recuo de moldura que porta/janela usam) exatamente no
+  // contorno do vão — o renderer aplica cor de parede nelas, não cor de
+  // esquadria (ver Scene3DRenderer.buildOpeningPieces).
+  if (opening.kind === 'arco') {
+    const revealDepth = wallThickness + OPENING_FRAME_SEAL_OVERLAP * 2;
+    const revealBars: OpeningFrameBar[] = [
+      { // lateral esquerda
+        width: OPENING_FRAME_SEAL_OVERLAP * 2, height: opening.height, depth: revealDepth,
+        centerX: -opening.width / 2, centerY: opening.sillHeight + opening.height / 2
+      },
+      { // lateral direita
+        width: OPENING_FRAME_SEAL_OVERLAP * 2, height: opening.height, depth: revealDepth,
+        centerX: opening.width / 2, centerY: opening.sillHeight + opening.height / 2
+      },
+      { // topo (verga)
+        width: opening.width, height: OPENING_FRAME_SEAL_OVERLAP * 2, depth: revealDepth,
+        centerX: 0, centerY: opening.sillHeight + opening.height
+      }
+    ];
+    // Peitoril (só existe reentrância embaixo se o vão não vai até o
+    // chão — ex.: sacada). Sem peitoril, é aberto até o piso, não tem o
+    // que fechar embaixo.
+    if (opening.sillHeight > 0.02) {
+      revealBars.push({
+        width: opening.width, height: OPENING_FRAME_SEAL_OVERLAP * 2, depth: revealDepth,
+        centerX: 0, centerY: opening.sillHeight
+      });
+    }
+    return { infillWidth: opening.width, infillHeight: opening.height, infillCenterY: opening.sillHeight + opening.height / 2, frameBars: revealBars };
+  }
   const frame = Math.min(
     OPENING_FRAME_FACE_WIDTH,
     Math.max(0.005, opening.width / 4),

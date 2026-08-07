@@ -34,6 +34,21 @@ export const DOOR_DEFAULT_HEIGHT = 2.1;
 export const WINDOW_DEFAULT_WIDTH = 1.2;
 export const WINDOW_DEFAULT_HEIGHT = 1.2;
 export const WINDOW_DEFAULT_SILL = 1.0;
+// Arco — vão estrutural (sacada, garagem, conceito aberto), bem maior
+// que porta/janela por padrão. Sem peitoril de nascença (fechado até o
+// chão) — o usuário sobe o peitoril arrastando quando quiser o efeito
+// de sacada; pra garagem/conceito aberto, fica em 0 mesmo.
+export const ARCO_DEFAULT_WIDTH = 2.4;
+export const ARCO_DEFAULT_HEIGHT = 2.4;
+export const ARCO_DEFAULT_SILL = 0;
+// Altura de parede usada só pra VALIDAR redimensionamento de abertura
+// (não deixar altura+peitoril passar do teto). O valor real de
+// renderização mora em Scene3DRenderer.WALL_HEIGHT — os dois têm que
+// ficar em sincronia manual, já que Core não depende de nada de Three.js
+// e não pode importar de lá.
+export const WALL_HEIGHT = 2.7;
+export const OPENING_MIN_WIDTH = 0.4;
+export const OPENING_MIN_HEIGHT = 0.4;
 export const OPENING_MARGIN = 0.25;
 // Distancia livre minima entre as bordas de duas esquadrias na mesma parede.
 export const OPENING_GAP = 0.15;
@@ -89,15 +104,18 @@ export function createFurnitureEntity(x: number, y: number, productId: string, r
 // offset: distância em metros do x1,y1 da parede até o CENTRO da
 // abertura, medida ao longo do eixo dela.
 export function createOpeningEntity(wallId: string, kind: OpeningKind, offset: number, id?: string): Opening {
-  const isDoor = kind === 'door';
+  const width = kind === 'door' ? DOOR_DEFAULT_WIDTH : kind === 'arco' ? ARCO_DEFAULT_WIDTH : WINDOW_DEFAULT_WIDTH;
+  const height = kind === 'door' ? DOOR_DEFAULT_HEIGHT : kind === 'arco' ? ARCO_DEFAULT_HEIGHT : WINDOW_DEFAULT_HEIGHT;
+  const sillHeight = kind === 'window' ? WINDOW_DEFAULT_SILL : kind === 'arco' ? ARCO_DEFAULT_SILL : 0;
   return {
     id: id || nextId('opening'),
-    kind: isDoor ? 'door' : 'window',
+    kind,
     wallId,
     offset,
-    width: isDoor ? DOOR_DEFAULT_WIDTH : WINDOW_DEFAULT_WIDTH,
-    height: isDoor ? DOOR_DEFAULT_HEIGHT : WINDOW_DEFAULT_HEIGHT,
-    sillHeight: isDoor ? 0 : WINDOW_DEFAULT_SILL
+    width,
+    height,
+    sillHeight,
+    shape: 'reta'
   };
 }
 
@@ -223,6 +241,50 @@ export function findValidOpeningOffset(
   const finalChosen = chosen as [number, number] | null;
   if (!finalChosen) return null;
   return Math.max(finalChosen[0], Math.min(finalChosen[1], desired));
+}
+
+// Redimensiona uma abertura arrastando UMA borda (esquerda ou direita),
+// mantendo a borda oposta fixa — mesmo princípio de findValidOpeningOffset
+// (margem da parede + não invadir outra abertura), mas aqui só uma ponta
+// se move, então a lógica é resolver o intervalo livre daquele lado, não
+// buscar um intervalo qualquer pro vão inteiro.
+export function resolveOpeningEdgeResize(
+  w: Wall, openings: Opening[] | null | undefined, openingId: string,
+  edge: 'left' | 'right', desired: number
+): { offset: number; width: number } | null {
+  const current = (openings || []).find((o) => o.id === openingId);
+  if (!current) return null;
+  const lenM = wallLengthMeters(w);
+  const fixedEdge = edge === 'left' ? current.offset + current.width / 2 : current.offset - current.width / 2;
+
+  const blockers: [number, number][] = [];
+  (openings || []).forEach((o) => {
+    if (o.wallId !== w.id || o.id === openingId) return;
+    blockers.push([o.offset - o.width / 2 - OPENING_GAP, o.offset + o.width / 2 + OPENING_GAP]);
+  });
+
+  let lo = OPENING_MARGIN, hi = lenM - OPENING_MARGIN;
+  if (edge === 'left') {
+    hi = Math.min(hi, fixedEdge - OPENING_MIN_WIDTH);
+    blockers.forEach((b) => { if (b[1] <= fixedEdge) lo = Math.max(lo, b[1]); });
+  } else {
+    lo = Math.max(lo, fixedEdge + OPENING_MIN_WIDTH);
+    blockers.forEach((b) => { if (b[0] >= fixedEdge) hi = Math.min(hi, b[0]); });
+  }
+  if (lo > hi) return null;
+  const clamped = Math.max(lo, Math.min(hi, desired));
+  const newOffset = edge === 'left' ? (clamped + fixedEdge) / 2 : (fixedEdge + clamped) / 2;
+  const newWidth = edge === 'left' ? fixedEdge - clamped : clamped - fixedEdge;
+  return { offset: newOffset, width: newWidth };
+}
+
+// Redimensiona a altura arrastando o TOPO — o peitoril (base do vão)
+// fica fixo, só o topo sobe/desce. desiredTop é a altura absoluta
+// desejada do topo (metros, a partir do chão).
+export function resolveOpeningHeightResize(op: Opening, desiredTop: number): number {
+  const maxTop = WALL_HEIGHT - 0.05; // pequena folga até o teto, pra sempre sobrar verga
+  const top = Math.max(op.sillHeight + OPENING_MIN_HEIGHT, Math.min(maxTop, desiredTop));
+  return top - op.sillHeight;
 }
 
 export function createProject(): Project {
@@ -1229,9 +1291,12 @@ export const Core = {
   GRID, SNAP_UNIT, WALL_THICK, COINCIDENCE_TOL, COLUMN_SIZE,
   DOOR_DEFAULT_WIDTH, DOOR_DEFAULT_HEIGHT,
   WINDOW_DEFAULT_WIDTH, WINDOW_DEFAULT_HEIGHT, WINDOW_DEFAULT_SILL,
+  ARCO_DEFAULT_WIDTH, ARCO_DEFAULT_HEIGHT, ARCO_DEFAULT_SILL,
+  WALL_HEIGHT, OPENING_MIN_WIDTH, OPENING_MIN_HEIGHT,
   OPENING_MARGIN, OPENING_GAP, OPENING_WALL_CLEARANCE,
   snap, nextId,
   createOpeningEntity, wallLengthMeters, wallOffsetAtPoint, findValidOpeningOffset,
+  resolveOpeningEdgeResize, resolveOpeningHeightResize,
   roofRidgeHeightMeters, roofPitchForRidgeHeight, roofsCanFuse, fusedRoofBounds,
   rectsNearby, pointInPolygon, roomModelBounds, findRoomWallIds, findIsolatedRoomWallIds, wallResizeTopology, resolveWallResizeOffset, computeWallFootprints,
   wallResizeEndpointNeedsBridge,

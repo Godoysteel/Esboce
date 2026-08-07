@@ -6,7 +6,7 @@
 
 import { Core } from './Core.js';
 import type {
-  Project, Floor, Wall, Column, Roof, Opening, Varanda, Furniture, ColumnShape, RoofType,
+  Project, Floor, Wall, Column, Roof, Opening, OpeningKind, Varanda, Furniture, ColumnShape, RoofType,
   RidgeAxis, VarandaFrontSide, FoundationType, StoreEvent, StoreListener,
   WallSnapshot, LinkedWallUpdate
 } from './types.js';
@@ -567,9 +567,9 @@ export const commands = {
   },
 
   // Insere uma porta/janela genérica na parede clicada.
-  insertOpening(wallId: string, kind: 'door' | 'window', px: number, py: number): Opening | null {
+  insertOpening(wallId: string, kind: OpeningKind, px: number, py: number): Opening | null {
     const w = findWall(wallId); if (!w) return null;
-    const width = kind === 'door' ? Core.DOOR_DEFAULT_WIDTH : Core.WINDOW_DEFAULT_WIDTH;
+    const width = kind === 'door' ? Core.DOOR_DEFAULT_WIDTH : kind === 'arco' ? Core.ARCO_DEFAULT_WIDTH : Core.WINDOW_DEFAULT_WIDTH;
     const desired = Core.wallOffsetAtPoint(w, px, py);
     const offset = Core.findValidOpeningOffset(w, currentOpenings(), width, desired);
     if (offset == null) return null; // parede curta demais / sem espaço livre
@@ -599,6 +599,27 @@ export const commands = {
     pushUndoSnapshot();
     op.offset = offset;
     emit({ type: 'OpeningMoved', openingId });
+  },
+
+  // Arraste ao vivo — redimensiona a LARGURA puxando uma borda (a outra
+  // fica fixa). Um único passo de undo cobre o gesto inteiro (ver
+  // beginTransaction, chamado no início do arraste pelo ViewportController).
+  resizeOpeningEdgeLive(openingId: string, edge: 'left' | 'right', desiredOffset: number): void {
+    const op = findOpening(openingId); if (!op) return;
+    const w = findWall(op.wallId); if (!w) return;
+    const result = Core.resolveOpeningEdgeResize(w, currentOpenings(), openingId, edge, desiredOffset);
+    if (!result) return;
+    op.offset = result.offset;
+    op.width = result.width;
+    emit({ type: 'OpeningResized', openingId, live: true });
+  },
+
+  // Arraste ao vivo — redimensiona a ALTURA puxando o topo (o peitoril,
+  // base do vão, fica fixo).
+  resizeOpeningHeightLive(openingId: string, desiredTop: number): void {
+    const op = findOpening(openingId); if (!op) return;
+    op.height = Core.resolveOpeningHeightResize(op, desiredTop);
+    emit({ type: 'OpeningResized', openingId, live: true });
   },
 
   deleteOpening(openingId: string): void {
