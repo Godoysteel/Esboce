@@ -173,3 +173,13 @@ export async function listMyProjects(userId: string): Promise<OwnedProjectSummar
   if (error) throw error;
   return (data ?? []) as OwnedProjectSummary[];
 }
+
+// Exclui um projeto — só funciona se quem chamar for o dono (RLS
+// "Usuário exclui seus projetos"). Se não for, o Postgrest não erra,
+// só não apaga nada — por isso devolve se de fato apagou uma linha,
+// mesmo padrão de updateSharedProject.
+export async function deleteProject(id: string): Promise<boolean> {
+  const { data, error } = await supabase.from('projects').delete().eq('id', id).select('id');
+  if (error) throw error;
+  return !!(data && data.length);
+}

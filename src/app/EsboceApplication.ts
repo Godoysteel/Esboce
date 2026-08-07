@@ -9,7 +9,7 @@ import { NavGizmo } from "../core/NavGizmo.js";
 import { Store } from "../core/Store.js";
 import { ViewportController } from "../core/ViewportController.js";
 import { ViewportStats } from "../core/ViewportStats.js";
-import { createSharedProject, loadSharedProject, updateSharedProject, signUpWithProfile, signIn, signOut, getCurrentUser, listMyProjects, type ProfileFields } from "../core/SupabaseClient.js";
+import { createSharedProject, loadSharedProject, updateSharedProject, deleteProject, signUpWithProfile, signIn, signOut, getCurrentUser, listMyProjects, type ProfileFields } from "../core/SupabaseClient.js";
 
 export class EsboceApplication {
   private readonly scene = new THREE.Scene();
@@ -220,10 +220,12 @@ export class EsboceApplication {
       const isVisible = ViewportController.toggleWallDiagnostics();
       (event.currentTarget as HTMLElement).classList.toggle("active", isVisible);
     });
+    this.requireElement("newProjectBtn").addEventListener("click", () => this.startNewProject());
     this.requireElement("saveProjectBtn").addEventListener("click", () => this.saveProject());
     this.requireElement("shareProjectBtn").addEventListener("click", () => this.shareProject());
     this.requireElement("myProjectsBtn").addEventListener("click", () => this.openMyProjects());
     this.requireElement("accountBtn").addEventListener("click", () => this.handleAccountButtonClick());
+    this.requireElement("logoutBtn").addEventListener("click", () => this.handleLogoutClick());
 
     window.addEventListener("keydown", (event) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
@@ -273,6 +275,24 @@ export class EsboceApplication {
     }
     (btn as HTMLButtonElement).disabled = false;
     setTimeout(() => { btn.textContent = original; }, 1800);
+  }
+
+  // "Novo projeto": zera o modelo (Core.createProject, mesma origem
+  // que o app usa ao abrir sem link nenhum) E a sessão de salvamento
+  // (sharedProjectId, currentProjectName, URL) — sem isso, clicar em
+  // "Salvar" continuaria atualizando o projeto anterior em vez de
+  // criar um novo e perguntar o nome de novo.
+  private startNewProject(): void {
+    const hasContent = Store.currentWalls().length > 0 || Store.currentColumns().length > 0;
+    if (hasContent && !confirm("Isso limpa tudo que não foi salvo agora. Quer começar um projeto novo mesmo assim?")) return;
+    Store.setProject(Core.createProject());
+    this.sharedProjectId = null;
+    this.currentProjectName = null;
+    document.title = "Esboce — construtor de casas online";
+    const url = new URL(window.location.href);
+    url.searchParams.delete("p");
+    window.history.replaceState(null, "", url.toString());
+    ViewportController.deselect();
   }
 
   private async saveProject(): Promise<void> {
@@ -434,23 +454,36 @@ export class EsboceApplication {
 
   private refreshAccountButton(): void {
     const btn = this.requireElement("accountBtn");
-    btn.textContent = this.currentUserEmail ? `👤 ${this.currentUserEmail}` : "👤 Entrar";
+    const logoutBtn = this.requireElement("logoutBtn");
+    if (this.currentUserEmail) {
+      btn.textContent = `👤 ${this.currentUserEmail}`;
+      btn.title = "Logado";
+      logoutBtn.style.display = "";
+    } else {
+      btn.textContent = "👤 Entrar";
+      btn.title = "Entrar";
+      logoutBtn.style.display = "none";
+    }
   }
 
-  private async handleAccountButtonClick(): Promise<void> {
-    if (this.currentUserId) {
-      if (!confirm("Sair da conta?")) return;
-      try {
-        await signOut();
-      } catch (err) {
-        console.error("Falha ao sair:", err);
-      }
-      this.currentUserId = null;
-      this.currentUserEmail = null;
-      this.refreshAccountButton();
-    } else {
-      this.openAuthModal();
+  private handleAccountButtonClick(): void {
+    // Logado: esse botão vira só um indicador de quem está logado —
+    // sair é responsabilidade do botão "🚪 Sair" ao lado, explícito,
+    // em vez de um clique "escondido" no mesmo lugar que também serve
+    // pra entrar.
+    if (!this.currentUserId) this.openAuthModal();
+  }
+
+  private async handleLogoutClick(): Promise<void> {
+    if (!confirm("Sair da conta?")) return;
+    try {
+      await signOut();
+    } catch (err) {
+      console.error("Falha ao sair:", err);
     }
+    this.currentUserId = null;
+    this.currentUserEmail = null;
+    this.refreshAccountButton();
   }
 
   private friendlyAuthError(err: unknown): string {
@@ -548,15 +581,52 @@ export class EsboceApplication {
       }
       projects.forEach((p) => {
         const row = document.createElement("div");
-        row.style.cssText = "padding:10px;border:1px solid #D3D1C7;border-radius:8px;margin-bottom:8px;cursor:pointer;";
+        row.style.cssText = "display:flex; align-items:center; gap:8px; padding:10px; border:1px solid #D3D1C7; border-radius:8px; margin-bottom:8px;";
+
+        const info = document.createElement("div");
+        info.style.cssText = "flex:1; cursor:pointer;";
         const updated = new Date(p.updated_at).toLocaleString("pt-BR");
-        row.innerHTML = `<strong>${p.nome}</strong><br><span style="font-size:12px;color:#5F5E5A;">Atualizado em ${updated}</span>`;
-        row.addEventListener("click", () => this.openProjectById(p.id));
+        info.innerHTML = `<strong>${p.nome}</strong><br><span style="font-size:12px;color:#5F5E5A;">Atualizado em ${updated}</span>`;
+        info.addEventListener("click", () => this.openProjectById(p.id));
+        row.appendChild(info);
+
+        const deleteBtn = document.createElement("button");
+        deleteBtn.textContent = "🗑️";
+        deleteBtn.title = "Excluir projeto";
+        deleteBtn.style.cssText = "flex-shrink:0;";
+        deleteBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.deleteMyProject(p.id, p.nome, row);
+        });
+        row.appendChild(deleteBtn);
+
         listEl.appendChild(row);
       });
     } catch (err) {
       listEl.innerHTML = '<p style="color:#D7263D;font-size:13px;">Falha ao carregar projetos.</p>';
       console.error("Falha ao listar projetos:", err);
+    }
+  }
+
+  private async deleteMyProject(id: string, nome: string, rowEl: HTMLElement): Promise<void> {
+    if (!confirm(`Excluir "${nome}" pra sempre? Isso não tem volta.`)) return;
+    try {
+      const deleted = await deleteProject(id);
+      if (!deleted) { alert("Não foi possível excluir — só o dono do projeto pode fazer isso."); return; }
+      rowEl.remove();
+      // Se o projeto excluído era o que está aberto agora, desfaz o
+      // vínculo — senão o próximo "Salvar" tentaria atualizar um
+      // registro que não existe mais.
+      if (this.sharedProjectId === id) {
+        this.sharedProjectId = null;
+        this.currentProjectName = null;
+        const url = new URL(window.location.href);
+        url.searchParams.delete("p");
+        window.history.replaceState(null, "", url.toString());
+      }
+    } catch (err) {
+      console.error("Falha ao excluir projeto:", err);
+      alert("Falha ao excluir o projeto.");
     }
   }
 
