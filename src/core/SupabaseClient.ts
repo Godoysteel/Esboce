@@ -48,10 +48,10 @@ function generateShortId(): string {
 // obrigatório desde que login passou a existir — a RLS de projects
 // exige auth.uid() = user_id no insert, então sem isso o Supabase
 // rejeita a gravação.
-export async function createSharedProject(projectData: unknown, userId: string): Promise<string> {
+export async function createSharedProject(projectData: unknown, userId: string, nome: string): Promise<string> {
   for (let attempt = 0; attempt < 3; attempt++) {
     const id = generateShortId();
-    const { error } = await supabase.from('projects').insert({ id, data: projectData, user_id: userId });
+    const { error } = await supabase.from('projects').insert({ id, data: projectData, user_id: userId, nome });
     if (!error) return id;
     // 23505 = unique_violation no Postgres — só nesse caso vale tentar
     // de novo com outro id; qualquer outro erro (rede, RLS, etc.)
@@ -74,12 +74,18 @@ export async function updateSharedProject(id: string, projectData: unknown): Pro
   return !!(data && data.length);
 }
 
-// Carrega um projeto pelo id (usado ao abrir um link ?p=<id>).
-// Devolve null se o id não existir (link inválido/expirado).
-export async function loadSharedProject(id: string): Promise<unknown | null> {
-  const { data, error } = await supabase.from('projects').select('data').eq('id', id).maybeSingle();
+// Carrega um projeto pelo id (usado ao abrir um link ?p=<id>, ou pela
+// lista "Meus projetos"). Devolve null se o id não existir (link
+// inválido/expirado). Vem junto com o nome, pra quem carregar saber
+// como se chama esse projeto (mostrar no título, ou reusar ao salvar
+// de novo sem perguntar outra vez).
+export interface LoadedProject { data: unknown; nome: string; }
+export async function loadSharedProject(id: string): Promise<LoadedProject | null> {
+  const { data, error } = await supabase.from('projects').select('data, nome').eq('id', id).maybeSingle();
   if (error) throw error;
-  return data ? (data as { data: unknown }).data : null;
+  if (!data) return null;
+  const row = data as { data: unknown; nome: string | null };
+  return { data: row.data, nome: row.nome ?? 'Projeto sem nome' };
 }
 
 // ---- Cadastro / login ----
@@ -157,11 +163,11 @@ export async function ensureProfileExists(userId: string, profile: ProfileFields
 // resposta de verdade pra "e quando o usuário quiser carregar um
 // projeto salvo?" agora que projetos têm dono. Sem isso, só dava pra
 // achar um projeto salvo tendo o link guardado.
-export interface OwnedProjectSummary { id: string; updated_at: string; created_at: string; }
+export interface OwnedProjectSummary { id: string; nome: string; updated_at: string; created_at: string; }
 export async function listMyProjects(userId: string): Promise<OwnedProjectSummary[]> {
   const { data, error } = await supabase
     .from('projects')
-    .select('id, created_at, updated_at')
+    .select('id, nome, created_at, updated_at')
     .eq('user_id', userId)
     .order('updated_at', { ascending: false });
   if (error) throw error;

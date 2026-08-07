@@ -860,6 +860,17 @@ Mova uma parede para registrar a operação.</pre>
   </div>
 </div>
 
+<div id="projectNameModalOverlay" style="display:none; position:fixed; inset:0; background:rgba(44,44,42,0.55); z-index:1000; align-items:center; justify-content:center;">
+  <div class="auth-modal" style="width:380px;">
+    <button class="auth-close" id="projectNameModalClose" title="Fechar">✕</button>
+    <h2>Nome do projeto</h2>
+    <p class="auth-sub">Como você quer chamar essa casa? Ajuda a reconhecer ela depois, na lista de "Meus projetos".</p>
+    <div class="auth-field"><input id="projectNameInput" type="text" placeholder="Ex.: Casa da Praia, Sobrado Jardins..." maxlength="120"></div>
+    <button class="auth-submit" id="projectNameSubmit">Salvar projeto</button>
+    <div class="auth-error" id="projectNameError"></div>
+  </div>
+</div>
+
 <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

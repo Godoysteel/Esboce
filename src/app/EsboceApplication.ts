@@ -33,6 +33,13 @@ export class EsboceApplication {
   // sucesso, reject() se a pessoa fechar o modal sem logar.
   private pendingAuthResolve: ((userId: string) => void) | null = null;
   private pendingAuthReject: ((err: Error) => void) | null = null;
+  // Nome do projeto atual — perguntado uma vez, no primeiro "Salvar"
+  // (ver requireProjectName). Depois disso fica em memória, então
+  // salvamentos seguintes não perguntam de novo — só ao carregar um
+  // projeto salvo é que troca (para o nome que ele já tinha).
+  private currentProjectName: string | null = null;
+  private pendingNameResolve: ((nome: string) => void) | null = null;
+  private pendingNameReject: ((err: Error) => void) | null = null;
 
   public async start(): Promise<void> {
     this.viewport = this.requireElement("viewport");
@@ -54,10 +61,12 @@ export class EsboceApplication {
     const sharedId = new URLSearchParams(window.location.search).get("p");
     if (sharedId) {
       try {
-        const data = await loadSharedProject(sharedId);
-        if (data) {
-          Store.setProject(data as ReturnType<typeof Store.getProject>);
+        const loaded = await loadSharedProject(sharedId);
+        if (loaded) {
+          Store.setProject(loaded.data as ReturnType<typeof Store.getProject>);
           this.sharedProjectId = sharedId;
+          this.currentProjectName = loaded.nome;
+          document.title = `${loaded.nome} — Esboce`;
         } else {
           console.warn(`Link compartilhado "${sharedId}" não encontrado — abrindo projeto vazio.`);
         }
@@ -274,6 +283,18 @@ export class EsboceApplication {
     } catch {
       return; // modal fechado sem logar — não é erro, só desiste em silêncio
     }
+    // Nome só é pedido na primeira vez que esse projeto é salvo
+    // (currentProjectName ainda null). Pedido ANTES de entrar no
+    // flashButtonFeedback: se a pessoa fechar o modal de nome sem
+    // confirmar, o certo é desistir em silêncio, não mostrar "falhou".
+    let nome = this.currentProjectName;
+    if (!nome) {
+      try {
+        nome = await this.resolveProjectName();
+      } catch {
+        return;
+      }
+    }
     await this.flashButtonFeedback(btn, async () => {
       btn.textContent = "Salvando...";
       const project = Store.getProject();
@@ -289,16 +310,20 @@ export class EsboceApplication {
           // — a RLS bloqueou a atualização em silêncio. Em vez de
           // fingir que salvou, salva como um projeto NOVO seu, e o
           // link passa a apontar pra essa cópia.
-          const forkedId = await createSharedProject(project, userId);
+          const forkedId = await createSharedProject(project, userId, nome);
           this.sharedProjectId = forkedId;
+          this.currentProjectName = nome;
           this.setUrlProjectId(forkedId);
+          document.title = `${nome} — Esboce`;
           btn.textContent = "✅ Salvo como cópia sua";
           return;
         }
       } else {
-        const newId = await createSharedProject(project, userId);
+        const newId = await createSharedProject(project, userId, nome);
         this.sharedProjectId = newId;
+        this.currentProjectName = nome;
         this.setUrlProjectId(newId);
+        document.title = `${nome} — Esboce`;
       }
       btn.textContent = "✅ Salvo";
     });
@@ -312,15 +337,25 @@ export class EsboceApplication {
     } catch {
       return;
     }
+    let nome = this.currentProjectName;
+    if (!this.sharedProjectId && !nome) {
+      try {
+        nome = await this.resolveProjectName();
+      } catch {
+        return;
+      }
+    }
     await this.flashButtonFeedback(btn, async () => {
       // Compartilhar sem ter salvo ainda: salva primeiro (senão o link
       // apontaria pra um projeto que não existe no banco).
       let id = this.sharedProjectId;
       if (!id) {
         btn.textContent = "Salvando...";
-        id = await createSharedProject(Store.getProject(), userId);
+        id = await createSharedProject(Store.getProject(), userId, nome!);
         this.sharedProjectId = id;
+        this.currentProjectName = nome;
         this.setUrlProjectId(id);
+        document.title = `${nome} — Esboce`;
       }
       const shareUrl = new URL(window.location.href);
       shareUrl.searchParams.set("p", id);
@@ -364,6 +399,11 @@ export class EsboceApplication {
     this.requireElement("authLoginSubmit").addEventListener("click", () => this.handleLoginSubmit());
     this.requireElement("myProjectsClose").addEventListener("click", () => {
       this.requireElement("myProjectsOverlay").style.display = "none";
+    });
+    this.requireElement("projectNameModalClose").addEventListener("click", () => this.closeProjectNameModal(true));
+    this.requireElement("projectNameSubmit").addEventListener("click", () => this.handleProjectNameSubmit());
+    this.requireElement("projectNameInput").addEventListener("keydown", (e) => {
+      if ((e as KeyboardEvent).key === "Enter") this.handleProjectNameSubmit();
     });
   }
 
@@ -510,7 +550,7 @@ export class EsboceApplication {
         const row = document.createElement("div");
         row.style.cssText = "padding:10px;border:1px solid #D3D1C7;border-radius:8px;margin-bottom:8px;cursor:pointer;";
         const updated = new Date(p.updated_at).toLocaleString("pt-BR");
-        row.innerHTML = `<strong>Projeto ${p.id}</strong><br><span style="font-size:12px;color:#5F5E5A;">Atualizado em ${updated}</span>`;
+        row.innerHTML = `<strong>${p.nome}</strong><br><span style="font-size:12px;color:#5F5E5A;">Atualizado em ${updated}</span>`;
         row.addEventListener("click", () => this.openProjectById(p.id));
         listEl.appendChild(row);
       });
@@ -522,15 +562,61 @@ export class EsboceApplication {
 
   private async openProjectById(id: string): Promise<void> {
     try {
-      const data = await loadSharedProject(id);
-      if (!data) { alert("Projeto não encontrado — pode ter sido apagado."); return; }
-      Store.setProject(data as ReturnType<typeof Store.getProject>);
+      const loaded = await loadSharedProject(id);
+      if (!loaded) { alert("Projeto não encontrado — pode ter sido apagado."); return; }
+      Store.setProject(loaded.data as ReturnType<typeof Store.getProject>);
       this.sharedProjectId = id;
+      this.currentProjectName = loaded.nome;
+      document.title = `${loaded.nome} — Esboce`;
       this.setUrlProjectId(id);
       this.requireElement("myProjectsOverlay").style.display = "none";
     } catch (err) {
       console.error("Falha ao abrir projeto:", err);
       alert("Falha ao abrir o projeto.");
+    }
+  }
+
+  // Devolve o nome que o usuário digitar pro projeto atual. Abre o
+  // modal e só resolve quando ele confirmar um nome não-vazio — ou
+  // rejeita se ele fechar o modal sem confirmar (quem chamar isso deve
+  // tratar esse cancelamento como "desistiu de salvar agora", não como
+  // uma falha real).
+  private resolveProjectName(): Promise<string> {
+    return new Promise((resolve, reject) => {
+      this.pendingNameResolve = resolve;
+      this.pendingNameReject = reject;
+      this.openProjectNameModal();
+    });
+  }
+
+  private openProjectNameModal(): void {
+    const input = this.requireElement("projectNameInput") as HTMLInputElement;
+    input.value = "";
+    this.requireElement("projectNameError").textContent = "";
+    this.requireElement("projectNameModalOverlay").style.display = "flex";
+    input.focus();
+  }
+
+  private closeProjectNameModal(cancelled: boolean): void {
+    this.requireElement("projectNameModalOverlay").style.display = "none";
+    if (cancelled && this.pendingNameReject) this.pendingNameReject(new Error("Nome do projeto cancelado pelo usuário."));
+    this.pendingNameResolve = null;
+    this.pendingNameReject = null;
+  }
+
+  private handleProjectNameSubmit(): void {
+    const input = this.requireElement("projectNameInput") as HTMLInputElement;
+    const nome = input.value.trim();
+    if (!nome) {
+      this.requireElement("projectNameError").textContent = "Dá um nome pro projeto pra continuar.";
+      return;
+    }
+    this.requireElement("projectNameModalOverlay").style.display = "none";
+    if (this.pendingNameResolve) {
+      const resolve = this.pendingNameResolve;
+      this.pendingNameResolve = null;
+      this.pendingNameReject = null;
+      resolve(nome);
     }
   }
 
