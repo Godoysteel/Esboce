@@ -6,7 +6,7 @@
 <title>Esboce — construtor de casas online</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSI1MCIgZmlsbD0iI0MxNjczRiIvPjxwYXRoIGQ9Ik0yMCw4MCBMMjAsNTAgTDUwLDIyIEw4MCw1MCBMODAsODAgWiIgZmlsbD0iI0YxRUFEOSIvPjxyZWN0IHg9IjQyIiB5PSI2NCIgd2lkdGg9IjE2IiBoZWlnaHQ9IjE2IiBmaWxsPSIjMkMyQzJBIi8+PC9zdmc+Cg==">
 <style>
-  :root { --top-overlay-h: 210px; }
+  :root { --top-overlay-h: 60px; }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
   body {
@@ -19,27 +19,29 @@
     color: #2C2C2A;
   }
   h1 { font-size: 22px; font-weight: 600; margin: 0 0 4px; }
-  p.subtitle { color: #5F5E5A; margin: 0 0 10px; font-size: 13px; }
-  /* Viewport ocupa a tela inteira — cabeçalho/barra/dica viram
-     overlays flutuando POR CIMA dela (ver .top-overlay/.actions-row),
-     em vez de empurrar o 3D pra baixo numa página que rola. O
-     Scene3DRenderer já lê width/height do próprio elemento #viewport
-     em tempo real (ResizeObserver/clientWidth), então não precisou
-     mudar nada de JS — só o CSS do container. */
+  /* Viewport ocupa a tela inteira — a barra vira uma faixa FINA
+     flutuando por cima dela (não um bloco separado empurrando o 3D
+     pra baixo). O Scene3DRenderer já lê width/height do próprio
+     elemento #viewport em tempo real, então não precisou mudar nada
+     de JS — só o CSS do container. */
   .wrap { position: relative; width: 100%; height: 100%; overflow: hidden; }
   .top-overlay {
     position: absolute; top: 0; left: 0; right: 0; z-index: 20;
-    background: #F4F1EA;
+    display: flex; align-items: center; gap: 16px;
+    background: rgba(244,241,234,0.94);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     border-bottom: 1px solid #D3D1C7;
-    padding: 14px 20px 12px;
+    padding: 8px 14px;
     box-shadow: 0 2px 14px rgba(0,0,0,.18);
-    max-height: 45vh;
-    overflow-y: auto;
+    overflow-x: auto;
+    white-space: nowrap;
   }
-  .brand-header { display: flex; align-items: center; gap: 10px; margin-bottom: 2px; }
-  .brand-header h1 { margin: 0; line-height: 1.1; }
+  .brand-header { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .brand-header .brand-logo { width: 26px; height: 26px; }
+  .brand-header h1 { margin: 0; line-height: 1; font-size: 16px; white-space: nowrap; }
   .brand-logo { flex-shrink: 0; }
-  p.brand-tagline { margin: 1px 0 0; font-size: 12px; font-weight: 500; color: #C1673F; }
+  p.brand-tagline { display: none; }
 
   .panel-card {
     background: transparent;
@@ -80,7 +82,7 @@
   #dimensionsToggleBtn.active { background: #D7263D; border-color: #D7263D; color: #FFFFFF; }
   #gridToggleBtn.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
 
-  .floor-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+  .floor-row { display: flex; gap: 8px; align-items: center; flex-wrap: nowrap; margin: 0; }
   .floor-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
   .floor-tab { padding: 7px 13px; font-size: 13px; border-radius: 7px; }
   .floor-tab.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
@@ -519,8 +521,6 @@
     <p class="brand-tagline">Sonhe, esboce, construa!</p>
   </div>
 </div>
-<p class="subtitle">Clique num ambiente na barra lateral pra criá-lo na cena. Ferramentas de desenho livre ficam em "Avançado".</p>
-
 <div class="panel-card">
   <div class="floor-row">
     <div class="floor-tabs" id="floorTabs"></div>
