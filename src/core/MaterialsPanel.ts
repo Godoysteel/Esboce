@@ -210,7 +210,8 @@ const MASONRY_REF = {
 
 interface Totals {
   wallLength: number; wallAreaNet: number; floorArea: number; baseboard: number; roofArea: number;
-  doors: number; windows: number; arcos: number; columnCount: number; columnVolume: number; estimatedColumnCount: number;
+  doors: number; windows: number; arcos: number; soleiraCount: number; soleiraLength: number;
+  columnCount: number; columnVolume: number; estimatedColumnCount: number;
 }
 interface Masonry { blocks: number; mortarM3: number; cementKg: number; calKg: number; sandM3: number; }
 interface Structure {
@@ -233,7 +234,8 @@ export function compute(): ComputeResult {
   const wallHeight = Scene3DRenderer.WALL_HEIGHT_GETTER();
   const totals: Totals = {
     wallLength: 0, wallAreaNet: 0, floorArea: 0, baseboard: 0, roofArea: 0,
-    doors: 0, windows: 0, arcos: 0, columnCount: 0, columnVolume: 0, estimatedColumnCount: 0
+    doors: 0, windows: 0, arcos: 0, soleiraCount: 0, soleiraLength: 0,
+    columnCount: 0, columnVolume: 0, estimatedColumnCount: 0
   };
   const paint: Record<string, number> = {}, floorTile: Record<string, number> = {}, roofTile: Record<string, number> = {};
 
@@ -265,6 +267,22 @@ export function compute(): ComputeResult {
     // agrupado por produto usando a MESMA assinatura de parede (roomKey)
     // que o renderer 3D já usa pra achar o acabamento do cômodo.
     const rooms = Core.detectRooms(floor.walls);
+
+    // Soleiras externas — mesma regra do renderer 3D (Core.findRoomsAdjacentToOpening,
+    // DEC-30): abertura no nível do chão com cômodo de UM lado só. Só
+    // conta a peça própria (externa); a soleira "escondida" entre dois
+    // cômodos não é um item de compra separado, não entra aqui.
+    floor.openings.forEach(function (op) {
+      if (op.sillHeight > 0.02) return;
+      const wall = floor.walls.filter(function (w) { return w.id === op.wallId; })[0];
+      if (!wall) return;
+      const adj = Core.findRoomsAdjacentToOpening(wall, op, rooms);
+      if ((adj.roomA && !adj.roomB) || (!adj.roomA && adj.roomB)) {
+        totals.soleiraCount++;
+        totals.soleiraLength += op.width;
+      }
+    });
+
     rooms.forEach(function (room) {
       const areaM2 = room.area / (Core.GRID * Core.GRID);
       totals.floorArea += areaM2;
@@ -425,6 +443,7 @@ export function render(): void {
   html += '<div class="materials-line"><span>Portas</span><span>' + q.totals.doors + ' un.</span></div>';
   html += '<div class="materials-line"><span>Janelas</span><span>' + q.totals.windows + ' un.</span></div>';
   html += '<div class="materials-line"><span>Arcos</span><span>' + q.totals.arcos + ' un.</span></div>';
+  html += '<div class="materials-line"><span>Soleiras externas</span><span>' + q.totals.soleiraCount + ' un. · ' + fmtM(q.totals.soleiraLength) + '</span></div>';
   if (q.foundation) {
     const f = q.foundation;
     html += '<div class="object-panel-section-label">Fundação (' + (f.type === 'baldrame' ? 'baldrame' : 'radier') + ' — ref. taxa de aço 70 kg/m³)</div>';
@@ -577,6 +596,8 @@ export function buildRows(): (string | number)[][] {
   push('Geral', 'Portas', q.totals.doors, 'un', null);
   push('Geral', 'Janelas', q.totals.windows, 'un', null);
   push('Geral', 'Arcos', q.totals.arcos, 'un', null);
+  push('Geral', 'Soleiras externas (unidades)', q.totals.soleiraCount, 'un', null);
+  push('Geral', 'Soleiras externas (comprimento)', q.totals.soleiraLength, 'm', null);
   if (q.foundation) {
     const f = q.foundation;
     const fLabel = 'Fundação (' + f.type + ')';
