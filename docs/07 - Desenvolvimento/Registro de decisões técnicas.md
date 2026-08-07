@@ -18,7 +18,7 @@ Contexto: uma linha — qual problema motivou a decisão
 Decisão: o que foi escolhido, com nomes exatos de função/constante quando existirem
 Alternativas descartadas: lista curta, cada uma com o motivo entre parênteses
 Status: Ativo / Limitação conhecida / Pendente
-Decisões (29)
+Decisões (30)
 DEC-01  Vista unificada 3D substitui o editor 2D/3D dividido
 Sessão: 1
 Contexto: Objetivo de tornar a ferramenta fácil o bastante para uma criança usar; referência: Sims 4.
@@ -191,7 +191,13 @@ DEC-29  Garagem/Lavanderia/Escritório sem móveis no MVP
 Sessão: 4
 Contexto: Preenchimento automático de móveis (ROOM_DEFAULT_FURNITURE) já cobre Quarto, Sala, Cozinha e Banheiro, cada um com peças testadas e calibradas na 3D.
 Decisão: Garagem, Lavanderia e Escritório ficam sem catálogo de móveis nesta fase — mobiliário real desses ambientes (vaga, portão, tanque, estante etc.) só entra quando as lojas parceiras integrarem suas bibliotecas BIM/catálogo à plataforma. MVP segue só com os quatro exemplos calibrados.
-Status: Ativo
+DEC-30  Rebuild completo aceito no MVP, mas novas features devem evitar acoplamento que dificulte migração futura pra grafo de dependências
+Sessão: 4
+Contexto: Pesquisa comparativa (Sweet Home 3D, Blender, FreeCAD) sobre como ferramentas 3D interativas lidam com atualização de cena em modelos grandes. FreeCAD resolve isso com um grafo de dependências real entre objetos (App::Document, recompute() topológico) — a referência mais próxima da filosofia "Objetos Paramétricos" já adotada no Domínio. Blender e Sweet Home 3D usam padrões mais simples (snapshot completo / listener por objeto). O Esboce hoje reconstrói a cena inteira a cada mudança (Scene3DRenderer.rebuild()) — aceitável na escala atual (poucos cômodos), mas não escalável indefinidamente.
+Decisão: Não adotar grafo de dependências agora — mesmo o FreeCAD levou anos pra chegar nesse ponto, e a otimização parcial só vale a pena quando há dor real medida, não hipotética (ver conversa sobre performance). Porém, dependências entre entidades introduzidas por features novas (ex.: um objeto cuja geometria depende de outro) devem ser mantidas explícitas e localizadas — evitar que o cálculo de uma entidade fique espalhado/misturado com o de outra sem necessidade, mesmo enquanto tudo continua sendo recalculado junto. Isso mantém a porta aberta para migrar por partes no futuro (como fizemos com o rodapé, cache de textura e o snap incremental — mudanças locais, uma de cada vez), em vez de exigir uma reescrita grande e arriscada de uma só vez.
+Alternativas descartadas:
+    • Implementar grafo de dependências completo agora, antecipando a escala futura (rejeitada — otimização prematura; o próprio FreeCAD só amadureceu essa parte com o tempo, não desde o início)
+Status: Ativo — princípio orientador pra desenvolvimento futuro, não uma mudança de código
 Pendências e limitações conhecidas
     • Rastro automático em topologias de 3+ cômodos convergindo no mesmo canto — comportamento inesperado, escopo não decidido (ver DEC-17).
     • Porta, Janela, Escada e Varanda — sem nenhuma implementação, só botão visual desabilitado na barra lateral.
