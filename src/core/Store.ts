@@ -916,11 +916,22 @@ export const commands = {
 
 export function getProject(): Project { return project; }
 
+// Substitui o projeto inteiro em memória — usado só ao carregar um
+// link compartilhado (ver EsboceApplication.start()). Diferente dos
+// comandos normais, não empilha undo (carregar não é uma edição que
+// alguém vá querer desfazer) — é o ponto de partida de uma sessão
+// nova, análogo a createProject().
+export function setProject(next: Project): void {
+  project = next;
+  emit({ type: 'ProjectLoaded' });
+}
+
 // Namespace de compatibilidade — mesma razão do Core.ts (chamadas
 // Store.xxx no código legado, enquanto ViewportController/Scene3DRenderer
 // etc. ainda não foram migrados).
 export const Store = {
   getProject,
+  setProject,
   currentFloor,
   currentWalls,
   currentColumns,

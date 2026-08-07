@@ -9,6 +9,7 @@ import { NavGizmo } from "../core/NavGizmo.js";
 import { Store } from "../core/Store.js";
 import { ViewportController } from "../core/ViewportController.js";
 import { ViewportStats } from "../core/ViewportStats.js";
+import { createSharedProject, loadSharedProject, updateSharedProject } from "../core/SupabaseClient.js";
 
 export class EsboceApplication {
   private readonly scene = new THREE.Scene();
@@ -17,8 +18,13 @@ export class EsboceApplication {
   private viewport?: HTMLElement;
   private readonly terrainGrid = new THREE.Group();
   private storeUpdateScheduled = false;
+  // Id do projeto no Supabase — null enquanto ainda não foi salvo
+  // nesta sessão, ou preenchido de saída se a sessão começou abrindo
+  // um link (?p=<id>). "Salvar" de novo depois disso atualiza o mesmo
+  // registro em vez de criar um projeto novo a cada clique.
+  private sharedProjectId: string | null = null;
 
-  public start(): void {
+  public async start(): Promise<void> {
     this.viewport = this.requireElement("viewport");
     this.scene.background = new THREE.Color(0xa9dff2);
 
@@ -29,6 +35,26 @@ export class EsboceApplication {
     // usuários finais reais, se um dia isso importar.
     (window as any).Store = Store;
     (window as any).Core = Core;
+
+    // Link compartilhado (?p=<id>): tenta carregar ANTES do primeiro
+    // render, pra a cena já nascer com o projeto certo (evita um
+    // flash da casa vazia seguido de troca). Link inválido/projeto
+    // apagado cai de volta pro projeto vazio de sempre, com um aviso
+    // — não trava a inicialização.
+    const sharedId = new URLSearchParams(window.location.search).get("p");
+    if (sharedId) {
+      try {
+        const data = await loadSharedProject(sharedId);
+        if (data) {
+          Store.setProject(data as ReturnType<typeof Store.getProject>);
+          this.sharedProjectId = sharedId;
+        } else {
+          console.warn(`Link compartilhado "${sharedId}" não encontrado — abrindo projeto vazio.`);
+        }
+      } catch (err) {
+        console.error("Falha ao carregar projeto compartilhado:", err);
+      }
+    }
 
     this.camera = new THREE.PerspectiveCamera(
       50,
@@ -164,6 +190,8 @@ export class EsboceApplication {
       const isVisible = ViewportController.toggleWallDiagnostics();
       (event.currentTarget as HTMLElement).classList.toggle("active", isVisible);
     });
+    this.requireElement("saveProjectBtn").addEventListener("click", () => this.saveProject());
+    this.requireElement("shareProjectBtn").addEventListener("click", () => this.shareProject());
 
     window.addEventListener("keydown", (event) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
@@ -184,6 +212,74 @@ export class EsboceApplication {
       MaterialsPanel.refresh();
       MaterialsSheet.refresh();
       ViewportStats.refresh();
+    });
+  }
+
+  // Atualiza a URL da barra de endereço com o id do projeto salvo, sem
+  // recarregar a página nem empilhar entrada nova no histórico — só
+  // pra "F5" continuar mostrando o mesmo projeto depois de salvar.
+  private setUrlProjectId(id: string): void {
+    const url = new URL(window.location.href);
+    url.searchParams.set("p", id);
+    window.history.replaceState(null, "", url.toString());
+  }
+
+  // Feedback rápido no próprio botão (texto muda por ~1,8s e volta) —
+  // simples de propósito, sem dependência de toast/notificação nova
+  // pra essa primeira versão de testes.
+  private async flashButtonFeedback(btn: HTMLElement, action: () => Promise<void>): Promise<void> {
+    const original = btn.textContent;
+    (btn as HTMLButtonElement).disabled = true;
+    try {
+      await action();
+    } catch (err) {
+      console.error("Falha ao salvar/compartilhar projeto:", err);
+      btn.textContent = "⚠️ Falhou — tenta de novo";
+      (btn as HTMLButtonElement).disabled = false;
+      setTimeout(() => { btn.textContent = original; }, 2500);
+      return;
+    }
+    (btn as HTMLButtonElement).disabled = false;
+    setTimeout(() => { btn.textContent = original; }, 1800);
+  }
+
+  private async saveProject(): Promise<void> {
+    const btn = this.requireElement("saveProjectBtn");
+    await this.flashButtonFeedback(btn, async () => {
+      btn.textContent = "Salvando...";
+      const project = Store.getProject();
+      // Campo de classe (this.sharedProjectId) não fica "estreitado"
+      // pelo TypeScript depois de um await dentro do mesmo bloco —
+      // guarda numa variável local pra manter o tipo certo (string,
+      // não string | null) no resto da função.
+      const existingId = this.sharedProjectId;
+      if (existingId) {
+        await updateSharedProject(existingId, project);
+      } else {
+        const newId = await createSharedProject(project);
+        this.sharedProjectId = newId;
+        this.setUrlProjectId(newId);
+      }
+      btn.textContent = "✅ Salvo";
+    });
+  }
+
+  private async shareProject(): Promise<void> {
+    const btn = this.requireElement("shareProjectBtn");
+    await this.flashButtonFeedback(btn, async () => {
+      // Compartilhar sem ter salvo ainda: salva primeiro (senão o link
+      // apontaria pra um projeto que não existe no banco).
+      let id = this.sharedProjectId;
+      if (!id) {
+        btn.textContent = "Salvando...";
+        id = await createSharedProject(Store.getProject());
+        this.sharedProjectId = id;
+        this.setUrlProjectId(id);
+      }
+      const shareUrl = new URL(window.location.href);
+      shareUrl.searchParams.set("p", id);
+      await navigator.clipboard.writeText(shareUrl.toString());
+      btn.textContent = "🔗 Link copiado!";
     });
   }
 
