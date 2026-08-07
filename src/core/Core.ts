@@ -1172,29 +1172,54 @@ export function resolveWallGroupGridDelta(
   openings: Opening[] = [],
   allWalls: Wall[] = [],
 ): Point {
-  const dx = snap(requestedDx);
-  const dy = snap(requestedDy);
+  const targetDx = snap(requestedDx);
+  const targetDy = snap(requestedDy);
   const groupIds = group.map((wall) => wall.id);
-  for (const source of group) {
-    const candidate: Wall = {
-      ...source,
-      x1: source.x1 + dx,
-      y1: source.y1 + dy,
-      x2: source.x2 + dx,
-      y2: source.y2 + dy,
-    };
-    if (wallOverlapsForeignOpening(candidate, groupIds, openings, allWalls)) {
-      return { x: snap(lastValidDx), y: snap(lastValidDy) };
-    }
-    for (const other of others) {
-      if (wallsCanFuse(candidate, other)) continue;
-      if (wallsMeetAtEndpoint(candidate, other)) continue;
-      if (obbOverlapMTV(wallOBB(candidate), wallOBB(other))) {
-        return { x: snap(lastValidDx), y: snap(lastValidDy) };
+
+  function isValid(dx: number, dy: number): boolean {
+    for (const source of group) {
+      const candidate: Wall = {
+        ...source,
+        x1: source.x1 + dx,
+        y1: source.y1 + dy,
+        x2: source.x2 + dx,
+        y2: source.y2 + dy,
+      };
+      if (wallOverlapsForeignOpening(candidate, groupIds, openings, allWalls)) return false;
+      for (const other of others) {
+        if (wallsCanFuse(candidate, other)) continue;
+        if (wallsMeetAtEndpoint(candidate, other)) continue;
+        if (obbOverlapMTV(wallOBB(candidate), wallOBB(other))) return false;
       }
     }
+    return true;
   }
-  return { x: dx, y: dy };
+
+  // Antes, só a posição FINAL (já arredondada pro grid) era testada — se
+  // colidisse, voltava inteiro pro último passo válido, sem checar nada
+  // no meio do caminho. Isso causava dois sintomas visuais durante o
+  // arraste de cômodo: um arrasto rápido podia "pular" direto por cima
+  // de uma colisão real no meio do trajeto (a posição final ficava livre
+  // mesmo passando por dentro de uma parede no caminho), e um arrasto
+  // lento podia ficar preso uma linha de grid inteira antes do previsto.
+  // Corrigido: caminha do último passo válido até o alvo em incrementos
+  // de UMA linha de grid (SNAP_UNIT) no eixo que mais se move, testando
+  // cada posição intermediária — devolve a mais distante ainda válida,
+  // em vez de tudo-ou-nada na posição final.
+  const stepsX = Math.abs(targetDx - lastValidDx) / SNAP_UNIT;
+  const stepsY = Math.abs(targetDy - lastValidDy) / SNAP_UNIT;
+  const MAX_STEPS = 200; // trava de segurança contra arrasto teleportado/absurdo
+  const steps = Math.min(MAX_STEPS, Math.max(1, Math.ceil(Math.max(stepsX, stepsY))));
+
+  let bestDx = snap(lastValidDx), bestDy = snap(lastValidDy);
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    const candidateDx = snap(lastValidDx + (targetDx - lastValidDx) * t);
+    const candidateDy = snap(lastValidDy + (targetDy - lastValidDy) * t);
+    if (!isValid(candidateDx, candidateDy)) break;
+    bestDx = candidateDx; bestDy = candidateDy;
+  }
+  return { x: bestDx, y: bestDy };
 }
 
 // Namespace de compatibilidade — permite chamar `Core.snap(...)` igual ao

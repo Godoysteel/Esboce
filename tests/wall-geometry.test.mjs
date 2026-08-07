@@ -334,6 +334,24 @@ test('colisão que não é fusão conserva o último passo válido do grid', () 
   assert.equal(resolved.y % 10, 0);
 });
 
+test('arrasto de duas linhas de grid nao pula por cima de obstaculo no meio do caminho', () => {
+  const moving = [{ id: 'moving', x1: 0, y1: 10, x2: 80, y2: 10 }];
+  const obstacleAtIntermediateStep = [{ id: 'obstacle', x1: 40, y1: -5, x2: 40, y2: 5 }];
+
+  const resolved = resolveWallGroupGridDelta(moving, obstacleAtIntermediateStep, 0, -20, 0, 0);
+
+  assert.deepEqual(resolved, { x: 0, y: 0 });
+});
+
+test('arrasto de duas linhas de grid avanca ate o passo valido mais proximo do alvo', () => {
+  const moving = [{ id: 'moving', x1: 0, y1: 10, x2: 80, y2: 10 }];
+  const farAway = [{ id: 'far', x1: 400, y1: 400, x2: 480, y2: 400 }];
+
+  const resolved = resolveWallGroupGridDelta(moving, farAway, 0, -20, 0, 0);
+
+  assert.deepEqual(resolved, { x: 0, y: -20 });
+});
+
 test('parede fundida atualiza as quinas dos dois cômodos sem abrir fresta unilateral', () => {
   const walls = [
     { id: 'left-bottom', x1: 0, y1: 0, x2: 40, y2: 0 },
