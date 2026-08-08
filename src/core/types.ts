@@ -43,6 +43,8 @@ export interface Roof {
   gableFinishB?: string;
   /** Identifica uma cobertura composta confirmada pelo usuário. */
   compoundGroupId?: string;
+  /** Altura do parapeito acima do topo da parede, em metros — só relevante pra type === 'platibanda'. */
+  parapetHeight?: number;
 }
 
 export type VarandaFrontSide = 'minZ' | 'maxZ' | 'minX' | 'maxX';

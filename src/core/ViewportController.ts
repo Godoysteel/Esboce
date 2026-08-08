@@ -931,11 +931,13 @@ import {
     // colocado (ou coloca um novo em cima do cômodo sob o cursor).
     if (currentTool === 'telhado') {
       var handleT = pickHandle(e.clientX, e.clientY);
-      if (handleT && (handleT === 'roofRidge' || handleT.indexOf('roofEdge') === 0)) {
+      if (handleT && (handleT === 'roofRidge' || handleT === 'roofParapetHeight' || handleT.indexOf('roofEdge') === 0)) {
         dragMode = handleT;
         var rrT = Store.findRoof(selectedRoofId);
         if (handleT === 'roofRidge') {
           dragElementStart = { pitchDeg: rrT ? rrT.pitchDeg : 28, startScreenY: e.clientY };
+        } else if (handleT === 'roofParapetHeight') {
+          dragElementStart = { parapetHeight: rrT ? rrT.parapetHeight : 0.5, startScreenY: e.clientY };
         } else if (rrT) {
           var regionForDrag = findGridRegionAt((rrT.x1 + rrT.x2) / 2, (rrT.y1 + rrT.y2) / 2);
           dragElementStart = { x1: rrT.x1, y1: rrT.y1, x2: rrT.x2, y2: rrT.y2, region: regionForDrag };
@@ -986,7 +988,7 @@ import {
         startWallResizeDrag(selectedWallId, e.clientX, e.clientY);
         return;
       }
-      dragMode = handle; // 'endpoint1' | 'endpoint2' | 'roofRidge' | 'roofEdge*' | 'varandaEdge*'
+      dragMode = handle; // 'endpoint1' | 'endpoint2' | 'roofRidge' | 'roofParapetHeight' | 'roofEdge*' | 'varandaEdge*'
       if (handle === 'endpoint1' || handle === 'endpoint2') {
         var endpointWall = Store.findWall(selectedWallId);
         if (endpointWall) {
@@ -1003,6 +1005,9 @@ import {
       } else if (handle === 'roofRidge') {
         var rr = Store.findRoof(selectedRoofId);
         dragElementStart = { pitchDeg: rr ? rr.pitchDeg : 28, startScreenY: e.clientY };
+      } else if (handle === 'roofParapetHeight') {
+        var rrP = Store.findRoof(selectedRoofId);
+        dragElementStart = { parapetHeight: rrP ? rrP.parapetHeight : 0.5, startScreenY: e.clientY };
       } else if (handle.indexOf('roofEdge') === 0) {
         // A borda do telhado precisa saber o retângulo de partida E a
         // região de grade que trava o arraste — isso valia antes só
@@ -1566,6 +1571,14 @@ import {
       }
       return;
     }
+    if (dragMode === 'roofParapetHeight') {
+      if (dragElementStart) {
+        var deltaScreenP = dragElementStart.startScreenY - e.clientY; // positivo = arrastou pra cima
+        var candidateHeight = Math.max(0.2, Math.min(1.2, dragElementStart.parapetHeight + deltaScreenP * 0.01));
+        Store.commands.updateRoofParapetHeightLive(selectedRoofId, candidateHeight);
+      }
+      return;
+    }
     if (dragMode && dragMode.indexOf('roofEdge') === 0) {
       var gpE = getGroundModelPoint(e.clientX, e.clientY);
       if (gpE && dragElementStart) {
@@ -1774,7 +1787,7 @@ import {
     // tentar calcular vale entre dois telhados que NÃO são a mesma água
     // continuando, esse caso genérico continua fora de escopo — ver
     // Registro de Decisões Técnicas, Sessão 4).
-    if (dragMode === 'roofRidge' || (dragMode && dragMode.indexOf('roofEdge') === 0)) {
+    if (dragMode === 'roofRidge' || dragMode === 'roofParapetHeight' || (dragMode && dragMode.indexOf('roofEdge') === 0)) {
       if (selectedRoofId && fuseRoofsIfTouching(selectedRoofId)) {
         hintEl.textContent = 'Telhados fundidos — a cumeeira agora é uma só.';
         onModelChanged();

@@ -75,13 +75,16 @@ export function createColumnEntity(x: number, y: number, shape?: ColumnShape, id
 
 export function createRoofEntity(
   x1: number, y1: number, x2: number, y2: number,
-  type?: RoofType, pitchDeg?: number, ridgeAxis?: RidgeAxis, id?: string
+  type?: RoofType, pitchDeg?: number, ridgeAxis?: RidgeAxis, id?: string, parapetHeight?: number
 ): Roof {
   return {
     id: id || nextId('roof'), x1, y1, x2, y2,
     type: type || 'duasAguas',
     pitchDeg: pitchDeg != null ? pitchDeg : 28,
-    ridgeAxis: ridgeAxis || 'x'
+    ridgeAxis: ridgeAxis || 'x',
+    // Só relevante pra type === 'platibanda' — altura do parapeito acima
+    // do topo da parede, ajustável pela alça de seleção.
+    parapetHeight: parapetHeight != null ? parapetHeight : 0.5
   };
 }
 
