@@ -183,3 +183,54 @@ export async function deleteProject(id: string): Promise<boolean> {
   if (error) throw error;
   return !!(data && data.length);
 }
+
+// ---- Catálogo de produtos (vitrine) ----
+//
+// Isso é só pra MOSTRAR o produto (foto, preço, ficha técnica) — não
+// tem relação com a renderização 3D, que continua lendo de
+// src/core/Catalog.ts (cor/textura/modelo ficam locais, por decisão
+// deliberada: ver conversa sobre parceiros/SDK de produtos). Um
+// produto pode aparecer aqui sem ter representação visual na cena
+// ainda (ex.: a caixa d'água do Mercador).
+
+export interface CatalogDepartment { id: string; nome: string; ordem: number; }
+export interface CatalogManufacturer { id: string; nome: string; logo_url: string | null; is_demo: boolean; }
+export interface CatalogProduct {
+  id: string;
+  manufacturer_id: string;
+  categoria: string;
+  nome: string;
+  sku: string | null;
+  preco: number;
+  unidade: string;
+  specs: Record<string, unknown>;
+  foto_url: string | null;
+  origem: 'generico' | 'fornecedor' | 'oficial';
+}
+
+export async function listDepartments(): Promise<CatalogDepartment[]> {
+  const { data, error } = await supabase.from('departments').select('id, nome, ordem').order('ordem');
+  if (error) throw error;
+  return (data ?? []) as CatalogDepartment[];
+}
+
+export async function listManufacturers(): Promise<CatalogManufacturer[]> {
+  const { data, error } = await supabase.from('manufacturers').select('id, nome, logo_url, is_demo');
+  if (error) throw error;
+  return (data ?? []) as CatalogManufacturer[];
+}
+
+// Devolve todos os produtos ativos, já com o department_id resolvido
+// (via category_departments) — pra montar a vitrine sem precisar de 3
+// idas e vindas separadas no app.
+export interface CatalogProductWithDepartment extends CatalogProduct { department_id: string | null; }
+export async function listCatalogProducts(): Promise<CatalogProductWithDepartment[]> {
+  const [{ data: products, error: productsError }, { data: mappings, error: mappingsError }] = await Promise.all([
+    supabase.from('products').select('id, manufacturer_id, categoria, nome, sku, preco, unidade, specs, foto_url, origem').eq('ativo', true),
+    supabase.from('category_departments').select('categoria, department_id'),
+  ]);
+  if (productsError) throw productsError;
+  if (mappingsError) throw mappingsError;
+  const categoryToDept = new Map((mappings ?? []).map((m: any) => [m.categoria, m.department_id]));
+  return (products ?? []).map((p: any) => ({ ...p, department_id: categoryToDept.get(p.categoria) ?? null })) as CatalogProductWithDepartment[];
+}

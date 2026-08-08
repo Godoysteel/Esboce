@@ -497,6 +497,82 @@
   .auth-submit:disabled { opacity: .6; cursor: not-allowed; }
   .auth-error { color: #D7263D; font-size: 12px; margin-top: 8px; min-height: 14px; }
   .auth-close { float: right; border: none; background: none; font-size: 18px; cursor: pointer; padding: 0 4px; }
+
+  /* Catálogo de produtos — vitrine dos parceiros (departamentos +
+     produtos com foto/preço/ficha técnica). Só navegação por enquanto
+     — "usar esse material" fica pra uma próxima rodada, depois de
+     decidir como ligar isso na renderização 3D com segurança. */
+  #catalogOverlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(44,44,42,0.6);
+    z-index: 1000;
+    align-items: center; justify-content: center;
+  }
+  #catalogOverlay.visible { display: flex; }
+  .catalog-modal {
+    background: #FFFFFF;
+    border-radius: 12px;
+    width: min(920px, calc(100vw - 32px));
+    height: min(720px, calc(100vh - 32px));
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .catalog-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 20px 10px;
+    border-bottom: 1px solid #EDEBE3;
+  }
+  .catalog-header h2 { margin: 0; font-size: 18px; }
+  .catalog-tabs {
+    display: flex; gap: 6px; overflow-x: auto;
+    padding: 10px 20px;
+    border-bottom: 1px solid #EDEBE3;
+    flex-shrink: 0;
+  }
+  .catalog-tab {
+    padding: 7px 14px; border-radius: 999px; border: 1px solid #D3D1C7;
+    background: #FFFFFF; font-size: 13px; white-space: nowrap; cursor: pointer;
+  }
+  .catalog-tab.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
+  .catalog-body { flex: 1; overflow-y: auto; padding: 16px 20px; }
+  .catalog-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 14px;
+  }
+  .catalog-card {
+    border: 1px solid #D3D1C7; border-radius: 10px; overflow: hidden;
+    display: flex; flex-direction: column; cursor: pointer;
+    background: #FFFFFF;
+  }
+  .catalog-card:hover { border-color: #534AB7; }
+  .catalog-card-photo {
+    width: 100%; aspect-ratio: 1; background: #F1EFE8;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+  .catalog-card-photo img { width: 100%; height: 100%; object-fit: contain; }
+  .catalog-card-photo .no-photo { font-size: 11px; color: #9C9A92; text-align: center; padding: 8px; }
+  .catalog-card-info { padding: 10px 10px 12px; }
+  .catalog-card-nome { font-size: 13px; font-weight: 600; line-height: 1.25; margin: 0 0 4px; }
+  .catalog-card-fabricante { font-size: 11px; color: #5F5E5A; margin: 0 0 6px; }
+  .catalog-card-preco { font-size: 14px; font-weight: 700; color: #2C2C2A; }
+  .catalog-card-preco.consulta { font-size: 12px; font-weight: 500; color: #9C9A92; }
+  .catalog-badge {
+    display: inline-block; font-size: 10px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .03em; padding: 2px 7px; border-radius: 999px; margin-top: 6px;
+  }
+  .catalog-badge.generico { background: #EDEBE3; color: #5F5E5A; }
+  .catalog-badge.fornecedor { background: #FFE9DC; color: #C1673F; }
+  .catalog-badge.oficial { background: #DCEFE0; color: #2E7D4F; }
+
+  /* Detalhe do produto (specs) — reaproveita o auth-modal como base */
+  .catalog-detail-specs { font-size: 13px; }
+  .catalog-detail-specs table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  .catalog-detail-specs td { padding: 4px 0; border-bottom: 1px solid #EDEBE3; }
+  .catalog-detail-specs td:first-child { color: #5F5E5A; width: 45%; }
 </style>
 </head>
 <body>
@@ -535,6 +611,7 @@
     <button id="saveProjectBtn" title="Salvar o projeto na nuvem">💾 Salvar</button>
     <button id="shareProjectBtn" title="Copiar link do projeto pra compartilhar">🔗 Compartilhar</button>
     <button id="myProjectsBtn" title="Ver meus projetos salvos">🗂️ Meus projetos</button>
+    <button id="catalogBtn" title="Ver catálogo de produtos dos parceiros">🏬 Catálogo</button>
     <button id="accountBtn" title="Entrar">👤 Entrar</button>
     <button id="logoutBtn" style="display:none;" title="Sair da conta">🚪 Sair</button>
   </div>
@@ -879,6 +956,24 @@ Mova uma parede para registrar a operação.</pre>
     </div>
 
     <div class="auth-error" id="authError"></div>
+  </div>
+</div>
+
+<div id="catalogOverlay">
+  <div class="catalog-modal">
+    <div class="catalog-header">
+      <h2>🏬 Catálogo de produtos</h2>
+      <button class="auth-close" id="catalogClose" title="Fechar">✕</button>
+    </div>
+    <div class="catalog-tabs" id="catalogTabs"></div>
+    <div class="catalog-body" id="catalogBody"><p style="color:#9C9A92; font-size:13px;">Carregando...</p></div>
+  </div>
+</div>
+
+<div id="catalogDetailOverlay" style="display:none; position:fixed; inset:0; background:rgba(44,44,42,0.6); z-index:1001; align-items:center; justify-content:center;">
+  <div class="auth-modal" style="width:420px;">
+    <button class="auth-close" id="catalogDetailClose" title="Fechar">✕</button>
+    <div id="catalogDetailBody"></div>
   </div>
 </div>
 

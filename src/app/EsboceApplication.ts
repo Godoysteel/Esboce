@@ -9,7 +9,7 @@ import { NavGizmo } from "../core/NavGizmo.js";
 import { Store } from "../core/Store.js";
 import { ViewportController } from "../core/ViewportController.js";
 import { ViewportStats } from "../core/ViewportStats.js";
-import { createSharedProject, loadSharedProject, updateSharedProject, deleteProject, signUpWithProfile, signIn, signOut, getCurrentUser, listMyProjects, ensureProfileExists, type ProfileFields } from "../core/SupabaseClient.js";
+import { createSharedProject, loadSharedProject, updateSharedProject, deleteProject, signUpWithProfile, signIn, signOut, getCurrentUser, listMyProjects, ensureProfileExists, listDepartments, listManufacturers, listCatalogProducts, type ProfileFields, type CatalogDepartment, type CatalogManufacturer, type CatalogProductWithDepartment } from "../core/SupabaseClient.js";
 
 export class EsboceApplication {
   private readonly scene = new THREE.Scene();
@@ -40,6 +40,13 @@ export class EsboceApplication {
   private currentProjectName: string | null = null;
   private pendingNameResolve: ((nome: string) => void) | null = null;
   private pendingNameReject: ((err: Error) => void) | null = null;
+  // Cache do catálogo — buscado uma vez na primeira abertura do
+  // modal, reaproveitado depois (não recarrega do banco toda vez que
+  // o usuário reabre, só a cada sessão/página nova).
+  private catalogDepartments: CatalogDepartment[] | null = null;
+  private catalogManufacturers: Map<string, CatalogManufacturer> | null = null;
+  private catalogProducts: CatalogProductWithDepartment[] | null = null;
+  private catalogActiveDeptId: string | null = null;
 
   public async start(): Promise<void> {
     this.viewport = this.requireElement("viewport");
@@ -224,6 +231,7 @@ export class EsboceApplication {
     this.requireElement("saveProjectBtn").addEventListener("click", () => this.saveProject());
     this.requireElement("shareProjectBtn").addEventListener("click", () => this.shareProject());
     this.requireElement("myProjectsBtn").addEventListener("click", () => this.openMyProjects());
+    this.requireElement("catalogBtn").addEventListener("click", () => this.openCatalog());
     this.requireElement("accountBtn").addEventListener("click", () => this.handleAccountButtonClick());
     this.requireElement("logoutBtn").addEventListener("click", () => this.handleLogoutClick());
 
@@ -425,6 +433,12 @@ export class EsboceApplication {
     this.requireElement("projectNameInput").addEventListener("keydown", (e) => {
       if ((e as KeyboardEvent).key === "Enter") this.handleProjectNameSubmit();
     });
+    this.requireElement("catalogClose").addEventListener("click", () => {
+      this.requireElement("catalogOverlay").classList.remove("visible");
+    });
+    this.requireElement("catalogDetailClose").addEventListener("click", () => {
+      this.requireElement("catalogDetailOverlay").style.display = "none";
+    });
   }
 
   private openAuthModal(): void {
@@ -597,6 +611,128 @@ export class EsboceApplication {
       btn.disabled = false;
       btn.textContent = "Entrar";
     }
+  }
+
+  // ---- Catálogo de produtos (vitrine) ----
+
+  private async openCatalog(): Promise<void> {
+    const overlay = this.requireElement("catalogOverlay");
+    overlay.classList.add("visible");
+    if (!this.catalogProducts) {
+      const body = this.requireElement("catalogBody");
+      body.innerHTML = '<p style="color:#9C9A92; font-size:13px;">Carregando...</p>';
+      try {
+        const [departments, manufacturers, products] = await Promise.all([
+          listDepartments(),
+          listManufacturers(),
+          listCatalogProducts(),
+        ]);
+        this.catalogDepartments = departments;
+        this.catalogManufacturers = new Map(manufacturers.map((m) => [m.id, m]));
+        this.catalogProducts = products;
+        this.catalogActiveDeptId = departments[0]?.id ?? null;
+      } catch (err) {
+        console.error("Falha ao carregar catálogo:", err);
+        body.innerHTML = '<p style="color:#D7263D; font-size:13px;">Falha ao carregar o catálogo. Tenta de novo em alguns instantes.</p>';
+        return;
+      }
+    }
+    this.renderCatalogTabs();
+    this.renderCatalogGrid();
+  }
+
+  private renderCatalogTabs(): void {
+    const tabsEl = this.requireElement("catalogTabs");
+    const departments = this.catalogDepartments ?? [];
+    const products = this.catalogProducts ?? [];
+    tabsEl.innerHTML = "";
+    // Só mostra departamento que tem pelo menos 1 produto — uma aba
+    // vazia não ajuda ninguém a navegar.
+    departments
+      .filter((dept) => products.some((p) => p.department_id === dept.id))
+      .forEach((dept) => {
+        const tab = document.createElement("div");
+        tab.className = "catalog-tab" + (dept.id === this.catalogActiveDeptId ? " active" : "");
+        tab.textContent = dept.nome;
+        tab.addEventListener("click", () => {
+          this.catalogActiveDeptId = dept.id;
+          this.renderCatalogTabs();
+          this.renderCatalogGrid();
+        });
+        tabsEl.appendChild(tab);
+      });
+  }
+
+  private renderCatalogGrid(): void {
+    const bodyEl = this.requireElement("catalogBody");
+    const products = (this.catalogProducts ?? []).filter((p) => p.department_id === this.catalogActiveDeptId);
+    if (!products.length) {
+      bodyEl.innerHTML = '<p style="color:#9C9A92; font-size:13px;">Nenhum produto nesse departamento ainda.</p>';
+      return;
+    }
+    const grid = document.createElement("div");
+    grid.className = "catalog-grid";
+    products.forEach((product) => {
+      const manufacturer = this.catalogManufacturers?.get(product.manufacturer_id);
+      const card = document.createElement("div");
+      card.className = "catalog-card";
+
+      const photo = document.createElement("div");
+      photo.className = "catalog-card-photo";
+      if (product.foto_url) {
+        const img = document.createElement("img");
+        img.src = product.foto_url;
+        img.alt = product.nome;
+        photo.appendChild(img);
+      } else {
+        photo.innerHTML = '<span class="no-photo">Sem foto ainda</span>';
+      }
+      card.appendChild(photo);
+
+      const info = document.createElement("div");
+      info.className = "catalog-card-info";
+      const precoHtml = product.preco > 0
+        ? `<div class="catalog-card-preco">R$ ${product.preco.toFixed(2).replace(".", ",")} <span style="font-weight:400;font-size:11px;color:#5F5E5A;">/ ${product.unidade}</span></div>`
+        : '<div class="catalog-card-preco consulta">Sob consulta</div>';
+      info.innerHTML = `
+        <p class="catalog-card-nome">${product.nome}</p>
+        <p class="catalog-card-fabricante">${manufacturer?.nome ?? product.manufacturer_id}</p>
+        ${precoHtml}
+        <span class="catalog-badge ${product.origem}">${this.catalogOrigemLabel(product.origem)}</span>
+      `;
+      card.appendChild(info);
+
+      card.addEventListener("click", () => this.openCatalogDetail(product));
+      grid.appendChild(card);
+    });
+    bodyEl.innerHTML = "";
+    bodyEl.appendChild(grid);
+  }
+
+  private catalogOrigemLabel(origem: string): string {
+    if (origem === "generico") return "Genérico";
+    if (origem === "oficial") return "Oficial";
+    return "Fornecedor";
+  }
+
+  private openCatalogDetail(product: CatalogProductWithDepartment): void {
+    const manufacturer = this.catalogManufacturers?.get(product.manufacturer_id);
+    const specsRows = Object.entries(product.specs ?? {})
+      .map(([key, value]) => `<tr><td>${key}</td><td>${value}</td></tr>`)
+      .join("");
+    const precoHtml = product.preco > 0
+      ? `R$ ${product.preco.toFixed(2).replace(".", ",")} / ${product.unidade}`
+      : "Sob consulta";
+    const body = this.requireElement("catalogDetailBody");
+    body.innerHTML = `
+      ${product.foto_url ? `<img src="${product.foto_url}" alt="${product.nome}" style="width:100%; aspect-ratio:1; object-fit:contain; background:#F1EFE8; border-radius:8px; margin-bottom:12px;">` : ""}
+      <h2 style="margin-bottom:2px;">${product.nome}</h2>
+      <p class="auth-sub" style="margin-bottom:8px;">${manufacturer?.nome ?? product.manufacturer_id}${product.sku ? ` · SKU ${product.sku}` : ""}</p>
+      <p style="font-size:16px; font-weight:700; margin:0 0 10px;">${precoHtml}</p>
+      <span class="catalog-badge ${product.origem}">${this.catalogOrigemLabel(product.origem)}</span>
+      ${specsRows ? `<div class="catalog-detail-specs"><table>${specsRows}</table></div>` : ""}
+    `;
+    this.requireElement("catalogDetailOverlay").style.display = "flex";
   }
 
   private async openMyProjects(): Promise<void> {
