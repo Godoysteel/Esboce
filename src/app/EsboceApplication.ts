@@ -47,6 +47,7 @@ export class EsboceApplication {
   private catalogManufacturers: Map<string, CatalogManufacturer> | null = null;
   private catalogProducts: CatalogProductWithDepartment[] | null = null;
   private catalogActiveDeptId: string | null = null;
+  private catalogActiveCategoriaFilter: string | null = null;
 
   public async start(): Promise<void> {
     this.viewport = this.requireElement("viewport");
@@ -200,6 +201,7 @@ export class EsboceApplication {
     FloorTabsController.init();
     LayersPanel.init();
     GizmoController.init();
+    GizmoController.setOnSwapRequested((productId) => this.handleSwapRequested(productId));
     MaterialsPanel.init();
   }
 
@@ -618,25 +620,59 @@ export class EsboceApplication {
   private async openCatalog(): Promise<void> {
     const overlay = this.requireElement("catalogOverlay");
     overlay.classList.add("visible");
-    if (!this.catalogProducts) {
-      const body = this.requireElement("catalogBody");
-      body.innerHTML = '<p style="color:#9C9A92; font-size:13px;">Carregando...</p>';
-      try {
-        const [departments, manufacturers, products] = await Promise.all([
-          listDepartments(),
-          listManufacturers(),
-          listCatalogProducts(),
-        ]);
-        this.catalogDepartments = departments;
-        this.catalogManufacturers = new Map(manufacturers.map((m) => [m.id, m]));
-        this.catalogProducts = products;
-        this.catalogActiveDeptId = departments[0]?.id ?? null;
-      } catch (err) {
-        console.error("Falha ao carregar catálogo:", err);
-        body.innerHTML = '<p style="color:#D7263D; font-size:13px;">Falha ao carregar o catálogo. Tenta de novo em alguns instantes.</p>';
-        return;
-      }
+    const loaded = await this.ensureCatalogLoaded();
+    if (!loaded) return;
+    this.catalogActiveCategoriaFilter = null;
+    if (!this.catalogActiveDeptId) this.catalogActiveDeptId = this.catalogDepartments?.[0]?.id ?? null;
+    this.renderCatalogTabs();
+    this.renderCatalogGrid();
+  }
+
+  // Busca departamentos/fabricantes/produtos uma vez só (cacheado em
+  // this.catalog*) — devolve false e já mostra a mensagem de erro no
+  // corpo do modal se a busca falhar, pra quem chamou não precisar
+  // tratar isso de novo.
+  private async ensureCatalogLoaded(): Promise<boolean> {
+    if (this.catalogProducts) return true;
+    const body = this.requireElement("catalogBody");
+    body.innerHTML = '<p style="color:#9C9A92; font-size:13px;">Carregando...</p>';
+    try {
+      const [departments, manufacturers, products] = await Promise.all([
+        listDepartments(),
+        listManufacturers(),
+        listCatalogProducts(),
+      ]);
+      this.catalogDepartments = departments;
+      this.catalogManufacturers = new Map(manufacturers.map((m) => [m.id, m]));
+      this.catalogProducts = products;
+      return true;
+    } catch (err) {
+      console.error("Falha ao carregar catálogo:", err);
+      body.innerHTML = '<p style="color:#D7263D; font-size:13px;">Falha ao carregar o catálogo. Tenta de novo em alguns instantes.</p>';
+      return false;
     }
+  }
+
+  // Acionado pelo botão "🔁 Trocar" no móvel selecionado (ver
+  // GizmoController.setOnSwapRequested). productId é o mesmo id usado
+  // em Catalog.ts — como preservei os ids ao espelhar o catálogo pro
+  // Supabase, dá pra achar o produto correspondente direto por igualdade.
+  private async handleSwapRequested(productId: string): Promise<void> {
+    const loaded = await this.ensureCatalogLoaded();
+    if (!loaded) { this.requireElement("catalogOverlay").classList.add("visible"); return; }
+    const match = this.catalogProducts?.find((p) => p.id === productId);
+    if (!match) {
+      alert("Esse item ainda não tem produtos alternativos cadastrados no catálogo.");
+      return;
+    }
+    this.openCatalogFilteredByCategoria(match.categoria);
+  }
+
+  private openCatalogFilteredByCategoria(categoria: string): void {
+    this.requireElement("catalogOverlay").classList.add("visible");
+    const product = this.catalogProducts?.find((p) => p.categoria === categoria);
+    this.catalogActiveDeptId = product?.department_id ?? this.catalogActiveDeptId;
+    this.catalogActiveCategoriaFilter = categoria;
     this.renderCatalogTabs();
     this.renderCatalogGrid();
   }
@@ -656,6 +692,7 @@ export class EsboceApplication {
         tab.textContent = dept.nome;
         tab.addEventListener("click", () => {
           this.catalogActiveDeptId = dept.id;
+          this.catalogActiveCategoriaFilter = null;
           this.renderCatalogTabs();
           this.renderCatalogGrid();
         });
@@ -665,9 +702,32 @@ export class EsboceApplication {
 
   private renderCatalogGrid(): void {
     const bodyEl = this.requireElement("catalogBody");
-    const products = (this.catalogProducts ?? []).filter((p) => p.department_id === this.catalogActiveDeptId);
+    const filter = this.catalogActiveCategoriaFilter;
+    const products = (this.catalogProducts ?? []).filter((p) =>
+      filter ? p.categoria === filter : p.department_id === this.catalogActiveDeptId
+    );
+
+    bodyEl.innerHTML = "";
+    if (filter) {
+      const banner = document.createElement("div");
+      banner.style.cssText = "margin-bottom:12px; font-size:13px; color:#5F5E5A;";
+      const clearBtn = document.createElement("button");
+      clearBtn.textContent = "← Ver departamento inteiro";
+      clearBtn.style.cssText = "font-size:12px; padding:5px 10px;";
+      clearBtn.addEventListener("click", () => {
+        this.catalogActiveCategoriaFilter = null;
+        this.renderCatalogTabs();
+        this.renderCatalogGrid();
+      });
+      banner.appendChild(clearBtn);
+      bodyEl.appendChild(banner);
+    }
+
     if (!products.length) {
-      bodyEl.innerHTML = '<p style="color:#9C9A92; font-size:13px;">Nenhum produto nesse departamento ainda.</p>';
+      const empty = document.createElement("p");
+      empty.style.cssText = "color:#9C9A92; font-size:13px;";
+      empty.textContent = "Nenhum produto nessa categoria ainda.";
+      bodyEl.appendChild(empty);
       return;
     }
     const grid = document.createElement("div");
@@ -705,7 +765,6 @@ export class EsboceApplication {
       card.addEventListener("click", () => this.openCatalogDetail(product));
       grid.appendChild(card);
     });
-    bodyEl.innerHTML = "";
     bodyEl.appendChild(grid);
   }
 

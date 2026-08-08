@@ -86,7 +86,7 @@ import {
   var camTarget = { x: 0, y: 0, z: 0 }; // pra onde a câmera olha e orbita — Shift+scroll desloca isso
   var MIN_DIST = 3, MAX_DIST = 35;
 
-  var gizmoEl: any, openingGizmoEl: any, roomGizmoEl: any, columnShapePanelEl: any, roofTypePanelEl: any, finishPanelEl: any, paintPickerPanelEl: any, objectPanelEl: any, objectPanelTitleEl: any, objectPanelBodyEl: any, hintEl: any, layersContextMenuEl: any;
+  var gizmoEl: any, gzSwapBtnEl: any, openingGizmoEl: any, roomGizmoEl: any, columnShapePanelEl: any, roofTypePanelEl: any, finishPanelEl: any, paintPickerPanelEl: any, objectPanelEl: any, objectPanelTitleEl: any, objectPanelBodyEl: any, hintEl: any, layersContextMenuEl: any;
   var dimLabelAEl: any, dimLabelBEl: any, liveRoomDimensionLineEl: any, liveRoomDimensionLineBEl: any;
   // Cotas persistentes de largura/altura de parede (ligar/desligar) —
   // ver rebuildDimensionCotas mais abaixo. Diferente do dimLabelA/B
@@ -493,6 +493,10 @@ import {
   }
 
   function positionGizmoAndShapePanel() {
+    // Botão "Trocar" só faz sentido pra móvel (é o único caso com
+    // categoria de produto trocável no catálogo por enquanto) —
+    // escondido por padrão, cada branch abaixo decide se mostra.
+    if (gzSwapBtnEl) gzSwapBtnEl.style.display = 'none';
     // Esquadria selecionada: gizmo próprio, sempre visível (não depende
     // de gizmoMenuOpen — ver selectOpening). Posicionado um pouco acima
     // do topo do vão, pra não tampar a folha/vidro.
@@ -590,6 +594,7 @@ import {
       var midF = modelToWorld(fItem.x, fItem.y);
       positionFloatingPanel(gizmoEl, midF.x, yOffset + Scene3DRenderer.FLOOR_STACK_HEIGHT_GETTER(), midF.z, 0);
       gizmoEl.classList.add('visible');
+      if (gzSwapBtnEl) gzSwapBtnEl.style.display = '';
       return;
     }
 
@@ -2401,6 +2406,7 @@ import {
     container = opts.container; camera = opts.camera; scene = opts.scene; renderer = opts.renderer;
     Scene3DRenderer.setOnFurnitureAssetLoaded(render);
     gizmoEl = document.getElementById('wallGizmo');
+    gzSwapBtnEl = document.getElementById('gzSwapBtn');
     openingGizmoEl = document.getElementById('openingGizmo');
     roomGizmoEl = document.getElementById('roomGizmo');
     layersContextMenuEl = document.getElementById('layersContextMenu');

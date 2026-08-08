@@ -63,6 +63,16 @@ function handleVarandaAction(varandaId: string, action: string): void {
 // livre direto na peça (ver ViewportController — dragMode
 // 'furnitureBody'); os botões de seta não fazem sentido aqui porque o
 // objetivo do móvel é justamente NÃO ficar preso ao grid de 50cm.
+//
+// "Trocar" (swap) não mexe em nada aqui dentro — só avisa quem
+// registrou o callback (EsboceApplication, que sabe abrir o catálogo
+// filtrado). GizmoController não conhece Supabase nem catálogo, só
+// avisa "o usuário quer trocar o produto deste móvel".
+let onSwapRequested: ((productId: string) => void) | null = null;
+export function setOnSwapRequested(callback: (productId: string) => void): void {
+  onSwapRequested = callback;
+}
+
 function handleFurnitureAction(furnitureId: string, action: string): void {
   const f = Store.findFurniture(furnitureId);
   if (!f) return;
@@ -75,6 +85,10 @@ function handleFurnitureAction(furnitureId: string, action: string): void {
   }
   if (action === 'rotateCw' || action === 'rotateCcw') {
     Store.commands.rotateFurniture(furnitureId, action === 'rotateCw' ? 90 : -90);
+    return;
+  }
+  if (action === 'swap') {
+    if (onSwapRequested) onSwapRequested(f.productId);
     return;
   }
 }
@@ -153,4 +167,4 @@ export function init(): void {
 }
 
 // Namespace de compatibilidade — mesma razão dos demais módulos.
-export const GizmoController = { init };
+export const GizmoController = { init, setOnSwapRequested };
