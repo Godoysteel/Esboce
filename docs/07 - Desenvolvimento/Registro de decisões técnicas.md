@@ -198,6 +198,14 @@ Decisão: Não adotar grafo de dependências agora — mesmo o FreeCAD levou ano
 Alternativas descartadas:
     • Implementar grafo de dependências completo agora, antecipando a escala futura (rejeitada — otimização prematura; o próprio FreeCAD só amadureceu essa parte com o tempo, não desde o início)
 Status: Ativo — princípio orientador pra desenvolvimento futuro, não uma mudança de código
+DEC-31  Platibanda: caimento sutil, cor/textura igual às paredes, altura ajustável
+Sessão: 5
+Contexto: Platibanda nasceu (DEC-04) como laje 100% plana + parapeito de altura fixa (0,5 m) numa cor bege fixa (GABLE_COLOR, sem textura nenhuma), destoando de qualquer casa pintada com outra cor e sem nenhum indício visual de escoamento de água.
+Decisão: (1) A laje ganha um caimento sutil (2°, o mínimo usual pra laje impermeabilizada escoar) na direção do ridgeAxis do telhado — mesma técnica (extrudeSlopeDown) já usada nas águas de verdade; o botão de girar existente (rotateRoofAxis) agora também troca a direção do caimento. (2) O parapeito passa a usar a MESMA textura de reboco PBR das paredes de verdade (getWallPlasterMaps, com repeat ajustado por segmento) em vez de material liso sem mapa, e a cor por padrão acompanha o acabamento de tinta predominante já escolhido nas paredes do pavimento (computeWallMatchColor), caindo em GABLE_COLOR só quando nenhuma parede tem acabamento escolhido — o mesmo default que as próprias paredes usam. (3) Roof ganha o campo parapetHeight (padrão 0,5 m, 0,2–1,2 m), com alça 3D própria (handle 'roofParapetHeight') no lugar da alça de cumeeira quando type === 'platibanda', comandos setRoofParapetHeight/updateRoofParapetHeightLive (mesmo padrão de setRoofPitch/updateRoofPitchLive) e propagação em duplicateRoof.
+Alternativas descartadas:
+    • Cor fixa configurável só por um seletor dedicado de acabamento do parapeito (rejeitada por ora — mais UI nova pra manter; herdar da parede já resolve o caso comum sem exigir escolha extra da pessoa; pode virar um campo próprio (ex.: parapetFinishId) no futuro se o auto-match não bastar)
+    • Caimento mais acentuado (5°+, mais realista pra chuva forte) — descartado por exigir parapeito mais alto por padrão pra não deixar a laje aparecer por cima; 2° já basta pra dar leitura visual de "não é plano" sem forçar outras mudanças
+Status: Ativo
 Pendências e limitações conhecidas
     • Rastro automático em topologias de 3+ cômodos convergindo no mesmo canto — comportamento inesperado, escopo não decidido (ver DEC-17).
     • Porta, Janela, Escada e Varanda — sem nenhuma implementação, só botão visual desabilitado na barra lateral.

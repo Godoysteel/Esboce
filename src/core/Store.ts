@@ -708,7 +708,7 @@ export const commands = {
     const r = findRoof(roofId); if (!r) return null;
     pushUndoSnapshot();
     const offset = Core.GRID;
-    const copy = Core.createRoofEntity(r.x1 + offset, r.y1 + offset, r.x2 + offset, r.y2 + offset, r.type, r.pitchDeg, r.ridgeAxis);
+    const copy = Core.createRoofEntity(r.x1 + offset, r.y1 + offset, r.x2 + offset, r.y2 + offset, r.type, r.pitchDeg, r.ridgeAxis, undefined, r.parapetHeight);
     currentRoofs().push(copy);
     emit({ type: 'RoofCreated', floorIndex: project.currentFloorIndex, roofId: copy.id, duplicatedFrom: roofId });
     return copy;
@@ -751,6 +751,22 @@ export const commands = {
     const r = findRoof(roofId); if (!r) return;
     r.pitchDeg = Math.max(5, Math.min(75, pitchDeg));
     emit({ type: 'RoofPitchChanged', roofId, live: true });
+  },
+
+  // Alça de altura do parapeito da platibanda — mesmo padrão da cumeeira
+  // (setRoofPitch/updateRoofPitchLive): arrastar pra cima/baixo
+  // recalcula a altura, clampada num intervalo razoável de parapeito
+  // (20cm a 1,2m).
+  setRoofParapetHeight(roofId: string, height: number): void {
+    const r = findRoof(roofId); if (!r) return;
+    pushUndoSnapshot();
+    r.parapetHeight = Math.max(0.2, Math.min(1.2, height));
+    emit({ type: 'RoofParapetHeightChanged', roofId });
+  },
+  updateRoofParapetHeightLive(roofId: string, height: number): void {
+    const r = findRoof(roofId); if (!r) return;
+    r.parapetHeight = Math.max(0.2, Math.min(1.2, height));
+    emit({ type: 'RoofParapetHeightChanged', roofId, live: true });
   },
 
   // Alças das bordas: arrastar uma borda estica/encolhe só aquele lado.
