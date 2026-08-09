@@ -42,3 +42,7 @@ Criada a primeira baseline de engenharia do projeto.
 ## Corrigido
 
 - Platibanda (telhado): laje ganhou um caimento sutil (2°) — antes era 100% plana, sem nenhuma queda visível; parapeito passou a usar a mesma textura de reboco e a mesma cor de acabamento predominante das paredes da casa (antes um bege fixo sem textura); altura do parapeito agora é ajustável por uma alça própria na seleção do telhado (0,2–1,2 m, padrão 0,5 m). Ver DEC-31 no Registro de Decisões Técnicas.
+
+## Alterado
+
+- Pé-direito padrão da casa ajustado de 2,7 m pra 2,9 m. Ver DEC-08 (atualizada) no Registro de Decisões Técnicas.

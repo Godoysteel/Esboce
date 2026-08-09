@@ -5,6 +5,7 @@ import test from 'node:test';
 import {
   COINCIDENCE_TOL,
   GRID,
+  WALL_HEIGHT,
   WALL_THICK,
   computeWallFootprints,
   detectRooms,
@@ -703,5 +704,5 @@ test('redimensionar altura da abertura nao passa do teto', () => {
 
   const newHeight = resolveOpeningHeightResize(opening, 10);
 
-  assert.ok(opening.sillHeight + newHeight <= 2.7);
+  assert.ok(opening.sillHeight + newHeight <= WALL_HEIGHT);
 });

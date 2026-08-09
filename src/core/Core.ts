@@ -46,7 +46,7 @@ export const ARCO_DEFAULT_SILL = 0;
 // renderização mora em Scene3DRenderer.WALL_HEIGHT — os dois têm que
 // ficar em sincronia manual, já que Core não depende de nada de Three.js
 // e não pode importar de lá.
-export const WALL_HEIGHT = 2.7;
+export const WALL_HEIGHT = 2.9;
 export const OPENING_MIN_WIDTH = 0.4;
 export const OPENING_MIN_HEIGHT = 0.4;
 export const OPENING_MARGIN = 0.25;

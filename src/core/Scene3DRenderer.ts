@@ -55,7 +55,7 @@ export function hashColorHex(key: string): number {
   return c.getHex();
 }
 
-  var WALL_HEIGHT = 2.7, WALL_THICK = Core.WALL_THICK;
+  var WALL_HEIGHT = 2.9, WALL_THICK = Core.WALL_THICK;
   var LAJE_THICKNESS = 0.15;
   // Acabamento de piso que todo cômodo nasce usando, antes de qualquer
   // escolha manual em Materiais — assim já vem com fuga desenhada em

@@ -62,11 +62,11 @@ Sessão: 1
 Contexto: Redimensionar às vezes virava o telhado inteiro 90° sozinho.
 Decisão: Direção deixa de ser recalculada a cada mudança de tamanho; vira propriedade fixa, só alterável pelos botões de girar do menu.
 Status: Ativo
-DEC-08  Pé-direito único e constante (2,7 m) para a casa inteira
+DEC-08  Pé-direito único e constante (2,9 m) para a casa inteira
 Sessão: 1
 Contexto: Escopo do MVP.
 Decisão: Não configurável por pavimento nem por parede nesta fase.
-Status: Limitação conhecida
+Status: Ativo. Valor ajustado de 2,7 m pra 2,9 m na Sessão 5, depois de uma tentativa de pé-direito configurável por cômodo (chegou a ser implementada numa branch separada e revertida antes de integrar à main, por se mostrar mais complexa e propensa a bug do que o benefício justificava nesta fase do produto). Decisão explícita de simplificar: altura única, fixa, sem essa superfície de configuração.
 DEC-09  Consolidação de documentação de produto/UX e certificação
 Sessão: 2
 Contexto: Quatro/dois pares de documentos com sobreposição de conteúdo.
