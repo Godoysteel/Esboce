@@ -2,10 +2,13 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   root: '.',
-  // Domínio próprio serve a partir da raiz — '/Esboce/' era o
-  // necessário só pro GitHub Pages padrão (godoysteel.github.io/Esboce/);
-  // com esboce.com.br, os caminhos de asset precisam começar em '/'.
-  base: '/',
+  // Caminho RELATIVO (não '/', não '/Esboce/') — funciona nos dois
+  // endereços ao mesmo tempo: esboce.com.br/ (raiz) e
+  // godoysteel.github.io/Esboce/ (subpasta). Com caminho absoluto, só
+  // um dos dois funcionava por vez (o outro ficava com tela preta —
+  // os assets JS/textura 404 avam, porque o navegador procurava na
+  // raiz errada).
+  base: './',
   server: {
     port: 5173
   },
