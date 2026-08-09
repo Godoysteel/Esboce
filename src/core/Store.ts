@@ -6,7 +6,7 @@
 
 import { Core } from './Core.js';
 import type {
-  Project, Floor, Wall, Column, Roof, Opening, OpeningKind, Varanda, Furniture, ColumnShape, RoofType,
+  Project, Floor, Wall, Column, Roof, Opening, OpeningKind, Varanda, Laje, Furniture, ColumnShape, RoofType,
   RidgeAxis, VarandaFrontSide, FoundationType, StoreEvent, StoreListener,
   WallSnapshot, LinkedWallUpdate
 } from './types.js';
@@ -55,6 +55,15 @@ export function currentVarandas(): Varanda[] {
   if (!f.varandas) f.varandas = [];
   return f.varandas;
 }
+export function currentLajes(): Laje[] {
+  const f = currentFloor();
+  if (!f.lajes) f.lajes = [];
+  return f.lajes;
+}
+export function lajesOfFloor(floor: Floor): Laje[] {
+  if (!floor.lajes) floor.lajes = [];
+  return floor.lajes;
+}
 export function findWall(id: string): Wall | null {
   const walls = currentWalls();
   for (let i = 0; i < walls.length; i++) if (walls[i]!.id === id) return walls[i]!;
@@ -78,6 +87,11 @@ export function findOpening(id: string): Opening | null {
 export function findVaranda(id: string): Varanda | null {
   const varandas = currentVarandas();
   for (let i = 0; i < varandas.length; i++) if (varandas[i]!.id === id) return varandas[i]!;
+  return null;
+}
+export function findLaje(id: string): Laje | null {
+  const lajes = currentLajes();
+  for (let i = 0; i < lajes.length; i++) if (lajes[i]!.id === id) return lajes[i]!;
   return null;
 }
 export function currentFurniture(): Furniture[] {
@@ -831,6 +845,50 @@ export const commands = {
     emit({ type: 'VarandaDeleted', varandaId });
   },
 
+  // Laje: mesmo padrão de telhado/varanda — objeto independente, nasce
+  // de um clique, redimensiona pelas bordas SEM travar em nenhum
+  // contorno de parede (pode encolher pra virar um vão aberto, ou
+  // crescer além da parede pra virar balanço/sacada — ver DEC-35).
+  createLaje(x1: number, y1: number, x2: number, y2: number): Laje | null {
+    if (x1 === x2 || y1 === y2) return null;
+    pushUndoSnapshot();
+    const l = Core.createLajeEntity(Math.min(x1, x2), Math.min(y1, y2), Math.max(x1, x2), Math.max(y1, y2));
+    currentLajes().push(l);
+    emit({ type: 'LajeCreated', floorIndex: project.currentFloorIndex, lajeId: l.id });
+    return l;
+  },
+
+  updateLajeBoundsLive(lajeId: string, x1: number, y1: number, x2: number, y2: number): void {
+    const l = findLaje(lajeId); if (!l) return;
+    l.x1 = x1; l.y1 = y1; l.x2 = x2; l.y2 = y2;
+    emit({ type: 'LajeBoundsChanged', lajeId, live: true });
+  },
+
+  // Funde duas lajes do MESMO pavimento que se tocam — vira uma peça
+  // só, no contorno que envolve as duas (mesma técnica de fuseRoofs).
+  fuseLajes(lajeAId: string, lajeBId: string): Laje | null {
+    const a = findLaje(lajeAId), b = findLaje(lajeBId);
+    if (!a || !b) return null;
+    const bounds = Core.fusedLajeBounds(a, b);
+    a.x1 = bounds.x1; a.y1 = bounds.y1; a.x2 = bounds.x2; a.y2 = bounds.y2;
+    const lajes = currentLajes();
+    let fuseIdx = -1;
+    for (let i = 0; i < lajes.length; i++) if (lajes[i]!.id === b.id) { fuseIdx = i; break; }
+    if (fuseIdx >= 0) lajes.splice(fuseIdx, 1);
+    emit({ type: 'LajesFused', floorIndex: project.currentFloorIndex, lajeId: a.id, fusedFrom: b.id });
+    return a;
+  },
+
+  deleteLaje(lajeId: string): void {
+    const list = currentLajes();
+    let idx = -1;
+    for (let i = 0; i < list.length; i++) if (list[i]!.id === lajeId) { idx = i; break; }
+    if (idx < 0) return;
+    pushUndoSnapshot();
+    list.splice(idx, 1);
+    emit({ type: 'LajeDeleted', lajeId });
+  },
+
   // Móvel: mesmo padrão de Coluna — um único ponto (x,y), arrastável
   // livremente, mais rotação em passos de 90°. productId aponta pro
   // Catalog (categoria 'furniture'), que resolve qual .glb carregar.
@@ -954,12 +1012,14 @@ export const Store = {
   currentRoofs,
   currentOpenings,
   currentVarandas,
+  currentLajes,
   currentFurniture,
   findWall,
   findColumn,
   findRoof,
   findOpening,
   findVaranda,
+  findLaje,
   findFurniture,
   onChange,
   commands

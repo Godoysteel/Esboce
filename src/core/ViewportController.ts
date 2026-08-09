@@ -60,7 +60,7 @@ import {
   var selectedPaintRoomKey: any = null;
   var floorFinishScale = 1;
   var floorFinishRotation = 0;
-  var selectedWallId: any = null, selectedColumnId: any = null, selectedRoofId: any = null, selectedOpeningId: any = null, selectedVarandaId: any = null, selectedFurnitureId: any = null;
+  var selectedWallId: any = null, selectedColumnId: any = null, selectedRoofId: any = null, selectedOpeningId: any = null, selectedVarandaId: any = null, selectedLajeId: any = null, selectedFurnitureId: any = null;
   var selectedRoomWallIds: any = null; // cômodo isolado selecionado como módulo; após qualquer junção o clique volta a ser individual
   var resizeWallId: any = null; // parede em modo de deslocamento perpendicular, iniciado no primeiro clique/arraste
   var gizmoMenuOpen = false;
@@ -74,6 +74,7 @@ import {
   var pendingRoofType = 'duasAguas'; // tipo do próximo telhado a ser colocado
   var ROOF_DEFAULT_SIZE = 3 * Core.GRID; // 3m — tamanho inicial ao clicar pra colocar
   var VARANDA_DEFAULT_W_M = 3, VARANDA_DEFAULT_D_M = 2; // 3m x 2m — mesma escala de um cômodo comum
+  var LAJE_DEFAULT_SIZE_M = 4; // usado só quando o pavimento está vazio (sem parede nenhuma pra "copiar" o contorno)
   // Snap assistido entre telhados vizinhos (Opção B — ver Registro de
   // Decisões Técnicas, Sessão 4): a inclinação "gruda" na que faria a
   // cumeeira bater com a de um vizinho do MESMO tipo, quando a pessoa já
@@ -178,11 +179,18 @@ import {
     var rect = container.getBoundingClientRect();
     var mouse = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
     raycaster.setFromCamera(mouse, camera);
-    // "laje" nunca entra no hit-test: ela é uma superfície horizontal bem
-    // na altura do plano de desenho de QUALQUER pavimento acima dela, e
-    // sempre atrapalharia o clique-e-arraste ali. A visibilidade dela já
-    // é controlada pelo painel de camadas, não precisa ser clicável aqui.
-    var targets = scene.children.filter(function (o: any) { return o.isMesh && o.userData && o.userData.category && o.userData.category !== 'laje'; });
+    // Piso/soleira também usam a categoria 'laje' (mesmo tag visual,
+    // ver tagCategory nesses casos) e continuam de fora do hit-test:
+    // são superfícies horizontais na altura do plano de desenho do
+    // pavimento de cima, e sempre atrapalhariam o clique-e-arraste ali
+    // — a visibilidade deles já é controlada pelo painel de camadas,
+    // não precisa ser clicável aqui. Mas a Laje de VERDADE (objeto
+    // colocável — ver DEC-35) tem lajeId marcado e PRECISA ser
+    // clicável, senão não dá pra selecionar nem excluir ela depois de
+    // colocada.
+    var targets = scene.children.filter(function (o: any) {
+      return o.isMesh && o.userData && o.userData.category && (o.userData.category !== 'laje' || o.userData.lajeId);
+    });
     var hits = raycaster.intersectObjects(targets, false);
     var best = hits.length ? hits[0] : null;
     // Móvel é um grupo glTF (várias malhas aninhadas, não um único
@@ -246,12 +254,12 @@ import {
   }
 
   function select(wallId: any) {
-    selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedFurnitureId = null; selectedWallId = wallId; gizmoMenuOpen = false;
+    selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedWallId = wallId; gizmoMenuOpen = false;
     if (DEBUG_COLOR_MODE && wallId) hintEl.textContent = 'Debug — parede selecionada: ' + wallId;
     render();
   }
-  function selectColumn(columnId: any) { selectedWallId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedFurnitureId = null; selectedColumnId = columnId; gizmoMenuOpen = false; render(); }
-  function selectRoof(roofId: any) { selectedWallId = null; selectedColumnId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedFurnitureId = null; selectedRoofId = roofId; gizmoMenuOpen = false; render(); }
+  function selectColumn(columnId: any) { selectedWallId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedColumnId = columnId; gizmoMenuOpen = false; render(); }
+  function selectRoof(roofId: any) { selectedWallId = null; selectedColumnId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedRoofId = roofId; gizmoMenuOpen = false; render(); }
 
   function connectedRoofIds(startId: any) {
     var selected = Store.findRoof(startId);
@@ -278,22 +286,25 @@ import {
   }
   // "Agarra" o cômodo inteiro (clique único numa parede que fecha só um
   // cômodo) — sem seleção de parede individual, sem gizmo de parede.
-  function selectRoomGroup(wallIds: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedFurnitureId = null; selectedRoomWallIds = wallIds; gizmoMenuOpen = false; render(); }
+  function selectRoomGroup(wallIds: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedRoomWallIds = wallIds; gizmoMenuOpen = false; render(); }
   // Porta/janela: gizmo próprio (deslizar/excluir), sempre visível assim
   // que seleciona — diferente de parede/coluna/telhado, não precisa de
   // um segundo clique (clique direito) pra "abrir o menu", porque não
   // existe aqui a ambiguidade de "agarrar o cômodo inteiro" que motivou
   // aquele gesto extra nos outros tipos.
-  function selectOpening(openingId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedVarandaId = null; selectedFurnitureId = null; selectedOpeningId = openingId; gizmoMenuOpen = false; render(); }
+  function selectOpening(openingId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedOpeningId = openingId; gizmoMenuOpen = false; render(); }
   // Varanda: mesmo padrão do telhado (clique seleciona, clique direito
   // de novo abre o menu com girar/excluir).
-  function selectVaranda(varandaId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedFurnitureId = null; selectedVarandaId = varandaId; gizmoMenuOpen = false; render(); }
+  function selectVaranda(varandaId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedLajeId = null; selectedFurnitureId = null; selectedVarandaId = varandaId; gizmoMenuOpen = false; render(); }
+  // Laje: mesmo padrão da varanda — clique seleciona, arraste livre nas
+  // bordas (nunca trava em contorno de parede — ver DEC-35).
+  function selectLaje(lajeId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedFurnitureId = null; selectedLajeId = lajeId; gizmoMenuOpen = false; render(); }
   // Móvel: mesmo padrão da coluna (clique seleciona e já mostra o gizmo
   // completo — girar/duplicar/excluir — sem precisar de segundo clique).
-  function selectFurniture(furnitureId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedFurnitureId = furnitureId; gizmoMenuOpen = false; render(); }
+  function selectFurniture(furnitureId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = furnitureId; gizmoMenuOpen = false; render(); }
   function deselect() {
     commitRoomGroupIfNeeded(); // "clicou fora do objeto" — decide agora se funde
-    selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedFurnitureId = null;
+    selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null;
     gizmoMenuOpen = false; closeObjectPanel(); render();
   }
 
@@ -586,6 +597,15 @@ import {
       return;
     }
 
+    if (selectedLajeId) {
+      var lG = Store.findLaje(selectedLajeId);
+      if (!lG) { selectedLajeId = null; gizmoEl.classList.remove('visible'); return; }
+      var midL = modelToWorld((lG.x1 + lG.x2) / 2, (lG.y1 + lG.y2) / 2);
+      positionFloatingPanel(gizmoEl, midL.x, yOffset + Scene3DRenderer.WALL_HEIGHT_GETTER() + 0.4, midL.z, 0);
+      gizmoEl.classList.add('visible');
+      return;
+    }
+
     // Móvel: mesmo padrão da varanda (girar/duplicar/excluir no gizmo
     // genérico reaproveitado, sem painel extra próprio).
     if (selectedFurnitureId) {
@@ -712,6 +732,7 @@ import {
     var selectedRoof = selectedRoofId ? Store.findRoof(selectedRoofId) : null;
     var selectedOpening = selectedOpeningId ? Store.findOpening(selectedOpeningId) : null;
     var selectedVaranda = selectedVarandaId ? Store.findVaranda(selectedVarandaId) : null;
+    var selectedLaje = selectedLajeId ? Store.findLaje(selectedLajeId) : null;
     Scene3DRenderer.rebuild(scene, project, { width: 0, height: 0 }, {
       highlightedCategory: highlightedCategory,
       editingFloorIndex: project.currentFloorIndex,
@@ -721,6 +742,7 @@ import {
       selectedRoof: selectedRoof,
       selectedOpening: selectedOpening,
       selectedVaranda: selectedVaranda,
+      selectedLaje: selectedLaje,
       roomGroupWallIds: selectedRoomWallIds,
       resizeWallId: resizeWallId,
       drawPreview: drawPreview
@@ -736,6 +758,7 @@ import {
     if (selectedRoofId && !Store.findRoof(selectedRoofId)) selectedRoofId = null;
     if (selectedOpeningId && !Store.findOpening(selectedOpeningId)) selectedOpeningId = null;
     if (selectedVarandaId && !Store.findVaranda(selectedVarandaId)) selectedVarandaId = null;
+    if (selectedLajeId && !Store.findLaje(selectedLajeId)) selectedLajeId = null;
     if (resizeWallId && !Store.findWall(resizeWallId)) resizeWallId = null;
     if (selectedRoomWallIds) {
       selectedRoomWallIds = selectedRoomWallIds.filter(function (id: any) { return !!Store.findWall(id); });
@@ -988,7 +1011,7 @@ import {
         startWallResizeDrag(selectedWallId, e.clientX, e.clientY);
         return;
       }
-      dragMode = handle; // 'endpoint1' | 'endpoint2' | 'roofRidge' | 'roofParapetHeight' | 'roofEdge*' | 'varandaEdge*'
+      dragMode = handle; // 'endpoint1' | 'endpoint2' | 'roofRidge' | 'roofParapetHeight' | 'roofEdge*' | 'varandaEdge*' | 'lajeEdge*'
       if (handle === 'endpoint1' || handle === 'endpoint2') {
         var endpointWall = Store.findWall(selectedWallId);
         if (endpointWall) {
@@ -1026,6 +1049,12 @@ import {
         // nenhuma aqui, só o retângulo de partida.
         var vrE = Store.findVaranda(selectedVarandaId);
         if (vrE) dragElementStart = { x1: vrE.x1, y1: vrE.y1, x2: vrE.x2, y2: vrE.y2 };
+      } else if (handle.indexOf('lajeEdge') === 0) {
+        // Laje também não trava em região nenhuma — igual varanda, de
+        // propósito, pra dar pra arrastar além da parede (balanço) ou
+        // encolher além dela (vão aberto) — ver DEC-35.
+        var lrE = Store.findLaje(selectedLajeId);
+        if (lrE) dragElementStart = { x1: lrE.x1, y1: lrE.y1, x2: lrE.x2, y2: lrE.y2 };
       } else if (handle === 'openingEdgeTop') {
         // Redimensionar altura arrasta na vertical — mesma técnica de
         // roofRidge (delta de tela, não raycast contra plano vertical).
@@ -1172,6 +1201,8 @@ import {
           Store.commands.beginTransaction();
         } else if (mesh.userData.varandaId) {
           selectVaranda(mesh.userData.varandaId);
+        } else if (mesh.userData.lajeId) {
+          selectLaje(mesh.userData.lajeId);
         } else if (mesh.userData.furnitureId) {
           selectFurniture(mesh.userData.furnitureId);
           dragMode = 'furnitureBody';
@@ -1288,6 +1319,33 @@ import {
       var neighbor = findFusableRoof(r);
       if (!neighbor) break;
       var fused = Store.commands.fuseRoofs(roofId, neighbor.id);
+      if (!fused) break;
+      fusedAny = true;
+    }
+    return fusedAny;
+  }
+
+  // Mesma ideia de fuseRoofsIfTouching, só que pra laje — mais
+  // permissiva (Core.lajesCanFuse só olha se encostam, sem exigir
+  // "mesmo tipo"/"mesma inclinação" que telhado exige), porque laje
+  // não tem variação de tipo nenhuma.
+  function findFusableLaje(laje: any) {
+    var lajes = Store.currentLajes();
+    var found: any = null;
+    lajes.forEach(function (o: any) {
+      if (found) return;
+      if (Core.lajesCanFuse(laje, o, ROOF_NEARBY_TOLERANCE)) found = o;
+    });
+    return found;
+  }
+  function fuseLajesIfTouching(lajeId: any) {
+    var fusedAny = false;
+    for (var pass = 0; pass < 5; pass++) {
+      var l = Store.findLaje(lajeId);
+      if (!l) break;
+      var neighbor = findFusableLaje(l);
+      if (!neighbor) break;
+      var fused = Store.commands.fuseLajes(lajeId, neighbor.id);
       if (!fused) break;
       fusedAny = true;
     }
@@ -1612,6 +1670,20 @@ import {
       }
       return;
     }
+    if (dragMode && dragMode.indexOf('lajeEdge') === 0) {
+      var gpLE = getGroundModelPoint(e.clientX, e.clientY);
+      if (gpLE && dragElementStart) {
+        var snappedLX = Core.snap(gpLE.x), snappedLY = Core.snap(gpLE.y);
+        var edgeL = dragMode.slice('lajeEdge'.length);
+        var lx1 = dragElementStart.x1, ly1 = dragElementStart.y1, lx2 = dragElementStart.x2, ly2 = dragElementStart.y2;
+        if (edgeL === 'MinX') lx1 = Math.min(snappedLX, lx2 - Core.SNAP_UNIT);
+        else if (edgeL === 'MaxX') lx2 = Math.max(snappedLX, lx1 + Core.SNAP_UNIT);
+        else if (edgeL === 'MinY') ly1 = Math.min(snappedLY, ly2 - Core.SNAP_UNIT);
+        else if (edgeL === 'MaxY') ly2 = Math.max(snappedLY, ly1 + Core.SNAP_UNIT);
+        Store.commands.updateLajeBoundsLive(selectedLajeId, lx1, ly1, lx2, ly2);
+      }
+      return;
+    }
     if (dragMode === 'openingEdgeLeft' || dragMode === 'openingEdgeRight') {
       var opE = Store.findOpening(selectedOpeningId);
       var gpOE = getGroundModelPoint(e.clientX, e.clientY);
@@ -1677,7 +1749,7 @@ import {
         // de camadas — essa regra simples evita qualquer ambiguidade
         // sobre qual menu vai aparecer.
         var mesh = pickMesh(e.clientX, e.clientY);
-        var hitsSelected = mesh && ((mesh.userData.wallId && mesh.userData.wallId === selectedWallId) || (mesh.userData.columnId && mesh.userData.columnId === selectedColumnId) || (mesh.userData.roofId && mesh.userData.roofId === selectedRoofId) || (mesh.userData.varandaId && mesh.userData.varandaId === selectedVarandaId) || (mesh.userData.furnitureId && mesh.userData.furnitureId === selectedFurnitureId));
+        var hitsSelected = mesh && ((mesh.userData.wallId && mesh.userData.wallId === selectedWallId) || (mesh.userData.columnId && mesh.userData.columnId === selectedColumnId) || (mesh.userData.roofId && mesh.userData.roofId === selectedRoofId) || (mesh.userData.varandaId && mesh.userData.varandaId === selectedVarandaId) || (mesh.userData.lajeId && mesh.userData.lajeId === selectedLajeId) || (mesh.userData.furnitureId && mesh.userData.furnitureId === selectedFurnitureId));
         if (hitsSelected) { hideLayersMenu(); gizmoMenuOpen = true; render(); }
         else { gizmoMenuOpen = false; render(); showLayersMenu(e.clientX, e.clientY); }
       }
@@ -1790,6 +1862,16 @@ import {
     if (dragMode === 'roofRidge' || dragMode === 'roofParapetHeight' || (dragMode && dragMode.indexOf('roofEdge') === 0)) {
       if (selectedRoofId && fuseRoofsIfTouching(selectedRoofId)) {
         hintEl.textContent = 'Telhados fundidos — a cumeeira agora é uma só.';
+        onModelChanged();
+      }
+      dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
+      return;
+    }
+    // Laje: mesma ideia de telhado — ao soltar a borda, tenta fundir com
+    // qualquer laje vizinha que tenha ficado encostada (ver DEC-35).
+    if (dragMode && dragMode.indexOf('lajeEdge') === 0) {
+      if (selectedLajeId && fuseLajesIfTouching(selectedLajeId)) {
+        hintEl.textContent = 'Lajes fundidas — viraram uma peça só.';
         onModelChanged();
       }
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
@@ -2163,8 +2245,8 @@ import {
     roofGridRegions = [];
     if (currentTool !== 'telhado') { wallGridOverlay.visible = false; return; }
 
-    var walls = Store.currentWalls(), columns = Store.currentColumns();
-    if (!walls.length && !columns.length) { wallGridOverlay.visible = false; return; }
+    var walls = Store.currentWalls(), columns = Store.currentColumns(), varandas = Store.currentVarandas();
+    if (!walls.length && !columns.length && !varandas.length) { wallGridOverlay.visible = false; return; }
 
     var rooms = Core.detectRooms(walls);
     var boundsList: any[] = [];
@@ -2173,8 +2255,7 @@ import {
         var b = Core.roomModelBounds(room);
         if (b) boundsList.push(b);
       });
-      boundsList = mergeOverlappingBounds(boundsList, ROOF_GRID_MARGIN);
-    } else {
+    } else if (walls.length || columns.length) {
       // sem cômodo fechado (só colunas, térreo em pilotis) — cai pro
       // contorno geral de paredes + colunas
       var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
@@ -2190,6 +2271,22 @@ import {
       });
       if (isFinite(minX)) boundsList.push({ minX: minX, maxX: maxX, minY: minY, maxY: maxY });
     }
+    // Varanda não tem parede (é um retângulo aberto — ver interface
+    // Varanda), então nunca aparecia como cômodo fechado pro
+    // detectRooms acima: a ferramenta Telhado nunca gerava região
+    // nenhuma sobre ela, e o clique não fazia nada (região = null).
+    // Cada varanda entra como sua PRÓPRIA região — se estiver
+    // encostada na casa (dentro da margem), mergeOverlappingBounds
+    // logo abaixo já junta as duas automaticamente, permitindo um
+    // telhado só cobrindo casa + varanda; se estiver longe, fica
+    // separada, do mesmo jeito que um edículo separado já ficava.
+    varandas.forEach(function (v) {
+      boundsList.push({
+        minX: Math.min(v.x1, v.x2), maxX: Math.max(v.x1, v.x2),
+        minY: Math.min(v.y1, v.y2), maxY: Math.max(v.y1, v.y2)
+      });
+    });
+    boundsList = mergeOverlappingBounds(boundsList, ROOF_GRID_MARGIN);
 
     var y = currentFloorYOffset() + Scene3DRenderer.WALL_HEIGHT_GETTER() + 0.01;
     var step = Core.SNAP_UNIT / Core.GRID;
@@ -2402,6 +2499,58 @@ import {
       hintEl.textContent = 'Varanda criada — arraste as bordas se quiser ajustar o tamanho. Clique direito nela pra girar qual lado é a frente.';
       return;
     }
+    if (key === 'laje') {
+      // Nasce cobrindo o contorno de tudo que já existe no pavimento
+      // (paredes + varandas) — ponto de partida sensato, não uma
+      // trava: a pessoa arrasta as bordas livremente depois, inclusive
+      // pra fora do contorno (balanço/sacada) ou pra dentro (vão
+      // aberto) — ver DEC-35.
+      var walls = Store.currentWalls(), varandasL = Store.currentVarandas();
+      var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      walls.forEach(function (w) {
+        [[w.x1, w.y1], [w.x2, w.y2]].forEach(function (p: any) {
+          if (p[0] < minX) minX = p[0]; if (p[0] > maxX) maxX = p[0];
+          if (p[1] < minY) minY = p[1]; if (p[1] > maxY) maxY = p[1];
+        });
+      });
+      // w.x1/y1/x2/y2 são o EIXO da parede, não a face — sem esse
+      // ajuste a laje nascia encolhida (na verdade em cima do próprio
+      // eixo), deixando metade da espessura da parede de fora dela ou
+      // fazendo a lateral da laje cortar por dentro da parede. Paredes
+      // aqui são sempre alinhadas a 0°/90° (DEC-28), então dá pra só
+      // expandir o retângulo pela meia-espessura em vez de calcular
+      // face a face.
+      if (walls.length) {
+        var wallMargin = (Core.WALL_THICK / 2) * Core.GRID;
+        minX -= wallMargin; maxX += wallMargin; minY -= wallMargin; maxY += wallMargin;
+      }
+      varandasL.forEach(function (v) {
+        [Math.min(v.x1, v.x2), Math.max(v.x1, v.x2)].forEach(function (x) { if (x < minX) minX = x; if (x > maxX) maxX = x; });
+        [Math.min(v.y1, v.y2), Math.max(v.y1, v.y2)].forEach(function (y) { if (y < minY) minY = y; if (y > maxY) maxY = y; });
+      });
+      var rectL;
+      if (isFinite(minX)) {
+        rectL = { x1: minX, y1: minY, x2: maxX, y2: maxY };
+      } else {
+        // Pavimento vazio — nasce num tamanho padrão centralizado,
+        // igual telhado/varanda fariam no mesmo caso.
+        var halfL = (LAJE_DEFAULT_SIZE_M * Core.GRID) / 2;
+        rectL = { x1: -halfL, y1: -halfL, x2: halfL, y2: halfL };
+      }
+      deselect();
+      var newLaje = Store.commands.createLaje(rectL.x1, rectL.y1, rectL.x2, rectL.y2);
+      if (newLaje) {
+        // Clicar em "Laje" de novo com uma já existente no pavimento
+        // nasce cobrindo o MESMO contorno (mesma conta de nascimento)
+        // — sem isso, ficaria uma sobrepondo a outra em vez de virar
+        // uma peça só. Mesma checagem usada ao soltar o arraste de uma
+        // borda (ver DEC-35).
+        fuseLajesIfTouching(newLaje.id);
+        selectLaje(newLaje.id);
+      }
+      hintEl.textContent = 'Laje criada cobrindo o pavimento — arraste as bordas pra ajustar (inclusive além da parede, pra criar um balanço/sacada).';
+      return;
+    }
     var preset = ROOM_PRESETS[key];
     if (!preset) return;
     var rect = computeNextRoomSlot(preset.widthM, preset.depthM);
@@ -2409,6 +2558,25 @@ import {
     Store.commands.createRoom(rect.x1, rect.y1, rect.x2, rect.y2);
     placeDefaultFurniture(key, rect);
     hintEl.textContent = preset.label + ' criado(a) — arraste as paredes se quiser ajustar a posição ou o tamanho.';
+  }
+
+  // Pavimento acima do térreo só pode ganhar parede/cômodo depois que o
+  // pavimento de baixo já tem uma laje colocada (ver DEC-35) — sem
+  // isso, não existe "chão" nenhum pra sustentar o que nasceria ali.
+  // Térreo nunca precisa (ele já nasce apoiado no terreno).
+  function floorBelowMissingLaje() {
+    var project = Store.getProject();
+    var idx = project.currentFloorIndex;
+    if (idx <= 0) return false;
+    var belowFloor = project.floors[idx - 1];
+    return !belowFloor || !belowFloor.lajes || !belowFloor.lajes.length;
+  }
+  function requireLajeBelowOrHint() {
+    if (floorBelowMissingLaje()) {
+      hintEl.textContent = 'Antes de construir neste pavimento, coloque (e ajuste) a laje do pavimento de baixo — botão "Laje", na seção Cobertura.';
+      return false;
+    }
+    return true;
   }
 
   function flashDisabledHint(label: any) {
@@ -2529,6 +2697,10 @@ import {
 
     document.querySelectorAll('.tool-btn[data-tool]').forEach(function (btn: any) {
       btn.addEventListener('click', function () {
+        // Parede e cômodo (mas não porta/janela/coluna/telhado/etc.)
+        // exigem a laje do pavimento de baixo já colocada — ver
+        // requireLajeBelowOrHint / DEC-35.
+        if ((btn.dataset.tool === 'wall' || btn.dataset.tool === 'room') && !requireLajeBelowOrHint()) return;
         // Clicar na ferramenta já ativa desativa ela (volta pro modo
         // seleção, sem ferramenta nenhuma) — em vez de ficar preso nela
         // até escolher outra.
@@ -2536,7 +2708,10 @@ import {
       });
     });
     document.querySelectorAll('[data-room-preset]').forEach(function (btn: any) {
-      btn.addEventListener('click', function () { placeRoomPreset(btn.dataset.roomPreset); });
+      btn.addEventListener('click', function () {
+        if (btn.dataset.roomPreset !== 'varanda' && btn.dataset.roomPreset !== 'laje' && !requireLajeBelowOrHint()) return;
+        placeRoomPreset(btn.dataset.roomPreset);
+      });
     });
     document.querySelectorAll('[data-disabled-label]').forEach(function (btn: any) {
       btn.addEventListener('click', function () { flashDisabledHint(btn.dataset.disabledLabel); });
@@ -2569,6 +2744,7 @@ import {
   export function getSelectedRoofId() { return selectedRoofId; }
   export function getSelectedOpeningId() { return selectedOpeningId; }
   export function getSelectedVarandaId() { return selectedVarandaId; }
+  export function getSelectedLajeId() { return selectedLajeId; }
   export function getSelectedFurnitureId() { return selectedFurnitureId; }
   export function getSelectedRoomWallIds() { return selectedRoomWallIds; }
 
@@ -2578,7 +2754,7 @@ export const ViewportController = {
   init, render, onModelChanged, deselect,
   select, selectColumn, selectRoof, selectOpening, selectVaranda, selectFurniture,
   getSelectedWallId, getSelectedColumnId, getSelectedRoofId,
-  getSelectedOpeningId, getSelectedVarandaId, getSelectedFurnitureId, getSelectedRoomWallIds,
+  getSelectedOpeningId, getSelectedVarandaId, getSelectedLajeId, getSelectedFurnitureId, getSelectedRoomWallIds,
   toggleDimensions,
   toggleWallDiagnostics,
   repositionDimensions: repositionDimensionCotas

@@ -20,7 +20,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { Core } from './Core.js';
 import { Catalog } from './Catalog.js';
 import { computeOpeningAssemblyLayout, wallBandSideParameters, wallTopTriangleVertices } from './Scene3DGeometry.js';
-import type { Project, Wall, Column, Roof, Varanda, Opening } from './types.js';
+import type { Project, Wall, Column, Roof, Varanda, Laje, Opening } from './types.js';
 
 export interface ViewState {
   drawPreview?: any;
@@ -33,6 +33,7 @@ export interface ViewState {
   selectedOpening?: Opening | null;
   selectedRoof?: Roof | null;
   selectedVaranda?: Varanda | null;
+  selectedLaje?: Laje | null;
   selectedWall?: Wall | null;
   [key: string]: any;
 }
@@ -55,7 +56,7 @@ export function hashColorHex(key: string): number {
   return c.getHex();
 }
 
-  var WALL_HEIGHT = 2.9, WALL_THICK = Core.WALL_THICK;
+  var WALL_HEIGHT = 2.7, WALL_THICK = Core.WALL_THICK;
   var LAJE_THICKNESS = 0.15;
   // Acabamento de piso que todo cômodo nasce usando, antes de qualquer
   // escolha manual em Materiais — assim já vem com fuga desenhada em
@@ -1337,6 +1338,29 @@ export function hashColorHex(key: string): number {
     return buildRoofDuasAguas(bounds, floorTopY, roofColor, gableColors, pitchDeg, ridgeAxis, tabeiraColor);
   }
 
+  // Laje colocável de verdade (ver DEC-35) — uma caixa achatada com a
+  // MESMA textura de reboco das paredes (reaproveita
+  // buildParapetSegmentMaterial, já usado no parapeito da platibanda),
+  // sem nenhuma relação obrigatória com o contorno de parede: pode ser
+  // menor (vão aberto) ou maior (balanço/sacada) que ele — x1..y2 vêm
+  // direto do objeto Laje, arrastados livremente pela pessoa.
+  function buildLajePiece(laje: any, scale: any, offsetX: any, offsetY: any, topY: any, wallColor: any, viewState: any) {
+    var x1 = (laje.x1 - offsetX) * scale, z1 = (laje.y1 - offsetY) * scale;
+    var x2 = (laje.x2 - offsetX) * scale, z2 = (laje.y2 - offsetY) * scale;
+    var sizeX = Math.abs(x2 - x1), sizeZ = Math.abs(z2 - z1);
+    if (sizeX < 1e-4 || sizeZ < 1e-4) return [];
+    var cx = (x1 + x2) / 2, cz = (z1 + z2) / 2;
+    var color = pickColor(wallColor, 'laje', viewState);
+    var mat = buildParapetSegmentMaterial(color, LAJE_THICKNESS, LAJE_THICKNESS, Math.max(sizeX, sizeZ));
+    var geo = new THREE.BoxGeometry(sizeX, LAJE_THICKNESS, sizeZ);
+    var mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(cx, topY + LAJE_THICKNESS / 2, cz);
+    var edges = new THREE.EdgesGeometry(geo);
+    var edgeLines = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x1B1C1E }));
+    edgeLines.position.copy(mesh.position);
+    return [mesh, edgeLines];
+  }
+
   var VARANDA_SLAB_THICK = 0.12;
   // Colunas e vigas com a MESMA seção — 20x35cm — em vez do
   // Core.COLUMN_SIZE quadrado de 30cm usado pelas colunas comuns; a
@@ -2041,6 +2065,25 @@ export function hashColorHex(key: string): number {
       });
     }
 
+    if (viewState.selectedLaje) {
+      var lSel = viewState.selectedLaje, lYOffset = viewState.editingYOffset;
+      var lMidX = (lSel.x1 + lSel.x2) / 2, lMidY = (lSel.y1 + lSel.y2) / 2;
+      [
+        ['MinX', lSel.x1, lMidY], ['MaxX', lSel.x2, lMidY],
+        ['MinY', lMidX, lSel.y1], ['MaxY', lMidX, lSel.y2]
+      ].forEach(function (edge) {
+        var ex = (edge[1] - offsetX) * scale, ez = (edge[2] - offsetY) * scale;
+        var geoE = new THREE.SphereGeometry(0.11, 12, 12);
+        var matE = new THREE.MeshBasicMaterial({ color: SELECTED_ACCENT, depthTest: false });
+        var meshE = new THREE.Mesh(geoE, matE);
+        meshE.renderOrder = 999;
+        meshE.position.set(ex, lYOffset + WALL_HEIGHT + LAJE_THICKNESS + 0.06, ez);
+        meshE.userData.handle = 'lajeEdge' + edge[0];
+        scene.add(meshE);
+        registry.handleMeshes.push(meshE);
+      });
+    }
+
     if (viewState.selectedOpening) {
       var opSel = viewState.selectedOpening;
       var wSel = (walls || []).filter(function (x: any) { return x.id === opSel.wallId; })[0];
@@ -2093,20 +2136,17 @@ export function hashColorHex(key: string): number {
       var rooms = Core.detectRooms(floorData.walls);
       var wallFootprints = Core.computeWallFootprints(floorData.walls);
 
-      if (floorIdx > 0 && layers.laje) {
-        var belowFloor = project.floors[floorIdx - 1]!;
-        var belowColumns = layers.colunas ? belowFloor.columns : null;
-        var lajeBounds = computeWorldBounds(belowFloor.walls, belowColumns, scale, offsetX, offsetY) || { minX: -3, maxX: 3, minZ: -3, maxZ: 3 };
-        var lajeShape = rectShape(lajeBounds);
-        var lajeSlab = tagCategory(makeSlabMesh(lajeShape, LAJE_THICKNESS, yOffset, pickColor(0x8B8B85, 'laje', viewState), 1), 'laje');
-        lajeSlab.userData.floorIndex = floorIdx;
-        scene.add(lajeSlab);
-        registry.roomMeshes.push(lajeSlab);
-        var lajeEdges = new THREE.EdgesGeometry(lajeSlab.geometry);
-        var lajeEdgeLines = new THREE.LineSegments(lajeEdges, new THREE.LineBasicMaterial({ color: 0x1B1C1E }));
-        lajeEdgeLines.rotation.copy(lajeSlab.rotation); lajeEdgeLines.position.copy(lajeSlab.position);
-        scene.add(lajeEdgeLines);
-        registry.roomMeshes.push(lajeEdgeLines);
+      if (layers.laje) {
+        var lajeWallColor = computeWallMatchColor(floorData.walls);
+        (floorData.lajes || []).forEach(function (laje) {
+          var pieces = buildLajePiece(laje, scale, offsetX, offsetY, yOffset + WALL_HEIGHT, lajeWallColor, viewState);
+          pieces.forEach(function (m) {
+            tagCategory(m, 'laje');
+            m.userData.lajeId = laje.id; m.userData.floorIndex = floorIdx;
+            scene.add(m);
+            registry.structureMeshes.push(m);
+          });
+        });
       }
 
       if (wallsVisible) {

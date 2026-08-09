@@ -59,6 +59,18 @@ function handleVarandaAction(varandaId: string, action: string): void {
   }
 }
 
+// Laje: só close/delete — sem girar (não tem frente) nem duplicar (o
+// tamanho e a posição de cada laje são específicos demais pra fazer
+// sentido duplicar; nasce uma nova pelo botão da barra lateral). Os
+// botões de mover/girar/duplicar do gizmo compartilhado continuam
+// visíveis (mesmo padrão de varanda), só não fazem nada aqui.
+function handleLajeAction(lajeId: string, action: string): void {
+  const l = Store.findLaje(lajeId);
+  if (!l) return;
+  if (action === 'close') { ViewportController.deselect(); return; }
+  if (action === 'delete') { Store.commands.deleteLaje(lajeId); ViewportController.deselect(); return; }
+}
+
 // Móvel: girar (90° por clique)/duplicar/excluir. Mover é só arrasto
 // livre direto na peça (ver ViewportController — dragMode
 // 'furnitureBody'); os botões de seta não fazem sentido aqui porque o
@@ -108,6 +120,9 @@ export function init(): void {
 
     const varandaId = ViewportController.getSelectedVarandaId();
     if (varandaId) { handleVarandaAction(varandaId, action); return; }
+
+    const lajeId = ViewportController.getSelectedLajeId();
+    if (lajeId) { handleLajeAction(lajeId, action); return; }
 
     const furnitureId = ViewportController.getSelectedFurnitureId();
     if (furnitureId) { handleFurnitureAction(furnitureId, action); return; }

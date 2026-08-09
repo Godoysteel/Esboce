@@ -43,6 +43,12 @@ Criada a primeira baseline de engenharia do projeto.
 
 - Platibanda (telhado): laje ganhou um caimento sutil (2°) — antes era 100% plana, sem nenhuma queda visível; parapeito passou a usar a mesma textura de reboco e a mesma cor de acabamento predominante das paredes da casa (antes um bege fixo sem textura); altura do parapeito agora é ajustável por uma alça própria na seleção do telhado (0,2–1,2 m, padrão 0,5 m). Ver DEC-31 no Registro de Decisões Técnicas.
 
-## Alterado
+## Adicionado
 
-- Pé-direito padrão da casa ajustado de 2,7 m pra 2,9 m. Ver DEC-08 (atualizada) no Registro de Decisões Técnicas.
+- Laje vira objeto colocável de verdade (botão "Laje", ao lado de Telhado/Varanda) — não é mais gerada automaticamente entre pavimentos. Nasce cobrindo o pavimento atual (paredes + varanda), redimensiona pelas bordas sem travar em contorno de parede nenhum (dá pra criar balanço/sacada arrastando pra fora, ou um vão aberto encolhendo), funde automaticamente com outra laje que encoste, e usa a mesma textura de reboco das paredes. Parede/cômodo num pavimento acima do térreo agora exige a laje do pavimento de baixo já colocada. Ver DEC-35 no Registro de Decisões Técnicas.
+
+## Corrigido (laje)
+
+- Não dava pra selecionar nem excluir uma laje depois de colocada — a lógica de clique excluía qualquer objeto marcado com a categoria visual "laje" do hit-test, herdado de quando essa categoria só existia pra piso/soleira/laje automática (nunca clicáveis de propósito).
+- A lateral da laje nascia no eixo da parede em vez da face — cortando por dentro dela ou deixando um vão de fora.
+- Criar uma segunda laje sobre uma já existente não fundia — ficavam duas peças sobrepostas em vez de virar uma só.

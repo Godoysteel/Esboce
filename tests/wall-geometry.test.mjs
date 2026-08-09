@@ -5,12 +5,14 @@ import test from 'node:test';
 import {
   COINCIDENCE_TOL,
   GRID,
-  WALL_HEIGHT,
   WALL_THICK,
   computeWallFootprints,
+  createLajeEntity,
   detectRooms,
   findIsolatedRoomWallIds,
   findWallTJunctionSplits,
+  fusedLajeBounds,
+  lajesCanFuse,
   resolveOpeningEdgeResize,
   resolveOpeningHeightResize,
   resolveWallGroupGridDelta,
@@ -704,5 +706,44 @@ test('redimensionar altura da abertura nao passa do teto', () => {
 
   const newHeight = resolveOpeningHeightResize(opening, 10);
 
-  assert.ok(opening.sillHeight + newHeight <= WALL_HEIGHT);
+  assert.ok(opening.sillHeight + newHeight <= 2.7);
+});
+
+// ---- Laje colocável (DEC-35) ----
+
+test('lajesCanFuse: duas lajes encostadas (mesmo eixo) fundem', () => {
+  const a = createLajeEntity(0, 0, 100, 100);
+  const b = createLajeEntity(100, 0, 200, 100); // encostada na borda direita de A
+  assert.equal(lajesCanFuse(a, b, COINCIDENCE_TOL), true);
+});
+
+test('lajesCanFuse: duas lajes sobrepostas também contam como fundíveis', () => {
+  const a = createLajeEntity(0, 0, 100, 100);
+  const b = createLajeEntity(50, 50, 150, 150);
+  assert.equal(lajesCanFuse(a, b, COINCIDENCE_TOL), true);
+});
+
+test('lajesCanFuse: duas lajes longe uma da outra não fundem', () => {
+  const a = createLajeEntity(0, 0, 100, 100);
+  const b = createLajeEntity(500, 500, 600, 600);
+  assert.equal(lajesCanFuse(a, b, COINCIDENCE_TOL), false);
+});
+
+test('lajesCanFuse: laje não funde consigo mesma', () => {
+  const a = createLajeEntity(0, 0, 100, 100);
+  assert.equal(lajesCanFuse(a, a, COINCIDENCE_TOL), false);
+});
+
+test('fusedLajeBounds: contorno resultante envolve as duas lajes inteiras', () => {
+  const a = createLajeEntity(0, 0, 100, 100);
+  const b = createLajeEntity(80, 20, 200, 150);
+  const bounds = fusedLajeBounds(a, b);
+  assert.deepEqual(bounds, { x1: 0, y1: 0, x2: 200, y2: 150 });
+});
+
+test('createLajeEntity: nasce sem depender de nenhuma parede (x1..y2 livres)', () => {
+  const laje = createLajeEntity(-50, -50, 500, 500); // bem maior que qualquer parede razoável
+  assert.equal(laje.x1, -50);
+  assert.equal(laje.y2, 500);
+  assert.ok(laje.id);
 });

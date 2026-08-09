@@ -9,7 +9,7 @@
 
 import type {
   Point, Wall, Column, ColumnShape, Roof, RoofType, RidgeAxis,
-  Varanda, VarandaFrontSide, Opening, OpeningKind, Floor, Project,
+  Varanda, VarandaFrontSide, Laje, Opening, OpeningKind, Floor, Project,
   Room, WallFootprint, WallOBB, MTV, Interval, Furniture
 } from './types.js';
 
@@ -46,7 +46,7 @@ export const ARCO_DEFAULT_SILL = 0;
 // renderização mora em Scene3DRenderer.WALL_HEIGHT — os dois têm que
 // ficar em sincronia manual, já que Core não depende de nada de Three.js
 // e não pode importar de lá.
-export const WALL_HEIGHT = 2.9;
+export const WALL_HEIGHT = 2.7;
 export const OPENING_MIN_WIDTH = 0.4;
 export const OPENING_MIN_HEIGHT = 0.4;
 export const OPENING_MARGIN = 0.25;
@@ -94,8 +94,12 @@ export function createVarandaEntity(
   return { id: id || nextId('varanda'), x1, y1, x2, y2, frontSide: frontSide || 'minZ' };
 }
 
+export function createLajeEntity(x1: number, y1: number, x2: number, y2: number, id?: string): Laje {
+  return { id: id || nextId('laje'), x1, y1, x2, y2 };
+}
+
 export function createFloorEntity(name: string): Floor {
-  return { id: nextId('floor'), name, walls: [], columns: [], roofs: [], openings: [], varandas: [], furniture: [], roomFinishes: {}, roomFinishSettings: {} };
+  return { id: nextId('floor'), name, walls: [], columns: [], roofs: [], openings: [], varandas: [], lajes: [], furniture: [], roomFinishes: {}, roomFinishSettings: {} };
 }
 
 // x,y: posição do "pé" do móvel no plano do pavimento. rotationDeg: passos
@@ -171,6 +175,23 @@ export function roofsCanFuse(a: Roof, b: Roof, toleranceUnits: number): boolean 
 }
 
 export function fusedRoofBounds(a: Roof, b: Roof): { x1: number; y1: number; x2: number; y2: number } {
+  return {
+    x1: Math.min(a.x1, b.x1), y1: Math.min(a.y1, b.y1),
+    x2: Math.max(a.x2, b.x2), y2: Math.max(a.y2, b.y2)
+  };
+}
+
+// Laje é mais permissiva que telhado pra fundir: não tem "tipo" nem
+// inclinação que precisem bater — qualquer duas lajes do MESMO
+// pavimento que se tocam (ou quase) viram uma só, igual duas paredes
+// coincidentes. Reaproveita rectsNearby (genérico, já usado por
+// telhado) pra decidir "perto o bastante".
+export function lajesCanFuse(a: Laje, b: Laje, toleranceUnits: number): boolean {
+  if (!a || !b || a.id === b.id) return false;
+  return rectsNearby(a, b, toleranceUnits);
+}
+
+export function fusedLajeBounds(a: Laje, b: Laje): { x1: number; y1: number; x2: number; y2: number } {
   return {
     x1: Math.min(a.x1, b.x1), y1: Math.min(a.y1, b.y1),
     x2: Math.max(a.x2, b.x2), y2: Math.max(a.y2, b.y2)
@@ -1322,11 +1343,12 @@ export const Core = {
   resolveOpeningEdgeResize, resolveOpeningHeightResize,
   findRoomsAdjacentToOpening,
   roofRidgeHeightMeters, roofPitchForRidgeHeight, roofsCanFuse, fusedRoofBounds,
+  lajesCanFuse, fusedLajeBounds,
   rectsNearby, pointInPolygon, roomModelBounds, findRoomWallIds, findIsolatedRoomWallIds, wallResizeTopology, resolveWallResizeOffset, computeWallFootprints,
   wallResizeEndpointNeedsBridge,
   distPointToLine, wallOBB, furnitureOBB, openingOBB, obbOverlapMTV, wallOverlapsForeignOpening, resolveWallOffsetAgainstOpenings, wallsCanFuse, wallsMeetAtEndpoint, resolveWallGroupGridDelta,
   findWallTJunctionSplits,
-  createWallEntity, createColumnEntity, createRoofEntity, createVarandaEntity, createFloorEntity,
+  createWallEntity, createColumnEntity, createRoofEntity, createVarandaEntity, createLajeEntity, createFloorEntity,
   createFurnitureEntity,
   createProject, distToSegment, projectOnSegment, detectRooms
 };

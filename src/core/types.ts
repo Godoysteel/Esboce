@@ -58,6 +58,20 @@ export interface Varanda {
   frontSide: VarandaFrontSide;
 }
 
+// Laje entre pavimentos (ou cobertura plana no último) — objeto
+// colocável de verdade, igual telhado/varanda: nasce de um clique,
+// redimensiona pelas bordas, funde com outra laje que encoste. x1..y2
+// SEM relação obrigatória com as paredes do pavimento — pode ficar
+// menor (vão aberto, ex.: um poço de escada) ou maior (balanço,
+// sacada) que o contorno de parede. Ver DEC-35.
+export interface Laje {
+  id: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
 // Móvel colocado na cena — posição do "pé" (x,y) no plano do pavimento,
 // mais rotação em graus (passos de 90°, mesmo espírito do frontSide da
 // varanda). O objeto 3D real (glTF) vem do Catalog via productId.
@@ -99,6 +113,7 @@ export interface Floor {
   roofs: Roof[];
   openings: Opening[];
   varandas: Varanda[];
+  lajes: Laje[];
   furniture: Furniture[];
   roomFinishes: Record<string, string>;
   roomFinishSettings?: Record<string, { scale: number; rotation: number }>;
