@@ -217,6 +217,12 @@ export class EsboceApplication {
       ViewportController.deselect();
     });
     this.requireElement("undoBtn").addEventListener("click", () => Store.commands.undo());
+    // Painel de visualização (3D/2D/Orbit/Medir, canto direito) — só
+    // "Orbit" faz algo de verdade por ora (recentraliza a câmera). "3D"
+    // fica sempre marcado ativo (único modo existente); "2D" e "Medir"
+    // já nascem com `disabled` no HTML, então nem chegam a disparar
+    // clique — ver DEC (fase 2) no Registro de Decisões Técnicas.
+    this.requireElement("viewModeOrbitBtn").addEventListener("click", () => ViewportController.resetCamera());
     this.requireElement("gridToggleBtn").addEventListener("click", (event) => {
       this.terrainGrid.visible = !this.terrainGrid.visible;
       (event.currentTarget as HTMLElement).classList.toggle("active", this.terrainGrid.visible);

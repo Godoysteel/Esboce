@@ -147,6 +147,22 @@ import {
     return wallDiagnosticsVisible;
   }
 
+  // Botão "Orbit" do painel de visualização (canto direito) — volta a
+  // câmera pro enquadramento padrão (mesmo ângulo/distância/alvo do
+  // carregamento inicial). Não é uma troca de MODO de navegação (o
+  // right-click+arraste já orbita a câmera o tempo todo, sempre foi
+  // assim) — é só um "recentralizar", útil depois de a pessoa se
+  // perder num zoom/pan extremo.
+  export function resetCamera(): void {
+    camAngle = Math.PI / 4;
+    camElev = 0.6;
+    camDist = 13;
+    camTarget.x = 0;
+    camTarget.y = 0;
+    camTarget.z = 0;
+    updateCam();
+  }
+
   function updateCam() {
     camera.position.set(
       camTarget.x + camDist * Math.cos(camAngle) * Math.cos(camElev),
@@ -2842,5 +2858,6 @@ export const ViewportController = {
   getSelectedOpeningId, getSelectedVarandaId, getSelectedLajeId, getSelectedFurnitureId, getSelectedRoomWallIds,
   toggleDimensions,
   toggleWallDiagnostics,
+  resetCamera,
   repositionDimensions: repositionDimensionCotas
 };

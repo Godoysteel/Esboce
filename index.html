@@ -483,6 +483,36 @@
   }
 
   /* ---- Painel lateral visual (dentro do viewport) ---- */
+  /* Painel de visualização (3D/2D/Orbit/Medir) — coluna flutuante no
+     canto direito, abaixo da casinha de orientação (navGizmoCanvas,
+     58px + 10px de vão). Só "3D" (sempre ativo, único modo que
+     existe) e "Orbit" (recentraliza a câmera — ver
+     ViewportController.resetCamera) fazem algo de verdade agora; "2D"
+     e "Medir" ficam com o mesmo selo "em breve" já usado nos outros
+     botões não implementados do sidebar (ts-badge-soon), em vez de
+     fingir que funcionam. */
+  .tb-viewmode-panel {
+    position: absolute;
+    top: calc(var(--top-overlay-h) + 78px);
+    right: 10px;
+    z-index: 6;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px;
+  }
+  .tb-viewmode-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 44px; height: 40px; padding: 0;
+    border: 1px solid #D3D1C7; border-radius: 8px;
+    background: #FFFFFF; cursor: pointer;
+    font-size: 11px; font-weight: 600; color: #2C2C2A;
+  }
+  .tb-viewmode-btn:hover { background: #F1EFE8; }
+  .tb-viewmode-btn.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
+  .tb-viewmode-btn:disabled { opacity: .4; cursor: not-allowed; }
+  .tb-viewmode-btn:disabled:hover { background: #FFFFFF; }
+
   .tool-sidebar {
     position: absolute;
     left: 10px; top: calc(var(--top-overlay-h) + 10px); bottom: 10px;
@@ -498,6 +528,12 @@
     width: 84px;
   }
   .ts-group { display: flex; flex-direction: column; gap: 6px; }
+  .ts-supergroup-label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+    color: #5F5E5A; font-weight: 800; padding: 8px 2px 0;
+    border-top: 1px solid #EDEAE1; margin-top: 6px;
+  }
+  .ts-supergroup-label:first-child { border-top: none; margin-top: 0; padding-top: 0; }
   .ts-group-label {
     font-size: 9px; text-transform: uppercase; letter-spacing: .05em;
     color: #9C9A92; font-weight: 700; padding: 0 2px; margin-top: 2px;
@@ -729,8 +765,6 @@
   <div class="tb-overflow-menu" id="moreToolsMenu" hidden>
     <button id="gridToggleBtn" title="Mostrar ou ocultar o grid do terreno">▦ Grid</button>
     <button id="dimensionsToggleBtn" title="Mostrar/ocultar cotas de parede (largura e altura)">📏 Cotas</button>
-    <button id="materialsToggleBtn" title="Lista de materiais">📦 Materiais</button>
-    <button id="catalogBtn" title="Ver catálogo de produtos dos parceiros">🏬 Catálogo</button>
     <button id="wallDiagnosticsToggleBtn" hidden title="Mostrar diagnóstico técnico dos arrastes de parede">🩺 Diagnóstico</button>
   </div>
 </div>
@@ -743,6 +777,14 @@
 
 <div id="viewport">
   <canvas id="navGizmoCanvas" title="Orientação da câmera"></canvas>
+
+  <div class="tb-viewmode-panel">
+    <button class="tb-viewmode-btn active" id="viewMode3DBtn" title="Visualização 3D — modo atual">3D</button>
+    <button class="tb-viewmode-btn" id="viewMode2DBtn" disabled title="Vista de cima em 2D — ainda não disponível">2D</button>
+    <button class="tb-viewmode-btn" id="viewModeOrbitBtn" title="Recentralizar a câmera (o arraste com botão direito já orbita a qualquer momento)">Orbit</button>
+    <button class="tb-viewmode-btn" id="viewModeMedirBtn" disabled title="Ferramenta de medir — ainda não disponível">Medir</button>
+  </div>
+
   <div id="layersContextMenu" class="ctx-menu">
     <div class="ctx-menu-title">Camadas visíveis</div>
     <label><input type="checkbox" id="radierToggle"> Fundação</label>
@@ -759,6 +801,7 @@
     <label><input type="checkbox" id="varandaToggle" checked> Varanda</label>
   </div>
   <div class="tool-sidebar" id="toolSidebar">
+    <div class="ts-supergroup-label">Construir</div>
     <div class="ts-group-label">Cômodos</div>
     <div class="ts-group">
       <button class="ts-btn" data-room-preset="banheiro" title="Banheiro — clique pra criar">
@@ -886,6 +929,57 @@
     </div>
 
     <div class="ts-divider"></div>
+    <div class="ts-group-label">Avançado</div>
+    <div class="ts-small-group">
+      <button class="ts-small-btn tool-btn" id="toolWall" data-tool="wall" title="Parede livre">
+        <svg class="ts-small-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20 20 4"/></svg>
+        Parede
+      </button>
+      <button class="ts-small-btn tool-btn" id="toolRoom" data-tool="room" title="Cômodo de tamanho livre (2 cliques)">
+        <svg class="ts-small-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="1"/></svg>
+        Cômodo livre
+      </button>
+      <button class="ts-small-btn tool-btn" id="toolColumnQuadrada" data-tool="columnQuadrada" title="Coluna quadrada">
+        <svg class="ts-small-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="6" width="12" height="12"/></svg>
+        Coluna
+      </button>
+      <button class="ts-small-btn tool-btn" id="toolColumnRedonda" data-tool="columnRedonda" title="Coluna redonda">
+        <svg class="ts-small-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="12" r="7"/></svg>
+        Coluna
+      </button>
+      <button class="ts-small-btn tool-btn" id="toolDemolish" data-tool="demolish" title="Quebrar parede — clique numa parede pra demolir">
+        <svg class="ts-small-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 6l4 4-7 7-4-4z"/><path d="M12.5 7.5l3-3 4 4-3 3"/><path d="M6 17l-2 2 3 3 2-2"/></svg>
+        Quebrar parede
+      </button>
+      <button class="ts-small-btn tool-btn" id="toolPaintBucket" data-tool="paintBucket" title="Lata de tinta — clique numa parede pra pintar">
+        <svg class="ts-small-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12l8-8 9 9-8 8z"/><path d="M6 9l9 9"/><path d="M19 16c0 1.7-1 3-2 3s-2-1.3-2-3c0-1.3 2-3.5 2-3.5s2 2.2 2 3.5z"/></svg>
+        Pintar
+      </button>
+    </div>
+
+    <div class="ts-supergroup-label">Produtos</div>
+    <div class="ts-group-label">Catálogo</div>
+    <div class="ts-group">
+      <button class="ts-btn" id="catalogBtn" title="Ver catálogo de produtos dos parceiros">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 16l2-8h24l2 8"/>
+          <path d="M6 16a4 4 0 0 0 8 0 4 4 0 0 0 8 0 4 4 0 0 0 8 0 4 4 0 0 0 8 0"/>
+          <path d="M8 16v14a2 2 0 0 0 2 2h20a2 2 0 0 0 2-2V16"/>
+          <rect x="16" y="24" width="8" height="8"/>
+        </svg>
+        <span>Catálogo</span>
+      </button>
+      <button class="ts-btn" id="materialsToggleBtn" title="Lista de materiais">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="6" y="6" width="12" height="12" rx="2"/>
+          <rect x="22" y="6" width="12" height="12" rx="2"/>
+          <rect x="6" y="22" width="12" height="12" rx="2"/>
+          <rect x="22" y="22" width="12" height="12" rx="2"/>
+        </svg>
+        <span>Materiais</span>
+      </button>
+    </div>
+    <div class="ts-divider"></div>
     <div class="ts-group-label">Acabamentos</div>
     <div class="ts-group">
       <button class="ts-btn ts-disabled" data-disabled-label="Piso" title="Piso — em breve (já dá pra trocar pelo painel do cômodo)">
@@ -931,34 +1025,6 @@
       </button>
     </div>
 
-    <div class="ts-divider"></div>
-    <div class="ts-group-label">Avançado</div>
-    <div class="ts-small-group">
-      <button class="ts-small-btn tool-btn" id="toolWall" data-tool="wall" title="Parede livre">
-        <svg class="ts-small-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20 20 4"/></svg>
-        Parede
-      </button>
-      <button class="ts-small-btn tool-btn" id="toolRoom" data-tool="room" title="Cômodo de tamanho livre (2 cliques)">
-        <svg class="ts-small-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="1"/></svg>
-        Cômodo livre
-      </button>
-      <button class="ts-small-btn tool-btn" id="toolColumnQuadrada" data-tool="columnQuadrada" title="Coluna quadrada">
-        <svg class="ts-small-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="6" width="12" height="12"/></svg>
-        Coluna
-      </button>
-      <button class="ts-small-btn tool-btn" id="toolColumnRedonda" data-tool="columnRedonda" title="Coluna redonda">
-        <svg class="ts-small-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="12" r="7"/></svg>
-        Coluna
-      </button>
-      <button class="ts-small-btn tool-btn" id="toolDemolish" data-tool="demolish" title="Quebrar parede — clique numa parede pra demolir">
-        <svg class="ts-small-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 6l4 4-7 7-4-4z"/><path d="M12.5 7.5l3-3 4 4-3 3"/><path d="M6 17l-2 2 3 3 2-2"/></svg>
-        Quebrar parede
-      </button>
-      <button class="ts-small-btn tool-btn" id="toolPaintBucket" data-tool="paintBucket" title="Lata de tinta — clique numa parede pra pintar">
-        <svg class="ts-small-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12l8-8 9 9-8 8z"/><path d="M6 9l9 9"/><path d="M19 16c0 1.7-1 3-2 3s-2-1.3-2-3c0-1.3 2-3.5 2-3.5s2 2.2 2 3.5z"/></svg>
-        Pintar
-      </button>
-    </div>
   </div>
   <div id="wallGizmo" class="gizmo">
     <button class="gz" data-action="rotateCcw" title="Girar anti-horário">↺</button>
