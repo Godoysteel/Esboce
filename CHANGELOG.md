@@ -52,3 +52,7 @@ Criada a primeira baseline de engenharia do projeto.
 - Não dava pra selecionar nem excluir uma laje depois de colocada — a lógica de clique excluía qualquer objeto marcado com a categoria visual "laje" do hit-test, herdado de quando essa categoria só existia pra piso/soleira/laje automática (nunca clicáveis de propósito).
 - A lateral da laje nascia no eixo da parede em vez da face — cortando por dentro dela ou deixando um vão de fora.
 - Criar uma segunda laje sobre uma já existente não fundia — ficavam duas peças sobrepostas em vez de virar uma só.
+
+## Removido
+
+- Formato de topo curvo (arco/raio) de abertura — nunca chegou a ser implementado no renderer, e o campo que reservava essa possibilidade (Opening.shape) era código morto, sem nenhum leitor. Abertura do tipo "Arco" (vão livre, sem porta/janela) continua existindo normalmente, sempre com topo reto. Ver DEC-36 no Registro de Decisões Técnicas.

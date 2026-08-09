@@ -88,11 +88,6 @@ export interface Furniture {
 }
 
 export type OpeningKind = 'door' | 'window' | 'arco';
-// Formato do topo — só usado por 'arco' (porta/janela sempre 'reta', vem
-// de catálogo de fabricante mais pra frente, nunca curva). 'reta' é o
-// padrão de nascimento; 'arco' curvo é a Fase 2, geometria ainda pendente
-// no renderer — o campo já existe pra não precisar migrar dado depois.
-export type OpeningShape = 'reta' | 'arco';
 
 export interface Opening {
   id: string;
@@ -102,7 +97,6 @@ export interface Opening {
   width: number;
   height: number;
   sillHeight: number;
-  shape: OpeningShape;
 }
 
 export interface Floor {

@@ -121,8 +121,7 @@ export function createOpeningEntity(wallId: string, kind: OpeningKind, offset: n
     offset,
     width,
     height,
-    sillHeight,
-    shape: 'reta'
+    sillHeight
   };
 }
 
