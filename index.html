@@ -168,8 +168,9 @@
     font-size: 14px;
   }
   button:hover { background: #F1EFE8; }
-  #dimensionsToggleBtn.active { background: #D7263D; border-color: #D7263D; color: #FFFFFF; }
-  #gridToggleBtn.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
+  /* #dimensionsToggleBtn.active / #gridToggleBtn.active — ver bloco
+     .bottom-bar mais abaixo (junto com #layersToggleBtn.active, os
+     três moram na barra inferior a partir da fase 3). */
 
   .floor-row { display: flex; gap: 8px; align-items: center; flex-wrap: nowrap; margin: 0; }
   .floor-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -358,26 +359,18 @@
     text-align: center;
   }
 
-  /* Leitura rápida de metragem — bem pequena, canto oposto à barra de
-     ferramentas (que fica à esquerda) e fora da faixa central da dica,
-     pra nunca disputar espaço com a visualização 3D. */
+  /* Leitura rápida de metragem — agora uma pill dentro de .bottom-bar
+     (não mais absoluta solta dentro de #viewport). */
   .viewport-stats {
-    position: absolute;
-    right: 10px; bottom: 10px;
-    z-index: 5;
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    gap: 3px;
-    pointer-events: none;
+    gap: 2px;
   }
   .viewport-stats span {
-    background: rgba(27,28,30,0.72);
-    color: #F4F1EA;
-    font-size: 10.5px;
+    font-size: 11px;
     line-height: 1.3;
-    padding: 3px 7px;
-    border-radius: 6px;
+    color: #5F5E5A;
     white-space: nowrap;
   }
 
@@ -473,14 +466,35 @@
     pointer-events: none;
   }
 
-  .actions-row {
+  /* Barra inferior — mesmo padrão de .top-overlay (container
+     transparente, filhos viram pills flutuantes). Ver comentário no
+     HTML: substitui a antiga .actions-row (faixa contínua removida). */
+  .bottom-bar {
     position: absolute; bottom: 0; left: 0; right: 0; z-index: 15;
-    display: flex; gap: 8px; flex-wrap: wrap;
-    margin: 0;
-    padding: 8px 16px;
-    background: rgba(27,28,30,0.72);
-    backdrop-filter: blur(4px);
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    padding: 12px 14px;
+    pointer-events: none;
   }
+  .bottom-bar > * { pointer-events: auto; }
+  .bottom-toggle-group { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .bottom-toggle-btn {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 12px; border: 1px solid #D3D1C7; border-radius: 8px;
+    background: #FFFFFF; cursor: pointer; font-size: 12.5px; white-space: nowrap;
+  }
+  .bottom-toggle-btn:hover { background: #F1EFE8; }
+  .bottom-toggle-btn:disabled { opacity: .4; cursor: not-allowed; }
+  .bottom-toggle-btn:disabled:hover { background: #FFFFFF; }
+  #dimensionsToggleBtn.active { background: #D7263D; border-color: #D7263D; color: #FFFFFF; }
+  #gridToggleBtn.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
+  #layersToggleBtn.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
+
+  .zoom-control { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+  .zoom-control #zoomPercentLabel {
+    font-size: 12px; font-weight: 600; color: #2C2C2A;
+    width: 40px; text-align: center; flex-shrink: 0;
+  }
+  .zoom-control .tb-icon-btn { width: 30px; height: 30px; font-size: 15px; }
 
   /* ---- Painel lateral visual (dentro do viewport) ---- */
   /* Painel de visualização (3D/2D/Orbit/Medir) — coluna flutuante no
@@ -760,14 +774,16 @@
 
 <div class="tb-spacer"></div>
 
-<div class="tb-overflow tb-pill">
-  <button id="moreToolsBtn" class="tb-icon-btn" title="Mais ferramentas">⋯</button>
-  <div class="tb-overflow-menu" id="moreToolsMenu" hidden>
-    <button id="gridToggleBtn" title="Mostrar ou ocultar o grid do terreno">▦ Grid</button>
-    <button id="dimensionsToggleBtn" title="Mostrar/ocultar cotas de parede (largura e altura)">📏 Cotas</button>
-    <button id="wallDiagnosticsToggleBtn" hidden title="Mostrar diagnóstico técnico dos arrastes de parede">🩺 Diagnóstico</button>
-  </div>
-</div>
+<!-- Grid, Cotas e "⋯" saem da toolbar nesta fase — Grid/Cotas viram
+     toggles da barra inferior (junto de Ajustes/Visualização, igual à
+     referência); Materiais/Catálogo já tinham ido pro sidebar na fase
+     2. Sem mais nada dentro, o menu "⋯" ficaria vazio pra quem usa o
+     app — removido. #wallDiagnosticsToggleBtn (dev-only, sempre
+     `hidden`, nunca teve um jeito de desligar o hidden pela própria
+     UI) continua existindo no DOM avulso, só pra o listener em
+     EsboceApplication.ts não quebrar; sem pill/menu visível em volta,
+     já que ninguém enxerga ele mesmo. -->
+<button id="wallDiagnosticsToggleBtn" hidden title="Mostrar diagnóstico técnico dos arrastes de parede">🩺 Diagnóstico</button>
 
 <div class="tb-account tb-pill">
   <button id="accountBtn" class="tb-avatar" title="Entrar">👤</button>
@@ -1086,11 +1102,6 @@
 Modo de observação ativo.
 Mova uma parede para registrar a operação.</pre>
   </div>
-  <div class="viewport-stats" id="viewportStats">
-    <span id="statWalls" title="Paredes — comprimento total e área líquida (descontando portas/janelas)">Paredes: 0,00 m · 0,00 m²</span>
-    <span id="statFloor" title="Área de piso dos cômodos fechados">Área: 0,00 m²</span>
-    <span id="statRoof" title="Telhado — área real da água (com inclinação e beiral)">Telhado: 0,00 m²</span>
-  </div>
   <div id="dimLabelA" class="dim-label"></div>
   <div id="dimLabelB" class="dim-label"></div>
   <div id="liveRoomDimensionLine" class="live-room-dimension-line"></div>
@@ -1098,8 +1109,34 @@ Mova uma parede para registrar a operação.</pre>
   <div id="dimCotaLayer" class="dim-cota-layer"></div>
 </div>
 
-<div class="actions-row">
-  <span style="font-size:12px; color:#9C9A92; align-self:center;">Clique numa parede/coluna do pavimento atual pra selecionar. Clique direito nela abre girar/duplicar/excluir.</span>
+<!-- Barra inferior — mesmo princípio das ilhas do topo (fase 1): sem
+     faixa contínua, cada grupo é uma pill flutuante com vão
+     transparente e clicável entre elas. Substitui a antiga
+     `.actions-row` (uma faixa escura full-width com um texto estático
+     que já duplicava a dica dinâmica de `.viewport-hint` — removida,
+     não só reestilizada). -->
+<div class="bottom-bar">
+  <div class="tb-pill bottom-toggle-group">
+    <button id="gridToggleBtn" class="bottom-toggle-btn" title="Mostrar ou ocultar o grid do terreno">▦ Grid</button>
+    <button id="dimensionsToggleBtn" class="bottom-toggle-btn" title="Mostrar/ocultar cotas de parede (largura e altura)">📏 Cotas</button>
+    <button id="settingsToggleBtn" class="bottom-toggle-btn" disabled title="Ajustes — ainda não disponível">⚙️ Ajustes</button>
+    <button id="layersToggleBtn" class="bottom-toggle-btn" title="Camadas visíveis (fundação, telhado, varanda...) — mesmo menu de antes, agora também aberto por aqui, não só clique direito">🗂️ Visualização</button>
+  </div>
+
+  <div class="tb-spacer"></div>
+
+  <div class="tb-pill viewport-stats" id="viewportStats">
+    <span id="statWalls" title="Paredes — comprimento total e área líquida (descontando portas/janelas)">Paredes: 0,00 m · 0,00 m²</span>
+    <span id="statFloor" title="Área de piso dos cômodos fechados">Área: 0,00 m²</span>
+    <span id="statRoof" title="Telhado — área real da água (com inclinação e beiral)">Telhado: 0,00 m²</span>
+  </div>
+
+  <div class="tb-pill zoom-control">
+    <button id="zoomOutBtn" class="tb-icon-btn" title="Diminuir zoom">−</button>
+    <span id="zoomPercentLabel">100%</span>
+    <button id="zoomInBtn" class="tb-icon-btn" title="Aumentar zoom">+</button>
+    <button id="fullscreenBtn" class="tb-icon-btn" title="Tela cheia">⤢</button>
+  </div>
 </div>
 
 </div>

@@ -163,6 +163,8 @@ import {
     updateCam();
   }
 
+  var onZoomChangedCb: ((percent: number) => void) | null = null;
+
   function updateCam() {
     camera.position.set(
       camTarget.x + camDist * Math.cos(camAngle) * Math.cos(camElev),
@@ -171,6 +173,44 @@ import {
     );
     camera.lookAt(camTarget.x, camTarget.y, camTarget.z);
     NavGizmo.update(camAngle, camElev);
+    if (onZoomChangedCb) onZoomChangedCb(getZoomPercent());
+  }
+
+  // Zoom da barra inferior (canto direito: "− 100% +"). "100%" é uma
+  // convenção nossa, não uma medida óptica real — é só camDist no
+  // valor padrão (13, o mesmo de resetCamera) mapeado pra 100; menos
+  // distância = mais zoom = percentual maior. onZoomChangedCb dispara
+  // a cada updateCam (arraste, roda do mouse, pinch, botão — todos
+  // passam por aqui), então o rótulo na barra acompanha em tempo real
+  // mesmo quando o zoom muda por gesto, não só pelo botão.
+  var ZOOM_REFERENCE_DIST = 13;
+  export function getZoomPercent(): number {
+    return Math.round((ZOOM_REFERENCE_DIST / camDist) * 100);
+  }
+  export function zoomIn(): void {
+    camDist = Math.max(MIN_DIST, camDist * 0.85);
+    updateCam();
+  }
+  export function zoomOut(): void {
+    camDist = Math.min(MAX_DIST, camDist * 1.15);
+    updateCam();
+  }
+  export function setOnZoomChanged(cb: (percent: number) => void): void {
+    onZoomChangedCb = cb;
+    cb(getZoomPercent());
+  }
+
+  // Botão "Visualização" da barra inferior — mesmo menu de camadas
+  // que já existia (clique direito em área vazia), só que com um
+  // segundo jeito de abrir, descobrível, sem precisar saber do
+  // atalho de clique direito. Alterna: se já está aberto, fecha.
+  export function toggleLayersMenuAtElement(anchor: HTMLElement): void {
+    if (layersContextMenuEl && layersContextMenuEl.classList.contains('visible')) {
+      hideLayersMenu();
+      return;
+    }
+    var rect = anchor.getBoundingClientRect();
+    showLayersMenu(rect.left, rect.top);
   }
 
   function currentFloorYOffset() {
@@ -2859,5 +2899,7 @@ export const ViewportController = {
   toggleDimensions,
   toggleWallDiagnostics,
   resetCamera,
+  getZoomPercent, zoomIn, zoomOut, setOnZoomChanged,
+  toggleLayersMenuAtElement,
   repositionDimensions: repositionDimensionCotas
 };

@@ -203,6 +203,13 @@ export class EsboceApplication {
     GizmoController.init();
     GizmoController.setOnSwapRequested((productId) => this.handleSwapRequested(productId));
     MaterialsPanel.init();
+    // Rótulo de zoom da barra inferior — atualiza sozinho a cada
+    // mudança de câmera (botão, roda do mouse, pinch), não só quando
+    // clicado; ver ViewportController.setOnZoomChanged.
+    ViewportController.setOnZoomChanged((percent) => {
+      const label = document.getElementById("zoomPercentLabel");
+      if (label) label.textContent = `${percent}%`;
+    });
   }
 
   private bindApplicationEvents(): void {
@@ -223,6 +230,18 @@ export class EsboceApplication {
     // já nascem com `disabled` no HTML, então nem chegam a disparar
     // clique — ver DEC (fase 2) no Registro de Decisões Técnicas.
     this.requireElement("viewModeOrbitBtn").addEventListener("click", () => ViewportController.resetCamera());
+
+    // Barra inferior: zoom (− / % / +), tela cheia e "Visualização"
+    // (mesmo menu de camadas do clique direito em área vazia, ver
+    // ViewportController.toggleLayersMenuAtElement). O rótulo de
+    // porcentagem também atualiza sozinho durante scroll/pinch — ver
+    // setOnZoomChanged, chamado logo abaixo no init.
+    this.requireElement("zoomInBtn").addEventListener("click", () => ViewportController.zoomIn());
+    this.requireElement("zoomOutBtn").addEventListener("click", () => ViewportController.zoomOut());
+    this.requireElement("fullscreenBtn").addEventListener("click", () => this.toggleFullscreen());
+    this.requireElement("layersToggleBtn").addEventListener("click", (event) => {
+      ViewportController.toggleLayersMenuAtElement(event.currentTarget as HTMLElement);
+    });
     this.requireElement("gridToggleBtn").addEventListener("click", (event) => {
       this.terrainGrid.visible = !this.terrainGrid.visible;
       (event.currentTarget as HTMLElement).classList.toggle("active", this.terrainGrid.visible);
@@ -243,14 +262,16 @@ export class EsboceApplication {
     this.requireElement("accountBtn").addEventListener("click", () => this.handleAccountButtonClick());
     this.requireElement("logoutBtn").addEventListener("click", () => this.handleLogoutClick());
 
-    // Menus suspensos da toolbar ("📁 Arquivo", pavimento e "⋯") —
-    // mesmo padrão pros três: clique no botão abre/fecha e fecha os
-    // outros dois (nunca dois abertos ao mesmo tempo); clique num
-    // item de dentro fecha; clique fora fecha.
+    // Menus suspensos da toolbar ("📁 Arquivo" e pavimento) — mesmo
+    // padrão pros dois: clique no botão abre/fecha e fecha o outro
+    // (nunca os dois abertos ao mesmo tempo); clique num item de
+    // dentro fecha; clique fora fecha. O antigo terceiro menu "⋯"
+    // (Grid/Cotas/Diagnóstico) saiu na fase 3 — Grid/Cotas viraram
+    // toggles simples da barra inferior (sem menu, mesmo padrão do
+    // resto dela), Diagnóstico é dev-only e nunca teve botão visível.
     const menuPairs: Array<{ btnId: string; menuId: string }> = [
       { btnId: "fileMenuBtn", menuId: "fileMenu" },
       { btnId: "floorMenuBtn", menuId: "floorMenu" },
-      { btnId: "moreToolsBtn", menuId: "moreToolsMenu" },
     ];
     menuPairs.forEach(({ btnId, menuId }) => {
       this.requireElement(btnId).addEventListener("click", (event) => {
@@ -332,6 +353,22 @@ export class EsboceApplication {
   // (sharedProjectId, currentProjectName, URL) — sem isso, clicar em
   // "Salvar" continuaria atualizando o projeto anterior em vez de
   // criar um novo e perguntar o nome de novo.
+  // Botão ⤢ da barra inferior — Fullscreen API padrão do navegador.
+  // Falha em silêncio (só loga) se o navegador recusar (ex.: iframe
+  // sem allow="fullscreen", ou o usuário nunca ter clicado em nada
+  // ainda — API exige gesto do usuário, e este listener já É um).
+  private toggleFullscreen(): void {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch((err) => {
+        console.error("Não deu pra entrar em tela cheia:", err);
+      });
+    } else {
+      document.exitFullscreen().catch((err) => {
+        console.error("Não deu pra sair da tela cheia:", err);
+      });
+    }
+  }
+
   private startNewProject(): void {
     const hasContent = Store.currentWalls().length > 0 || Store.currentColumns().length > 0;
     if (hasContent && !confirm("Isso limpa tudo que não foi salvo agora. Quer começar um projeto novo mesmo assim?")) return;
