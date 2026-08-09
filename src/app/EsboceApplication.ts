@@ -237,6 +237,40 @@ export class EsboceApplication {
     this.requireElement("accountBtn").addEventListener("click", () => this.handleAccountButtonClick());
     this.requireElement("logoutBtn").addEventListener("click", () => this.handleLogoutClick());
 
+    // Menus suspensos da toolbar ("📁 Arquivo", pavimento e "⋯") —
+    // mesmo padrão pros três: clique no botão abre/fecha e fecha os
+    // outros dois (nunca dois abertos ao mesmo tempo); clique num
+    // item de dentro fecha; clique fora fecha.
+    const menuPairs: Array<{ btnId: string; menuId: string }> = [
+      { btnId: "fileMenuBtn", menuId: "fileMenu" },
+      { btnId: "floorMenuBtn", menuId: "floorMenu" },
+      { btnId: "moreToolsBtn", menuId: "moreToolsMenu" },
+    ];
+    menuPairs.forEach(({ btnId, menuId }) => {
+      this.requireElement(btnId).addEventListener("click", (event) => {
+        event.stopPropagation();
+        menuPairs.forEach((other) => {
+          if (other.menuId !== menuId) this.requireElement(other.menuId).hidden = true;
+        });
+        const menu = this.requireElement(menuId);
+        menu.hidden = !menu.hidden;
+      });
+      this.requireElement(menuId).addEventListener("click", (event) => {
+        if ((event.target as HTMLElement).tagName === "BUTTON") {
+          this.requireElement(menuId).hidden = true;
+        }
+      });
+    });
+    document.addEventListener("click", (event) => {
+      menuPairs.forEach(({ btnId, menuId }) => {
+        const menu = document.getElementById(menuId);
+        const btn = document.getElementById(btnId);
+        if (!menu || menu.hidden) return;
+        if (event.target === btn || menu.contains(event.target as Node)) return;
+        menu.hidden = true;
+      });
+    });
+
     window.addEventListener("keydown", (event) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
         event.preventDefault();
@@ -468,15 +502,21 @@ export class EsboceApplication {
     }
   }
 
+  // Avatar compacto (bolinha com iniciais) em vez do botão de texto
+  // antigo — mesma lógica de estado logado/deslogado, só a
+  // apresentação muda. Sem nome de perfil disponível aqui ainda (só
+  // e-mail), as "iniciais" são as 2 primeiras letras do e-mail; dá
+  // pra trocar por nome real assim que o perfil for carregado no
+  // login (ver ProfileFields.nome em SupabaseClient.ts).
   private refreshAccountButton(): void {
     const btn = this.requireElement("accountBtn");
     const logoutBtn = this.requireElement("logoutBtn");
     if (this.currentUserEmail) {
-      btn.textContent = `👤 ${this.currentUserEmail}`;
-      btn.title = "Logado";
+      btn.textContent = this.currentUserEmail.slice(0, 2).toUpperCase();
+      btn.title = `Logado como ${this.currentUserEmail}`;
       logoutBtn.style.display = "";
     } else {
-      btn.textContent = "👤 Entrar";
+      btn.textContent = "👤";
       btn.title = "Entrar";
       logoutBtn.style.display = "none";
     }

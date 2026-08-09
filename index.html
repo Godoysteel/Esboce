@@ -25,23 +25,40 @@
      elemento #viewport em tempo real, então não precisou mudar nada
      de JS — só o CSS do container. */
   .wrap { position: relative; width: 100%; height: 100%; overflow: hidden; }
+  /* Sem cabeçalho contínuo: cada grupo de controles (marca, menu
+     Arquivo, pavimento, undo/redo, menu "⋯", conta) flutua como uma
+     "ilha" própria (classe .tb-pill) direto sobre a viewport 3D — o
+     vão TRANSPARENTE entre elas deixa orbitar/arrastar a câmera por
+     baixo normalmente. .top-overlay continua existindo só como
+     CONTAINER de layout (flex row, sem fundo/borda/sombra própria) —
+     inclusive pra --top-overlay-h (medido do offsetHeight dele)
+     continuar valendo pros painéis que se posicionam abaixo da linha
+     de controles (ver script no fim do arquivo). */
   .top-overlay {
     position: absolute; top: 0; left: 0; right: 0; z-index: 20;
-    display: flex; align-items: center; gap: 16px;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    padding: 12px 14px;
+    pointer-events: none;
+  }
+  .top-overlay > * { pointer-events: auto; }
+  .tb-spacer { pointer-events: none; }
+  /* Sem breakpoint especial pra telas estreitas — as pills já são
+     pequenas o bastante (ícone/label curto) pra caber na maioria das
+     larguras; quando não cabem, quebram pra uma segunda linha
+     (flex-wrap acima), nunca viram uma barra de scroll horizontal. */
+  .tb-pill {
     background: rgba(244,241,234,0.94);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
-    border-bottom: 1px solid #D3D1C7;
-    padding: 8px 14px;
+    border: 1px solid #D3D1C7;
+    border-radius: 12px;
+    padding: 6px 10px;
     box-shadow: 0 2px 14px rgba(0,0,0,.18);
-    overflow-x: auto;
-    white-space: nowrap;
   }
   .brand-header { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
   .brand-header .brand-logo { width: 26px; height: 26px; }
   .brand-header h1 { margin: 0; line-height: 1; font-size: 16px; white-space: nowrap; }
   .brand-logo { flex-shrink: 0; }
-  p.brand-tagline { display: none; }
 
   .panel-card {
     background: transparent;
@@ -53,6 +70,78 @@
 
   .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
   .tool-group { display: flex; gap: 6px; flex-wrap: wrap; }
+
+  /* Toolbar compacta (fase 1 do redesign — ver referência em
+     docs/07 - Desenvolvimento/Registro de decisões técnicas.md).
+     Prefixo `tb-` pra não colidir com `.tool-btn`/`.tool-group`, que
+     também são usados pelos botões de ferramenta do sidebar
+     (data-tool), estilizados por `.ts-btn`/`.ts-small-btn`. */
+  .tb-group { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .tb-spacer { flex: 1 1 auto; min-width: 8px; }
+
+  .tb-icon-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 34px; height: 34px; padding: 0; flex-shrink: 0;
+    border: 1px solid #D3D1C7; border-radius: 8px; background: #FFFFFF;
+    cursor: pointer; font-size: 15px; line-height: 1;
+  }
+  .tb-icon-btn:hover { background: #F1EFE8; }
+  .tb-icon-btn:disabled { opacity: .4; cursor: default; }
+  .tb-icon-btn:disabled:hover { background: #FFFFFF; }
+
+  .tb-btn {
+    display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+    padding: 8px 14px; border: 1px solid #D3D1C7; border-radius: 8px;
+    background: #FFFFFF; cursor: pointer; font-size: 13px; white-space: nowrap;
+  }
+  .tb-btn:hover { background: #F1EFE8; }
+  .tb-btn-primary { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
+  .tb-btn-primary:hover { background: #453D9C; }
+
+  .floor-select { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  /* Menu suspenso de pavimento — mesma "casca" do .tb-overflow-menu,
+     só que o conteúdo (lista de andares) é montado pelo
+     FloorTabsController, então os estilos de .floor-tab entram aqui
+     em vez de no bloco genérico dos outros menus. */
+  .floor-menu .tb-overflow-menu .floor-tabs { display: flex; flex-direction: column; gap: 2px; margin-bottom: 4px; }
+  .floor-menu .tb-overflow-menu .floor-tab {
+    width: 100%; text-align: left; border: none; background: transparent;
+    padding: 9px 10px; border-radius: 6px; font-size: 13px;
+  }
+  .floor-menu .tb-overflow-menu .floor-tab:hover { background: #F1EFE8; }
+  .floor-menu .tb-overflow-menu .floor-tab.active { background: #EDEBFB; color: #534AB7; font-weight: 600; }
+
+  .tb-avatar {
+    width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+    background: #2C2C2A; color: #FFFFFF; border: none;
+    font-size: 12px; font-weight: 600; letter-spacing: .02em; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .tb-account { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+
+  /* Menu "⋯" — abriga, por enquanto, ações que na referência visual
+     moram no sidebar (Materiais/Catálogo) ou na barra inferior
+     (Grid/Cotas). Elas migram pra lá nas próximas fases; até rodar
+     essas fases, ficam aqui pra não sumir a funcionalidade. */
+  .tb-overflow { position: relative; flex-shrink: 0; }
+  .tb-overflow-menu {
+    position: absolute; top: calc(100% + 6px); right: 0;
+    background: #FFFFFF; border: 1px solid #D3D1C7; border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.18);
+    min-width: 230px; padding: 6px; z-index: 30;
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .tb-overflow-menu[hidden] { display: none; }
+  .tb-overflow-menu button {
+    border: none; background: transparent; text-align: left;
+    padding: 9px 10px; border-radius: 6px; font-size: 13px; width: 100%;
+  }
+  .tb-overflow-menu button:hover { background: #F1EFE8; }
+  .tb-overflow-menu button.active { background: #EDEBFB; color: #534AB7; font-weight: 600; }
+  .tb-overflow-divider { height: 1px; background: #E7E5DC; margin: 4px 2px; }
+  .tb-caret { font-size: 10px; opacity: .6; }
+  .file-menu .tb-overflow-menu { left: 0; right: auto; min-width: 240px; }
+
   .tool-btn {
     display: flex; align-items: center; gap: 6px;
     padding: 9px 14px;
@@ -579,7 +668,7 @@
 
 <div class="wrap">
 <div class="top-overlay">
-<div class="brand-header">
+<div class="brand-header tb-pill" title="Esboce">
   <svg class="brand-logo" width="34" height="34" viewBox="0 0 100 100" aria-hidden="true">
     <g fill="none" stroke="#2C2C2A" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
       <path d="M12,94 L11,59 L50,14 L89,58 L88,95" opacity="0.85"/>
@@ -592,29 +681,63 @@
     </g>
     <path d="M41,94 L40,72 L60,72 L61,94" fill="none" stroke="#C1673F" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
   </svg>
-  <div>
-    <h1>Esboce</h1>
-    <p class="brand-tagline">Sonhe, esboce, construa!</p>
-  </div>
 </div>
-<div class="panel-card">
-  <div class="floor-row">
-    <div class="floor-tabs" id="floorTabs"></div>
-    <button id="addFloorBtn">+ Novo pavimento</button>
-    <button id="clearBtn">Limpar pavimento atual</button>
-    <button id="undoBtn" title="Ctrl+Z">↶ Desfazer</button>
-    <button id="gridToggleBtn" title="Mostrar ou ocultar o grid do terreno">▦ Grid</button>
-    <button id="materialsToggleBtn" title="Lista de materiais">📦 Materiais</button>
-    <button id="dimensionsToggleBtn" title="Mostrar/ocultar cotas de parede (largura e altura)">📏 Cotas</button>
-    <button id="wallDiagnosticsToggleBtn" hidden title="Mostrar diagnóstico técnico dos arrastes de parede">🩺 Diagnóstico</button>
+
+<!-- Menu "Arquivo" — igual ao File menu do SketchUp: um botão só,
+     empilha as ações do CICLO DE VIDA DO PROJETO (novo, salvar,
+     compartilhar, listar, limpar). Ações de visualização/produto
+     (Grid, Cotas, Materiais, Catálogo) ficam de fora — moram no menu
+     "⋯" por enquanto, não são "arquivo". Só ícone (sem o texto
+     "Arquivo") pra manter a pill pequena — mesmo padrão visual dos
+     outros botões só-ícone da barra. -->
+<div class="tb-overflow file-menu tb-pill">
+  <button id="fileMenuBtn" class="tb-btn" title="Arquivo">📁 <span class="tb-caret">▾</span></button>
+  <div class="tb-overflow-menu" id="fileMenu" hidden>
     <button id="newProjectBtn" title="Começar um projeto novo do zero">📄 Novo projeto</button>
     <button id="saveProjectBtn" title="Salvar o projeto na nuvem">💾 Salvar</button>
     <button id="shareProjectBtn" title="Copiar link do projeto pra compartilhar">🔗 Compartilhar</button>
     <button id="myProjectsBtn" title="Ver meus projetos salvos">🗂️ Meus projetos</button>
-    <button id="catalogBtn" title="Ver catálogo de produtos dos parceiros">🏬 Catálogo</button>
-    <button id="accountBtn" title="Entrar">👤 Entrar</button>
-    <button id="logoutBtn" style="display:none;" title="Sair da conta">🚪 Sair</button>
+    <div class="tb-overflow-divider"></div>
+    <button id="clearBtn" title="Limpar tudo do pavimento atual">🧹 Limpar pavimento atual</button>
   </div>
+</div>
+
+<!-- Pavimento — uma pill só, mostrando o andar atual. A lista de
+     andares (antes pills sempre visíveis lado a lado, que cresceria
+     sem limite com mais pavimentos) e o "+ Novo pavimento" agora
+     moram dentro do menu suspenso. -->
+<div class="tb-overflow floor-menu tb-pill">
+  <button id="floorMenuBtn" class="tb-btn" title="Pavimento atual — clique pra trocar ou adicionar">
+    <span id="floorMenuLabel">Térreo</span> <span class="tb-caret">▾</span>
+  </button>
+  <div class="tb-overflow-menu" id="floorMenu" hidden>
+    <div class="floor-tabs" id="floorTabs"></div>
+    <div class="tb-overflow-divider"></div>
+    <button id="addFloorBtn" title="Adicionar um novo pavimento">+ Novo pavimento</button>
+  </div>
+</div>
+
+<div class="tb-group tb-pill">
+  <button id="undoBtn" class="tb-icon-btn" title="Desfazer (Ctrl+Z)">↶</button>
+  <button id="redoBtn" class="tb-icon-btn" disabled title="Refazer — ainda não disponível">↷</button>
+</div>
+
+<div class="tb-spacer"></div>
+
+<div class="tb-overflow tb-pill">
+  <button id="moreToolsBtn" class="tb-icon-btn" title="Mais ferramentas">⋯</button>
+  <div class="tb-overflow-menu" id="moreToolsMenu" hidden>
+    <button id="gridToggleBtn" title="Mostrar ou ocultar o grid do terreno">▦ Grid</button>
+    <button id="dimensionsToggleBtn" title="Mostrar/ocultar cotas de parede (largura e altura)">📏 Cotas</button>
+    <button id="materialsToggleBtn" title="Lista de materiais">📦 Materiais</button>
+    <button id="catalogBtn" title="Ver catálogo de produtos dos parceiros">🏬 Catálogo</button>
+    <button id="wallDiagnosticsToggleBtn" hidden title="Mostrar diagnóstico técnico dos arrastes de parede">🩺 Diagnóstico</button>
+  </div>
+</div>
+
+<div class="tb-account tb-pill">
+  <button id="accountBtn" class="tb-avatar" title="Entrar">👤</button>
+  <button id="logoutBtn" class="tb-icon-btn" style="display:none;" title="Sair da conta">🚪</button>
 </div>
 </div>
 

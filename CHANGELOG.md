@@ -39,6 +39,10 @@ Criada a primeira baseline de engenharia do projeto.
 
 # Não lançado
 
+## Alterado (toolbar)
+
+- Toolbar (barra superior) reorganizada e compactada, e deixa de ser uma faixa contínua de fundo sólido — cada grupo de controles (marca, menu **"📁 Arquivo"**, pavimento, undo/redo, menu "⋯", conta) agora flutua como uma ilha independente direto sobre a viewport 3D, com vão transparente e clicável (orbit/pan) entre elas. Menu "📁 Arquivo" empilha Novo projeto, Salvar, Compartilhar, Meus projetos e Limpar pavimento atual (igual ao menu Arquivo do SketchUp); menu "⋯" ficou só com as ações de visualização/produto (Grid, Cotas, Materiais, Catálogo). Avatar de conta (iniciais) substitui o botão de texto "Entrar"/e-mail completo. Botão "Refazer" aparece mas fica desabilitado — o Store ainda não tem pilha de redo de verdade. Ilhas passaram por uma rodada de enxugamento: marca e "Arquivo" perderam o rótulo de texto (só ícone), e o pavimento — antes lista de abas sempre visível + botão "+ Pavimento" separado — virou uma única pill "Térreo ▾" com a lista de andares e "+ Novo pavimento" dentro do menu suspenso. A barra também trocou o scroll horizontal (que aparecia em telas mais estreitas) por quebra de linha simples. Fase 1 de um redesign visual maior (toolbar → sidebar → barra inferior → catálogo). Ver DEC-38 no Registro de Decisões Técnicas.
+
 ## Corrigido
 
 - Platibanda (telhado): laje ganhou um caimento sutil (2°) — antes era 100% plana, sem nenhuma queda visível; parapeito passou a usar a mesma textura de reboco e a mesma cor de acabamento predominante das paredes da casa (antes um bege fixo sem textura); altura do parapeito agora é ajustável por uma alça própria na seleção do telhado (0,2–1,2 m, padrão 0,5 m). Ver DEC-31 no Registro de Decisões Técnicas.

@@ -7,9 +7,11 @@ import { Store } from './Store.js';
 import { ViewportController } from './ViewportController.js';
 
 let container: HTMLElement | null;
+let labelEl: HTMLElement | null;
 
 export function init(): void {
   container = document.getElementById('floorTabs');
+  labelEl = document.getElementById('floorMenuLabel');
   refresh();
 }
 
@@ -27,6 +29,13 @@ export function refresh(): void {
     });
     container!.appendChild(btn);
   });
+  // Label do botão-gatilho (ex.: "Térreo ▾") — a lista de andares
+  // inteira só aparece dentro do menu suspenso agora, não mais como
+  // pills sempre visíveis na barra (ver DEC-38, revisão 3).
+  if (labelEl) {
+    const current = project.floors[project.currentFloorIndex];
+    labelEl.textContent = current ? current.name : 'Pavimento';
+  }
 }
 
 // Namespace de compatibilidade — mesma razão dos demais módulos.
