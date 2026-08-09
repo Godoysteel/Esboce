@@ -1,0 +1,88 @@
+# Fluxo de Trabalho com IA (Claude)
+
+**Status:** Ativo
+
+**Objetivo:** Registrar o padrão de trabalho já validado entre o Product Owner e o Claude nesta sessão, pra qualquer conversa nova (ou qualquer outra instância do Claude) seguir o mesmo fluxo sem precisar redescobrir cada passo.
+
+---
+
+## 0. Contexto — por que esse documento existe
+
+O Claude, neste ambiente, **não tem credenciais de Git** (sem token, sem SSH key) e **não consegue dar `git push` direto no repositório**. Toda alteração de código passa pela pessoa, que aplica os arquivos e roda os comandos no próprio terminal (VS Code, PowerShell). Esse documento descreve o fluxo que funcionou bem, ponta a ponta, pra manter consistência entre sessões.
+
+---
+
+## 1. Investigação — sempre a partir do estado real
+
+Antes de qualquer mudança, o Claude clona o repositório **direto do GitHub** (`git clone https://github.com/Godoysteel/Esboce.git`), nunca assume que uma cópia de trabalho anterior (de uma sessão passada) ainda reflete o estado atual. Isso evita implementar em cima de código que já mudou ou que nunca chegou a ser commitado.
+
+## 2. Implementação
+
+O Claude edita os arquivos diretamente nessa cópia clonada, sempre mirando o **estado mais atual do `main`** (ou da branch relevante) — nunca em cima de uma tentativa anterior que não foi confirmada como aplicada.
+
+## 3. Validação obrigatória antes de entregar
+
+Antes de considerar qualquer mudança pronta, o Claude roda, na própria cópia clonada:
+
+```bash
+npx tsc --noEmit    # (ou: npm run typecheck)
+npm test
+npx vite build
+```
+
+Só depois dos três passarem limpo é que os arquivos são entregues. Se algum teste quebrar por causa da mudança, o teste é atualizado pra refletir a nova regra (não simplesmente apagado) — e se um teste antigo pegar um bug real, isso é dito explicitamente, não escondido.
+
+## 4. Documentação junto com o código
+
+Mudanças relevantes (novo comportamento, decisão de arquitetura, reversão de algo) são registradas na hora, nos mesmos arquivos:
+
+- **`docs/07 - Desenvolvimento/Registro de decisões técnicas.md`** — decisões pontuais de implementação, numeradas `DEC-NN`, cada uma com Sessão, Contexto, Decisão, Alternativas descartadas e Status. Quando uma decisão é corrigida ou revista depois, isso é registrado como "Correção pós-lançamento" ou "Revisão" dentro da MESMA entrada — a história de por que algo mudou fica visível, em vez de apagada.
+- **`docs/07 - Desenvolvimento/ADR/`** — decisões arquiteturais maiores, numeradas `ADR-NNN`, seguindo o cabeçalho padrão (Status/Data/Responsáveis) já usado nas ADRs existentes. Toda ADR nova também entra no índice de "Decisões relacionadas" em `docs/03 - Arquitetura/Arquitetura.md`.
+- **`CHANGELOG.md`** — resumo voltado pra changelog de produto, nas seções `## Adicionado`, `## Corrigido`, `## Alterado`, `## Removido`.
+
+## 5. Entrega dos arquivos
+
+O Claude **não envia zip nem patch por padrão** — cada arquivo alterado é entregue **individualmente**, como card de download, com o conteúdo completo do arquivo já pronto pra substituir o original (não um diff pra aplicar manualmente). Isso já foi pedido explicitamente e funciona bem pelo celular/qualquer dispositivo.
+
+Se a mudança tocar poucos arquivos, só esses são reenviados (não o projeto inteiro) — mais rápido de revisar e aplicar.
+
+## 6. Aplicar e commitar — um comando por vez
+
+**Importante:** o terminal usado é **PowerShell no Windows**, que não aceita encadear comandos com `&&` (isso só funciona em PowerShell 7+, e nem sempre está disponível). Por isso, todo bloco de comandos deve ser passado **um comando por linha**, pra pessoa rodar um de cada vez (Enter depois de cada linha) — nunca colar um bloco inteiro com `&&`.
+
+Sequência padrão, depois de substituir os arquivos:
+
+```powershell
+npm run typecheck
+npm test
+git add -A
+git commit -m "tipo(escopo): descrição curta"
+git push
+```
+
+Mensagens de commit seguem o estilo `tipo(escopo): descrição` (`feat`, `fix`, `docs`, `chore`), em português, sem exigir acento (pra evitar qualquer problema de encoding no PowerShell, embora acento normalmente funcione também).
+
+## 7. Confirmação — sempre verificada de fora
+
+Depois que a pessoa diz que aplicou (ex.: "pronto"), o Claude **não confia só na palavra** — clona o repositório de novo, direto do GitHub, num diretório novo, e roda a validação completa (`tsc`, `npm test`, `vite build`) nesse clone limpo, confirmando que o commit realmente chegou no remoto e que o código funciona a partir do zero (não só na máquina local da pessoa). Isso pegou mais de uma vez um `git push` que não tinha rodado ainda.
+
+## 8. Quando algo dá errado no terminal
+
+Se a pessoa manda um print do terminal com erro, o Claude lê a saída com atenção antes de sugerir o próximo passo — casos já vistos:
+- Colar um bloco com `&&` no PowerShell (não executa nada, gera erro de sintaxe) → resolvido rodando um comando por vez.
+- `git checkout` recusado por haver mudanças não commitadas → resolvido com `git status` primeiro, depois decidindo se descarta (`git checkout -- .` / `git clean -fd`) ou commita antes.
+- Branch errada ativa depois de um comando falhar no meio → resolvido conferindo `git branch`/`git status` antes de seguir.
+
+## 9. Branch direto na `main` ou branch nova + PR — os dois são aceitos
+
+Esta sessão usou os dois fluxos, dependendo da urgência/contexto: branch nova + Pull Request (Draft → Ready for review → Merge) pra mudanças que valia revisar, e commit direto na `main` pra iterações rápidas de correção. Nenhum dos dois é "errado" — a pessoa escolhe conforme o momento.
+
+## 10. Honestidade sobre limitação e escopo
+
+Quando um pedido é grande ou arriscado (ex.: mudar a arquitetura de um recurso inteiro), o Claude explica o trade-off ANTES de implementar, em vez de simplesmente escolher um caminho sozinho — várias vezes isso foi feito com uma pergunta objetiva de poucas opções, não um questionário longo. Quando uma abordagem já implementada se mostra errada ou complexa demais, trocar de abordagem é tratado como normal, não como falha — o registro de decisões existe exatamente pra deixar essa mudança de rumo rastreável.
+
+---
+
+## Resumo rápido (pra colar no início de uma conversa nova)
+
+> Sempre que for implementar algo no Esboce: clone o repo do GitHub, implemente, valide com `tsc --noEmit` + `npm test` + `vite build`, documente em `Registro de decisões técnicas.md`/`CHANGELOG.md` (e `ADR/` se for decisão maior), entregue os arquivos alterados individualmente (não zip/patch), dê os comandos de commit **um por linha** (PowerShell não aceita `&&`), e depois que a pessoa confirmar que aplicou, verifique de novo clonando do GitHub — nunca só confie na palavra.

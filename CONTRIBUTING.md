@@ -29,6 +29,10 @@ A documentação oficial está localizada em:docs/
 
 A governança da engenharia está localizada em:atlas/
 
+## Trabalhando com IA (Claude)
+
+Ao usar um assistente de IA (Claude) pra implementar mudanças, siga o fluxo descrito em `docs/07 - Desenvolvimento/Fluxo de Trabalho com IA (Claude).md` — cobre validação obrigatória antes de entregar, onde documentar cada tipo de decisão, como aplicar os arquivos entregues, e como confirmar que o commit realmente chegou no repositório.
+
 ---
 
 Projeto:
