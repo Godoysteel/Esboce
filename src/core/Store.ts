@@ -846,37 +846,45 @@ export const commands = {
   },
 
   // Laje: mesmo padrão de telhado/varanda — objeto independente, nasce
-  // de um clique, redimensiona pelas bordas SEM travar em nenhum
-  // contorno de parede (pode encolher pra virar um vão aberto, ou
-  // crescer além da parede pra virar balanço/sacada — ver DEC-35).
-  createLaje(x1: number, y1: number, x2: number, y2: number): Laje | null {
-    if (x1 === x2 || y1 === y2) return null;
+  // de um clique, redimensiona por ARESTA (não mais um retângulo de 4
+  // lados fixos — depois de fundir, o contorno pode ter mais de 4
+  // pontos, ex.: um "L") SEM travar em nenhum contorno de parede (pode
+  // encolher pra virar um vão aberto, ou crescer além da parede pra
+  // virar balanço/sacada — ver DEC-35/37).
+  createLaje(points: { x: number; y: number }[]): Laje | null {
+    if (!points || points.length < 4) return null;
     pushUndoSnapshot();
-    const l = Core.createLajeEntity(Math.min(x1, x2), Math.min(y1, y2), Math.max(x1, x2), Math.max(y1, y2));
+    const l = Core.createLajeEntity(points);
     currentLajes().push(l);
     emit({ type: 'LajeCreated', floorIndex: project.currentFloorIndex, lajeId: l.id });
     return l;
   },
 
-  updateLajeBoundsLive(lajeId: string, x1: number, y1: number, x2: number, y2: number): void {
+  // Arrasta UMA aresta do contorno (o segmento entre points[edgeIndex]
+  // e o próximo, sempre horizontal ou vertical) — atualiza os dois
+  // pontos que a formam, mantendo o resto do contorno intacto. Esse é
+  // o jeito de reshapear a laje aresta por aresta, cada uma
+  // independente das outras.
+  updateLajeEdgeLive(lajeId: string, edgeIndex: number, newValue: number): void {
     const l = findLaje(lajeId); if (!l) return;
-    l.x1 = x1; l.y1 = y1; l.x2 = x2; l.y2 = y2;
+    const n = l.points.length;
+    if (edgeIndex < 0 || edgeIndex >= n) return;
+    const p1 = l.points[edgeIndex]!, p2 = l.points[(edgeIndex + 1) % n]!;
+    if (Math.abs(p1.x - p2.x) < 1e-6) { p1.x = newValue; p2.x = newValue; }
+    else { p1.y = newValue; p2.y = newValue; }
     emit({ type: 'LajeBoundsChanged', lajeId, live: true });
   },
 
-  // Funde duas lajes do MESMO pavimento que se tocam — vira uma peça
-  // só, no contorno que envolve as duas (mesma técnica de fuseRoofs).
-  fuseLajes(lajeAId: string, lajeBId: string): Laje | null {
-    const a = findLaje(lajeAId), b = findLaje(lajeBId);
-    if (!a || !b) return null;
-    const bounds = Core.fusedLajeBounds(a, b);
-    a.x1 = bounds.x1; a.y1 = bounds.y1; a.x2 = bounds.x2; a.y2 = bounds.y2;
-    const lajes = currentLajes();
-    let fuseIdx = -1;
-    for (let i = 0; i < lajes.length; i++) if (lajes[i]!.id === b.id) { fuseIdx = i; break; }
-    if (fuseIdx >= 0) lajes.splice(fuseIdx, 1);
-    emit({ type: 'LajesFused', floorIndex: project.currentFloorIndex, lajeId: a.id, fusedFrom: b.id });
-    return a;
+  // Move a laje INTEIRA (o "bloco" todo, sem mudar o formato) —
+  // substitui o contorno pelos mesmos pontos deslocados. Usado pelo
+  // arraste do corpo (clique fora das alças de aresta), com o ímã de
+  // encaixe calculado no ViewportController (ver DEC-37 — decisão
+  // revista: sem fusão automática, só um snap pra ficar colada na
+  // vizinha sem sobrepor).
+  updateLajePointsLive(lajeId: string, points: { x: number; y: number }[]): void {
+    const l = findLaje(lajeId); if (!l) return;
+    l.points = points;
+    emit({ type: 'LajeBoundsChanged', lajeId, live: true });
   },
 
   deleteLaje(lajeId: string): void {

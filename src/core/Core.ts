@@ -94,8 +94,29 @@ export function createVarandaEntity(
   return { id: id || nextId('varanda'), x1, y1, x2, y2, frontSide: frontSide || 'minZ' };
 }
 
-export function createLajeEntity(x1: number, y1: number, x2: number, y2: number, id?: string): Laje {
-  return { id: id || nextId('laje'), x1, y1, x2, y2 };
+// Contorno retangular simples (4 cantos, horário) — usado tanto pra
+// nascer uma laje nova quanto por outras peças que precisem de um
+// retângulo em formato de polígono.
+export function rectPoints(x1: number, y1: number, x2: number, y2: number): { x: number; y: number }[] {
+  const minX = Math.min(x1, x2), maxX = Math.max(x1, x2);
+  const minY = Math.min(y1, y2), maxY = Math.max(y1, y2);
+  return [{ x: minX, y: minY }, { x: maxX, y: minY }, { x: maxX, y: maxY }, { x: minX, y: maxY }];
+}
+
+export function createLajeEntity(points: { x: number; y: number }[], id?: string): Laje {
+  return { id: id || nextId('laje'), points };
+}
+
+// Retângulo delimitador do polígono — usado pelo ímã de encaixe
+// (ViewportController.nearestWallFaceCoord/snapLajeBodyDelta) pra
+// decidir "perto o bastante" de outra laje/parede.
+export function lajeBounds(laje: Laje): { minX: number; maxX: number; minY: number; maxY: number } {
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  laje.points.forEach((p) => {
+    if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+  });
+  return { minX, maxX, minY, maxY };
 }
 
 export function createFloorEntity(name: string): Floor {
@@ -180,23 +201,11 @@ export function fusedRoofBounds(a: Roof, b: Roof): { x1: number; y1: number; x2:
   };
 }
 
-// Laje é mais permissiva que telhado pra fundir: não tem "tipo" nem
-// inclinação que precisem bater — qualquer duas lajes do MESMO
-// pavimento que se tocam (ou quase) viram uma só, igual duas paredes
-// coincidentes. Reaproveita rectsNearby (genérico, já usado por
-// telhado) pra decidir "perto o bastante".
-export function lajesCanFuse(a: Laje, b: Laje, toleranceUnits: number): boolean {
-  if (!a || !b || a.id === b.id) return false;
-  return rectsNearby(a, b, toleranceUnits);
-}
-
-export function fusedLajeBounds(a: Laje, b: Laje): { x1: number; y1: number; x2: number; y2: number } {
-  return {
-    x1: Math.min(a.x1, b.x1), y1: Math.min(a.y1, b.y1),
-    x2: Math.max(a.x2, b.x2), y2: Math.max(a.y2, b.y2)
-  };
-}
-
+// (Removido: fusão automática de laje em um polígono único — ver
+// DEC-37, decisão revista na Sessão 6. Duas lajes que se tocam agora
+// só ficam "coladas" por um ímã de encaixe no arraste, sem virar UM
+// objeto — cada laje continua com o próprio contorno independente,
+// livre pra ser arrastada/reshapeada sem depender da outra.)
 interface RectLike { x1: number; y1: number; x2: number; y2: number; }
 
 // "perto" o bastante pra valer a pena tentar alinhar? Sobrepostos ou com
@@ -1342,7 +1351,7 @@ export const Core = {
   resolveOpeningEdgeResize, resolveOpeningHeightResize,
   findRoomsAdjacentToOpening,
   roofRidgeHeightMeters, roofPitchForRidgeHeight, roofsCanFuse, fusedRoofBounds,
-  lajesCanFuse, fusedLajeBounds,
+  rectPoints, lajeBounds,
   rectsNearby, pointInPolygon, roomModelBounds, findRoomWallIds, findIsolatedRoomWallIds, wallResizeTopology, resolveWallResizeOffset, computeWallFootprints,
   wallResizeEndpointNeedsBridge,
   distPointToLine, wallOBB, furnitureOBB, openingOBB, obbOverlapMTV, wallOverlapsForeignOpening, resolveWallOffsetAgainstOpenings, wallsCanFuse, wallsMeetAtEndpoint, resolveWallGroupGridDelta,

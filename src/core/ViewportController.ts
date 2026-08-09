@@ -250,7 +250,7 @@ import {
     if (!mesh) return false;
     var editingIdx = Store.getProject().currentFloorIndex;
     if (mesh.userData.floorIndex !== editingIdx) return false;
-    return mesh.userData.category === 'paredesTerreo' || mesh.userData.category === 'paredesSuperiores' || mesh.userData.category === 'colunas' || mesh.userData.category === 'telhado' || mesh.userData.category === 'aberturas' || mesh.userData.category === 'varanda' || mesh.userData.category === 'furniture';
+    return mesh.userData.category === 'paredesTerreo' || mesh.userData.category === 'paredesSuperiores' || mesh.userData.category === 'colunas' || mesh.userData.category === 'telhado' || mesh.userData.category === 'aberturas' || mesh.userData.category === 'varanda' || mesh.userData.category === 'furniture' || !!mesh.userData.lajeId;
   }
 
   function select(wallId: any) {
@@ -600,7 +600,10 @@ import {
     if (selectedLajeId) {
       var lG = Store.findLaje(selectedLajeId);
       if (!lG) { selectedLajeId = null; gizmoEl.classList.remove('visible'); return; }
-      var midL = modelToWorld((lG.x1 + lG.x2) / 2, (lG.y1 + lG.y2) / 2);
+      var lGcx = 0, lGcy = 0;
+      lG.points.forEach(function (p: any) { lGcx += p.x; lGcy += p.y; });
+      lGcx /= lG.points.length; lGcy /= lG.points.length;
+      var midL = modelToWorld(lGcx, lGcy);
       positionFloatingPanel(gizmoEl, midL.x, yOffset + Scene3DRenderer.WALL_HEIGHT_GETTER() + 0.4, midL.z, 0);
       gizmoEl.classList.add('visible');
       return;
@@ -1052,9 +1055,14 @@ import {
       } else if (handle.indexOf('lajeEdge') === 0) {
         // Laje também não trava em região nenhuma — igual varanda, de
         // propósito, pra dar pra arrastar além da parede (balanço) ou
-        // encolher além dela (vão aberto) — ver DEC-35.
+        // encolher além dela (vão aberto) — ver DEC-35. edgeIndex vem
+        // do próprio nome da alça ('lajeEdge3' -> aresta entre
+        // points[3] e points[4]) — guarda uma cópia dos pontos de
+        // ANTES do arraste, pro mousemove sempre calcular a partir do
+        // estado original (não acumular erro frame a frame).
         var lrE = Store.findLaje(selectedLajeId);
-        if (lrE) dragElementStart = { x1: lrE.x1, y1: lrE.y1, x2: lrE.x2, y2: lrE.y2 };
+        var edgeIndexL = parseInt(handle.slice('lajeEdge'.length), 10);
+        if (lrE) dragElementStart = { points: lrE.points.map(function (p: any) { return { x: p.x, y: p.y }; }), edgeIndex: edgeIndexL };
       } else if (handle === 'openingEdgeTop') {
         // Redimensionar altura arrasta na vertical — mesma técnica de
         // roofRidge (delta de tela, não raycast contra plano vertical).
@@ -1203,6 +1211,11 @@ import {
           selectVaranda(mesh.userData.varandaId);
         } else if (mesh.userData.lajeId) {
           selectLaje(mesh.userData.lajeId);
+          dragMode = 'lajeBody';
+          var lEnt = Store.findLaje(mesh.userData.lajeId)!;
+          dragElementStart = { points: lEnt.points.map(function (p: any) { return { x: p.x, y: p.y }; }) };
+          dragGroundStart = getGroundModelPoint(e.clientX, e.clientY);
+          Store.commands.beginTransaction();
         } else if (mesh.userData.furnitureId) {
           selectFurniture(mesh.userData.furnitureId);
           dragMode = 'furnitureBody';
@@ -1325,31 +1338,76 @@ import {
     return fusedAny;
   }
 
-  // Mesma ideia de fuseRoofsIfTouching, só que pra laje — mais
-  // permissiva (Core.lajesCanFuse só olha se encostam, sem exigir
-  // "mesmo tipo"/"mesma inclinação" que telhado exige), porque laje
-  // não tem variação de tipo nenhuma.
-  function findFusableLaje(laje: any) {
-    var lajes = Store.currentLajes();
-    var found: any = null;
-    lajes.forEach(function (o: any) {
-      if (found) return;
-      if (Core.lajesCanFuse(laje, o, ROOF_NEARBY_TOLERANCE)) found = o;
+  // Ao arrastar a BORDA da laje perto de uma parede OU de outra laje,
+  // gruda na FACE mais próxima (não no eixo/centro) — imã com um raio
+  // de captura, não uma trava: sem nada perto o bastante, cai no grid
+  // normal (Core.snap) de qualquer jeito. 'axis' é qual coordenada está
+  // sendo arrastada ('x' pra bordas verticais, 'y' pra horizontais);
+  // só considera paredes/lajes PERPENDICULARES a esse eixo (paredes
+  // aqui são sempre 0°/90°, DEC-28, e laje é sempre retilínea, então
+  // não precisa de footprint completo).
+  function nearestWallFaceCoord(axis: 'x' | 'y', rawValue: any, skipLajeId?: any) {
+    var walls = Store.currentWalls();
+    var halfThick = (Core.WALL_THICK / 2) * Core.GRID;
+    var best: number | null = null, bestDist = Core.SNAP_UNIT;
+    walls.forEach(function (w: any) {
+      var isVertical = Math.abs(w.x1 - w.x2) < 1e-6;
+      var isHorizontal = Math.abs(w.y1 - w.y2) < 1e-6;
+      if (axis === 'x' && isVertical) {
+        [w.x1 - halfThick, w.x1 + halfThick].forEach(function (faceX) {
+          var d = Math.abs(faceX - rawValue);
+          if (d < bestDist) { bestDist = d; best = faceX; }
+        });
+      } else if (axis === 'y' && isHorizontal) {
+        [w.y1 - halfThick, w.y1 + halfThick].forEach(function (faceY) {
+          var d = Math.abs(faceY - rawValue);
+          if (d < bestDist) { bestDist = d; best = faceY; }
+        });
+      }
     });
-    return found;
+    Store.currentLajes().forEach(function (other: any) {
+      if (other.id === skipLajeId) return;
+      var b = Core.lajeBounds(other);
+      var candidates = axis === 'x' ? [b.minX, b.maxX] : [b.minY, b.maxY];
+      candidates.forEach(function (c: any) {
+        var d = Math.abs(c - rawValue);
+        if (d < bestDist) { bestDist = d; best = c; }
+      });
+    });
+    return best;
   }
-  function fuseLajesIfTouching(lajeId: any) {
-    var fusedAny = false;
-    for (var pass = 0; pass < 5; pass++) {
-      var l = Store.findLaje(lajeId);
-      if (!l) break;
-      var neighbor = findFusableLaje(l);
-      if (!neighbor) break;
-      var fused = Store.commands.fuseLajes(lajeId, neighbor.id);
-      if (!fused) break;
-      fusedAny = true;
-    }
-    return fusedAny;
+
+  // Arrastar o CORPO inteiro da laje (mover sem mudar o formato) —
+  // gruda (ímã) numa laje vizinha quando fica perto o bastante, pra
+  // ficar colada sem sobrepor, SEM virar um objeto só (decisão revista
+  // — ver DEC-37, Sessão 6: nada de fusão automática, só esse snap).
+  // Testa os dois jeitos de encostar em cada eixo (minha borda direita
+  // na esquerda da vizinha, ou minha esquerda na direita dela — e o
+  // mesmo em Y), só quando as faixas do OUTRO eixo realmente se
+  // sobrepõem (senão "encostar" não faz sentido geométrico).
+  function snapLajeBodyDelta(lajeId: any, rawDx: any, rawDy: any, origBounds: any) {
+    var candMinX = origBounds.minX + rawDx, candMaxX = origBounds.maxX + rawDx;
+    var candMinY = origBounds.minY + rawDy, candMaxY = origBounds.maxY + rawDy;
+    var tol = Core.SNAP_UNIT;
+    var bestDx = rawDx, bestDxDist = tol;
+    var bestDy = rawDy, bestDyDist = tol;
+    Store.currentLajes().forEach(function (other: any) {
+      if (other.id === lajeId) return;
+      var ob = Core.lajeBounds(other);
+      var overlapY = Math.min(candMaxY, ob.maxY) - Math.max(candMinY, ob.minY);
+      if (overlapY > -tol) {
+        [ob.minX - candMaxX, ob.maxX - candMinX].forEach(function (d: any) {
+          if (Math.abs(d) < bestDxDist) { bestDxDist = Math.abs(d); bestDx = rawDx + d; }
+        });
+      }
+      var overlapX = Math.min(candMaxX, ob.maxX) - Math.max(candMinX, ob.minX);
+      if (overlapX > -tol) {
+        [ob.minY - candMaxY, ob.maxY - candMinY].forEach(function (d: any) {
+          if (Math.abs(d) < bestDyDist) { bestDyDist = Math.abs(d); bestDy = rawDy + d; }
+        });
+      }
+    });
+    return { dx: bestDx, dy: bestDy };
   }
 
   function onPointerMove(e: any) {
@@ -1673,14 +1731,32 @@ import {
     if (dragMode && dragMode.indexOf('lajeEdge') === 0) {
       var gpLE = getGroundModelPoint(e.clientX, e.clientY);
       if (gpLE && dragElementStart) {
-        var snappedLX = Core.snap(gpLE.x), snappedLY = Core.snap(gpLE.y);
-        var edgeL = dragMode.slice('lajeEdge'.length);
-        var lx1 = dragElementStart.x1, ly1 = dragElementStart.y1, lx2 = dragElementStart.x2, ly2 = dragElementStart.y2;
-        if (edgeL === 'MinX') lx1 = Math.min(snappedLX, lx2 - Core.SNAP_UNIT);
-        else if (edgeL === 'MaxX') lx2 = Math.max(snappedLX, lx1 + Core.SNAP_UNIT);
-        else if (edgeL === 'MinY') ly1 = Math.min(snappedLY, ly2 - Core.SNAP_UNIT);
-        else if (edgeL === 'MaxY') ly2 = Math.max(snappedLY, ly1 + Core.SNAP_UNIT);
-        Store.commands.updateLajeBoundsLive(selectedLajeId, lx1, ly1, lx2, ly2);
+        var startPtsL = dragElementStart.points;
+        var edgeIdxL = dragElementStart.edgeIndex;
+        var nL = startPtsL.length;
+        var p1L = startPtsL[edgeIdxL], p2L = startPtsL[(edgeIdxL + 1) % nL];
+        var isVerticalL = Math.abs(p1L.x - p2L.x) < 1e-6;
+        var newValueL: number;
+        if (isVerticalL) {
+          var snappedLX: number | null = nearestWallFaceCoord('x', gpLE.x, selectedLajeId);
+          newValueL = snappedLX == null ? Core.snap(gpLE.x) : snappedLX;
+        } else {
+          var snappedLY: number | null = nearestWallFaceCoord('y', gpLE.y, selectedLajeId);
+          newValueL = snappedLY == null ? Core.snap(gpLE.y) : snappedLY;
+        }
+        Store.commands.updateLajeEdgeLive(selectedLajeId, edgeIdxL, newValueL);
+      }
+      return;
+    }
+    if (dragMode === 'lajeBody') {
+      var gpLB = getGroundModelPoint(e.clientX, e.clientY);
+      if (gpLB && dragGroundStart && dragElementStart) {
+        var rawDxL = Core.snap(gpLB.x - dragGroundStart.x);
+        var rawDyL = Core.snap(gpLB.y - dragGroundStart.y);
+        var origBoundsL = Core.lajeBounds({ id: '', points: dragElementStart.points } as any);
+        var snapped = snapLajeBodyDelta(selectedLajeId, rawDxL, rawDyL, origBoundsL);
+        var movedPts = dragElementStart.points.map(function (p: any) { return { x: p.x + snapped.dx, y: p.y + snapped.dy }; });
+        Store.commands.updateLajePointsLive(selectedLajeId, movedPts);
       }
       return;
     }
@@ -1867,13 +1943,11 @@ import {
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }
-    // Laje: mesma ideia de telhado — ao soltar a borda, tenta fundir com
-    // qualquer laje vizinha que tenha ficado encostada (ver DEC-35).
+    // Laje: sem fusão automática (decisão revista — ver DEC-37, Sessão
+    // 6). Arrastar borda/corpo só solta a alça normalmente; o "colar
+    // sem sobrepor" já aconteceu ao vivo, durante o próprio arraste
+    // (ver nearestWallFaceCoord/snapLajeBodyDelta).
     if (dragMode && dragMode.indexOf('lajeEdge') === 0) {
-      if (selectedLajeId && fuseLajesIfTouching(selectedLajeId)) {
-        hintEl.textContent = 'Lajes fundidas — viraram uma peça só.';
-        onModelChanged();
-      }
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }
@@ -1887,7 +1961,7 @@ import {
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }
-    if (dragMode === 'columnBody' || dragMode === 'furnitureBody' || dragMode === 'openingSlide' || dragMode === 'openingEdgeLeft' || dragMode === 'openingEdgeRight' || dragMode === 'openingEdgeTop' || (dragMode && dragMode.indexOf('varandaEdge') === 0)) {
+    if (dragMode === 'columnBody' || dragMode === 'furnitureBody' || dragMode === 'lajeBody' || dragMode === 'openingSlide' || dragMode === 'openingEdgeLeft' || dragMode === 'openingEdgeRight' || dragMode === 'openingEdgeTop' || (dragMode && dragMode.indexOf('varandaEdge') === 0)) {
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }
@@ -2537,18 +2611,29 @@ import {
         var halfL = (LAJE_DEFAULT_SIZE_M * Core.GRID) / 2;
         rectL = { x1: -halfL, y1: -halfL, x2: halfL, y2: halfL };
       }
-      deselect();
-      var newLaje = Store.commands.createLaje(rectL.x1, rectL.y1, rectL.x2, rectL.y2);
-      if (newLaje) {
-        // Clicar em "Laje" de novo com uma já existente no pavimento
-        // nasce cobrindo o MESMO contorno (mesma conta de nascimento)
-        // — sem isso, ficaria uma sobrepondo a outra em vez de virar
-        // uma peça só. Mesma checagem usada ao soltar o arraste de uma
-        // borda (ver DEC-35).
-        fuseLajesIfTouching(newLaje.id);
-        selectLaje(newLaje.id);
+      // Já existe laje no pavimento? Nasce AO LADO de tudo que já
+      // existe (mesmo espírito de computeNextRoomSlot pra cômodo) —
+      // uma peça nova, separada, que a pessoa arrasta como bloco até
+      // encostar; o "colar sem sobrepor" acontece pelo ímã do próprio
+      // arraste (nearestWallFaceCoord/snapLajeBodyDelta), sem fundir
+      // (decisão revista — ver DEC-37, Sessão 6).
+      var existingLajes = Store.currentLajes();
+      if (existingLajes.length) {
+        var lajeMinX = Infinity, lajeMaxX = -Infinity;
+        existingLajes.forEach(function (l) {
+          l.points.forEach(function (p: any) { if (p.x < lajeMinX) lajeMinX = p.x; if (p.x > lajeMaxX) lajeMaxX = p.x; });
+        });
+        var gapL = 1 * Core.GRID; // 1m de respiro, mesmo espírito do gap entre cômodos
+        var widthL = rectL.x2 - rectL.x1, depthL = rectL.y2 - rectL.y1;
+        var newX1 = Math.max(rectL.x2, lajeMaxX) + gapL;
+        rectL = { x1: newX1, y1: rectL.y1, x2: newX1 + widthL, y2: rectL.y1 + depthL };
       }
-      hintEl.textContent = 'Laje criada cobrindo o pavimento — arraste as bordas pra ajustar (inclusive além da parede, pra criar um balanço/sacada).';
+      deselect();
+      var newLaje = Store.commands.createLaje(Core.rectPoints(rectL.x1, rectL.y1, rectL.x2, rectL.y2));
+      if (newLaje) selectLaje(newLaje.id);
+      hintEl.textContent = existingLajes.length
+        ? 'Nova laje criada ao lado — arraste o corpo dela pra encostar em outra (gruda sozinha, sem sobrepor).'
+        : 'Laje criada cobrindo o pavimento — arraste o corpo pra reposicionar, ou as bordas pra ajustar o formato (inclusive além da parede, pra criar um balanço/sacada).';
       return;
     }
     var preset = ROOM_PRESETS[key];

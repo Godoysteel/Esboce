@@ -1344,19 +1344,49 @@ export function hashColorHex(key: string): number {
   // sem nenhuma relação obrigatória com o contorno de parede: pode ser
   // menor (vão aberto) ou maior (balanço/sacada) que ele — x1..y2 vêm
   // direto do objeto Laje, arrastados livremente pela pessoa.
+  // Laje colocável de verdade (ver DEC-35/37) — extrusão de um
+  // POLÍGONO real (não mais uma caixa retangular fixa): depois de
+  // fundir duas peças que não formam um retângulo perfeito, o
+  // contorno pode ter mais de 4 pontos (um "L", por exemplo). Mesma
+  // técnica de makeSlabMesh (Shape + ExtrudeGeometry, shape.x/y = 
+  // mundo x/z), com a MESMA textura de reboco das paredes
+  // (buildParapetSegmentMaterial, já usado no parapeito da
+  // platibanda) em vez do material liso genérico de makeSlabMesh.
   function buildLajePiece(laje: any, scale: any, offsetX: any, offsetY: any, topY: any, wallColor: any, viewState: any) {
-    var x1 = (laje.x1 - offsetX) * scale, z1 = (laje.y1 - offsetY) * scale;
-    var x2 = (laje.x2 - offsetX) * scale, z2 = (laje.y2 - offsetY) * scale;
-    var sizeX = Math.abs(x2 - x1), sizeZ = Math.abs(z2 - z1);
+    var pts = laje.points;
+    if (!pts || pts.length < 3) return [];
+    var worldPts = pts.map(function (p: any) {
+      return { x: (p.x - offsetX) * scale, z: (p.y - offsetY) * scale };
+    });
+    var minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    worldPts.forEach(function (p: any) {
+      if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+      if (p.z < minZ) minZ = p.z; if (p.z > maxZ) maxZ = p.z;
+    });
+    var sizeX = maxX - minX, sizeZ = maxZ - minZ;
     if (sizeX < 1e-4 || sizeZ < 1e-4) return [];
-    var cx = (x1 + x2) / 2, cz = (z1 + z2) / 2;
     var color = pickColor(wallColor, 'laje', viewState);
     var mat = buildParapetSegmentMaterial(color, LAJE_THICKNESS, LAJE_THICKNESS, Math.max(sizeX, sizeZ));
-    var geo = new THREE.BoxGeometry(sizeX, LAJE_THICKNESS, sizeZ);
+    mat.side = THREE.DoubleSide;
+
+    var shape = new THREE.Shape();
+    worldPts.forEach(function (p: any, i: any) {
+      if (i === 0) shape.moveTo(p.x, p.z); else shape.lineTo(p.x, p.z);
+    });
+    shape.closePath();
+    var geo = new THREE.ExtrudeGeometry(shape, { depth: LAJE_THICKNESS, bevelEnabled: false });
     var mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set(cx, topY + LAJE_THICKNESS / 2, cz);
+    mesh.rotation.x = Math.PI / 2;
+    // makeSlabMesh (de onde essa técnica foi copiada) trata "topY" como
+    // a SUPERFÍCIE DE CIMA, extrudindo pra BAIXO a partir dali — certo
+    // pro piso (que fica embutido no chão). Laje é o oposto: precisa
+    // ficar EM CIMA da parede, subindo a partir do topo dela — por
+    // isso soma LAJE_THICKNESS aqui, senão a laje nascia enterrada
+    // dentro do topo da parede em vez de apoiada em cima dela.
+    mesh.position.y = topY + LAJE_THICKNESS;
     var edges = new THREE.EdgesGeometry(geo);
     var edgeLines = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x1B1C1E }));
+    edgeLines.rotation.copy(mesh.rotation);
     edgeLines.position.copy(mesh.position);
     return [mesh, edgeLines];
   }
@@ -2067,20 +2097,23 @@ export function hashColorHex(key: string): number {
 
     if (viewState.selectedLaje) {
       var lSel = viewState.selectedLaje, lYOffset = viewState.editingYOffset;
-      var lMidX = (lSel.x1 + lSel.x2) / 2, lMidY = (lSel.y1 + lSel.y2) / 2;
-      [
-        ['MinX', lSel.x1, lMidY], ['MaxX', lSel.x2, lMidY],
-        ['MinY', lMidX, lSel.y1], ['MaxY', lMidX, lSel.y2]
-      ].forEach(function (edge) {
-        var ex = (edge[1] - offsetX) * scale, ez = (edge[2] - offsetY) * scale;
-        var geoE = new THREE.SphereGeometry(0.11, 12, 12);
-        var matE = new THREE.MeshBasicMaterial({ color: SELECTED_ACCENT, depthTest: false });
-        var meshE = new THREE.Mesh(geoE, matE);
-        meshE.renderOrder = 999;
-        meshE.position.set(ex, lYOffset + WALL_HEIGHT + LAJE_THICKNESS + 0.06, ez);
-        meshE.userData.handle = 'lajeEdge' + edge[0];
-        scene.add(meshE);
-        registry.handleMeshes.push(meshE);
+      var lPts = lSel.points || [];
+      var lHandleY = lYOffset + WALL_HEIGHT + LAJE_THICKNESS + 0.06;
+      // Uma alça por ARESTA do contorno (não mais 4 fixas — depois de
+      // fundir duas peças que não formam um retângulo perfeito, o
+      // contorno pode ter mais pontos, ex.: um "L" com 6 arestas).
+      lPts.forEach(function (lp1: any, li: any) {
+        var lp2 = lPts[(li + 1) % lPts.length];
+        var lmx = (lp1.x + lp2.x) / 2, lmy = (lp1.y + lp2.y) / 2;
+        var lex = (lmx - offsetX) * scale, lez = (lmy - offsetY) * scale;
+        var geoLE = new THREE.SphereGeometry(0.11, 12, 12);
+        var matLE = new THREE.MeshBasicMaterial({ color: SELECTED_ACCENT, depthTest: false });
+        var meshLE = new THREE.Mesh(geoLE, matLE);
+        meshLE.renderOrder = 999;
+        meshLE.position.set(lex, lHandleY, lez);
+        meshLE.userData.handle = 'lajeEdge' + li;
+        scene.add(meshLE);
+        registry.handleMeshes.push(meshLE);
       });
     }
 

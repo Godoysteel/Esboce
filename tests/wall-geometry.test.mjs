@@ -11,8 +11,8 @@ import {
   detectRooms,
   findIsolatedRoomWallIds,
   findWallTJunctionSplits,
-  fusedLajeBounds,
-  lajesCanFuse,
+  rectPoints,
+  lajeBounds,
   resolveOpeningEdgeResize,
   resolveOpeningHeightResize,
   resolveWallGroupGridDelta,
@@ -709,41 +709,39 @@ test('redimensionar altura da abertura nao passa do teto', () => {
   assert.ok(opening.sillHeight + newHeight <= 2.7);
 });
 
-// ---- Laje colocável (DEC-35) ----
+// ---- Laje colocável, com contorno poligonal real (DEC-35/37) ----
+//
+// Sem fusão automática (decisão revista, Sessão 6): duas lajes
+// encostadas continuam objetos separados — o "colar sem sobrepor" é
+// só um ímã de encaixe no arraste (ViewportController.
+// nearestWallFaceCoord/snapLajeBodyDelta, testado manualmente na UI,
+// não aqui). O que continua testável em isolamento (Core.ts puro) é
+// o contorno de cada laje e o retângulo delimitador usado pelo ímã.
 
-test('lajesCanFuse: duas lajes encostadas (mesmo eixo) fundem', () => {
-  const a = createLajeEntity(0, 0, 100, 100);
-  const b = createLajeEntity(100, 0, 200, 100); // encostada na borda direita de A
-  assert.equal(lajesCanFuse(a, b, COINCIDENCE_TOL), true);
-});
-
-test('lajesCanFuse: duas lajes sobrepostas também contam como fundíveis', () => {
-  const a = createLajeEntity(0, 0, 100, 100);
-  const b = createLajeEntity(50, 50, 150, 150);
-  assert.equal(lajesCanFuse(a, b, COINCIDENCE_TOL), true);
-});
-
-test('lajesCanFuse: duas lajes longe uma da outra não fundem', () => {
-  const a = createLajeEntity(0, 0, 100, 100);
-  const b = createLajeEntity(500, 500, 600, 600);
-  assert.equal(lajesCanFuse(a, b, COINCIDENCE_TOL), false);
-});
-
-test('lajesCanFuse: laje não funde consigo mesma', () => {
-  const a = createLajeEntity(0, 0, 100, 100);
-  assert.equal(lajesCanFuse(a, a, COINCIDENCE_TOL), false);
-});
-
-test('fusedLajeBounds: contorno resultante envolve as duas lajes inteiras', () => {
-  const a = createLajeEntity(0, 0, 100, 100);
-  const b = createLajeEntity(80, 20, 200, 150);
-  const bounds = fusedLajeBounds(a, b);
-  assert.deepEqual(bounds, { x1: 0, y1: 0, x2: 200, y2: 150 });
-});
-
-test('createLajeEntity: nasce sem depender de nenhuma parede (x1..y2 livres)', () => {
-  const laje = createLajeEntity(-50, -50, 500, 500); // bem maior que qualquer parede razoável
-  assert.equal(laje.x1, -50);
-  assert.equal(laje.y2, 500);
+test('createLajeEntity: nasce sem depender de nenhuma parede (contorno livre)', () => {
+  const laje = createLajeEntity(rectPoints(-50, -50, 500, 500));
+  assert.equal(laje.points.length, 4);
   assert.ok(laje.id);
+});
+
+test('rectPoints: 4 cantos no sentido horário, min/max resolvidos mesmo com os pontos invertidos', () => {
+  const pts = rectPoints(100, 100, 0, 0); // x1>x2, y1>y2 de propósito
+  assert.deepEqual(pts, [
+    { x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }
+  ]);
+});
+
+test('lajeBounds: retângulo delimitador de um polígono simples bate com o próprio retângulo', () => {
+  const laje = createLajeEntity(rectPoints(10, 20, 110, 220));
+  const b = lajeBounds(laje);
+  assert.deepEqual(b, { minX: 10, maxX: 110, minY: 20, maxY: 220 });
+});
+
+test('lajeBounds: funciona também pra um contorno não-retangular (ex.: um "L" desenhado à mão)', () => {
+  const lShape = createLajeEntity([
+    { x: 0, y: 0 }, { x: 200, y: 0 }, { x: 200, y: 100 },
+    { x: 100, y: 100 }, { x: 100, y: 200 }, { x: 0, y: 200 }
+  ]);
+  const b = lajeBounds(lShape);
+  assert.deepEqual(b, { minX: 0, maxX: 200, minY: 0, maxY: 200 });
 });

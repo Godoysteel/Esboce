@@ -60,16 +60,21 @@ export interface Varanda {
 
 // Laje entre pavimentos (ou cobertura plana no último) — objeto
 // colocável de verdade, igual telhado/varanda: nasce de um clique,
-// redimensiona pelas bordas, funde com outra laje que encoste. x1..y2
-// SEM relação obrigatória com as paredes do pavimento — pode ficar
-// menor (vão aberto, ex.: um poço de escada) ou maior (balanço,
-// sacada) que o contorno de parede. Ver DEC-35.
+// arrasta como bloco pra reposicionar, e cada aresta do contorno
+// arrasta independente pra ajustar o formato. Sem relação obrigatória
+// com as paredes do pavimento — pode ficar menor (vão aberto, ex.: um
+// poço de escada) ou maior (balanço, sacada) que o contorno de
+// parede. Duas lajes encostadas grudam por um ímã de encaixe (sem
+// sobrepor), mas continuam objetos SEPARADOS — sem fusão automática
+// (ver DEC-35/37).
+//
+// `points` é o contorno de VERDADE — um polígono retilíneo (só cantos
+// de 90°, nunca diagonal), sentido horário. Nasce com 4 pontos (um
+// retângulo simples); cada segmento entre dois pontos consecutivos é
+// UMA aresta independente, arrastável na seleção.
 export interface Laje {
   id: string;
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
+  points: { x: number; y: number }[];
 }
 
 // Móvel colocado na cena — posição do "pé" (x,y) no plano do pavimento,
