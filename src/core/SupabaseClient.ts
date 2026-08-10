@@ -15,6 +15,7 @@
 // Identity/AccessPolicy no Domínio v2.1).
 
 import { createClient } from '@supabase/supabase-js';
+import { CURRENT_LEGAL_ACCEPTANCE } from './LegalAcceptance.js';
 
 const SUPABASE_URL = 'https://dugcwndtflcjajffxjko.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_32BTfCDesA9WyH9Ltm0-zw_MKttNAfO';
@@ -233,4 +234,27 @@ export async function listCatalogProducts(): Promise<CatalogProductWithDepartmen
   if (mappingsError) throw mappingsError;
   const categoryToDept = new Map((mappings ?? []).map((m: any) => [m.categoria, m.department_id]));
   return (products ?? []).map((p: any) => ({ ...p, department_id: categoryToDept.get(p.categoria) ?? null })) as CatalogProductWithDepartment[];
+}
+
+// O aceite é versionado: uma nova versão dos documentos pode exigir
+// uma nova confirmação sem apagar o registro histórico anterior.
+export async function hasCurrentLegalAcceptance(userId: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('legal_acceptances')
+    .select('user_id')
+    .eq('user_id', userId)
+    .eq('terms_version', CURRENT_LEGAL_ACCEPTANCE.termsVersion)
+    .eq('privacy_version', CURRENT_LEGAL_ACCEPTANCE.privacyVersion)
+    .maybeSingle();
+  if (error) throw error;
+  return !!data;
+}
+
+export async function recordCurrentLegalAcceptance(userId: string): Promise<void> {
+  const { error } = await supabase.from('legal_acceptances').upsert({
+    user_id: userId,
+    terms_version: CURRENT_LEGAL_ACCEPTANCE.termsVersion,
+    privacy_version: CURRENT_LEGAL_ACCEPTANCE.privacyVersion,
+  }, { onConflict: 'user_id,terms_version,privacy_version', ignoreDuplicates: true });
+  if (error) throw error;
 }
