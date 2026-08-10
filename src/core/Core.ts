@@ -262,7 +262,13 @@ export function findValidOpeningOffset(
   const blockers: [number, number][] = [];
   (openings || []).forEach((o) => {
     if (o.wallId !== w.id || o.id === excludeId) return;
-    blockers.push([o.offset - o.width / 2 - OPENING_GAP, o.offset + o.width / 2 + OPENING_GAP]);
+    // Estes intervalos representam posições possíveis para o centro da
+    // abertura candidata. Além da meia largura da abertura existente e do
+    // afastamento, precisam incluir também a meia largura da candidata.
+    blockers.push([
+      o.offset - o.width / 2 - OPENING_GAP - half,
+      o.offset + o.width / 2 + OPENING_GAP + half,
+    ]);
   });
   blockers.sort((a, b) => a[0] - b[0]);
 

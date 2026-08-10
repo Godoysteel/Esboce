@@ -5,17 +5,22 @@ import test from 'node:test';
 import {
   COINCIDENCE_TOL,
   GRID,
+  OPENING_GAP,
+  OPENING_WALL_CLEARANCE,
   WALL_THICK,
   computeWallFootprints,
   createLajeEntity,
   detectRooms,
+  findValidOpeningOffset,
   findIsolatedRoomWallIds,
   findWallTJunctionSplits,
+  openingOBB,
   polygonAreaModelUnits,
   rectPoints,
   lajeBounds,
   resolveOpeningEdgeResize,
   resolveOpeningHeightResize,
+  resolveWallOffsetAgainstOpenings,
   resolveWallGroupGridDelta,
   resolveWallResizeOffset,
   wallOBB,
@@ -197,6 +202,51 @@ test('janela recebe marco sólido nos quatro lados e vidro ocupa o interior', ()
     (layout.infillCenterY + layout.infillHeight / 2) - (1 + 1.2 - OPENING_FRAME_FACE_WIDTH),
   ) < 1e-9);
   assert.ok(layout.frameBars.every((bar) => bar.depth === 0.12 + OPENING_FRAME_SEAL_OVERLAP * 2));
+});
+
+test('porta e janela mantêm 150 mm livres entre suas extremidades', () => {
+  const wall = { id: 'wall', x1: 0, y1: 0, x2: 100, y2: 0 };
+  const door = { id: 'door', wallId: 'wall', kind: 'door', offset: 2, width: 0.8, height: 2.1, sillHeight: 0 };
+  const windowWidth = 1.2;
+
+  const offset = findValidOpeningOffset(wall, [door], windowWidth, 2.5);
+  const minimumCenter = door.offset + door.width / 2 + OPENING_GAP + windowWidth / 2;
+
+  assert.equal(offset, minimumCenter);
+  const resultingGap = offset - windowWidth / 2 - (door.offset + door.width / 2);
+  assert.ok(Math.abs(resultingGap - OPENING_GAP) < 1e-9);
+});
+
+test('abertura informa quando não existe espaço com margens e afastamentos', () => {
+  const wall = { id: 'wall', x1: 0, y1: 0, x2: 40, y2: 0 };
+  const door = { id: 'door', wallId: 'wall', kind: 'door', offset: 1, width: 0.8, height: 2.1, sillHeight: 0 };
+
+  assert.equal(findValidOpeningOffset(wall, [door], 1.2, 1), null);
+});
+
+test('caixa da esquadria inclui 50 mm de proteção em cada extremidade', () => {
+  const wall = { id: 'wall', x1: 0, y1: 0, x2: 100, y2: 0 };
+  const opening = { id: 'window', wallId: 'wall', kind: 'window', offset: 2.5, width: 1.2, height: 1.2, sillHeight: 1 };
+  const box = openingOBB(opening, wall);
+
+  assert.equal(box.cx, 50);
+  assert.equal(box.cy, 0);
+  assert.equal(box.halfLen, (opening.width / 2 + OPENING_WALL_CLEARANCE) * GRID);
+});
+
+test('parede transversal para antes da esquadria mesmo quando o ponteiro salta o vão', () => {
+  const owner = { id: 'owner', x1: 0, y1: 0, x2: 100, y2: 0 };
+  const moving = { id: 'moving', x1: 20, y1: -20, x2: 20, y2: 20 };
+  const opening = { id: 'window', wallId: 'owner', kind: 'window', offset: 2.5, width: 0.8, height: 1.2, sillHeight: 1 };
+
+  assert.deepEqual(
+    resolveWallOffsetAgainstOpenings(moving, 60, 1, 0, ['moving'], [opening], [owner, moving]),
+    { offset: 10, limited: true },
+  );
+  assert.deepEqual(
+    resolveWallOffsetAgainstOpenings({ ...moving, x1: 80, x2: 80 }, -60, 1, 0, ['moving'], [opening], [owner, moving]),
+    { offset: -10, limited: true },
+  );
 });
 
 test('parede de comodo para a 0,50 m antes de atravessar parede paralela', () => {
