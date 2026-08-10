@@ -190,7 +190,20 @@ const STEEL_RATE_LAJE_KG_M3 = 90;
 // menor que 3m — sempre confirmar com calculista.
 const COLUMN_MAX_SPAN_M = 3.0;
 const COLUMN_SECTION_M = 0.15; // pilarete 15x15cm — seção mínima usual
-const BEAM_HEIGHT_M = 0.10;    // altura usual de cinta de amarração/respaldo
+const BEAM_HEIGHT_M = 0.10;    // altura usual de cinta de amarração/respaldo — mesma seção reaproveitada pra verga (ver VERGA_BEARING_M)
+// Verga — reforço acima de QUALQUER vão (porta, janela ou arco), pra
+// redistribuir o peso da parede em volta do vazio. O renderer 3D não
+// desenha uma peça própria pra isso (o "verga" que aparece nos
+// comentários do Scene3DRenderer é só a faixa de parede/reboco que
+// continua acima do vão, sem geometria estrutural própria) — então,
+// diferente de pilarete/cinta, não existe nenhum valor 3D já desenhado
+// pra reaproveitar; é uma estimativa nova, mesma família de regra de
+// bolso. Regra usual de obra residencial: a verga ultrapassa o vão em
+// pelo menos ~20cm de cada lado (apoio sobre a alvenaria), seção igual
+// à cinta (espessura da parede × BEAM_HEIGHT_M). Se pé-direito baixo
+// entre o topo do vão e o teto, "quanto sobra" fica fora do escopo
+// desta estimativa; não substitui projeto estrutural.
+const VERGA_BEARING_M = 0.20;
 
 // ---------------------------------------------------------------
 // REFERÊNCIA DE ALVENARIA — SINAPI (Sistema Nacional de Pesquisa de
@@ -231,11 +244,13 @@ interface Totals {
   doors: number; windows: number; arcos: number; soleiraCount: number; soleiraLength: number;
   columnCount: number; columnVolume: number; estimatedColumnCount: number;
   lajeCount: number; lajeAreaM2: number;
+  vergaCount: number; vergaSpanM: number;
 }
 interface Masonry { blocks: number; mortarM3: number; cementKg: number; calKg: number; sandM3: number; }
 interface Structure {
   pilareteCount: number; pilareteVolume: number; pilareteSteelKg: number;
   beamLength: number; beamVolume: number; beamSteelKg: number;
+  vergaCount: number; vergaVolume: number; vergaSteelKg: number;
 }
 interface LajeQuantities { count: number; areaM2: number; volumeM3: number; steelKg: number; }
 interface FoundationBaldrame { type: 'baldrame'; length: number; concreteVolume: number; steelKg: number; }
@@ -256,7 +271,8 @@ export function compute(): ComputeResult {
     wallLength: 0, wallAreaNet: 0, floorArea: 0, baseboard: 0, roofArea: 0,
     doors: 0, windows: 0, arcos: 0, soleiraCount: 0, soleiraLength: 0,
     columnCount: 0, columnVolume: 0, estimatedColumnCount: 0,
-    lajeCount: 0, lajeAreaM2: 0
+    lajeCount: 0, lajeAreaM2: 0,
+    vergaCount: 0, vergaSpanM: 0
   };
   const paint: Record<string, number> = {}, floorTile: Record<string, number> = {}, roofTile: Record<string, number> = {};
 
@@ -277,11 +293,16 @@ export function compute(): ComputeResult {
       if (w.finishB) addTo(paint, w.finishB, faceArea);
     });
 
-    // Portas, janelas e arcos.
+    // Portas, janelas e arcos — e a verga (reforço acima do vão), que
+    // se aplica a QUALQUER abertura em alvenaria, tenha porta/janela
+    // instalada ou não (arco também precisa, é vão estrutural puro —
+    // ver comentário em VERGA_BEARING_M).
     floor.openings.forEach(function (op) {
       if (op.kind === 'door') totals.doors++;
       else if (op.kind === 'arco') totals.arcos++;
       else totals.windows++;
+      totals.vergaCount++;
+      totals.vergaSpanM += op.width + 2 * VERGA_BEARING_M;
     });
 
     // Cômodos fechados: área de piso + comprimento de rodapé, e piso
@@ -391,13 +412,17 @@ export function compute(): ComputeResult {
   // espessura-da-parede × BEAM_HEIGHT_M.
   const pilareteVolume = totals.estimatedColumnCount * COLUMN_SECTION_M * COLUMN_SECTION_M * wallHeight;
   const beamVolume = totals.wallLength * Core.WALL_THICK * BEAM_HEIGHT_M;
+  const vergaVolume = totals.vergaSpanM * Core.WALL_THICK * BEAM_HEIGHT_M;
   const structure: Structure = {
     pilareteCount: totals.estimatedColumnCount,
     pilareteVolume: pilareteVolume,
     pilareteSteelKg: pilareteVolume * STEEL_RATE_SUPERSTRUCTURE_KG_M3,
     beamLength: totals.wallLength,
     beamVolume: beamVolume,
-    beamSteelKg: beamVolume * STEEL_RATE_SUPERSTRUCTURE_KG_M3
+    beamSteelKg: beamVolume * STEEL_RATE_SUPERSTRUCTURE_KG_M3,
+    vergaCount: totals.vergaCount,
+    vergaVolume: vergaVolume,
+    vergaSteelKg: vergaVolume * STEEL_RATE_SUPERSTRUCTURE_KG_M3
   };
 
   // Fundação — só o TÉRREO (project.floors[0]), igual o renderer 3D já
@@ -518,6 +543,11 @@ export function render(): void {
       html += '<div class="materials-line"><span>Viga de cinta/amarração</span><span>' + fmtM(q.structure.beamLength) + '</span></div>';
       html += '<div class="materials-line"><span>Concreto — cinta</span><span>' + q.structure.beamVolume.toFixed(3).replace('.', ',') + ' m³</span></div>';
       html += '<div class="materials-line"><span>Aço — cinta</span><span>' + q.structure.beamSteelKg.toFixed(1).replace('.', ',') + ' kg</span></div>';
+    }
+    if (q.structure.vergaCount > 0) {
+      html += '<div class="materials-line"><span>Vergas acima de vãos (estimado, vão + 20cm de apoio/lado)</span><span>' + q.structure.vergaCount + ' un.</span></div>';
+      html += '<div class="materials-line"><span>Concreto — vergas</span><span>' + q.structure.vergaVolume.toFixed(3).replace('.', ',') + ' m³</span></div>';
+      html += '<div class="materials-line"><span>Aço — vergas</span><span>' + q.structure.vergaSteelKg.toFixed(1).replace('.', ',') + ' kg</span></div>';
     }
   }
   if (q.laje.count > 0) {
@@ -677,6 +707,11 @@ export function buildRows(): (string | number)[][] {
     push('Estrutura', 'Viga de cinta/amarração (comprimento)', q.structure.beamLength, 'm', null);
     push('Estrutura', 'Concreto — cinta', q.structure.beamVolume, 'm³', q.structure.beamVolume * REFERENCE_PRICES.concretePerM3);
     push('Estrutura', 'Aço — cinta', q.structure.beamSteelKg, 'kg', q.structure.beamSteelKg * REFERENCE_PRICES.steelPerKg);
+  }
+  if (q.structure.vergaCount > 0) {
+    push('Estrutura', 'Vergas acima de vãos (estimado)', q.structure.vergaCount, 'un', null);
+    push('Estrutura', 'Concreto — vergas', q.structure.vergaVolume, 'm³', q.structure.vergaVolume * REFERENCE_PRICES.concretePerM3);
+    push('Estrutura', 'Aço — vergas', q.structure.vergaSteelKg, 'kg', q.structure.vergaSteelKg * REFERENCE_PRICES.steelPerKg);
   }
   if (q.laje.count > 0) {
     const lLabel = 'Laje (ref. taxa de aço 90 kg/m³)';

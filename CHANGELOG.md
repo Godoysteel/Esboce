@@ -41,6 +41,7 @@ Criada a primeira baseline de engenharia do projeto.
 
 ## Adicionado (quantitativo de materiais)
 
+- **Verga (reforço acima de qualquer vão — porta, janela ou arco) agora entra no quantitativo.** Antes só existia visualmente (continuação da textura de parede acima do vão), sem nenhum concreto/aço contado. Agora: volume por abertura = (largura do vão + 20cm de apoio de cada lado) × espessura da parede × altura de seção (reaproveitando a mesma altura que a cinta já usa), aço pela mesma taxa de superestrutura de pilarete/cinta (100 kg/m³). Aparece agregado no painel e na planilha/CSV, mesmo tratamento que pilarete/cinta já recebem. Ver DEC-43 no Registro de Decisões Técnicas.
 - **Laje agora entra no quantitativo de materiais.** A entidade Laje (polígono livre, arrastável, por pavimento) existia na cena, mas nunca era contada no orçamento — nem área, nem concreto, nem aço. Agora: volume = área × espessura real (0,15m, a mesma que o 3D já usa pra desenhar), aço numa taxa própria de **90 kg/m³** (mais baixa que a de viga/pilar, 100 kg/m³, porque armação de laje maciça é mais distribuída). Sem viga própria por laje — a viga de cinta que já existe já cumpre esse papel de apoio; somar as duas duplicaria a peça. Vão de laje sem apoio intermediário fica fora de escopo (fica pro projeto estrutural, mesmo tratamento que pilarete de parede já dá pro vão grande). Aparece nos três lugares que já existiam pra outros itens: painel de quantitativo, planilha/CSV e detalhe elemento-a-elemento. Ver DEC-42 no Registro de Decisões Técnicas.
 
 ## Documentação
