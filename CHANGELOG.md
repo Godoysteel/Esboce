@@ -39,6 +39,10 @@ Criada a primeira baseline de engenharia do projeto.
 
 # Não lançado
 
+## Documentação
+
+- Fechada a pendência "fundação pra Laje" (registrada na DEC-42/DEC-43): definido que **Laje é sempre entrepiso** — nunca fica em contato com o solo, nunca gera fundação própria. Laje em contato com o solo já é responsabilidade do tipo de fundação **radier**, que já existe. Sem mudança de código — o comportamento atual já estava certo, só faltava essa definição registrada. Ver DEC-44 no Registro de Decisões Técnicas.
+
 ## Adicionado (quantitativo de materiais)
 
 - **Verga (reforço acima de qualquer vão — porta, janela ou arco) agora entra no quantitativo.** Antes só existia visualmente (continuação da textura de parede acima do vão), sem nenhum concreto/aço contado. Agora: volume por abertura = (largura do vão + 20cm de apoio de cada lado) × espessura da parede × altura de seção (reaproveitando a mesma altura que a cinta já usa), aço pela mesma taxa de superestrutura de pilarete/cinta (100 kg/m³). Aparece agregado no painel e na planilha/CSV, mesmo tratamento que pilarete/cinta já recebem. Ver DEC-43 no Registro de Decisões Técnicas.
