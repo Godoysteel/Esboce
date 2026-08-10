@@ -239,7 +239,19 @@ export class EsboceApplication {
     // fica sempre marcado ativo (único modo existente); "2D" e "Medir"
     // já nascem com `disabled` no HTML, então nem chegam a disparar
     // clique — ver DEC (fase 2) no Registro de Decisões Técnicas.
-    this.requireElement("viewModeOrbitBtn").addEventListener("click", () => ViewportController.resetCamera());
+    const orbitBtn = this.requireElement("viewModeOrbitBtn");
+    const touchFirst = window.matchMedia('(pointer: coarse)').matches;
+    if (touchFirst) {
+      orbitBtn.textContent = "CÃ¢mera";
+      orbitBtn.title = "Alternar entre construir e girar a cÃ¢mera com um dedo";
+    }
+    orbitBtn.addEventListener("click", () => {
+      if (!touchFirst) {
+        ViewportController.resetCamera();
+        return;
+      }
+      orbitBtn.classList.toggle("active", ViewportController.toggleTouchCameraMode());
+    });
 
     // Barra inferior: zoom (− / % / +), tela cheia e "Visualização"
     // (mesmo menu de camadas do clique direito em área vazia, ver

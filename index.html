@@ -604,6 +604,50 @@
     overflow-y: auto;
     width: 84px;
   }
+  @media (max-width: 700px) {
+    :root { --top-overlay-h: 54px; }
+    .top-overlay { flex-wrap: nowrap; gap: 6px; padding: 8px; }
+    .brand-header { display: none; }
+    .top-overlay .tb-pill { padding: 4px 6px; border-radius: 10px; }
+    .top-overlay .tb-btn { padding: 7px 9px; }
+    .top-overlay .tb-icon-btn { width: 32px; height: 32px; }
+    .top-overlay .tb-group { gap: 3px; }
+    .top-overlay .tb-spacer { min-width: 0; }
+
+    #navGizmoCanvas { top: calc(var(--top-overlay-h) + 6px); right: 6px; width: 48px; height: 48px; }
+    .tb-viewmode-panel { top: calc(var(--top-overlay-h) + 60px); right: 6px; gap: 5px; padding: 5px; }
+    .tb-viewmode-panel #viewMode2DBtn,
+    .tb-viewmode-panel #viewModeMedirBtn { display: none; }
+    .tb-viewmode-btn { width: 42px; height: 38px; }
+
+    .tool-sidebar {
+      left: 6px; top: calc(var(--top-overlay-h) + 6px); bottom: 58px;
+      width: 72px; padding: 8px 6px; gap: 8px; border-radius: 10px;
+    }
+    .ts-btn { padding: 7px 3px 5px; font-size: 9.5px; }
+    .ts-icon { width: 26px; height: 26px; }
+    .ts-supergroup-label { font-size: 9px; }
+    .ts-group-label { font-size: 8px; }
+
+    .bottom-bar {
+      left: 84px; right: 6px; padding: 6px 0; gap: 4px;
+      flex-wrap: nowrap; justify-content: space-between;
+    }
+    .bottom-bar .tb-spacer,
+    .bottom-bar .viewport-stats,
+    #settingsToggleBtn { display: none; }
+    .bottom-bar .tb-pill { padding: 4px; border-radius: 10px; }
+    .bottom-toggle-group { gap: 2px; min-width: 0; }
+    .bottom-toggle-btn { padding: 7px 6px; font-size: 10px; gap: 2px; }
+    .zoom-control { gap: 2px; }
+    .zoom-control #zoomPercentLabel { display: none; }
+    .zoom-control .tb-icon-btn { width: 28px; height: 28px; }
+
+    .viewport-hint {
+      left: 84px; right: 58px; bottom: 54px; transform: none;
+      max-width: none; padding: 5px 7px; font-size: 10px; line-height: 1.25;
+    }
+  }
   .ts-group { display: flex; flex-direction: column; gap: 6px; }
   .ts-supergroup-label {
     font-size: 11px; text-transform: uppercase; letter-spacing: .03em;
