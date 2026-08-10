@@ -8,7 +8,14 @@ import { Store } from './Store.js';
 import { Catalog } from './Catalog.js';
 import { Scene3DRenderer } from './Scene3DRenderer.js';
 import { MaterialsSheet } from './MaterialsSheet.js';
-import type { Point, Wall, Roof, Column, Laje } from './types.js';
+import {
+  computeFoundationQuantity,
+  gableAreaMeters as calculateGableAreaMeters,
+  roofAreaMeters as calculateRoofAreaMeters,
+  roofNetAreas as calculateRoofNetAreas,
+} from './QuantityGeometry.js';
+import type { FoundationQuantity } from './QuantityGeometry.js';
+import type { Point, Wall, Roof, Column, Laje, Project } from './types.js';
 
 let bodyEl: HTMLElement | null, panelEl: HTMLElement | null;
 
@@ -60,77 +67,23 @@ function addTo(map: Record<string, number>, key: string, value: number): void {
 // footprint estendido inteiro no mesmo ângulo, mesma fórmula. platibanda
 // é laje plana sem beiral — ignora pitchDeg e overhangs.
 function roofAreaMeters(roof: Roof): number {
-  const widthM = Math.abs(roof.x2 - roof.x1) / Core.GRID;
-  const depthM = Math.abs(roof.y2 - roof.y1) / Core.GRID;
-  if (roof.type === 'platibanda') return widthM * depthM;
-
-  const pitchRad = (roof.pitchDeg || 0) * Math.PI / 180;
-  const ridgeAlongX = roof.ridgeAxis === 'x';
-  const eave = Scene3DRenderer.ROOF_OVERHANG_GETTER();
-  const rake = Scene3DRenderer.RAKE_OVERHANG_GETTER();
-
-  let extWidth: number, extDepth: number;
-  if (roof.type === 'quatroAguas') {
-    // Quatro águas: beiral igual (ROOF_OVERHANG) nos dois eixos — não
-    // tem oitão/rake, então não existe overhang "estreito".
-    extWidth = widthM + 2 * eave;
-    extDepth = depthM + 2 * eave;
-  } else if (ridgeAlongX) {
-    // duasAguas/umaAgua com cumeeira/caimento correndo no eixo X: a
-    // largura (X) é a direção do oitão/rake; a profundidade (Z) é a
-    // direção do beiral de goteira.
-    extWidth = widthM + 2 * rake;
-    extDepth = depthM + 2 * eave;
-  } else {
-    extWidth = widthM + 2 * eave;
-    extDepth = depthM + 2 * rake;
-  }
-  return (extWidth * extDepth) / Math.cos(pitchRad);
-}
-
-function roofExtendedFootprintMeters(roof: Roof) {
-  const ridgeAlongX = roof.ridgeAxis === 'x';
-  const eave = Scene3DRenderer.ROOF_OVERHANG_GETTER();
-  const rake = Scene3DRenderer.RAKE_OVERHANG_GETTER();
-  const marginX = roof.type === 'quatroAguas' ? eave : (ridgeAlongX ? rake : eave);
-  const marginY = roof.type === 'quatroAguas' ? eave : (ridgeAlongX ? eave : rake);
-  return {
-    minX: Math.min(roof.x1, roof.x2) / Core.GRID - marginX,
-    maxX: Math.max(roof.x1, roof.x2) / Core.GRID + marginX,
-    minY: Math.min(roof.y1, roof.y2) / Core.GRID - marginY,
-    maxY: Math.max(roof.y1, roof.y2) / Core.GRID + marginY
-  };
-}
-
-function roofBodyFootprintMeters(roof: Roof) {
-  return {
-    minX: Math.min(roof.x1, roof.x2) / Core.GRID,
-    maxX: Math.max(roof.x1, roof.x2) / Core.GRID,
-    minY: Math.min(roof.y1, roof.y2) / Core.GRID,
-    maxY: Math.max(roof.y1, roof.y2) / Core.GRID
-  };
+  return calculateRoofAreaMeters(roof, roofQuantityConfig());
 }
 
 function roofNetAreas(roofs: Roof[]): Record<string, number> {
-  const result: Record<string, number> = {};
-  roofs.forEach((roof) => { result[roof.id] = roofAreaMeters(roof); });
-  for (let i = 0; i < roofs.length; i++) for (let j = i + 1; j < roofs.length; j++) {
-    const a = roofs[i]!, b = roofs[j]!;
-    if (!a.compoundGroupId || a.compoundGroupId !== b.compoundGroupId || a.ridgeAxis === b.ridgeAxis) continue;
-    const ra = roofExtendedFootprintMeters(a), rb = roofExtendedFootprintMeters(b);
-    const areaA = (ra.maxX - ra.minX) * (ra.maxY - ra.minY);
-    const areaB = (rb.maxX - rb.minX) * (rb.maxY - rb.minY);
-    const secondary = areaA < areaB || (Math.abs(areaA - areaB) <= 1e-9 && a.id > b.id) ? a : b;
-    const primary = secondary === a ? b : a;
-    const secondaryFootprint = secondary === a ? ra : rb;
-    const primaryBody = roofBodyFootprintMeters(primary);
-    const overlap = Math.max(0, Math.min(secondaryFootprint.maxX, primaryBody.maxX) - Math.max(secondaryFootprint.minX, primaryBody.minX)) *
-      Math.max(0, Math.min(secondaryFootprint.maxY, primaryBody.maxY) - Math.max(secondaryFootprint.minY, primaryBody.minY));
-    if (overlap <= 1e-9) continue;
-    const slopeFactor = secondary.type === 'platibanda' ? 1 : 1 / Math.cos((secondary.pitchDeg || 0) * Math.PI / 180);
-    result[secondary.id] = Math.max(0, result[secondary.id]! - overlap * slopeFactor);
-  }
-  return result;
+  return calculateRoofNetAreas(roofs, roofQuantityConfig());
+}
+
+function roofQuantityConfig() {
+  return {
+    grid: Core.GRID,
+    roofOverhang: Scene3DRenderer.ROOF_OVERHANG_GETTER(),
+    rakeOverhang: Scene3DRenderer.RAKE_OVERHANG_GETTER(),
+  };
+}
+
+function gableAreaMeters(roof: Roof): number {
+  return calculateGableAreaMeters(roof, roofQuantityConfig());
 }
 
 // Volume estruturral de uma coluna (pilar), em m³ — lado/diâmetro fixo
@@ -295,12 +248,37 @@ interface Structure {
 }
 interface LajeQuantities { count: number; areaM2: number; volumeM3: number; steelKg: number; }
 interface RoofTimber { areaM2: number; ripaLinearM: number; caibroLinearM: number; tercaLinearM: number; volumeM3: number; }
-interface FoundationBaldrame { type: 'baldrame'; length: number; concreteVolume: number; steelKg: number; }
-interface FoundationRadier { type: 'radier'; areaM2: number; concreteVolume: number; steelKg: number; }
-type Foundation = FoundationBaldrame | FoundationRadier | null;
+type Foundation = FoundationQuantity;
 interface ComputeResult {
   totals: Totals; paint: Record<string, number>; floorTile: Record<string, number>; roofTile: Record<string, number>;
   masonry: Masonry; structure: Structure; foundation: Foundation; laje: LajeQuantities; roofTimber: RoofTimber;
+}
+
+function computeFoundation(project: Project): Foundation {
+  const groundFloor = project.floors[0];
+  if (!groundFloor) return null;
+
+  let groundWallLength = 0, groundPerimeter = 0, groundAreaM2 = 0;
+  groundFloor.walls.forEach(function (w) { groundWallLength += Core.wallLengthMeters(w); });
+  const groundRooms = Core.detectRooms(groundFloor.walls);
+  groundRooms.forEach(function (room) {
+    groundAreaM2 += room.area / (Core.GRID * Core.GRID);
+    groundPerimeter += polygonPerimeterMeters(room.points);
+  });
+
+  return computeFoundationQuantity(
+    project.foundationType,
+    groundWallLength,
+    groundAreaM2,
+    groundPerimeter,
+    {
+      baldrameWidth: Scene3DRenderer.BALDRAME_WIDTH_GETTER(),
+      baldrameThickness: Scene3DRenderer.BALDRAME_THICKNESS_GETTER(),
+      radierMargin: Scene3DRenderer.RADIER_MARGIN_GETTER(),
+      radierThickness: Scene3DRenderer.RADIER_THICKNESS_GETTER(),
+      steelRateKgM3: STEEL_RATE_FOUNDATION_KG_M3,
+    },
+  );
 }
 
 // Percorre TODOS os pavimentos — a lista é do projeto inteiro, não só do
@@ -393,11 +371,7 @@ export function compute(): ComputeResult {
       // não participa do contorno dos cômodos. Duas águas possui duas
       // faces triangulares/retangulares iguais, uma em cada empena.
       if (roof.type === 'duasAguas') {
-        const widthM = (roof.ridgeAxis === 'x' ? Math.abs(roof.y2 - roof.y1) : Math.abs(roof.x2 - roof.x1)) / Core.GRID;
-        const pitchRad = (roof.pitchDeg || 0) * Math.PI / 180;
-        const baseRise = Scene3DRenderer.ROOF_OVERHANG_GETTER() * Math.tan(pitchRad);
-        const triangleRise = widthM / 2 * Math.tan(pitchRad);
-        const oneGableArea = widthM * baseRise + widthM * triangleRise / 2;
+        const oneGableArea = gableAreaMeters(roof);
         totals.wallAreaNet += oneGableArea * 2;
         if (roof.gableFinishA) addTo(paint, roof.gableFinishA, oneGableArea);
         if (roof.gableFinishB) addTo(paint, roof.gableFinishB, oneGableArea);
@@ -481,41 +455,7 @@ export function compute(): ComputeResult {
   // (comprimento de parede, sem duplicar as internas — mais preciso que
   // a malha 3D, que desenha um quadro por cômodo e sobrepõe nas paredes
   // compartilhadas).
-  const groundFloor = project.floors[0];
-  let foundation: Foundation = null;
-  if (groundFloor) {
-    let groundWallLength = 0, groundPerimeter = 0, groundAreaM2 = 0;
-    groundFloor.walls.forEach(function (w) { groundWallLength += Core.wallLengthMeters(w); });
-    const groundRooms = Core.detectRooms(groundFloor.walls);
-    groundRooms.forEach(function (room) {
-      groundAreaM2 += room.area / (Core.GRID * Core.GRID);
-      groundPerimeter += polygonPerimeterMeters(room.points);
-    });
-    if (groundAreaM2 > 0 || groundWallLength > 0) {
-      if (project.foundationType === 'baldrame') {
-        const baldrameWidth = Scene3DRenderer.BALDRAME_WIDTH_GETTER();
-        const baldrameThickness = Scene3DRenderer.BALDRAME_THICKNESS_GETTER();
-        const baldrameVolume = groundWallLength * baldrameWidth * baldrameThickness;
-        foundation = {
-          type: 'baldrame',
-          length: groundWallLength,
-          concreteVolume: baldrameVolume,
-          steelKg: baldrameVolume * STEEL_RATE_FOUNDATION_KG_M3
-        };
-      } else {
-        const radierMargin = Scene3DRenderer.RADIER_MARGIN_GETTER();
-        const radierThickness = Scene3DRenderer.RADIER_THICKNESS_GETTER();
-        const radierAreaM2 = groundAreaM2 + groundPerimeter * radierMargin;
-        const radierVolume = radierAreaM2 * radierThickness;
-        foundation = {
-          type: 'radier',
-          areaM2: radierAreaM2,
-          concreteVolume: radierVolume,
-          steelKg: radierVolume * STEEL_RATE_FOUNDATION_KG_M3
-        };
-      }
-    }
-  }
+  const foundation = computeFoundation(project);
 
   // Laje — volume = área total já somada × espessura real (mesma
   // constante que o 3D usa pra desenhar), aço pela taxa própria de laje
