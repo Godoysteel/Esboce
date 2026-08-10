@@ -134,7 +134,7 @@ portas
 janelas
 lajes
 
-Ático/Chalé é uma configuração paramétrica de uma cobertura de duas águas, não um novo nível obrigatório. Ao criar o telhado, o usuário escolhe o modo, ajusta uma prévia transparente na altura desejada e confirma em **Gerar ático**. A cobertura guarda sua altura de beiral e os identificadores das paredes associadas; o recorte visual e o quantitativo são derivados desses dados, permitindo desfazer e recalcular sem destruir a geometria original. Uma laje parcial pode representar o mezanino. A entidade Varanda continua reconhecida apenas para compatibilidade de arquivos anteriores.
+Ático/Chalé é uma configuração paramétrica de uma cobertura de duas águas, não um novo nível obrigatório. Ao criar o telhado, o usuário escolhe o modo, ajusta uma prévia transparente na altura desejada e confirma em **Gerar ático**. A cobertura guarda sua altura de beiral e os identificadores das paredes associadas; o recorte visual e o quantitativo são derivados desses dados, permitindo desfazer e recalcular sem destruir a geometria original. Portas e janelas continuam vinculadas à parede e recortam tanto sua seção-base quanto a extensão perfilada do oitão. Uma laje parcial pode representar o mezanino. A entidade Varanda continua reconhecida apenas para compatibilidade de arquivos anteriores.
 8. Parede
 É a entidade estrutural principal.
 Identificação
@@ -596,6 +596,8 @@ Esta atualização registra as invariantes já implementadas no editor v19 sem t
 - Junções entre paredes são relações topológicas; linhas de contorno são apenas representação.
 - Porta e janela continuam pertencendo obrigatoriamente a uma parede.
 - Uma abertura deve manter 50 mm de uma parede transversal e 150 mm de outra abertura na mesma parede.
+- Numa parede associada a um ático gerado, a abertura recorta a seção-base e a extensão perfilada; sua borda superior deve permanecer abaixo da menor altura da face inferior do telhado em toda a largura do vão.
+- Inserção, deslocamento e redimensionamento de uma abertura no ático devem rejeitar ou limitar qualquer estado que atravesse a cobertura.
 - Uma operação inválida é rejeitada antes de substituir o estado confirmado.
 - Cômodos, cotas e superfícies continuam derivados da topologia das paredes.
 
