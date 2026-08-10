@@ -321,7 +321,7 @@ Pendências e limitações conhecidas
     • Laje: textura de reboco aplicada de forma uniforme na caixa inteira (topo/fundo/lados usam o mesmo material, calculado pro tamanho das bordas) — face de topo/fundo pode ficar com a textura meio esticada em lajes muito grandes; aceito como a mesma simplificação já usada no parapeito da platibanda (ver DEC-31).
     • Trava de parede/cômodo sem laje (DEC-35) checa só no clique do botão da ferramenta — se a pessoa já estiver com a ferramenta ativa e a laje for excluída durante o desenho, a trava não interrompe no meio do gesto.
     • Rastro automático em topologias de 3+ cômodos convergindo no mesmo canto — comportamento inesperado, escopo não decidido (ver DEC-17).
-    • Porta, Janela, Escada e Varanda — sem nenhuma implementação, só botão visual desabilitado na barra lateral.
+    • Escada — ainda sem implementação, apenas botão visual desabilitado. Porta, Janela e Varanda já estão implementadas e não pertencem mais a esta lista.
     • Cotas (mostrar/editar medida de parede já existente fora do momento de colocação) não portadas para a vista unificada.
     • Arrastar o corpo de uma parede já existente não avisa paredes vizinhas que compartilhavam o canto.
     • Corner de 3+ paredes sem nenhum par colinear (convergência genuína, não disfarçada de T) — só uma parede "vence" e estica; não resolvido.
@@ -333,12 +333,48 @@ Pendências e limitações conhecidas
 Ferramentas de depuração disponíveis
 Deixadas no protótipo de propósito, úteis para investigações futuras direto do console do navegador:
 
-Ferramenta	Uso
-window.__DEBUG__ = { Core, Store }	Acesso direto ao modelo/comandos pelo console do navegador.
-Modo "Cor por ID" (checkbox Debug)	Cada face/piso ganha cor derivada de hash do id — sobreposições ficam visíveis.
-Clique com debug ligado	Mostra o id da entidade selecionada na barra de dica.
-dumpWallFace(wallId)	Lista os vértices reais da malha 3D de uma parede, direto da cena.
-listRoomKeys() / dumpRoomFloor(roomKey)	Mesmo princípio, para o piso (em espaço de mundo).
-Store.commands.pruneDegenerateWalls()	Remove paredes de comprimento zero existentes no modelo.
-Checkbox "Esconder chão/grade"	Isola a estrutura das paredes para inspeção visual.
-Isola a estrutura das paredes para inspeção visual.
+| Ferramenta | Uso |
+| --- | --- |
+| `window.Store` / `window.Core` | Acesso direto ao estado, comandos e regras geométricas pelo console do navegador. |
+| `Store.commands.pruneDegenerateWalls()` | Remove paredes de comprimento zero existentes no modelo. |
+| `wallDiagnosticsToggleBtn` | Aciona o painel técnico de diagnóstico; permanece oculto na interface comum e é destinado ao desenvolvimento. |
+
+As antigas ferramentas `window.__DEBUG__`, "Cor por ID", `dumpWallFace`, `listRoomKeys`, `dumpRoomFloor` e "Esconder chão/grade" não existem na implementação atual e foram removidas desta lista para evitar orientação incorreta.
+
+DEC-47  Persistência versionada, validação única e backup de projetos
+Sessão: 11
+Contexto: O editor já salvava projetos no Supabase, mas o conteúdo persistido não tinha versão explícita nem uma fronteira única de validação. Isso tornava perigoso abrir documentos antigos, corrompidos ou produzidos por uma versão futura. O mesmo risco existia ao importar arquivos locais.
+Decisão: `ProjectPersistence.ts` passa a ser a fronteira obrigatória para salvar, carregar, exportar e importar. O documento recebe `schemaVersion`; a leitura valida estrutura, tipos, tamanho, identificadores duplicados e referências órfãs, normaliza campos compatíveis e identifica migrações. Versões futuras incompatíveis são recusadas. O backup JSON usa o mesmo envelope do Supabase. A geometria de quantitativos foi extraída para `QuantityGeometry.ts`, evitando implementações divergentes entre editor e painel.
+Alternativas descartadas:
+    • Confiar que todo JSON vindo do banco foi produzido pela versão atual — rejeitada porque banco, links antigos e backups sobrevivem a releases.
+    • Manter validações separadas para Supabase e backup — rejeitada porque as regras inevitavelmente divergiriam.
+Status: Ativo. Coberto por testes de ida e volta, migração, versão futura, IDs duplicados e referências órfãs.
+
+DEC-48  Baseline pré-comercial de conta, conformidade e proteção antiabuso
+Sessão: 12
+Contexto: Para testar o produto com usuários reais, salvar projetos exigia um ciclo de conta completo, transparência jurídica e entrega confiável de e-mails. O SMTP padrão do Supabase tinha limite reduzido e os fluxos públicos estavam expostos a automação.
+Decisão: (1) Termos e Privacidade públicos, versionados e com aceite separado persistido em `legal_acceptances`; nova versão exige novo aceite. (2) Ciclo de conta cobre cadastro, confirmação, login, recuperação, redefinição, troca de senha, reautenticação e exclusão dos dados associados. (3) Senha mínima de oito caracteres no cliente e no Supabase. (4) Resend configurado como SMTP próprio, domínio verificado e remetente `nao-responda@esboce.com.br`; modelos essenciais em português. (5) Cloudflare Turnstile protege cadastro, login, recuperação e reautenticação; somente a site key é pública e a secret key permanece no Supabase. (6) Exclusão no servidor deriva o usuário de `auth.uid()`.
+Alternativas descartadas:
+    • Adiar Termos e Privacidade até a abertura formal da empresa — rejeitada para o piloto; os documentos identificam o operador atual e deverão ser revistos quando a empresa for formalizada.
+    • Continuar usando o SMTP compartilhado do Supabase — rejeitada por limite e baixa adequação operacional.
+    • Colocar segredos do Resend ou Turnstile no frontend — rejeitada por segurança.
+Status: Ativo. MFA administrativo fica obrigatório antes da divulgação pública ampla, não para o piloto atual.
+
+DEC-49  Monitoramento mínimo de erros em produção
+Sessão: 13
+Contexto: Testes automatizados não revelam todos os erros de navegador, dispositivo e fluxo real. Era necessário detectar falhas do piloto sem introduzir rastreamento invasivo nem coletar o conteúdo dos projetos.
+Decisão: Sentry é iniciado somente em `esboce.com.br`. `sendDefaultPii`, replay, tracing, logs e breadcrumbs ficam desativados. Antes do envio, o evento remove usuário, extras, contextos, e-mails, parâmetros de consulta e outros campos potencialmente sensíveis. A Política de Privacidade identifica o serviço e a finalidade. Source maps e evolução de observabilidade ficam para uma etapa separada.
+Alternativas descartadas:
+    • Ativar Session Replay para facilitar diagnóstico — rejeitada pelo risco de capturar conteúdo visual do projeto.
+    • Monitorar também localhost e prévias — rejeitada para não misturar erros de desenvolvimento com produção.
+    • Operar sem monitoramento até o lançamento — rejeitada porque o piloto é justamente a fase de descobrir falhas reais.
+Status: Ativo. Evento sintético de produção recebido com sucesso na implantação inicial.
+
+DEC-50  Céu procedural e terreno contínuo no viewport
+Sessão: 14
+Contexto: O fundo azul uniforme e a borda próxima do plano de grama deixavam o viewport visualmente plano. A melhoria precisava preservar o caráter técnico do editor, sem panorama fotográfico, assets pesados ou distrações.
+Decisão: O fundo passa a ser um degradê vertical gerado em `CanvasTexture`; a cena usa iluminação hemisférica e luz direcional levemente aquecida. O plano do terreno aumenta de 30×30 para 120×120 unidades e mantém a densidade da textura por repetição proporcional. Uma névoa linear chegou a ser testada, mas foi removida antes da aprovação porque produzia uma faixa esbranquiçada artificial no chão.
+Alternativas descartadas:
+    • Panorama fotográfico, nuvens, montanhas ou árvores — rejeitados nesta fase por distração, peso e conflito com a leitura técnica.
+    • Manter a névoa para esconder totalmente o horizonte — rejeitada após teste visual do usuário.
+Status: Ativo e publicado após prévia isolada e aprovação visual.

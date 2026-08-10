@@ -1,10 +1,10 @@
 # Arquitetura do Esboce
 
-**Versão:** 2.1
+**Versão:** 2.2
 
 **Status:** Canônico
 
-**Atualização:** 04/08/2026
+**Atualização:** 10/08/2026
 
 ## 1. Objetivo
 
@@ -18,14 +18,15 @@ Definir a arquitetura vigente do editor e distingui-la da arquitetura-alvo da pl
 4. Cômodos, superfícies, recortes e quantitativos são recalculados.
 5. A interface apresenta intenção e resultado, mas não se torna fonte da verdade.
 
-## 3. Arquitetura implementada na v19
+## 3. Arquitetura implementada
 
 ```text
 Interface HTML
     ↓
 Bootstrap / EsboceApplication
-    ↓
-ViewportController ─── painéis de camadas e materiais
+    ├── autenticação, documentos jurídicos e ciclo de projetos
+    ├── viewport, painéis e ferramentas
+    └── monitoramento de produção
     ↓
 Store.commands ─────── validações e mutações do projeto
     ↓
@@ -34,6 +35,9 @@ Core ───────────────── topologia, snapping e r
 Scene3DRenderer ────── projeção Three.js
     ↓
 ViewportStats / MaterialsPanel ── valores derivados
+
+Persistência validada ── ProjectPersistence ── Supabase
+Serviços externos ────── Resend / Turnstile / Sentry
 ```
 
 Responsabilidades atuais:
@@ -44,6 +48,12 @@ Responsabilidades atuais:
 - `src/core/ViewportController.ts`: seleção, arraste, ferramentas e cotas.
 - `src/core/Scene3DRenderer.ts`: geração da cena a partir do estado.
 - `src/core/MaterialsPanel.ts`: quantitativos e estimativas derivados.
+- `src/core/QuantityGeometry.ts`: geometria compartilhada pelos quantitativos.
+- `src/core/ProjectPersistence.ts`: envelope versionado, normalização, validação, migração e backup.
+- `src/core/SupabaseClient.ts`: autenticação, projetos, catálogo, perfis e aceite jurídico.
+- `src/core/LegalAcceptance.ts`: versões vigentes de Termos e Privacidade.
+- `src/core/Turnstile.ts`: obtenção do token antiabuso no cliente; a validação autoritativa ocorre no Supabase Auth.
+- `src/core/Monitoring.ts`: captura sanitizada de erros exclusivamente no domínio oficial.
 
 ## 4. Fluxo de uma alteração
 
@@ -73,17 +83,34 @@ Uma prévia de arraste não deve persistir geometria inválida. Ao confirmar, pa
 
 O estado paramétrico atual continua sendo a fonte da verdade. A direção arquitetural é o modelo híbrido definido no documento de domínio: comandos explícitos agora, eventos para auditoria e evolução posterior para histórico mais completo. Malhas, linhas de contorno, cotas e estatísticas não são persistidas como entidades estruturais.
 
-## 7. Arquitetura-alvo
+Todo projeto salvo ou importado passa por `ProjectPersistence`. O documento possui `schemaVersion`; formatos legados suportados são normalizados e migrados na leitura, documentos estruturalmente inválidos são recusados e versões futuras não são abertas silenciosamente. O mesmo contrato é usado no Supabase e nos backups JSON.
+
+O Supabase aplica autenticação e Row Level Security. Projetos e aceites jurídicos pertencem ao usuário autenticado; links compartilhados utilizam o identificador público previsto pelo fluxo atual. A exclusão de conta é executada no servidor e deriva o alvo de `auth.uid()`, nunca de um identificador fornecido pelo cliente.
+
+## 7. Segurança, privacidade e serviços externos
+
+- **Supabase:** autenticação, banco, RLS e ciclo de projetos.
+- **Resend:** transporte SMTP dos e-mails transacionais; nenhuma chave fica no cliente.
+- **Cloudflare Turnstile:** proteção de cadastro, login, recuperação e reautenticação; a chave secreta fica somente no Supabase.
+- **Sentry:** erros de produção no domínio oficial, com PII padrão, replay, tracing, logs e breadcrumbs desativados e sanitização adicional antes do envio.
+- **GitHub Pages:** hospedagem do site oficial após aprovação do pipeline.
+- **Vercel:** prévias temporárias de branches para validação, sem substituir a produção oficial.
+
+Termos e Privacidade têm versões explícitas. O aceite é separado, obrigatório e persistido; mudança de versão exige novo aceite. Segredos operacionais não pertencem ao repositório.
+
+## 8. Arquitetura-alvo
 
 A organização atual em `src/core` é uma etapa de migração, não o destino final. À medida que os módulos estabilizarem, o código deve migrar para contextos de negócio como `Wall`, `Room`, `Roof`, `Foundation`, `Catalog`, `Budget` e `Simulation`, mantendo separação interna entre domínio, comandos, renderização e testes.
 
-## 8. Verificação
+## 9. Verificação
 
-- Testes geométricos existentes: `npm test`.
-- Verificação de tipos e produção: `npm run build`.
+- Testes automatizados: `npm test` (baseline atual: 85 testes).
+- Verificação de tipos: `npm run typecheck`.
+- Build de produção: `npm run build`.
 - Validação visual: prévia Vite e cenários descritos na SPEC-001.
+- CI: `.github/workflows/quality.yml` em branches/PRs e `.github/workflows/deploy.yml` no `main`; falha em teste, tipo ou build bloqueia a publicação.
 
-## 9. Decisões relacionadas
+## 10. Decisões relacionadas
 
 - [ADR-003 — Documentação como Fonte da Verdade](../07%20-%20Desenvolvimento/ADR/ADR-003%20-%20Documentação%20como%20Fonte%20da%20Verdade.md)
 - [ADR-004 — Registro de Decisões Rejeitadas](../07%20-%20Desenvolvimento/ADR/ADR-004%20-%20Registro%20de%20Decisões%20Rejeitadas.md)
