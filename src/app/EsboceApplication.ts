@@ -10,6 +10,13 @@ import { Store } from "../core/Store.js";
 import { ViewportController } from "../core/ViewportController.js";
 import { ViewportStats } from "../core/ViewportStats.js";
 import { createSharedProject, loadSharedProject, updateSharedProject, deleteProject, signUpWithProfile, signIn, signOut, getCurrentUser, listMyProjects, ensureProfileExists, listDepartments, listManufacturers, listCatalogProducts, type ProfileFields, type CatalogDepartment, type CatalogManufacturer, type CatalogProductWithDepartment } from "../core/SupabaseClient.js";
+import {
+  ProjectFormatError,
+  decodeProjectDocument,
+  encodeProjectDocument,
+  exportProjectBackup,
+  importProjectBackup,
+} from "../core/ProjectPersistence.js";
 
 export class EsboceApplication {
   private readonly scene = new THREE.Scene();
@@ -71,7 +78,9 @@ export class EsboceApplication {
       try {
         const loaded = await loadSharedProject(sharedId);
         if (loaded) {
-          Store.setProject(loaded.data as ReturnType<typeof Store.getProject>);
+          const decoded = decodeProjectDocument(loaded.data);
+          Store.setProject(decoded.project);
+          if (decoded.migrated) console.info(`Projeto migrado do formato v${decoded.sourceVersion}.`);
           this.sharedProjectId = sharedId;
           this.currentProjectName = loaded.nome;
           document.title = `${loaded.nome} — Esboce`;
@@ -259,6 +268,9 @@ export class EsboceApplication {
     this.requireElement("saveProjectBtn").addEventListener("click", () => this.saveProject());
     this.requireElement("shareProjectBtn").addEventListener("click", () => this.shareProject());
     this.requireElement("myProjectsBtn").addEventListener("click", () => this.openMyProjects());
+    this.requireElement("exportProjectBtn").addEventListener("click", () => this.exportProjectFile());
+    this.requireElement("importProjectBtn").addEventListener("click", () => this.requireElement("importProjectInput").click());
+    this.requireElement("importProjectInput").addEventListener("change", (event) => this.importProjectFile(event));
     this.requireElement("catalogBtn").addEventListener("click", () => this.openCatalog());
     // "+ Adicionar produto" (CTA em destaque) leva pro mesmo painel
     // que "Catálogo" — ver comentário no HTML sobre por que os dois
@@ -387,6 +399,62 @@ export class EsboceApplication {
     ViewportController.deselect();
   }
 
+  private exportProjectFile(): void {
+    try {
+      const json = exportProjectBackup(Store.getProject());
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const baseName = (this.currentProjectName || "projeto-esboce")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9_-]+/g, "-")
+        .replace(/^-+|-+$/g, "") || "projeto-esboce";
+      link.href = url;
+      link.download = `${baseName}.esboce.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Falha ao exportar projeto:", err);
+      alert(this.projectFormatMessage(err, "Não foi possível exportar o projeto."));
+    }
+  }
+
+  private async importProjectFile(event: Event): Promise<void> {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file) return;
+    if (file.size > 20 * 1024 * 1024) {
+      alert("O arquivo excede o limite de 20 MB.");
+      return;
+    }
+    const hasContent = Store.getProject().floors.some((floor) =>
+      floor.walls.length || floor.columns.length || floor.roofs.length || floor.openings.length ||
+      floor.varandas.length || floor.lajes.length || floor.furniture.length
+    );
+    if (hasContent && !confirm("Importar substitui o projeto aberto. Deseja continuar?")) return;
+    try {
+      const decoded = importProjectBackup(await file.text());
+      Store.setProject(decoded.project);
+      this.sharedProjectId = null;
+      this.currentProjectName = file.name.replace(/\.esboce\.json$/i, "").replace(/\.json$/i, "") || null;
+      document.title = this.currentProjectName ? `${this.currentProjectName} — Esboce` : "Esboce — construtor de casas online";
+      const url = new URL(window.location.href);
+      url.searchParams.delete("p");
+      window.history.replaceState(null, "", url.toString());
+      ViewportController.deselect();
+      alert(decoded.migrated ? "Projeto antigo importado e atualizado com sucesso." : "Projeto importado com sucesso.");
+    } catch (err) {
+      console.error("Falha ao importar projeto:", err);
+      alert(this.projectFormatMessage(err, "Não foi possível importar esse arquivo."));
+    }
+  }
+
+  private projectFormatMessage(err: unknown, fallback: string): string {
+    return err instanceof ProjectFormatError ? `${fallback}\n\n${err.message}` : fallback;
+  }
+
   private async saveProject(): Promise<void> {
     const btn = this.requireElement("saveProjectBtn");
     let userId: string;
@@ -409,7 +477,7 @@ export class EsboceApplication {
     }
     await this.flashButtonFeedback(btn, async () => {
       btn.textContent = "Salvando...";
-      const project = Store.getProject();
+      const project = encodeProjectDocument(Store.getProject());
       // Campo de classe (this.sharedProjectId) não fica "estreitado"
       // pelo TypeScript depois de um await dentro do mesmo bloco —
       // guarda numa variável local pra manter o tipo certo (string,
@@ -463,7 +531,7 @@ export class EsboceApplication {
       let id = this.sharedProjectId;
       if (!id) {
         btn.textContent = "Salvando...";
-        id = await createSharedProject(Store.getProject(), userId, nome!);
+        id = await createSharedProject(encodeProjectDocument(Store.getProject()), userId, nome!);
         this.sharedProjectId = id;
         this.currentProjectName = nome;
         this.setUrlProjectId(id);
@@ -1011,7 +1079,8 @@ export class EsboceApplication {
     try {
       const loaded = await loadSharedProject(id);
       if (!loaded) { alert("Projeto não encontrado — pode ter sido apagado."); return; }
-      Store.setProject(loaded.data as ReturnType<typeof Store.getProject>);
+      const decoded = decodeProjectDocument(loaded.data);
+      Store.setProject(decoded.project);
       this.sharedProjectId = id;
       this.currentProjectName = loaded.nome;
       document.title = `${loaded.nome} — Esboce`;
@@ -1019,7 +1088,7 @@ export class EsboceApplication {
       this.requireElement("myProjectsOverlay").style.display = "none";
     } catch (err) {
       console.error("Falha ao abrir projeto:", err);
-      alert("Falha ao abrir o projeto.");
+      alert(this.projectFormatMessage(err, "Falha ao abrir o projeto."));
     }
   }
 
