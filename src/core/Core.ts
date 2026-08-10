@@ -119,8 +119,8 @@ export function lajeBounds(laje: Laje): { minX: number; maxX: number; minY: numb
   return { minX, maxX, minY, maxY };
 }
 
-export function createFloorEntity(name: string): Floor {
-  return { id: nextId('floor'), name, walls: [], columns: [], roofs: [], openings: [], varandas: [], lajes: [], furniture: [], roomFinishes: {}, roomFinishSettings: {} };
+export function createFloorEntity(name: string, kind: Floor['kind'] = 'standard'): Floor {
+  return { id: nextId('floor'), name, kind, walls: [], columns: [], roofs: [], openings: [], varandas: [], lajes: [], furniture: [], roomFinishes: {}, roomFinishSettings: {} };
 }
 
 // x,y: posição do "pé" do móvel no plano do pavimento. rotationDeg: passos

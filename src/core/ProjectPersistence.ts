@@ -2,7 +2,7 @@ import type {
   Column, Floor, Furniture, Laje, Opening, Project, ProjectLayers, Roof, Varanda, Wall,
 } from './types.js';
 
-export const CURRENT_PROJECT_SCHEMA_VERSION = 2;
+export const CURRENT_PROJECT_SCHEMA_VERSION = 3;
 
 export interface StoredProjectDocument {
   schemaVersion: number;
@@ -187,6 +187,7 @@ function parseFloor(value: unknown, path: string): Floor {
   const floor: Floor = {
     id: string(v.id, `${path}.id`),
     name: string(v.name, `${path}.name`, 'Pavimento'),
+    kind: enumValue(v.kind, ['standard', 'attic'], `${path}.kind`, 'standard'),
     walls: array(v.walls, `${path}.walls`, true).map((item, i) => parseWall(item, `${path}.walls[${i}]`)),
     columns: array(v.columns, `${path}.columns`, true).map((item, i) => parseColumn(item, `${path}.columns[${i}]`)),
     roofs: array(v.roofs, `${path}.roofs`, true).map((item, i) => parseRoof(item, `${path}.roofs[${i}]`)),
@@ -197,6 +198,7 @@ function parseFloor(value: unknown, path: string): Floor {
     roomFinishes: stringMap(v.roomFinishes, `${path}.roomFinishes`),
     roomFinishSettings: settingsMap(v.roomFinishSettings, `${path}.roomFinishSettings`),
   };
+  if (floor.kind === 'attic') floor.wallHeightM = number(v.wallHeightM, `${path}.wallHeightM`, 1.2);
   const wallIds = new Set(floor.walls.map((wall) => wall.id));
   floor.openings.forEach((opening, index) => {
     if (!wallIds.has(opening.wallId)) fail(`${path}.openings[${index}].wallId`, 'parede hospedeira não existe');

@@ -104,9 +104,14 @@ export interface Opening {
   sillHeight: number;
 }
 
+export type FloorKind = 'standard' | 'attic';
+
 export interface Floor {
   id: string;
   name: string;
+  kind: FloorKind;
+  /** Altura das paredes laterais do ático antes do início da cobertura. */
+  wallHeightM?: number;
   walls: Wall[];
   columns: Column[];
   roofs: Roof[];

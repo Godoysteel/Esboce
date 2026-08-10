@@ -1073,7 +1073,7 @@
     <div class="ctx-menu-sep"></div>
     <label><input type="checkbox" id="marquiseToggle"> Marquise</label>
     <label><input type="checkbox" id="telhadoToggle" checked> Telhado</label>
-    <label><input type="checkbox" id="varandaToggle" checked> Varanda</label>
+    <label hidden><input type="checkbox" id="varandaToggle" checked> Varanda (projetos antigos)</label>
   </div>
   <div class="tool-sidebar" id="toolSidebar">
     <div class="ts-supergroup-label">Produtos</div>
@@ -1191,13 +1191,14 @@
         </svg>
         <span>Telhado</span>
       </button>
-      <button class="ts-btn" data-room-preset="varanda" title="Varanda — clique pra criar, encaixada como um cômodo">
+      <button class="ts-btn" id="addAtticBtn" title="Adicionar um ático habitável sob o telhado">
         <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M6 30h28"/>
-          <path d="M8 30V16M14 30V16M20 30V16M26 30V16M32 30V16"/>
-          <path d="M6 16h28"/>
+          <path d="M5 23 20 8l15 15"/>
+          <path d="M9 21v11h22V21"/>
+          <path d="M14 32V22h12v10"/>
+          <path d="M20 22v10"/>
         </svg>
-        <span>Varanda</span>
+        <span>Ático</span>
       </button>
       <button class="ts-btn" data-room-preset="laje" title="Laje — clique pra criar cobrindo o pavimento, arraste as bordas pra ajustar (inclusive pra fora, pra fazer um balanço/sacada)">
         <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

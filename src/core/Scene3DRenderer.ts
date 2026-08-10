@@ -21,6 +21,7 @@ import { Core } from './Core.js';
 import { Catalog } from './Catalog.js';
 import { computeOpeningAssemblyLayout, wallBandSideParameters, wallTopTriangleVertices } from './Scene3DGeometry.js';
 import type { Project, Wall, Column, Roof, Varanda, Laje, Opening } from './types.js';
+import { floorWallHeight } from './Attic.js';
 
 export interface ViewState {
   drawPreview?: any;
@@ -792,7 +793,7 @@ export function hashColorHex(key: string): number {
   // width, height, sillHeight), devolve as bandas sólidas que sobram —
   // null se a parede não tem nenhuma abertura (caminho antigo, sem
   // mudança nenhuma). tA/tB em fração 0..1 do comprimento da parede.
-  function computeWallOpeningBands(wallLenM: any, openings: any) {
+  function computeWallOpeningBands(wallLenM: any, openings: any, wallHeight: any) {
     if (!openings || !openings.length) return null;
     var list = openings.map(function (o: any) {
       // Clamp defensivo: se a parede foi redimensionada depois que a
@@ -807,14 +808,14 @@ export function hashColorHex(key: string): number {
     var bands: any[] = [];
     var cursor = 0;
     list.forEach(function (op: any) {
-      if (op.dStart > cursor + 1e-4) bands.push({ dA: cursor, dB: op.dStart, y0: 0, y1: WALL_HEIGHT });
+      if (op.dStart > cursor + 1e-4) bands.push({ dA: cursor, dB: op.dStart, y0: 0, y1: wallHeight });
       // Peitoril (só janela — porta tem sill=0, sem banda embaixo).
       if (op.sill > 0.02) bands.push({ dA: op.dStart, dB: op.dEnd, y0: 0, y1: op.sill });
       // Verga (o "lintel" acima do vão).
-      if (op.top < WALL_HEIGHT - 0.02) bands.push({ dA: op.dStart, dB: op.dEnd, y0: op.top, y1: WALL_HEIGHT });
+      if (op.top < wallHeight - 0.02) bands.push({ dA: op.dStart, dB: op.dEnd, y0: op.top, y1: wallHeight });
       cursor = op.dEnd;
     });
-    if (cursor < wallLenM - 1e-4) bands.push({ dA: cursor, dB: wallLenM, y0: 0, y1: WALL_HEIGHT });
+    if (cursor < wallLenM - 1e-4) bands.push({ dA: cursor, dB: wallLenM, y0: 0, y1: wallHeight });
     if (!bands.length) return null;
     // Só a primeira/última banda (se realmente tocam a ponta de verdade
     // da parede) herdam a regra condicional de tampa do canto; todas as
@@ -1965,7 +1966,7 @@ export function hashColorHex(key: string): number {
   // depthTest:false + renderOrder alto: garante que a alça sempre desenha
   // por cima de qualquer coisa (parede, telhado...), nunca fica escondida
   // debaixo da própria superfície que ela ajusta.
-  function renderSelectionHandles(scene: any, viewState: any, scale: any, offsetX: any, offsetY: any, walls: any) {
+  function renderSelectionHandles(scene: any, viewState: any, scale: any, offsetX: any, offsetY: any, walls: any, wallHeight: any) {
     if (viewState.selectedWall) {
       var w = viewState.selectedWall, yOffset = viewState.editingYOffset;
       [[w.x1, w.y1, 1], [w.x2, w.y2, 2]].forEach(function (pt) {
@@ -1974,7 +1975,7 @@ export function hashColorHex(key: string): number {
         var mat = new THREE.MeshBasicMaterial({ color: SELECTED_ACCENT, depthTest: false });
         var mesh = new THREE.Mesh(geo, mat);
         mesh.renderOrder = 999;
-        mesh.position.set(wx, yOffset + WALL_HEIGHT / 2, wz);
+        mesh.position.set(wx, yOffset + wallHeight / 2, wz);
         mesh.userData.handle = 'endpoint' + pt[2];
         scene.add(mesh);
         registry.handleMeshes.push(mesh);
@@ -1990,7 +1991,7 @@ export function hashColorHex(key: string): number {
       var wdx = w.x2 - w.x1, wdy = w.y2 - w.y1;
       var wlen = Math.hypot(wdx, wdy) || 1;
       var nx = -wdy / wlen, ny = wdx / wlen; // perpendicular unitário, em coordenadas de modelo
-      var wallCenterY = yOffset + WALL_HEIGHT / 2;
+      var wallCenterY = yOffset + wallHeight / 2;
       var wallFaceOffset = Core.WALL_THICK * Core.GRID * 0.5; // até a face da parede
       var handleOffset = Core.WALL_THICK * Core.GRID * 2.2; // até onde a bolinha fica, além da face
       [1, -1].forEach(function (side) {
@@ -2015,7 +2016,7 @@ export function hashColorHex(key: string): number {
     }
     if (viewState.selectedRoof) {
       var r = viewState.selectedRoof, roofYOffset = viewState.editingYOffset;
-      var topY = roofYOffset + WALL_HEIGHT;
+      var topY = roofYOffset + wallHeight;
       var midX = (r.x1 + r.x2) / 2, midY = (r.y1 + r.y2) / 2;
 
       // 4 alças nas bordas — arrastar uma estica/encolhe só aquele lado
@@ -2163,6 +2164,7 @@ export function hashColorHex(key: string): number {
       if (floorIdx > editingIdx) return;
 
       var yOffset = floorIdx * FLOOR_STACK_HEIGHT;
+      var currentWallHeight = floorWallHeight(floorData, WALL_HEIGHT);
       var isGroundFloor = floorIdx === 0;
       var wallCategory: keyof typeof layers = isGroundFloor ? 'paredesTerreo' : 'paredesSuperiores';
       var wallsVisible = layers[wallCategory];
@@ -2172,7 +2174,7 @@ export function hashColorHex(key: string): number {
       if (layers.laje) {
         var lajeWallColor = computeWallMatchColor(floorData.walls);
         (floorData.lajes || []).forEach(function (laje) {
-          var pieces = buildLajePiece(laje, scale, offsetX, offsetY, yOffset + WALL_HEIGHT, lajeWallColor, viewState);
+          var pieces = buildLajePiece(laje, scale, offsetX, offsetY, yOffset + currentWallHeight, lajeWallColor, viewState);
           pieces.forEach(function (m) {
             tagCategory(m, 'laje');
             m.userData.lajeId = laje.id; m.userData.floorIndex = floorIdx;
@@ -2227,12 +2229,12 @@ export function hashColorHex(key: string): number {
           // Sem abertura nenhuma: caminho de sempre, sem mudança.
           var wallOpenings = (floorData.openings || []).filter(function (o) { return o.wallId === w.id; });
           var wallLenM = Core.wallLengthMeters(w);
-          var bands = wallOpenings.length ? computeWallOpeningBands(wallLenM, wallOpenings) : null;
+          var bands = wallOpenings.length ? computeWallOpeningBands(wallLenM, wallOpenings, currentWallHeight) : null;
           var wallAxisStart = { x: x1, z: z1 };
           var wallAxisEnd = { x: x2, z: z2 };
 
           if (!bands) {
-            var refMesh = tagCategory(buildWallMeshFromFootprint(fp, WALL_HEIGHT, yOffset, refMat), wallCategory);
+            var refMesh = tagCategory(buildWallMeshFromFootprint(fp, currentWallHeight, yOffset, refMat), wallCategory);
             refMesh.userData.wallId = w.id; refMesh.userData.floorIndex = floorIdx;
             scene.add(refMesh);
             registry.wallMeshes.push(refMesh);
@@ -2250,7 +2252,7 @@ export function hashColorHex(key: string): number {
           // O contorno representa somente a silhueta externa da parede.
           // As bandas internas usadas para recortar portas e janelas não
           // são quinas reais e, portanto, nunca recebem linhas próprias.
-          var edgeLines = buildWallFootprintEdgeLines(fp, WALL_HEIGHT, yOffset, !wallSupportsRoofGable(w, floorData.roofs || []));
+          var edgeLines = buildWallFootprintEdgeLines(fp, currentWallHeight, yOffset, !wallSupportsRoofGable(w, floorData.roofs || []));
           scene.add(edgeLines);
           registry.wallMeshes.push(edgeLines);
 
@@ -2262,7 +2264,7 @@ export function hashColorHex(key: string): number {
             side: THREE.DoubleSide,
             flatShading: true
           });
-          var topCapMesh = tagCategory(buildWallTopCapMesh(fp, yOffset + WALL_HEIGHT, topMat), wallCategory);
+          var topCapMesh = tagCategory(buildWallTopCapMesh(fp, yOffset + currentWallHeight, topMat), wallCategory);
           topCapMesh.userData.wallId = w.id;
           topCapMesh.userData.floorIndex = floorIdx;
           scene.add(topCapMesh);
@@ -2303,7 +2305,7 @@ export function hashColorHex(key: string): number {
             // clique próprio — a caixa de referência (mesma posição)
             // já cobre isso, então o clique passa direto pra ela.
             if (!bands) {
-              var faceMesh = buildFaceStripMesh(fp, WALL_HEIGHT, yOffset, faceMat, side);
+              var faceMesh = buildFaceStripMesh(fp, currentWallHeight, yOffset, faceMat, side);
               faceMesh.userData.floorIndex = floorIdx;
               faceMesh.userData.debugWallId = w.id;
               faceMesh.userData.debugSide = side;
@@ -2356,10 +2358,10 @@ export function hashColorHex(key: string): number {
           var isSelected = viewState.selectedColumn && viewState.selectedColumn.id === c.id;
           var baseColor = isSelected ? SELECTED_ACCENT : 0xA6A49A;
           var mat = new THREE.MeshStandardMaterial({ color: floorIdx === editingIdx ? pickColor(baseColor, 'colunas', viewState) : baseColor, flatShading: true });
-          var geo = c.shape === 'redonda' ? new THREE.CylinderGeometry(half, half, WALL_HEIGHT, 20) : new THREE.BoxGeometry(half * 2, WALL_HEIGHT, half * 2);
+          var geo = c.shape === 'redonda' ? new THREE.CylinderGeometry(half, half, currentWallHeight, 20) : new THREE.BoxGeometry(half * 2, currentWallHeight, half * 2);
           var mesh = tagCategory(new THREE.Mesh(geo, mat), 'colunas');
           mesh.userData.columnId = c.id; mesh.userData.floorIndex = floorIdx;
-          mesh.position.set(cx, WALL_HEIGHT / 2 + yOffset, cz);
+          mesh.position.set(cx, currentWallHeight / 2 + yOffset, cz);
           scene.add(mesh);
           registry.wallMeshes.push(mesh);
           var edges = new THREE.EdgesGeometry(geo);
@@ -2371,7 +2373,7 @@ export function hashColorHex(key: string): number {
       }
 
       if (layers.telhado && floorData.roofs) {
-        var roofTopY = yOffset + WALL_HEIGHT;
+        var roofTopY = yOffset + currentWallHeight;
         var wallMatchColor = computeWallMatchColor(floorData.walls);
         floorData.roofs.forEach(function (roof) {
           var pieces = buildRoofPiece(roof, scale, offsetX, offsetY, roofTopY, viewState, wallMatchColor);
@@ -2385,7 +2387,7 @@ export function hashColorHex(key: string): number {
           }, []);
           pieces.forEach(function (m) {
             clipMeshOutsideRects(m, trimRects);
-            tagCategory(m, m.userData.gableSide ? 'paredesTerreo' : 'telhado');
+            tagCategory(m, m.userData.gableSide ? wallCategory : 'telhado');
             m.userData.roofId = roof.id; m.userData.floorIndex = floorIdx;
             scene.add(m);
             registry.structureMeshes.push(m);
@@ -2568,7 +2570,10 @@ export function hashColorHex(key: string): number {
     }
 
     renderDrawPreview(scene, viewState, scale, offsetX, offsetY);
-    renderSelectionHandles(scene, viewState, scale, offsetX, offsetY, project.floors[editingIdx]!.walls);
+    renderSelectionHandles(
+      scene, viewState, scale, offsetX, offsetY, project.floors[editingIdx]!.walls,
+      floorWallHeight(project.floors[editingIdx]!, WALL_HEIGHT)
+    );
   }
 
   export function FLOOR_STACK_HEIGHT_GETTER() { return FLOOR_STACK_HEIGHT; }

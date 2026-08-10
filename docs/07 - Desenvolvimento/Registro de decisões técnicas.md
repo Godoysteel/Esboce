@@ -388,3 +388,13 @@ Alternativas descartadas:
     • Reaproveitar temporariamente a composição cerâmica nos três sistemas — rejeitada por produzir números tecnicamente enganosos.
     • Bloquear todo o quantitativo nos sistemas ainda incompletos — rejeitada porque áreas, acabamentos, fundação, laje e cobertura continuam sendo informações úteis e explicitamente separáveis.
 Status: Ativo. Composições próprias de bloco estrutural e Light Steel Frame permanecem no roadmap do piloto controlado.
+
+DEC-52  Ático como pavimento superior e retirada da criação de varanda
+Sessão: 16
+Contexto: Casas do tipo chalé e projetos com espaço habitável sob a cobertura não podiam ser representados por um pavimento comum de pé-direito integral. A ferramenta Varanda ocupava espaço de destaque na barra, mas não atendia essa tipologia.
+Decisão: (1) `Floor` passa a declarar `kind: standard | attic`; o schema do projeto sobe para a versão 3 e documentos anteriores recebem `standard`. (2) O botão Varanda é substituído por Ático; varandas antigas continuam carregando e renderizando para não destruir projetos existentes, mas não há mais criação nova pela interface. (3) Existe no máximo um ático e ele permanece no topo; novos pavimentos comuns são inseridos antes dele. (4) A parede lateral do ático nasce com 1,20 m, limitada a uma faixa segura de 0,60 a 2,20 m, e a cobertura começa nessa cota. (5) Renderização, colunas, lajes, alças e quantitativos usam a altura própria de cada pavimento. (6) O recorte de aberturas no oitão triangular não é declarado pronto nesta entrega e permanece explicitamente no roadmap.
+Alternativas descartadas:
+    • Simular o ático como pavimento comum de 2,80 m — rejeitada porque não representa a parede baixa nem o volume sob a cobertura.
+    • Reutilizar Varanda mudando apenas seu rótulo — rejeitada porque são entidades e comportamentos distintos.
+    • Remover a entidade Varanda dos arquivos — rejeitada porque quebraria projetos já salvos.
+Status: Ativo no editor. Aberturas diretamente no oitão exigem evolução geométrica posterior.

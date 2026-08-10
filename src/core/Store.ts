@@ -964,11 +964,28 @@ export const commands = {
 
   addFloor(): void {
     pushUndoSnapshot();
-    const floorNumber = project.floors.length;
+    const atticIndex = project.floors.findIndex((floor) => floor.kind === 'attic');
+    const floorNumber = atticIndex >= 0 ? atticIndex : project.floors.length;
     const floor = Core.createFloorEntity(floorNumber + 'º Pavimento');
+    if (atticIndex >= 0) project.floors.splice(atticIndex, 0, floor);
+    else project.floors.push(floor);
+    project.currentFloorIndex = floorNumber;
+    emit({ type: 'FloorAdded', floorId: floor.id });
+  },
+
+  addAtticFloor(): Floor {
+    const existingIndex = project.floors.findIndex((floor) => floor.kind === 'attic');
+    if (existingIndex >= 0) {
+      project.currentFloorIndex = existingIndex;
+      emit({ type: 'CurrentFloorChanged', floorIndex: existingIndex });
+      return project.floors[existingIndex]!;
+    }
+    pushUndoSnapshot();
+    const floor = Core.createFloorEntity('Ático', 'attic');
     project.floors.push(floor);
     project.currentFloorIndex = project.floors.length - 1;
-    emit({ type: 'FloorAdded', floorId: floor.id });
+    emit({ type: 'FloorAdded', floorId: floor.id, kind: 'attic' });
+    return floor;
   },
 
   setCurrentFloor(index: number): void {

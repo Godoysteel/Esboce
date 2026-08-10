@@ -278,6 +278,10 @@ export class EsboceApplication {
       Store.commands.addFloor();
       ViewportController.deselect();
     });
+    this.requireElement("addAtticBtn").addEventListener("click", () => {
+      Store.commands.addAtticFloor();
+      ViewportController.deselect();
+    });
     this.requireElement("undoBtn").addEventListener("click", () => Store.commands.undo());
     // Painel de visualização (3D/2D/Orbit/Medir, canto direito) — só
     // "Orbit" faz algo de verdade por ora (recentraliza a câmera). "3D"

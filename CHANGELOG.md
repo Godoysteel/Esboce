@@ -13,7 +13,7 @@ Todas as alterações relevantes do Esboce serão registradas neste arquivo.
 - Adicionados exportação e importação de backup JSON. O salvamento e a abertura pelo Supabase usam a mesma validação do backup.
 - Corrigido o ciclo de projetos autenticados: criar, atualizar, listar em **Meus projetos**, abrir por link e iniciar um projeto novo sem perder o projeto anteriormente salvo.
 - Criados gates de qualidade no GitHub Actions: testes, verificação TypeScript e build antecedem a publicação. O deploy do `main` no GitHub Pages só ocorre quando todos passam.
-- Baseline atual validada com **91 testes automatizados**.
+- Baseline atual validada com **97 testes automatizados**.
 
 ## Conta, segurança e conformidade
 
@@ -32,6 +32,7 @@ Todas as alterações relevantes do Esboce serão registradas neste arquivo.
 
 ## Interface e viewport
 
+- A antiga opção de criação de **Varanda** foi substituída por **Ático**. O ático é um pavimento superior próprio, com parede lateral baixa de 1,20 m e cobertura apoiada nessa altura; permanece sempre no topo do edifício e participa da persistência, do 3D e dos quantitativos. Varandas existentes em projetos antigos continuam legíveis, mas não são mais oferecidas para criação.
 - Projetos novos agora começam pela escolha obrigatória entre **Tijolos**, **Bloco estrutural** e **Steel Frame**, apresentada em três cartões visuais. A escolha integra o documento versionado, o backup e o compartilhamento; projetos legados são migrados para Tijolos.
 - A barra superior mantém o sistema construtivo do projeto visível durante toda a edição e o atualiza ao criar, abrir ou importar um projeto.
 - O painel e a planilha de materiais passaram a respeitar o sistema escolhido. Enquanto as composições próprias de bloco estrutural e Steel Frame não estiverem implementadas, o Esboce mantém áreas e itens comuns, mas não apresenta a composição cerâmica como se fosse válida para esses sistemas.

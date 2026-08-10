@@ -30,9 +30,24 @@ test('projeto legado sem envelope é migrado e recebe campos atuais ausentes', (
   assert.equal(decoded.migrated, true);
   assert.deepEqual(decoded.project.floors[0].lajes, []);
   assert.deepEqual(decoded.project.floors[0].furniture, []);
+  assert.equal(decoded.project.floors[0].kind, 'standard');
   assert.equal(decoded.project.layers.telhado, false);
   assert.equal(decoded.project.layers.fundacao, true);
   assert.equal(decoded.project.constructionSystem, 'ceramic_masonry');
+});
+
+test('ático preserva tipo e altura lateral no salvamento', () => {
+  const project = createProject();
+  project.floors.push({
+    ...project.floors[0],
+    id: 'floor-attic',
+    name: 'Ático',
+    kind: 'attic',
+    wallHeightM: 1.35,
+  });
+  const restored = decodeProjectDocument(encodeProjectDocument(project));
+  assert.equal(restored.project.floors[1].kind, 'attic');
+  assert.equal(restored.project.floors[1].wallHeightM, 1.35);
 });
 
 test('sistema construtivo escolhido faz parte do documento salvo', () => {
