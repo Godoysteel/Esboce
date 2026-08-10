@@ -1,5 +1,5 @@
 export const TERMS_VERSION = "2026-08-10";
-export const PRIVACY_VERSION = "2026-08-10";
+export const PRIVACY_VERSION = "2026-08-10.2";
 
 export interface LegalAcceptanceVersions {
   termsVersion: string;

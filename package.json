@@ -11,6 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@sentry/browser": "^10.70.0",
     "@supabase/supabase-js": "^2.112.2",
     "three": "^0.166.0"
   },
