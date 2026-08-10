@@ -10,6 +10,7 @@ import { Store } from "../core/Store.js";
 import { ViewportController } from "../core/ViewportController.js";
 import { ViewportStats } from "../core/ViewportStats.js";
 import { createSharedProject, loadSharedProject, updateSharedProject, deleteProject, signUpWithProfile, signIn, signOut, sendPasswordRecovery, updatePassword, onPasswordRecovery, reauthenticate, deleteCurrentAccount, getCurrentUser, listMyProjects, ensureProfileExists, hasCurrentLegalAcceptance, recordCurrentLegalAcceptance, listDepartments, listManufacturers, listCatalogProducts, type ProfileFields, type CatalogDepartment, type CatalogManufacturer, type CatalogProductWithDepartment } from "../core/SupabaseClient.js";
+import { renderCaptcha, requireCaptchaToken, resetCaptcha } from "../core/Turnstile.js";
 import { CURRENT_LEGAL_ACCEPTANCE } from "../core/LegalAcceptance.js";
 import {
   ProjectFormatError,
@@ -628,6 +629,7 @@ export class EsboceApplication {
       paneSignup.style.display = which === "signup" ? "" : "none";
       paneLogin.style.display = which === "login" ? "" : "none";
       this.requireElement("authError").textContent = "";
+      void renderCaptcha(which === "signup" ? "signupCaptcha" : "loginCaptcha");
     };
     tabSignup.addEventListener("click", () => showTab("signup"));
     tabLogin.addEventListener("click", () => showTab("login"));
@@ -668,6 +670,8 @@ export class EsboceApplication {
 
   private openAuthModal(): void {
     this.requireElement("authModalOverlay").classList.add("visible");
+    const signupVisible = this.requireElement("authSignupPane").style.display !== "none";
+    void renderCaptcha(signupVisible ? "signupCaptcha" : "loginCaptcha");
   }
 
   private closeAuthModal(cancelled: boolean): void {
@@ -747,6 +751,7 @@ export class EsboceApplication {
       this.refreshPasswordUpdateState();
     }
     this.requireElement("passwordResetOverlay").classList.add("visible");
+    if (!updatingPassword) void renderCaptcha("recoveryCaptcha");
   }
 
   private refreshPasswordUpdateState(): void {
@@ -817,12 +822,19 @@ export class EsboceApplication {
     const successEl = this.requireElement("passwordResetSuccess");
     const btn = this.requireElement("passwordRecoverySubmit") as HTMLButtonElement;
     if (!email) { errorEl.textContent = "Informe seu e-mail."; return; }
+    let captchaToken: string;
+    try {
+      captchaToken = requireCaptchaToken("recoveryCaptcha");
+    } catch (err) {
+      errorEl.textContent = err instanceof Error ? err.message : String(err);
+      return;
+    }
     errorEl.textContent = "";
     successEl.textContent = "";
     btn.disabled = true;
     btn.textContent = "Enviando...";
     try {
-      await sendPasswordRecovery(email);
+      await sendPasswordRecovery(email, captchaToken);
       // Mensagem deliberadamente neutra para não revelar se o e-mail
       // está ou não cadastrado na plataforma.
       successEl.textContent = "Se existir uma conta com esse e-mail, o link chegará em alguns minutos.";
@@ -830,6 +842,7 @@ export class EsboceApplication {
       console.error("Falha na recuperação de senha:", err);
       errorEl.textContent = this.friendlyPasswordRecoveryRequestError(err);
     } finally {
+      resetCaptcha("recoveryCaptcha");
       btn.disabled = false;
       btn.textContent = "Enviar link de recuperação";
     }
@@ -873,6 +886,7 @@ export class EsboceApplication {
     (this.requireElement("deleteAccountConfirmation") as HTMLInputElement).value = "";
     this.requireElement("deleteAccountError").textContent = "";
     this.requireElement("accountSettingsOverlay").classList.add("visible");
+    void renderCaptcha("deleteAccountCaptcha");
   }
 
   private closeAccountSettings(): void {
@@ -887,12 +901,19 @@ export class EsboceApplication {
     if (!this.currentUserEmail) { errorEl.textContent = "Sua sessão expirou. Entre novamente."; return; }
     if (!password) { errorEl.textContent = "Informe sua senha atual."; return; }
     if (confirmation !== "EXCLUIR") { errorEl.textContent = "Digite EXCLUIR exatamente como mostrado."; return; }
+    let captchaToken: string;
+    try {
+      captchaToken = requireCaptchaToken("deleteAccountCaptcha");
+    } catch (err) {
+      errorEl.textContent = err instanceof Error ? err.message : String(err);
+      return;
+    }
     if (!confirm("Esta ação é permanente e apagará todos os seus projetos. Deseja continuar?")) return;
     errorEl.textContent = "";
     btn.disabled = true;
     btn.textContent = "Excluindo definitivamente...";
     try {
-      await reauthenticate(this.currentUserEmail, password);
+      await reauthenticate(this.currentUserEmail, password, captchaToken);
       await deleteCurrentAccount();
       this.currentUserId = null;
       this.currentUserEmail = null;
@@ -903,6 +924,7 @@ export class EsboceApplication {
       console.error("Falha ao excluir conta:", err);
       errorEl.textContent = this.friendlyAuthError(err);
     } finally {
+      resetCaptcha("deleteAccountCaptcha");
       btn.disabled = false;
       btn.textContent = "Excluir minha conta e todos os dados";
     }
@@ -924,6 +946,7 @@ export class EsboceApplication {
     const msg = err instanceof Error ? err.message : String(err);
     if (/already registered|already exists|user already/i.test(msg)) return "Esse e-mail já tem conta — usa a aba \"Já tenho conta\".";
     if (/invalid login credentials/i.test(msg)) return "E-mail ou senha incorretos.";
+    if (/captcha/i.test(msg)) return "A verificação de segurança expirou ou falhou. Tente novamente.";
     return msg;
   }
 
@@ -1001,11 +1024,19 @@ export class EsboceApplication {
       return;
     }
 
+    let captchaToken: string;
+    try {
+      captchaToken = requireCaptchaToken("signupCaptcha");
+    } catch (err) {
+      errorEl.textContent = err instanceof Error ? err.message : String(err);
+      return;
+    }
+
     errorEl.textContent = "";
     btn.disabled = true;
     btn.textContent = "Criando conta...";
     try {
-      const result = await signUpWithProfile(email, senha, profile);
+      const result = await signUpWithProfile(email, senha, profile, captchaToken);
       if (result.needsEmailConfirmation) {
         // Sem sessão ainda (confirmação pendente) — o perfil não foi
         // gravado no banco (a RLS exige auth.uid(), que só existe com
@@ -1031,6 +1062,7 @@ export class EsboceApplication {
     } catch (err) {
       errorEl.textContent = this.friendlyAuthError(err);
     } finally {
+      resetCaptcha("signupCaptcha");
       btn.disabled = false;
       btn.textContent = "Criar conta e salvar projeto";
     }
@@ -1073,12 +1105,19 @@ export class EsboceApplication {
     const email = (this.requireElement("authLoginEmail") as HTMLInputElement).value.trim();
     const senha = (this.requireElement("authLoginSenha") as HTMLInputElement).value;
     if (!email || !senha) { errorEl.textContent = "Preenche e-mail e senha."; return; }
+    let captchaToken: string;
+    try {
+      captchaToken = requireCaptchaToken("loginCaptcha");
+    } catch (err) {
+      errorEl.textContent = err instanceof Error ? err.message : String(err);
+      return;
+    }
 
     errorEl.textContent = "";
     btn.disabled = true;
     btn.textContent = "Entrando...";
     try {
-      const user = await signIn(email, senha);
+      const user = await signIn(email, senha, captchaToken);
       if (!user) throw new Error("Login não retornou um usuário.");
       await this.completePendingProfileIfAny(user.id, email);
       await this.ensureCurrentLegalAcceptance(user.id);
@@ -1086,6 +1125,7 @@ export class EsboceApplication {
     } catch (err) {
       errorEl.textContent = this.friendlyAuthError(err);
     } finally {
+      resetCaptcha("loginCaptcha");
       btn.disabled = false;
       btn.textContent = "Entrar";
     }

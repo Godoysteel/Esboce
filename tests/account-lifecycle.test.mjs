@@ -5,6 +5,7 @@ import test from "node:test";
 const indexUrl = new URL("../index.html", import.meta.url);
 const clientUrl = new URL("../src/core/SupabaseClient.ts", import.meta.url);
 const appUrl = new URL("../src/app/EsboceApplication.ts", import.meta.url);
+const turnstileUrl = new URL("../src/core/Turnstile.ts", import.meta.url);
 const migrationUrl = new URL("../supabase/migrations/20260810183000_account_self_deletion.sql", import.meta.url);
 
 test("recuperação de senha usa o fluxo nativo do Supabase e retorno controlado", async () => {
@@ -45,10 +46,30 @@ test("recuperação explica quando o limite temporário de e-mails foi atingido"
 test("exclusão exige senha, confirmação textual e confirmação final", async () => {
   const [app, html] = await Promise.all([readFile(appUrl, "utf8"), readFile(indexUrl, "utf8")]);
   assert.match(app, /confirmation !== "EXCLUIR"/);
-  assert.match(app, /await reauthenticate\(this\.currentUserEmail, password\)/);
+  assert.match(app, /await reauthenticate\(this\.currentUserEmail, password, captchaToken\)/);
   assert.match(app, /confirm\("Esta ação é permanente/);
   assert.match(html, /id="deleteAccountPassword"/);
   assert.match(html, /id="deleteAccountConfirmation"/);
+});
+
+test("Turnstile protege cadastro, login, recuperação e reautenticação", async () => {
+  const [client, app, html, turnstile] = await Promise.all([
+    readFile(clientUrl, "utf8"),
+    readFile(appUrl, "utf8"),
+    readFile(indexUrl, "utf8"),
+    readFile(turnstileUrl, "utf8"),
+  ]);
+  assert.match(turnstile, /0x4AAAAAAEMLuO062rDllQlZ/);
+  assert.match(turnstile, /challenges\.cloudflare\.com\/turnstile\/v0\/api\.js/);
+  assert.match(turnstile, /expired-callback/);
+  assert.match(client, /signUp\(\{ email, password, options: \{ captchaToken \} \}\)/);
+  assert.match(client, /signInWithPassword\(\{ email, password, options: \{ captchaToken \} \}\)/);
+  assert.match(client, /resetPasswordForEmail\(email, \{ redirectTo: redirectTo\.toString\(\), captchaToken \}\)/);
+  for (const id of ["signupCaptcha", "loginCaptcha", "recoveryCaptcha", "deleteAccountCaptcha"]) {
+    assert.match(html, new RegExp(`id="${id}"`));
+    assert.match(app, new RegExp(`requireCaptchaToken\\("${id}"\\)`));
+    assert.match(app, new RegExp(`resetCaptcha\\("${id}"\\)`));
+  }
 });
 
 test("RPC de exclusão deriva o alvo somente de auth.uid e não aceita id externo", async () => {

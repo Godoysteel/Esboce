@@ -140,8 +140,8 @@ export async function getCurrentUser() {
 // caso ainda NÃO dá pra salvar (RLS exige auth.uid()), então quem
 // chamar isso precisa avisar o usuário pra confirmar o e-mail antes de
 // tentar salvar de novo.
-export async function signUpWithProfile(email: string, password: string, profile: ProfileFields): Promise<{ needsEmailConfirmation: boolean }> {
-  const { data, error } = await supabase.auth.signUp({ email, password });
+export async function signUpWithProfile(email: string, password: string, profile: ProfileFields, captchaToken: string): Promise<{ needsEmailConfirmation: boolean }> {
+  const { data, error } = await supabase.auth.signUp({ email, password, options: { captchaToken } });
   if (error) throw error;
   if (!data.user) throw new Error('Cadastro não retornou um usuário.');
 
@@ -157,8 +157,8 @@ export async function signUpWithProfile(email: string, password: string, profile
   return { needsEmailConfirmation: false };
 }
 
-export async function signIn(email: string, password: string) {
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+export async function signIn(email: string, password: string, captchaToken: string) {
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password, options: { captchaToken } });
   if (error) throw error;
   return data.user;
 }
@@ -168,12 +168,12 @@ export async function signOut(): Promise<void> {
   if (error) throw error;
 }
 
-export async function sendPasswordRecovery(email: string): Promise<void> {
+export async function sendPasswordRecovery(email: string, captchaToken: string): Promise<void> {
   const redirectTo = new URL(window.location.href);
   redirectTo.search = '';
   redirectTo.hash = '';
   redirectTo.searchParams.set('recuperar-senha', '1');
-  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: redirectTo.toString() });
+  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: redirectTo.toString(), captchaToken });
   if (error) throw error;
 }
 
@@ -182,8 +182,8 @@ export async function updatePassword(password: string): Promise<void> {
   if (error) throw error;
 }
 
-export async function reauthenticate(email: string, password: string): Promise<void> {
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+export async function reauthenticate(email: string, password: string, captchaToken: string): Promise<void> {
+  const { error } = await supabase.auth.signInWithPassword({ email, password, options: { captchaToken } });
   if (error) throw error;
 }
 
