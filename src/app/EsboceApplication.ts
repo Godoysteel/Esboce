@@ -9,7 +9,7 @@ import { NavGizmo } from "../core/NavGizmo.js";
 import { Store } from "../core/Store.js";
 import { ViewportController } from "../core/ViewportController.js";
 import { ViewportStats } from "../core/ViewportStats.js";
-import { createSharedProject, loadSharedProject, updateSharedProject, deleteProject, signUpWithProfile, signIn, signOut, sendPasswordRecovery, updatePassword, reauthenticate, deleteCurrentAccount, getCurrentUser, listMyProjects, ensureProfileExists, hasCurrentLegalAcceptance, recordCurrentLegalAcceptance, listDepartments, listManufacturers, listCatalogProducts, type ProfileFields, type CatalogDepartment, type CatalogManufacturer, type CatalogProductWithDepartment } from "../core/SupabaseClient.js";
+import { createSharedProject, loadSharedProject, updateSharedProject, deleteProject, signUpWithProfile, signIn, signOut, sendPasswordRecovery, updatePassword, onPasswordRecovery, reauthenticate, deleteCurrentAccount, getCurrentUser, listMyProjects, ensureProfileExists, hasCurrentLegalAcceptance, recordCurrentLegalAcceptance, listDepartments, listManufacturers, listCatalogProducts, type ProfileFields, type CatalogDepartment, type CatalogManufacturer, type CatalogProductWithDepartment } from "../core/SupabaseClient.js";
 import { CURRENT_LEGAL_ACCEPTANCE } from "../core/LegalAcceptance.js";
 import {
   ProjectFormatError,
@@ -35,6 +35,9 @@ export class EsboceApplication {
   // "Meus projetos" exigem isso (ver requireAuth()).
   private currentUserId: string | null = null;
   private currentUserEmail: string | null = null;
+  private passwordRecoveryReady = false;
+  private authUiReady = false;
+  private passwordRecoveryValidationTimer: number | null = null;
   // Enquanto o modal de cadastro/login está aberto por causa de um
   // "Salvar" (não por clique direto em "Entrar"), essas duas guardam
   // como avisar quem estava esperando: resolve() quando loga com
@@ -58,6 +61,10 @@ export class EsboceApplication {
   private catalogActiveCategoriaFilter: string | null = null;
 
   public async start(): Promise<void> {
+    onPasswordRecovery(() => {
+      this.passwordRecoveryReady = true;
+      if (this.authUiReady) this.openPasswordReset(true);
+    });
     this.viewport = this.requireElement("viewport");
     this.scene.background = new THREE.Color(0xa9dff2);
 
@@ -121,9 +128,10 @@ export class EsboceApplication {
     this.initializeControllers();
     this.bindApplicationEvents();
     this.setupAuthModal();
+    this.authUiReady = true;
     this.setupDisclaimerOverlay();
     this.refreshAccountButton();
-    if (new URLSearchParams(window.location.search).get("recuperar-senha") === "1") {
+    if (this.passwordRecoveryReady || new URLSearchParams(window.location.search).get("recuperar-senha") === "1") {
       this.openPasswordReset(true);
     }
     if (this.currentUserId) {
@@ -631,6 +639,13 @@ export class EsboceApplication {
     this.requireElement("passwordResetClose").addEventListener("click", () => this.closePasswordReset());
     this.requireElement("passwordRecoverySubmit").addEventListener("click", () => this.handlePasswordRecoveryRequest());
     this.requireElement("passwordUpdateSubmit").addEventListener("click", () => this.handlePasswordUpdate());
+    this.requireElement("newPassword").addEventListener("input", () => this.refreshPasswordUpdateState());
+    this.requireElement("newPasswordConfirm").addEventListener("input", () => this.refreshPasswordUpdateState());
+    this.requireElement("showNewPasswords").addEventListener("change", () => {
+      const visible = (this.requireElement("showNewPasswords") as HTMLInputElement).checked;
+      (this.requireElement("newPassword") as HTMLInputElement).type = visible ? "text" : "password";
+      (this.requireElement("newPasswordConfirm") as HTMLInputElement).type = visible ? "text" : "password";
+    });
     this.requireElement("accountSettingsClose").addEventListener("click", () => this.closeAccountSettings());
     this.requireElement("deleteAccountSubmit").addEventListener("click", () => this.handleDeleteAccount());
     this.requireElement("legalAcceptanceSubmit").addEventListener("click", () => this.handleLegalAcceptanceSubmit());
@@ -714,8 +729,61 @@ export class EsboceApplication {
     if (!updatingPassword) {
       (this.requireElement("passwordRecoveryEmail") as HTMLInputElement).value =
         (this.requireElement("authLoginEmail") as HTMLInputElement).value.trim();
+    } else {
+      if (this.passwordRecoveryReady) {
+        if (this.passwordRecoveryValidationTimer !== null) window.clearTimeout(this.passwordRecoveryValidationTimer);
+        this.passwordRecoveryValidationTimer = null;
+        this.requireElement("passwordResetError").textContent = "";
+      } else if (this.passwordRecoveryValidationTimer === null) {
+        this.requireElement("passwordResetSuccess").textContent = "Validando o link de recuperação...";
+        this.passwordRecoveryValidationTimer = window.setTimeout(() => {
+          this.passwordRecoveryValidationTimer = null;
+          if (this.passwordRecoveryReady) return;
+          this.requireElement("passwordResetSuccess").textContent = "";
+          this.requireElement("passwordResetError").textContent = "Este link não é válido ou expirou. Solicite um novo link e abra somente o mais recente.";
+          this.refreshPasswordUpdateState();
+        }, 8000);
+      }
+      this.refreshPasswordUpdateState();
     }
     this.requireElement("passwordResetOverlay").classList.add("visible");
+  }
+
+  private refreshPasswordUpdateState(): void {
+    const password = (this.requireElement("newPassword") as HTMLInputElement).value;
+    const confirmation = (this.requireElement("newPasswordConfirm") as HTMLInputElement).value;
+    const hint = this.requireElement("passwordMatchHint");
+    const btn = this.requireElement("passwordUpdateSubmit") as HTMLButtonElement;
+    const longEnough = password.length >= 8;
+    const matches = password === confirmation && confirmation.length > 0;
+    if (!password && !confirmation) {
+      hint.textContent = "";
+    } else if (!longEnough) {
+      hint.textContent = "Use pelo menos 8 caracteres.";
+      hint.style.color = "#A61B2B";
+    } else if (!matches) {
+      hint.textContent = "As senhas ainda não coincidem.";
+      hint.style.color = "#A61B2B";
+    } else {
+      hint.textContent = "As senhas coincidem.";
+      hint.style.color = "#287A45";
+    }
+    btn.disabled = !this.passwordRecoveryReady || !longEnough || !matches;
+    btn.textContent = this.passwordRecoveryReady ? "Salvar nova senha" : "Validando link...";
+  }
+
+  private friendlyPasswordUpdateError(err: unknown): string {
+    const message = err instanceof Error ? err.message : String(err);
+    if (/same password|different from the old|new password should be different/i.test(message)) {
+      return "A nova senha precisa ser diferente da senha anterior.";
+    }
+    if (/weak password|password should be at least/i.test(message)) {
+      return "A senha não atende aos requisitos de segurança. Use uma combinação mais forte.";
+    }
+    if (/session|expired|invalid|token/i.test(message)) {
+      return "Este link expirou ou já foi utilizado. Solicite um novo link e abra somente o mais recente.";
+    }
+    return "Não foi possível alterar a senha. Solicite um novo link e tente novamente.";
   }
 
   private closePasswordReset(): void {
@@ -752,6 +820,7 @@ export class EsboceApplication {
     const errorEl = this.requireElement("passwordResetError");
     const successEl = this.requireElement("passwordResetSuccess");
     const btn = this.requireElement("passwordUpdateSubmit") as HTMLButtonElement;
+    if (!this.passwordRecoveryReady) { errorEl.textContent = "Aguarde a validação do link ou solicite um novo."; return; }
     if (password.length < 8) { errorEl.textContent = "A nova senha precisa ter pelo menos 8 caracteres."; return; }
     if (password !== confirmation) { errorEl.textContent = "As senhas não coincidem."; return; }
     errorEl.textContent = "";
@@ -771,10 +840,9 @@ export class EsboceApplication {
       }, 900);
     } catch (err) {
       console.error("Falha ao alterar senha:", err);
-      errorEl.textContent = "O link expirou ou não é válido. Solicite uma nova recuperação.";
+      errorEl.textContent = this.friendlyPasswordUpdateError(err);
     } finally {
-      btn.disabled = false;
-      btn.textContent = "Salvar nova senha";
+      this.refreshPasswordUpdateState();
     }
   }
 

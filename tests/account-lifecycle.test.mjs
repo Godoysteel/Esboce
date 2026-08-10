@@ -15,9 +15,23 @@ test("recuperação de senha usa o fluxo nativo do Supabase e retorno controlado
   ]);
   assert.match(client, /resetPasswordForEmail\(email, \{ redirectTo:/);
   assert.match(client, /updateUser\(\{ password \}\)/);
+  assert.match(client, /event !== 'PASSWORD_RECOVERY'/);
+  assert.match(client, /passwordRecoveryReady = true/);
   assert.match(app, /recuperar-senha/);
+  assert.match(app, /if \(!this\.passwordRecoveryReady\)/);
   assert.match(html, /id="forgotPasswordBtn"/);
   assert.match(html, /id="passwordUpdatePane"/);
+  assert.match(html, /id="passwordUpdateSubmit" disabled/);
+  assert.match(html, /id="showNewPasswords"/);
+});
+
+test("nova senha só pode ser enviada após validação e quando os campos coincidem", async () => {
+  const app = await readFile(appUrl, "utf8");
+  assert.match(app, /btn\.disabled = !this\.passwordRecoveryReady \|\| !longEnough \|\| !matches/);
+  assert.match(app, /As senhas ainda não coincidem/);
+  assert.match(app, /As senhas coincidem/);
+  assert.match(app, /friendlyPasswordUpdateError/);
+  assert.match(app, /nova senha precisa ser diferente/i);
 });
 
 test("exclusão exige senha, confirmação textual e confirmação final", async () => {

@@ -1360,7 +1360,9 @@ Mova uma parede para registrar a operação.</pre>
       <p class="auth-sub">Escolha uma senha com pelo menos 8 caracteres.</p>
       <div class="auth-field"><label>Nova senha</label><input id="newPassword" type="password" autocomplete="new-password"></div>
       <div class="auth-field"><label>Confirmar nova senha</label><input id="newPasswordConfirm" type="password" autocomplete="new-password"></div>
-      <button class="auth-submit" id="passwordUpdateSubmit">Salvar nova senha</button>
+      <label class="legal-check"><input id="showNewPasswords" type="checkbox"> <span>Mostrar as senhas</span></label>
+      <div id="passwordMatchHint" style="font-size:12px;min-height:18px;"></div>
+      <button class="auth-submit" id="passwordUpdateSubmit" disabled>Validando link...</button>
     </div>
     <div class="auth-error" id="passwordResetError"></div>
     <div id="passwordResetSuccess" style="font-size:12px;color:#287A45;margin-top:8px;"></div>
