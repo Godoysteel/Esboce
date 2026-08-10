@@ -790,6 +790,27 @@ export class EsboceApplication {
     this.requireElement("passwordResetOverlay").classList.remove("visible");
   }
 
+  private friendlyPasswordRecoveryRequestError(err: unknown): string {
+    const details = typeof err === "object" && err !== null
+      ? err as { code?: unknown; status?: unknown; message?: unknown }
+      : {};
+    const code = typeof details.code === "string" ? details.code : "";
+    const status = typeof details.status === "number" ? details.status : Number(details.status);
+    const message = typeof details.message === "string" ? details.message : String(err);
+
+    if (
+      status === 429
+      || /over_email_send_rate_limit|over_request_rate_limit/i.test(code)
+      || /rate limit|too many requests/i.test(message)
+    ) {
+      return "O limite temporário de e-mails foi atingido. Aguarde cerca de 1 hora e tente uma única vez.";
+    }
+    if (/email address not authorized/i.test(message)) {
+      return "O serviço de e-mail ainda não está autorizado a enviar para este endereço.";
+    }
+    return "Não foi possível enviar o link agora. Tente novamente em alguns minutos.";
+  }
+
   private async handlePasswordRecoveryRequest(): Promise<void> {
     const email = (this.requireElement("passwordRecoveryEmail") as HTMLInputElement).value.trim();
     const errorEl = this.requireElement("passwordResetError");
@@ -807,7 +828,7 @@ export class EsboceApplication {
       successEl.textContent = "Se existir uma conta com esse e-mail, o link chegará em alguns minutos.";
     } catch (err) {
       console.error("Falha na recuperação de senha:", err);
-      errorEl.textContent = "Não foi possível enviar o link agora. Tente novamente em alguns minutos.";
+      errorEl.textContent = this.friendlyPasswordRecoveryRequestError(err);
     } finally {
       btn.disabled = false;
       btn.textContent = "Enviar link de recuperação";

@@ -34,6 +34,14 @@ test("nova senha só pode ser enviada após validação e quando os campos coinc
   assert.match(app, /nova senha precisa ser diferente/i);
 });
 
+test("recuperação explica quando o limite temporário de e-mails foi atingido", async () => {
+  const app = await readFile(appUrl, "utf8");
+  assert.match(app, /friendlyPasswordRecoveryRequestError/);
+  assert.match(app, /status === 429/);
+  assert.match(app, /over_email_send_rate_limit\|over_request_rate_limit/);
+  assert.match(app, /Aguarde cerca de 1 hora e tente uma única vez/);
+});
+
 test("exclusão exige senha, confirmação textual e confirmação final", async () => {
   const [app, html] = await Promise.all([readFile(appUrl, "utf8"), readFile(indexUrl, "utf8")]);
   assert.match(app, /confirmation !== "EXCLUIR"/);
