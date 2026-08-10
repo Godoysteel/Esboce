@@ -2584,6 +2584,11 @@ export function hashColorHex(key: string): number {
   export function RADIER_MARGIN_GETTER() { return RADIER_MARGIN; }
   export function BALDRAME_WIDTH_GETTER() { return BALDRAME_WIDTH; }
   export function BALDRAME_THICKNESS_GETTER() { return BALDRAME_THICKNESS; }
+  // Espessura real da Laje (elemento independente, arrastável, ver
+  // types.ts) — mesma ideia dos getters acima: o quantitativo de
+  // materiais lê daqui em vez de guardar um segundo valor solto que
+  // pode dessincronizar do que o 3D realmente desenha.
+  export function LAJE_THICKNESS_GETTER() { return LAJE_THICKNESS; }
 
 // Namespace de compatibilidade — mesma razão de Core.ts/Store.ts/Catalog.ts
 // (chamadas Scene3DRenderer.xxx no código legado, enquanto
@@ -2600,5 +2605,6 @@ export const Scene3DRenderer = {
   RADIER_THICKNESS_GETTER,
   RADIER_MARGIN_GETTER,
   BALDRAME_WIDTH_GETTER,
-  BALDRAME_THICKNESS_GETTER
+  BALDRAME_THICKNESS_GETTER,
+  LAJE_THICKNESS_GETTER
 };

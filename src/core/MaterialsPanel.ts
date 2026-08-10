@@ -8,7 +8,7 @@ import { Store } from './Store.js';
 import { Catalog } from './Catalog.js';
 import { Scene3DRenderer } from './Scene3DRenderer.js';
 import { MaterialsSheet } from './MaterialsSheet.js';
-import type { Point, Wall, Roof, Column } from './types.js';
+import type { Point, Wall, Roof, Column, Laje } from './types.js';
 
 let bodyEl: HTMLElement | null, panelEl: HTMLElement | null;
 
@@ -144,6 +144,15 @@ function columnVolumeM3(col: Column, wallHeight: number): number {
   return sizeM * sizeM * wallHeight;
 }
 
+// Área de uma Laje (elemento independente, arrastável — ver types.ts),
+// em m² — mesma fórmula de área de polígono que Core.detectRooms usa
+// pra cômodo (Core.polygonAreaModelUnits), só convertida de unidade de
+// modelo pra m² (dividindo por GRID ao quadrado, mesma convenção de
+// room.area em Core.ts).
+function lajeAreaMeters(laje: Laje): number {
+  return Math.abs(Core.polygonAreaModelUnits(laje.points)) / (Core.GRID * Core.GRID);
+}
+
 // ---------------------------------------------------------------
 // REFERÊNCIA ESTRUTURAL — taxa de aço por m³ de concreto, regra clássica
 // de pré-dimensionamento ("Números Mágicos das Estruturas de Concreto",
@@ -158,6 +167,15 @@ function columnVolumeM3(col: Column, wallHeight: number): number {
 // projeto estrutural fechado.
 const STEEL_RATE_SUPERSTRUCTURE_KG_M3 = 100;
 const STEEL_RATE_FOUNDATION_KG_M3 = 70;
+// Laje maciça (elemento independente, arrastável — ver types.ts Laje)
+// tem taxa própria, um pouco abaixo da de viga/pilar: armação de laje é
+// mais distribuída (malha), menos concentrada que viga/pilar — mesma
+// família de referência ("Números Mágicos das Estruturas de Concreto"),
+// mas com o valor mais baixo da faixa usual pra laje maciça. Decidido
+// nesta sessão (ver Registro de Decisões Técnicas) — não é um consenso
+// único na literatura, é uma escolha de pré-dimensionamento própria do
+// Esboce, documentada aqui pra poder ser revista.
+const STEEL_RATE_LAJE_KG_M3 = 90;
 
 // Pilaretes embutidos na alvenaria e viga de cinta/amarração no topo da
 // parede: o modelo NÃO tem essas peças desenhadas (só as Colunas que o
@@ -212,18 +230,20 @@ interface Totals {
   wallLength: number; wallAreaNet: number; floorArea: number; baseboard: number; roofArea: number;
   doors: number; windows: number; arcos: number; soleiraCount: number; soleiraLength: number;
   columnCount: number; columnVolume: number; estimatedColumnCount: number;
+  lajeCount: number; lajeAreaM2: number;
 }
 interface Masonry { blocks: number; mortarM3: number; cementKg: number; calKg: number; sandM3: number; }
 interface Structure {
   pilareteCount: number; pilareteVolume: number; pilareteSteelKg: number;
   beamLength: number; beamVolume: number; beamSteelKg: number;
 }
+interface LajeQuantities { count: number; areaM2: number; volumeM3: number; steelKg: number; }
 interface FoundationBaldrame { type: 'baldrame'; length: number; concreteVolume: number; steelKg: number; }
 interface FoundationRadier { type: 'radier'; areaM2: number; concreteVolume: number; steelKg: number; }
 type Foundation = FoundationBaldrame | FoundationRadier | null;
 interface ComputeResult {
   totals: Totals; paint: Record<string, number>; floorTile: Record<string, number>; roofTile: Record<string, number>;
-  masonry: Masonry; structure: Structure; foundation: Foundation;
+  masonry: Masonry; structure: Structure; foundation: Foundation; laje: LajeQuantities;
 }
 
 // Percorre TODOS os pavimentos — a lista é do projeto inteiro, não só do
@@ -235,7 +255,8 @@ export function compute(): ComputeResult {
   const totals: Totals = {
     wallLength: 0, wallAreaNet: 0, floorArea: 0, baseboard: 0, roofArea: 0,
     doors: 0, windows: 0, arcos: 0, soleiraCount: 0, soleiraLength: 0,
-    columnCount: 0, columnVolume: 0, estimatedColumnCount: 0
+    columnCount: 0, columnVolume: 0, estimatedColumnCount: 0,
+    lajeCount: 0, lajeAreaM2: 0
   };
   const paint: Record<string, number> = {}, floorTile: Record<string, number> = {}, roofTile: Record<string, number> = {};
 
@@ -320,6 +341,22 @@ export function compute(): ComputeResult {
     (floor.columns || []).forEach(function (col) {
       totals.columnCount++;
       totals.columnVolume += columnVolumeM3(col, wallHeight);
+    });
+
+    // Laje (elemento independente, arrastável) — volume = área do
+    // polígono × espessura real (mesma constante que o 3D usa pra
+    // desenhar, ver LAJE_THICKNESS_GETTER). Trata como concreto armado
+    // na taxa própria de laje (STEEL_RATE_LAJE_KG_M3) — SEM somar uma
+    // viga própria pra cada Laje: a viga de cinta/amarração já
+    // calculada mais abaixo roda por cima de toda parede do projeto, e
+    // é ela quem estruturalmente já cumpre o papel de apoio da laje —
+    // uma viga adicional aqui duplicaria essa mesma peça. Vão de laje
+    // sem apoio intermediário (sem parede no meio de um polígono
+    // grande) fica fora do escopo — é decisão de projeto estrutural,
+    // mesmo tratamento que pilarete em parede já dá pro vão grande.
+    (floor.lajes || []).forEach(function (laje) {
+      totals.lajeCount++;
+      totals.lajeAreaM2 += lajeAreaMeters(laje);
     });
 
     // Pilaretes ESTIMADOS embutidos na alvenaria (ver comentário em
@@ -407,7 +444,20 @@ export function compute(): ComputeResult {
     }
   }
 
-  return { totals, paint, floorTile, roofTile, masonry, structure, foundation };
+  // Laje — volume = área total já somada × espessura real (mesma
+  // constante que o 3D usa pra desenhar), aço pela taxa própria de laje
+  // (ver STEEL_RATE_LAJE_KG_M3 — mais baixa que viga/pilar de propósito,
+  // sem viga adicional: ver comentário no loop acima).
+  const lajeThickness = Scene3DRenderer.LAJE_THICKNESS_GETTER();
+  const lajeVolumeM3 = totals.lajeAreaM2 * lajeThickness;
+  const laje: LajeQuantities = {
+    count: totals.lajeCount,
+    areaM2: totals.lajeAreaM2,
+    volumeM3: lajeVolumeM3,
+    steelKg: lajeVolumeM3 * STEEL_RATE_LAJE_KG_M3
+  };
+
+  return { totals, paint, floorTile, roofTile, masonry, structure, foundation, laje };
 }
 
 function productLine(productId: string, areaM2: number): string {
@@ -469,6 +519,13 @@ export function render(): void {
       html += '<div class="materials-line"><span>Concreto — cinta</span><span>' + q.structure.beamVolume.toFixed(3).replace('.', ',') + ' m³</span></div>';
       html += '<div class="materials-line"><span>Aço — cinta</span><span>' + q.structure.beamSteelKg.toFixed(1).replace('.', ',') + ' kg</span></div>';
     }
+  }
+  if (q.laje.count > 0) {
+    html += '<div class="object-panel-section-label">Laje (ref. taxa de aço 90 kg/m³ — sem viga própria, apoiada na cinta já contada em Estrutura)</div>';
+    html += '<div class="materials-line"><span>Lajes (posicionadas)</span><span>' + q.laje.count + ' un.</span></div>';
+    html += '<div class="materials-line"><span>Área</span><span>' + fmtM2(q.laje.areaM2) + '</span></div>';
+    html += '<div class="materials-line"><span>Concreto</span><span>' + q.laje.volumeM3.toFixed(3).replace('.', ',') + ' m³</span></div>';
+    html += '<div class="materials-line"><span>Aço (estimado)</span><span>' + q.laje.steelKg.toFixed(1).replace('.', ',') + ' kg</span></div>';
   }
   if (q.totals.wallAreaNet > 0) {
     html += '<div class="object-panel-section-label">Alvenaria (ref. SINAPI — bloco 9x19x19, traço 1:2:8, com 10% de perda)</div>';
@@ -565,6 +622,9 @@ export function buildDetailRows(): (string | number)[][] {
     (floor.columns || []).forEach(function (c, i) {
       rows.push([label, 'Coluna ' + (i + 1) + ' (' + c.shape + ')', 1, 'un']);
     });
+    (floor.lajes || []).forEach(function (laje, i) {
+      rows.push([label, 'Laje ' + (i + 1), lajeAreaMeters(laje).toFixed(2), 'm²']);
+    });
   });
   return rows;
 }
@@ -617,6 +677,13 @@ export function buildRows(): (string | number)[][] {
     push('Estrutura', 'Viga de cinta/amarração (comprimento)', q.structure.beamLength, 'm', null);
     push('Estrutura', 'Concreto — cinta', q.structure.beamVolume, 'm³', q.structure.beamVolume * REFERENCE_PRICES.concretePerM3);
     push('Estrutura', 'Aço — cinta', q.structure.beamSteelKg, 'kg', q.structure.beamSteelKg * REFERENCE_PRICES.steelPerKg);
+  }
+  if (q.laje.count > 0) {
+    const lLabel = 'Laje (ref. taxa de aço 90 kg/m³)';
+    push(lLabel, 'Lajes (posicionadas)', q.laje.count, 'un', null);
+    push(lLabel, 'Área', q.laje.areaM2, 'm²', null);
+    push(lLabel, 'Concreto', q.laje.volumeM3, 'm³', q.laje.volumeM3 * REFERENCE_PRICES.concretePerM3);
+    push(lLabel, 'Aço (estimado)', q.laje.steelKg, 'kg', q.laje.steelKg * REFERENCE_PRICES.steelPerKg);
   }
   if (q.totals.wallAreaNet > 0) {
     push('Alvenaria (ref. SINAPI)', 'Blocos/tijolos', q.masonry.blocks, 'un', q.masonry.blocks * REFERENCE_PRICES.brickPerUnit);

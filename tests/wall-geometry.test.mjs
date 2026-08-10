@@ -11,6 +11,7 @@ import {
   detectRooms,
   findIsolatedRoomWallIds,
   findWallTJunctionSplits,
+  polygonAreaModelUnits,
   rectPoints,
   lajeBounds,
   resolveOpeningEdgeResize,
@@ -744,4 +745,29 @@ test('lajeBounds: funciona também pra um contorno não-retangular (ex.: um "L" 
   ]);
   const b = lajeBounds(lShape);
   assert.deepEqual(b, { minX: 0, maxX: 200, minY: 0, maxY: 200 });
+});
+
+// polygonAreaModelUnits — usada pelo quantitativo de materiais
+// (MaterialsPanel.ts) pra contar volume de concreto de Laje. Mesma
+// fórmula (shoelace) que Core.detectRooms já usava internamente pra
+// área de cômodo, agora exportada e reaproveitada — os dois cálculos
+// (área de cômodo e área de laje) nunca podem dessincronizar porque é
+// literalmente a mesma função nos dois lugares.
+test('polygonAreaModelUnits: retângulo 10×5m (200×100 unidades de grade) dá 20000 (= 50 m² depois de dividir por GRID²)', () => {
+  const laje = createLajeEntity(rectPoints(0, 0, 200, 100));
+  const areaRaw = polygonAreaModelUnits(laje.points);
+  assert.equal(Math.abs(areaRaw), 20000);
+  assert.equal(Math.abs(areaRaw) / (GRID * GRID), 50);
+});
+
+test('polygonAreaModelUnits: contorno em "L" — área bate com retângulo maior menos o recorte', () => {
+  // Mesmo "L" do teste de lajeBounds acima: quadrado 200×200 (100 m²)
+  // menos o canto recortado de 100×100 (25 m²) = 75 m² esperado.
+  const lShape = createLajeEntity([
+    { x: 0, y: 0 }, { x: 200, y: 0 }, { x: 200, y: 100 },
+    { x: 100, y: 100 }, { x: 100, y: 200 }, { x: 0, y: 200 }
+  ]);
+  const areaRaw = polygonAreaModelUnits(lShape.points);
+  assert.equal(Math.abs(areaRaw), 30000);
+  assert.equal(Math.abs(areaRaw) / (GRID * GRID), 75);
 });

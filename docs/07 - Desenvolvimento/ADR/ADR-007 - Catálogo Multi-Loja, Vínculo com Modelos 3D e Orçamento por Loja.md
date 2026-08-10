@@ -1,4 +1,4 @@
-# ADR-007 — Catálogo Multi-Loja, Vínculo com Modelos 3D e Orçamento por Loja.md
+# ADR-007 — Catálogo Multi-Loja, Vínculo com Modelos 3D e Orçamento por Loja
 
 **Status:** Aceita
 

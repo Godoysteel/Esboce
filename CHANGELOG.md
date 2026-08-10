@@ -39,6 +39,10 @@ Criada a primeira baseline de engenharia do projeto.
 
 # Não lançado
 
+## Adicionado (quantitativo de materiais)
+
+- **Laje agora entra no quantitativo de materiais.** A entidade Laje (polígono livre, arrastável, por pavimento) existia na cena, mas nunca era contada no orçamento — nem área, nem concreto, nem aço. Agora: volume = área × espessura real (0,15m, a mesma que o 3D já usa pra desenhar), aço numa taxa própria de **90 kg/m³** (mais baixa que a de viga/pilar, 100 kg/m³, porque armação de laje maciça é mais distribuída). Sem viga própria por laje — a viga de cinta que já existe já cumpre esse papel de apoio; somar as duas duplicaria a peça. Vão de laje sem apoio intermediário fica fora de escopo (fica pro projeto estrutural, mesmo tratamento que pilarete de parede já dá pro vão grande). Aparece nos três lugares que já existiam pra outros itens: painel de quantitativo, planilha/CSV e detalhe elemento-a-elemento. Ver DEC-42 no Registro de Decisões Técnicas.
+
 ## Documentação
 
 - Nova **ADR-007 — Catálogo Multi-Loja, Vínculo com Modelos 3D e Orçamento por Loja**: formaliza a separação Produto/Loja/Oferta, o escopo por cidade, o vínculo (por id compartilhado) entre o catálogo do Supabase (preço/loja/foto) e o catálogo local (modelos 3D), a regra de que só produtos de departamentos de acabamento têm modelo 3D, e o fluxo de finalização de projeto → quantitativo → orçamento agrupado por loja. Indexada em "Decisões relacionadas" na Arquitetura.md.

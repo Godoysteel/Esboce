@@ -150,6 +150,21 @@ export function wallLengthMeters(w: Wall): number {
   return Math.hypot(w.x2 - w.x1, w.y2 - w.y1) / GRID;
 }
 
+// Área de um polígono fechado (fórmula do laço/shoelace), em UNIDADES DE
+// MODELO ao quadrado (raw, mesma convenção de x1/y1 — dividir por
+// GRID*GRID pra virar m²). Extraída da closure local que já existia
+// dentro de detectRooms (usada ali pra área de cômodo) — passou a ser
+// exportada pra também servir pra área de Laje no quantitativo de
+// materiais (MaterialsPanel.ts), sem duplicar a fórmula em dois lugares.
+export function polygonAreaModelUnits(pts: Point[]): number {
+  let s = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const p1 = pts[i]!, p2 = pts[(i + 1) % pts.length]!;
+    s += p1.x * p2.y - p2.x * p1.y;
+  }
+  return s / 2;
+}
+
 // ---- Telhado — snap assistido entre telhados vizinhos ----
 // Altura da cumeeira acima do topo da parede, em metros. Só existe pra
 // duasAguas/quatroAguas.
@@ -485,14 +500,7 @@ export function detectRooms(wallList: Wall[]): Room[] {
 
   const dist = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
   const angleOf = (from: Point, to: Point) => Math.atan2(to.y - from.y, to.x - from.x);
-  const signedArea = (pts: Point[]) => {
-    let s = 0;
-    for (let i = 0; i < pts.length; i++) {
-      const p1 = pts[i]!, p2 = pts[(i + 1) % pts.length]!;
-      s += p1.x * p2.y - p2.x * p1.y;
-    }
-    return s / 2;
-  };
+  const signedArea = polygonAreaModelUnits;
 
   const nodes: GraphNode[] = [];
   function findOrCreateNode(p: Point): GraphNode {
@@ -1347,7 +1355,7 @@ export const Core = {
   WALL_HEIGHT, OPENING_MIN_WIDTH, OPENING_MIN_HEIGHT,
   OPENING_MARGIN, OPENING_GAP, OPENING_WALL_CLEARANCE,
   snap, nextId,
-  createOpeningEntity, wallLengthMeters, wallOffsetAtPoint, findValidOpeningOffset,
+  createOpeningEntity, wallLengthMeters, polygonAreaModelUnits, wallOffsetAtPoint, findValidOpeningOffset,
   resolveOpeningEdgeResize, resolveOpeningHeightResize,
   findRoomsAdjacentToOpening,
   roofRidgeHeightMeters, roofPitchForRidgeHeight, roofsCanFuse, fusedRoofBounds,
