@@ -22,6 +22,25 @@ const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_32BTfCDesA9WyH9Ltm0-zw_MKttNAfO
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
+let passwordRecoveryReady = false;
+const passwordRecoveryListeners = new Set<() => void>();
+
+// O listener precisa existir imediatamente depois do createClient: o
+// Supabase emite PASSWORD_RECOVERY enquanto processa o link recebido na
+// URL. Guardamos o estado para que a interface possa se registrar mesmo
+// alguns instantes depois sem perder o evento.
+supabase.auth.onAuthStateChange((event, session) => {
+  if (event !== 'PASSWORD_RECOVERY' || !session) return;
+  passwordRecoveryReady = true;
+  for (const listener of passwordRecoveryListeners) listener();
+});
+
+export function onPasswordRecovery(listener: () => void): () => void {
+  passwordRecoveryListeners.add(listener);
+  if (passwordRecoveryReady) queueMicrotask(listener);
+  return () => passwordRecoveryListeners.delete(listener);
+}
+
 export interface ProjectRow {
   id: string;
   data: unknown;
