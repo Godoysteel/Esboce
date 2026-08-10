@@ -32,7 +32,7 @@ Todas as alterações relevantes do Esboce serão registradas neste arquivo.
 
 ## Interface e viewport
 
-- A antiga opção de criação de **Varanda** foi substituída por **Ático**. O ático é um pavimento superior próprio, com parede lateral baixa de 1,20 m e cobertura apoiada nessa altura; permanece sempre no topo do edifício e participa da persistência, do 3D e dos quantitativos. Varandas existentes em projetos antigos continuam legíveis, mas não são mais oferecidas para criação.
+- A antiga opção de criação de **Varanda** foi substituída por **Ático**. A ferramenta configura livremente o pavimento atual, inclusive o térreo, como **Chalé** (cobertura iniciando junto ao piso) ou **Ático** (parede lateral de 1,20 m), e também permite voltar ao pavimento normal. A configuração participa da persistência, do 3D e dos quantitativos. Varandas existentes em projetos antigos continuam legíveis, mas não são mais oferecidas para criação.
 - Projetos novos agora começam pela escolha obrigatória entre **Tijolos**, **Bloco estrutural** e **Steel Frame**, apresentada em três cartões visuais. A escolha integra o documento versionado, o backup e o compartilhamento; projetos legados são migrados para Tijolos.
 - A barra superior mantém o sistema construtivo do projeto visível durante toda a edição e o atualiza ao criar, abrir ou importar um projeto.
 - O painel e a planilha de materiais passaram a respeitar o sistema escolhido. Enquanto as composições próprias de bloco estrutural e Steel Frame não estiverem implementadas, o Esboce mantém áreas e itens comuns, mas não apresenta a composição cerâmica como se fosse válida para esses sistemas.

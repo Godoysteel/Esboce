@@ -1191,7 +1191,7 @@
         </svg>
         <span>Telhado</span>
       </button>
-      <button class="ts-btn" id="addAtticBtn" title="Adicionar um ático habitável sob o telhado">
+      <button class="ts-btn" id="addAtticBtn" title="Configurar o pavimento atual como ático ou chalé">
         <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M5 23 20 8l15 15"/>
           <path d="M9 21v11h22V21"/>
@@ -1495,6 +1495,18 @@ Mova uma parede para registrar a operação.</pre>
     </div>
     <div class="catalog-tabs" id="catalogTabs"></div>
     <div class="catalog-body" id="catalogBody"><p style="color:#9C9A92; font-size:13px;">Carregando...</p></div>
+  </div>
+</div>
+
+<div id="atticModeOverlay" role="dialog" aria-modal="true" aria-labelledby="atticModeTitle" style="display:none; position:fixed; inset:0; background:rgba(44,44,42,0.55); z-index:1000; align-items:center; justify-content:center;">
+  <div class="auth-modal" style="width:460px;">
+    <button class="auth-close" id="atticModeClose" title="Fechar">✕</button>
+    <h2 id="atticModeTitle">Ático ou chalé neste pavimento</h2>
+    <p class="auth-sub">A configuração é aplicada ao pavimento atual e pode ser usada no térreo ou em qualquer outro nível.</p>
+    <button class="auth-submit" data-attic-mode="chalet">Chalé — telhado começa junto ao piso</button>
+    <button class="auth-submit" data-attic-mode="attic" style="margin-top:10px;">Ático — parede lateral de 1,20 m</button>
+    <button class="auth-submit" data-attic-mode="standard" style="margin-top:10px; background:#FFFFFF; color:#454440; border:1px solid #D3D1C7;">Pavimento normal — remover configuração</button>
+    <p style="margin:14px 0 0; color:#77746C; font-size:12px; line-height:1.45;">Depois, desenhe os cômodos e coloque uma cobertura de duas águas. Uma laje parcial pode representar um mezanino.</p>
   </div>
 </div>
 

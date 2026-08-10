@@ -25,7 +25,7 @@ Baseline verificada em 10/08/2026:
 
 - cômodos e paredes paramétricos, snapping estrutural e proteção de topologia;
 - portas, janelas e arcos vinculados a paredes, com afastamentos e proteção contra interseções;
-- pavimentos comuns, ático com parede lateral baixa, lajes, fundações e coberturas compostas;
+- pavimentos comuns e configuração livre de ático/chalé por nível, com parede lateral baixa, lajes, fundações e coberturas compostas;
 - materiais por superfície, móveis GLTF, colisão e arraste;
 - quantitativos de alvenaria, fundação, estrutura, laje, verga, telhado e madeiramento;
 - exportação de planilha/CSV e aviso de responsabilidade técnica.

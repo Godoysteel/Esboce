@@ -134,7 +134,7 @@ portas
 janelas
 lajes
 
-O ático é um pavimento habitável sob a cobertura. Ele permanece no topo da pilha de pavimentos e usa uma parede lateral baixa antes do início do telhado. Projetos antigos sem o campo `tipo` são migrados como pavimentos comuns. A entidade Varanda continua reconhecida apenas para compatibilidade de arquivos anteriores, mas não aparece mais como ferramenta de criação.
+Ático/Chalé é uma configuração do pavimento atual, não um novo nível obrigatório. Pode ser aplicada ao térreo ou a qualquer outro pavimento: no modo Chalé a cobertura começa praticamente junto ao piso; no modo Ático existe uma parede lateral baixa de 1,20 m. Uma laje parcial pode representar o mezanino. Projetos antigos sem o campo `tipo` são migrados como pavimentos comuns. A entidade Varanda continua reconhecida apenas para compatibilidade de arquivos anteriores, mas não aparece mais como ferramenta de criação.
 8. Parede
 É a entidade estrutural principal.
 Identificação

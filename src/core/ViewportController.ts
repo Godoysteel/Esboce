@@ -2755,6 +2755,10 @@ import {
     var project = Store.getProject();
     var idx = project.currentFloorIndex;
     if (idx <= 0) return false;
+    // Ático/Chalé é uma configuração livre do nível atual. Pode representar
+    // um A-frame no térreo ou um mezanino parcial, portanto não exige uma
+    // laje completa no nível imediatamente inferior.
+    if (project.floors[idx] && project.floors[idx]!.kind === 'attic') return false;
     var belowFloor = project.floors[idx - 1];
     return !belowFloor || !belowFloor.lajes || !belowFloor.lajes.length;
   }

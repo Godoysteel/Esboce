@@ -22,7 +22,7 @@ export function refresh(): void {
   project.floors.forEach(function (floor, idx) {
     const btn = document.createElement('button');
     btn.className = 'floor-tab' + (idx === project.currentFloorIndex ? ' active' : '');
-    btn.textContent = floor.name;
+    btn.textContent = floor.name + (floor.kind === 'attic' ? ' · Ático/Chalé' : '');
     btn.addEventListener('click', function () {
       Store.commands.setCurrentFloor(idx);
       ViewportController.deselect();
@@ -34,7 +34,7 @@ export function refresh(): void {
   // pills sempre visíveis na barra (ver DEC-38, revisão 3).
   if (labelEl) {
     const current = project.floors[project.currentFloorIndex];
-    labelEl.textContent = current ? current.name : 'Pavimento';
+    labelEl.textContent = current ? current.name + (current.kind === 'attic' ? ' · Ático/Chalé' : '') : 'Pavimento';
   }
 }
 

@@ -21,14 +21,17 @@ test('pavimento comum continua com o pé-direito normal', () => {
 
 test('altura lateral personalizada fica em uma faixa segura', () => {
   const attic = createFloorEntity('Ático', 'attic');
-  attic.wallHeightM = 0.2;
-  assert.equal(floorWallHeight(attic, 2.8), 0.6);
+  attic.wallHeightM = 0;
+  assert.equal(floorWallHeight(attic, 2.8), 0.1);
   attic.wallHeightM = 4;
   assert.equal(floorWallHeight(attic, 2.8), 2.2);
 });
 
 test('interface oferece Ático e não oferece mais criação de Varanda', () => {
   assert.match(html, /id="addAtticBtn"/);
+  assert.match(html, /data-attic-mode="chalet"/);
+  assert.match(html, /data-attic-mode="attic"/);
+  assert.match(html, /data-attic-mode="standard"/);
   assert.doesNotMatch(html, /data-room-preset="varanda"/);
 });
 

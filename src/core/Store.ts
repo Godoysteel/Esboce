@@ -964,27 +964,20 @@ export const commands = {
 
   addFloor(): void {
     pushUndoSnapshot();
-    const atticIndex = project.floors.findIndex((floor) => floor.kind === 'attic');
-    const floorNumber = atticIndex >= 0 ? atticIndex : project.floors.length;
+    const floorNumber = project.floors.length;
     const floor = Core.createFloorEntity(floorNumber + 'º Pavimento');
-    if (atticIndex >= 0) project.floors.splice(atticIndex, 0, floor);
-    else project.floors.push(floor);
-    project.currentFloorIndex = floorNumber;
+    project.floors.push(floor);
+    project.currentFloorIndex = project.floors.length - 1;
     emit({ type: 'FloorAdded', floorId: floor.id });
   },
 
-  addAtticFloor(): Floor {
-    const existingIndex = project.floors.findIndex((floor) => floor.kind === 'attic');
-    if (existingIndex >= 0) {
-      project.currentFloorIndex = existingIndex;
-      emit({ type: 'CurrentFloorChanged', floorIndex: existingIndex });
-      return project.floors[existingIndex]!;
-    }
+  configureCurrentFloor(kind: Floor['kind'], wallHeightM?: number): Floor {
     pushUndoSnapshot();
-    const floor = Core.createFloorEntity('Ático', 'attic');
-    project.floors.push(floor);
-    project.currentFloorIndex = project.floors.length - 1;
-    emit({ type: 'FloorAdded', floorId: floor.id, kind: 'attic' });
+    const floor = currentFloor();
+    floor.kind = kind;
+    if (kind === 'attic') floor.wallHeightM = Math.max(0.1, Math.min(2.2, wallHeightM ?? 1.2));
+    else delete floor.wallHeightM;
+    emit({ type: 'FloorConfigurationChanged', floorId: floor.id, kind, wallHeightM: floor.wallHeightM });
     return floor;
   },
 

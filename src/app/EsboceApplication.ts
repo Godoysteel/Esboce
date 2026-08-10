@@ -279,8 +279,18 @@ export class EsboceApplication {
       ViewportController.deselect();
     });
     this.requireElement("addAtticBtn").addEventListener("click", () => {
-      Store.commands.addAtticFloor();
-      ViewportController.deselect();
+      this.requireElement("atticModeOverlay").style.display = "flex";
+    });
+    this.requireElement("atticModeClose").addEventListener("click", () => {
+      this.requireElement("atticModeOverlay").style.display = "none";
+    });
+    document.querySelectorAll<HTMLElement>("[data-attic-mode]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const mode = button.dataset.atticMode;
+        Store.commands.configureCurrentFloor(mode === "standard" ? "standard" : "attic", mode === "chalet" ? 0.2 : 1.2);
+        this.requireElement("atticModeOverlay").style.display = "none";
+        ViewportController.deselect();
+      });
     });
     this.requireElement("undoBtn").addEventListener("click", () => Store.commands.undo());
     // Painel de visualização (3D/2D/Orbit/Medir, canto direito) — só
