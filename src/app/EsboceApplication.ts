@@ -68,7 +68,6 @@ export class EsboceApplication {
     });
     this.viewport = this.requireElement("viewport");
     this.scene.background = this.createSkyBackground();
-    this.scene.fog = new THREE.Fog(0xddebed, 38, 96);
 
     // Debug: acesso ao Store/Core pelo console do navegador, útil pra
     // testar posição/rotação de móveis ao vivo (Store.currentFurniture(),
