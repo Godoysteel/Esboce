@@ -149,6 +149,33 @@ export async function signOut(): Promise<void> {
   if (error) throw error;
 }
 
+export async function sendPasswordRecovery(email: string): Promise<void> {
+  const redirectTo = new URL(window.location.href);
+  redirectTo.search = '';
+  redirectTo.hash = '';
+  redirectTo.searchParams.set('recuperar-senha', '1');
+  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: redirectTo.toString() });
+  if (error) throw error;
+}
+
+export async function updatePassword(password: string): Promise<void> {
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) throw error;
+}
+
+export async function reauthenticate(email: string, password: string): Promise<void> {
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw error;
+}
+
+export async function deleteCurrentAccount(): Promise<void> {
+  const { error } = await supabase.rpc('delete_my_account');
+  if (error) throw error;
+  // A exclusão invalida a sessão no servidor; limpa também qualquer
+  // vestígio local mantido pelo cliente Supabase.
+  await supabase.auth.signOut({ scope: 'local' });
+}
+
 // Garante que, ao logar, o usuário tem uma linha em profiles — cobre o
 // caso de cadastro com confirmação de e-mail pendente (a linha não foi
 // criada no signUp original, porque não havia sessão ainda pra

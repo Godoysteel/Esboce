@@ -9,7 +9,7 @@ import { NavGizmo } from "../core/NavGizmo.js";
 import { Store } from "../core/Store.js";
 import { ViewportController } from "../core/ViewportController.js";
 import { ViewportStats } from "../core/ViewportStats.js";
-import { createSharedProject, loadSharedProject, updateSharedProject, deleteProject, signUpWithProfile, signIn, signOut, getCurrentUser, listMyProjects, ensureProfileExists, hasCurrentLegalAcceptance, recordCurrentLegalAcceptance, listDepartments, listManufacturers, listCatalogProducts, type ProfileFields, type CatalogDepartment, type CatalogManufacturer, type CatalogProductWithDepartment } from "../core/SupabaseClient.js";
+import { createSharedProject, loadSharedProject, updateSharedProject, deleteProject, signUpWithProfile, signIn, signOut, sendPasswordRecovery, updatePassword, reauthenticate, deleteCurrentAccount, getCurrentUser, listMyProjects, ensureProfileExists, hasCurrentLegalAcceptance, recordCurrentLegalAcceptance, listDepartments, listManufacturers, listCatalogProducts, type ProfileFields, type CatalogDepartment, type CatalogManufacturer, type CatalogProductWithDepartment } from "../core/SupabaseClient.js";
 import { CURRENT_LEGAL_ACCEPTANCE } from "../core/LegalAcceptance.js";
 import {
   ProjectFormatError,
@@ -123,6 +123,9 @@ export class EsboceApplication {
     this.setupAuthModal();
     this.setupDisclaimerOverlay();
     this.refreshAccountButton();
+    if (new URLSearchParams(window.location.search).get("recuperar-senha") === "1") {
+      this.openPasswordReset(true);
+    }
     if (this.currentUserId) {
       void this.ensureCurrentLegalAcceptance(this.currentUserId).catch((err) => {
         console.error("Falha ao verificar aceite dos documentos:", err);
@@ -624,6 +627,12 @@ export class EsboceApplication {
     this.requireElement("authModalClose").addEventListener("click", () => this.closeAuthModal(true));
     this.requireElement("authSignupSubmit").addEventListener("click", () => this.handleSignupSubmit());
     this.requireElement("authLoginSubmit").addEventListener("click", () => this.handleLoginSubmit());
+    this.requireElement("forgotPasswordBtn").addEventListener("click", () => this.openPasswordReset(false));
+    this.requireElement("passwordResetClose").addEventListener("click", () => this.closePasswordReset());
+    this.requireElement("passwordRecoverySubmit").addEventListener("click", () => this.handlePasswordRecoveryRequest());
+    this.requireElement("passwordUpdateSubmit").addEventListener("click", () => this.handlePasswordUpdate());
+    this.requireElement("accountSettingsClose").addEventListener("click", () => this.closeAccountSettings());
+    this.requireElement("deleteAccountSubmit").addEventListener("click", () => this.handleDeleteAccount());
     this.requireElement("legalAcceptanceSubmit").addEventListener("click", () => this.handleLegalAcceptanceSubmit());
     this.requireElement("myProjectsClose").addEventListener("click", () => {
       this.requireElement("myProjectsOverlay").style.display = "none";
@@ -693,6 +702,121 @@ export class EsboceApplication {
     // em vez de um clique "escondido" no mesmo lugar que também serve
     // pra entrar.
     if (!this.currentUserId) this.openAuthModal();
+    else this.openAccountSettings();
+  }
+
+  private openPasswordReset(updatingPassword: boolean): void {
+    this.requireElement("authModalOverlay").classList.remove("visible");
+    this.requireElement("passwordRecoveryRequestPane").style.display = updatingPassword ? "none" : "";
+    this.requireElement("passwordUpdatePane").style.display = updatingPassword ? "" : "none";
+    this.requireElement("passwordResetError").textContent = "";
+    this.requireElement("passwordResetSuccess").textContent = "";
+    if (!updatingPassword) {
+      (this.requireElement("passwordRecoveryEmail") as HTMLInputElement).value =
+        (this.requireElement("authLoginEmail") as HTMLInputElement).value.trim();
+    }
+    this.requireElement("passwordResetOverlay").classList.add("visible");
+  }
+
+  private closePasswordReset(): void {
+    this.requireElement("passwordResetOverlay").classList.remove("visible");
+  }
+
+  private async handlePasswordRecoveryRequest(): Promise<void> {
+    const email = (this.requireElement("passwordRecoveryEmail") as HTMLInputElement).value.trim();
+    const errorEl = this.requireElement("passwordResetError");
+    const successEl = this.requireElement("passwordResetSuccess");
+    const btn = this.requireElement("passwordRecoverySubmit") as HTMLButtonElement;
+    if (!email) { errorEl.textContent = "Informe seu e-mail."; return; }
+    errorEl.textContent = "";
+    successEl.textContent = "";
+    btn.disabled = true;
+    btn.textContent = "Enviando...";
+    try {
+      await sendPasswordRecovery(email);
+      // Mensagem deliberadamente neutra para não revelar se o e-mail
+      // está ou não cadastrado na plataforma.
+      successEl.textContent = "Se existir uma conta com esse e-mail, o link chegará em alguns minutos.";
+    } catch (err) {
+      console.error("Falha na recuperação de senha:", err);
+      errorEl.textContent = "Não foi possível enviar o link agora. Tente novamente em alguns minutos.";
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Enviar link de recuperação";
+    }
+  }
+
+  private async handlePasswordUpdate(): Promise<void> {
+    const password = (this.requireElement("newPassword") as HTMLInputElement).value;
+    const confirmation = (this.requireElement("newPasswordConfirm") as HTMLInputElement).value;
+    const errorEl = this.requireElement("passwordResetError");
+    const successEl = this.requireElement("passwordResetSuccess");
+    const btn = this.requireElement("passwordUpdateSubmit") as HTMLButtonElement;
+    if (password.length < 8) { errorEl.textContent = "A nova senha precisa ter pelo menos 8 caracteres."; return; }
+    if (password !== confirmation) { errorEl.textContent = "As senhas não coincidem."; return; }
+    errorEl.textContent = "";
+    btn.disabled = true;
+    btn.textContent = "Salvando...";
+    try {
+      await updatePassword(password);
+      await signOut();
+      successEl.textContent = "Senha alterada. Entre novamente com a nova senha.";
+      const cleanUrl = new URL(window.location.href);
+      cleanUrl.searchParams.delete("recuperar-senha");
+      history.replaceState({}, "", cleanUrl.toString());
+      setTimeout(() => {
+        this.closePasswordReset();
+        this.openAuthModal();
+        this.requireElement("authTabLogin").click();
+      }, 900);
+    } catch (err) {
+      console.error("Falha ao alterar senha:", err);
+      errorEl.textContent = "O link expirou ou não é válido. Solicite uma nova recuperação.";
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Salvar nova senha";
+    }
+  }
+
+  private openAccountSettings(): void {
+    this.requireElement("accountSettingsEmail").textContent = this.currentUserEmail ?? "";
+    (this.requireElement("deleteAccountPassword") as HTMLInputElement).value = "";
+    (this.requireElement("deleteAccountConfirmation") as HTMLInputElement).value = "";
+    this.requireElement("deleteAccountError").textContent = "";
+    this.requireElement("accountSettingsOverlay").classList.add("visible");
+  }
+
+  private closeAccountSettings(): void {
+    this.requireElement("accountSettingsOverlay").classList.remove("visible");
+  }
+
+  private async handleDeleteAccount(): Promise<void> {
+    const password = (this.requireElement("deleteAccountPassword") as HTMLInputElement).value;
+    const confirmation = (this.requireElement("deleteAccountConfirmation") as HTMLInputElement).value.trim();
+    const errorEl = this.requireElement("deleteAccountError");
+    const btn = this.requireElement("deleteAccountSubmit") as HTMLButtonElement;
+    if (!this.currentUserEmail) { errorEl.textContent = "Sua sessão expirou. Entre novamente."; return; }
+    if (!password) { errorEl.textContent = "Informe sua senha atual."; return; }
+    if (confirmation !== "EXCLUIR") { errorEl.textContent = "Digite EXCLUIR exatamente como mostrado."; return; }
+    if (!confirm("Esta ação é permanente e apagará todos os seus projetos. Deseja continuar?")) return;
+    errorEl.textContent = "";
+    btn.disabled = true;
+    btn.textContent = "Excluindo definitivamente...";
+    try {
+      await reauthenticate(this.currentUserEmail, password);
+      await deleteCurrentAccount();
+      this.currentUserId = null;
+      this.currentUserEmail = null;
+      alert("Sua conta e seus dados foram excluídos.");
+      const cleanUrl = new URL(window.location.origin + window.location.pathname);
+      window.location.assign(cleanUrl.toString());
+    } catch (err) {
+      console.error("Falha ao excluir conta:", err);
+      errorEl.textContent = this.friendlyAuthError(err);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Excluir minha conta e todos os dados";
+    }
   }
 
   private async handleLogoutClick(): Promise<void> {
