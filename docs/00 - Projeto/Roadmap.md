@@ -13,7 +13,7 @@ O Esboce está em **estabilização pré-comercial**. O editor paramétrico, o v
 Baseline verificada em 10/08/2026:
 
 - produção em `https://esboce.com.br`;
-- 85 testes automatizados;
+- 90 testes automatizados;
 - CI com testes, TypeScript e build antes do deploy;
 - projetos versionados e validados no Supabase, com backup JSON;
 - Termos, Privacidade e aceite jurídico versionado;
@@ -72,6 +72,7 @@ Critérios para iniciar um piloto com usuários convidados:
 
 ## Evoluções posteriores
 
+- composições de quantitativo próprias para bloco estrutural e Light Steel Frame;
 - orçamento por loja e catálogo multi-loja conforme ADR-007;
 - refinamento estrutural para telhas metálicas, fibrocimento e shingle;
 - tratamento de junções de cobertura com três ou mais águas;

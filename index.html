@@ -403,6 +403,45 @@
   }
   .disclaimer-card button:hover { background: #C9A227; border-color: #C9A227; }
 
+  #constructionSystemOverlay {
+    display: none; position: absolute; inset: 0; z-index: 80; padding: 24px;
+    box-sizing: border-box; background: rgba(30,34,35,.58); backdrop-filter: blur(5px);
+    align-items: center; justify-content: center;
+  }
+  #constructionSystemOverlay.visible { display: flex; }
+  .construction-system-dialog {
+    width: min(1040px, 100%); max-height: calc(100vh - 48px); overflow-y: auto;
+    box-sizing: border-box; padding: 30px; border: 1px solid rgba(255,255,255,.72);
+    border-radius: 20px; background: rgba(250,249,245,.98); box-shadow: 0 24px 70px rgba(24,27,28,.34);
+  }
+  .construction-system-kicker { margin-bottom: 7px; color: #5B4BC4; font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+  .construction-system-dialog h2 { margin: 0 0 7px; font-size: 26px; color: #2C2C2A; }
+  .construction-system-dialog > p { margin: 0 0 24px; color: #66645E; font-size: 14px; line-height: 1.5; }
+  .construction-system-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .construction-system-option {
+    appearance: none; overflow: hidden; padding: 0 0 18px; border: 1px solid #D7D3C9;
+    border-radius: 15px; background: #FFF; color: #2C2C2A; cursor: pointer; text-align: left;
+    transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease;
+  }
+  .construction-system-option:hover, .construction-system-option:focus-visible {
+    transform: translateY(-3px); border-color: #5B4BC4; box-shadow: 0 12px 30px rgba(64,55,125,.18); outline: none;
+  }
+  .construction-system-option img { display: block; width: 100%; aspect-ratio: 3 / 2; object-fit: cover; background: #EFEDE7; }
+  .construction-system-option strong, .construction-system-option span { display: block; padding-inline: 17px; }
+  .construction-system-option strong { margin-top: 15px; font-size: 17px; }
+  .construction-system-option span { margin-top: 5px; color: #74716A; font-size: 12.5px; line-height: 1.35; }
+  .construction-system-note { margin-top: 18px !important; margin-bottom: 0 !important; font-size: 12px !important; color: #817E76 !important; }
+  @media (max-width: 760px) {
+    #constructionSystemOverlay { padding: 12px; }
+    .construction-system-dialog { padding: 20px; max-height: calc(100vh - 24px); }
+    .construction-system-dialog h2 { font-size: 21px; }
+    .construction-system-grid { grid-template-columns: 1fr; }
+    .construction-system-option { display: grid; grid-template-columns: 132px 1fr; grid-template-rows: auto auto; padding: 0; }
+    .construction-system-option img { grid-row: 1 / 3; height: 100%; min-height: 106px; aspect-ratio: auto; }
+    .construction-system-option strong { margin-top: 22px; align-self: end; }
+    .construction-system-option span { margin-bottom: 20px; align-self: start; }
+  }
+
   .viewport-hint {
     position: absolute;
     left: 50%; bottom: 10px;
@@ -947,6 +986,28 @@
 </div>
 
 <div id="viewport">
+  <div id="constructionSystemOverlay" role="dialog" aria-modal="true" aria-labelledby="constructionSystemTitle">
+    <section class="construction-system-dialog">
+      <div class="construction-system-kicker">Novo projeto</div>
+      <h2 id="constructionSystemTitle">Como sua casa será construída?</h2>
+      <p>Escolha o sistema construtivo antes de começar. Essa informação será salva junto com o projeto e orientará os quantitativos.</p>
+      <div class="construction-system-grid">
+        <button class="construction-system-option" type="button" data-construction-system="ceramic_masonry">
+          <img src="./images/construction-systems/tijolos.png" alt="Casa em construção com tijolos cerâmicos">
+          <strong>Tijolos</strong><span>Alvenaria com blocos cerâmicos</span>
+        </button>
+        <button class="construction-system-option" type="button" data-construction-system="structural_block">
+          <img src="./images/construction-systems/bloco-estrutural.png" alt="Casa em construção com blocos estruturais">
+          <strong>Bloco estrutural</strong><span>Alvenaria estrutural de concreto</span>
+        </button>
+        <button class="construction-system-option" type="button" data-construction-system="light_steel_frame">
+          <img src="./images/construction-systems/light-steel-frame.png" alt="Casa em construção com perfis de Light Steel Frame">
+          <strong>Steel Frame</strong><span>Estrutura leve em aço galvanizado</span>
+        </button>
+      </div>
+      <p class="construction-system-note">Você poderá criar outro projeto e escolher um sistema diferente a qualquer momento.</p>
+    </section>
+  </div>
   <canvas id="navGizmoCanvas" title="Orientação da câmera"></canvas>
 
   <!-- Aviso de responsabilidade técnica (ADR-006, seções 13-15: "o

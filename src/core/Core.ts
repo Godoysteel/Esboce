@@ -340,7 +340,7 @@ export function resolveOpeningHeightResize(op: Opening, desiredTop: number): num
   return top - op.sillHeight;
 }
 
-export function createProject(): Project {
+export function createProject(constructionSystem: Project['constructionSystem'] = 'ceramic_masonry'): Project {
   return {
     floors: [createFloorEntity('Térreo')],
     currentFloorIndex: 0,
@@ -356,7 +356,8 @@ export function createProject(): Project {
       aberturas: true,
       varanda: true
     },
-    foundationType: 'baldrame'
+    foundationType: 'baldrame',
+    constructionSystem
   };
 }
 

@@ -85,6 +85,8 @@ O estado paramétrico atual continua sendo a fonte da verdade. A direção arqui
 
 Todo projeto salvo ou importado passa por `ProjectPersistence`. O documento possui `schemaVersion`; formatos legados suportados são normalizados e migrados na leitura, documentos estruturalmente inválidos são recusados e versões futuras não são abertas silenciosamente. O mesmo contrato é usado no Supabase e nos backups JSON.
 
+O sistema construtivo (`ceramic_masonry`, `structural_block` ou `light_steel_frame`) pertence ao estado paramétrico do projeto. A versão 2 do documento tornou esse campo obrigatório; documentos anteriores recebem `ceramic_masonry` durante a migração. Projeções de quantitativo devem consultar esse campo e nunca reutilizar silenciosamente uma composição de outro sistema.
+
 O Supabase aplica autenticação e Row Level Security. Projetos e aceites jurídicos pertencem ao usuário autenticado; links compartilhados utilizam o identificador público previsto pelo fluxo atual. A exclusão de conta é executada no servidor e deriva o alvo de `auth.uid()`, nunca de um identificador fornecido pelo cliente.
 
 ## 7. Segurança, privacidade e serviços externos
