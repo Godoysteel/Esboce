@@ -751,6 +751,7 @@
   .auth-submit:hover { background: #443C99; }
   .auth-submit:disabled { opacity: .6; cursor: not-allowed; }
   .auth-error { color: #D7263D; font-size: 12px; margin-top: 8px; min-height: 14px; }
+  .captcha-slot { min-height:65px; margin:10px 0 4px; }
   .auth-close { float: right; border: none; background: none; font-size: 18px; cursor: pointer; padding: 0 4px; }
   .legal-checks { margin: 12px 0; padding: 12px; background: #F4F2EC; border-radius: 8px; }
   .legal-check { display: flex; align-items: flex-start; gap: 8px; margin: 8px 0; font-size: 12px; line-height: 1.4; color: #454440; }
@@ -1330,6 +1331,7 @@ Mova uma parede para registrar a operação.</pre>
         <label class="legal-check"><input id="authTermsAccepted" type="checkbox"> <span>Li e aceito os <a href="termos.html" target="_blank" rel="noopener">Termos de Uso</a>.</span></label>
         <label class="legal-check"><input id="authPrivacyAcknowledged" type="checkbox"> <span>Li a <a href="privacidade.html" target="_blank" rel="noopener">Política de Privacidade</a>.</span></label>
       </div>
+      <div class="captcha-slot" id="signupCaptcha" aria-label="Verificação de segurança"></div>
       <button class="auth-submit" id="authSignupSubmit">Criar conta e salvar projeto</button>
     </div>
 
@@ -1339,6 +1341,7 @@ Mova uma parede para registrar a operação.</pre>
       <div class="auth-field"><label>E-mail</label><input id="authLoginEmail" type="email" autocomplete="email"></div>
       <div class="auth-field"><label>Senha</label><input id="authLoginSenha" type="password" autocomplete="current-password"></div>
       <button class="auth-link" id="forgotPasswordBtn" type="button">Esqueci minha senha</button>
+      <div class="captcha-slot" id="loginCaptcha" aria-label="Verificação de segurança"></div>
       <button class="auth-submit" id="authLoginSubmit">Entrar</button>
     </div>
 
@@ -1353,6 +1356,7 @@ Mova uma parede para registrar a operação.</pre>
       <h2>Recuperar senha</h2>
       <p class="auth-sub">Informe o e-mail da sua conta. Enviaremos um link seguro para criar uma nova senha.</p>
       <div class="auth-field"><label>E-mail</label><input id="passwordRecoveryEmail" type="email" autocomplete="email"></div>
+      <div class="captcha-slot" id="recoveryCaptcha" aria-label="Verificação de segurança"></div>
       <button class="auth-submit" id="passwordRecoverySubmit">Enviar link de recuperação</button>
     </div>
     <div id="passwordUpdatePane" style="display:none;">
@@ -1380,6 +1384,7 @@ Mova uma parede para registrar a operação.</pre>
       <p style="font-size:12px;line-height:1.5;">Esta ação apaga sua conta, perfil, projetos e registros associados. Exporte os backups que deseja guardar antes de continuar.</p>
       <div class="auth-field"><label>Senha atual</label><input id="deleteAccountPassword" type="password" autocomplete="current-password"></div>
       <div class="auth-field"><label>Digite EXCLUIR para confirmar</label><input id="deleteAccountConfirmation" type="text" autocomplete="off"></div>
+      <div class="captcha-slot" id="deleteAccountCaptcha" aria-label="Verificação de segurança"></div>
       <button class="danger-button" id="deleteAccountSubmit">Excluir minha conta e todos os dados</button>
       <div class="auth-error" id="deleteAccountError"></div>
     </div>
