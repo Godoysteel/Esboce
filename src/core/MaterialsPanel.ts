@@ -239,12 +239,53 @@ const MASONRY_REF = {
   wasteFactor: 1.10
 };
 
+// ---------------------------------------------------------------
+// REFERÊNCIA DE MADEIRAMENTO — SINAPI 92539 (TRAMA DE MADEIRA COMPOSTA
+// POR RIPAS, CAIBROS E TERÇAS PARA TELHADOS DE ATÉ 2 ÁGUAS, TELHA
+// CERÂMICA OU DE CONCRETO, INCLUSO TRANSPORTE VERTICAL — AF_10/2025).
+// A composição documenta ESPAÇAMENTO e SEÇÃO de cada peça (não uma
+// tabela pronta de "m³ por m²") — os metros lineares por m² abaixo são
+// DERIVADOS do espaçamento (1 ÷ espaçamento), mesma lógica que
+// qualquer orçamentista usaria com esses dados; volume vem de
+// multiplicar cada comprimento pela seção transversal da peça.
+//   - Ripa: seção 1,5×5,0cm, a cada 0,32m (galga pra telha cerâmica/concreto)
+//   - Caibro: seção 5,0×6,0cm, a cada 0,55m
+//   - Terça: seção 6,0×12,0cm, a cada 1,5–2,0m (usado o meio da faixa, 1,75m)
+// Aplicado uniformemente a QUALQUER telhado com água (duasAguas,
+// quatroAguas, umaAgua) — mesma simplificação já aceita pra alvenaria
+// (traço único pra toda parede, ver MASONRY_REF): existe uma
+// composição SINAPI própria pra "mais de 2 águas" (92542, espaçamento
+// de caibro mais apertado), mas manter uma referência só evita
+// multiplicar simplificações sem dado que realmente diferencie os
+// casos no modelo atual (o Roof não guarda hoje se é telhado simples
+// ou composto de verdade pra esse fim). Platibanda (laje plana, sem
+// água) NÃO entra — é laje de concreto, sem madeiramento nenhum.
+// Tesoura (treliça, só necessária em vãos maiores — SINAPI tem
+// composição própria, 92548, por peça e por vão) e frechal (a viga de
+// apoio no topo da parede pro madeiramento — na prática, o mesmo papel
+// estrutural que a viga de cinta já calculada em `structure` cumpre;
+// somar um frechal à parte duplicaria essa peça, mesmo raciocínio já
+// usado pra não somar viga própria de Laje) ficam FORA de escopo desta
+// rodada — registrado como pendência no Registro de Decisões Técnicas.
+// Preço de material (R$/m³ de madeira serrada) NÃO tem uma referência
+// de mercado confiável o bastante pra entrar em REFERENCE_PRICES por
+// ora — as linhas de madeiramento saem sem custo (`—`), mesmo
+// tratamento que qualquer item sem base de preço já recebe aqui
+// (ver productUnitCost).
+const ROOF_TIMBER_REF = {
+  ripaSpacingM: 0.32, ripaSectionM2: 0.015 * 0.05,
+  caibroSpacingM: 0.55, caibroSectionM2: 0.05 * 0.06,
+  tercaSpacingM: 1.75, tercaSectionM2: 0.06 * 0.12,
+  wasteFactor: 1.10
+};
+
 interface Totals {
   wallLength: number; wallAreaNet: number; floorArea: number; baseboard: number; roofArea: number;
   doors: number; windows: number; arcos: number; soleiraCount: number; soleiraLength: number;
   columnCount: number; columnVolume: number; estimatedColumnCount: number;
   lajeCount: number; lajeAreaM2: number;
   vergaCount: number; vergaSpanM: number;
+  roofTimberAreaM2: number;
 }
 interface Masonry { blocks: number; mortarM3: number; cementKg: number; calKg: number; sandM3: number; }
 interface Structure {
@@ -253,12 +294,13 @@ interface Structure {
   vergaCount: number; vergaVolume: number; vergaSteelKg: number;
 }
 interface LajeQuantities { count: number; areaM2: number; volumeM3: number; steelKg: number; }
+interface RoofTimber { areaM2: number; ripaLinearM: number; caibroLinearM: number; tercaLinearM: number; volumeM3: number; }
 interface FoundationBaldrame { type: 'baldrame'; length: number; concreteVolume: number; steelKg: number; }
 interface FoundationRadier { type: 'radier'; areaM2: number; concreteVolume: number; steelKg: number; }
 type Foundation = FoundationBaldrame | FoundationRadier | null;
 interface ComputeResult {
   totals: Totals; paint: Record<string, number>; floorTile: Record<string, number>; roofTile: Record<string, number>;
-  masonry: Masonry; structure: Structure; foundation: Foundation; laje: LajeQuantities;
+  masonry: Masonry; structure: Structure; foundation: Foundation; laje: LajeQuantities; roofTimber: RoofTimber;
 }
 
 // Percorre TODOS os pavimentos — a lista é do projeto inteiro, não só do
@@ -272,7 +314,8 @@ export function compute(): ComputeResult {
     doors: 0, windows: 0, arcos: 0, soleiraCount: 0, soleiraLength: 0,
     columnCount: 0, columnVolume: 0, estimatedColumnCount: 0,
     lajeCount: 0, lajeAreaM2: 0,
-    vergaCount: 0, vergaSpanM: 0
+    vergaCount: 0, vergaSpanM: 0,
+    roofTimberAreaM2: 0
   };
   const paint: Record<string, number> = {}, floorTile: Record<string, number> = {}, roofTile: Record<string, number> = {};
 
@@ -340,6 +383,11 @@ export function compute(): ComputeResult {
     (floor.roofs || []).forEach(function (roof) {
       const areaM2 = netRoofAreas[roof.id] ?? roofAreaMeters(roof);
       totals.roofArea += areaM2;
+      // Madeiramento (ripa/caibro/terça, ver ROOF_TIMBER_REF) — se
+      // aplica a QUALQUER água (duasAguas/quatroAguas/umaAgua).
+      // Platibanda é laje plana de concreto, sem estrutura de madeira
+      // nenhuma — de propósito fora dessa soma.
+      if (roof.type !== 'platibanda') totals.roofTimberAreaM2 += areaM2;
       if (roof.finishProductId) addTo(roofTile, roof.finishProductId, areaM2);
       // O oitão é alvenaria derivada do telhado: entra como parede, mas
       // não participa do contorno dos cômodos. Duas águas possui duas
@@ -482,7 +530,24 @@ export function compute(): ComputeResult {
     steelKg: lajeVolumeM3 * STEEL_RATE_LAJE_KG_M3
   };
 
-  return { totals, paint, floorTile, roofTile, masonry, structure, foundation, laje };
+  // Madeiramento — metros lineares de cada peça DERIVADOS do
+  // espaçamento (área com perda ÷ espaçamento), volume de cada um vezes
+  // a seção transversal (ver comentário completo em ROOF_TIMBER_REF).
+  const roofTimberAreaWithWaste = totals.roofTimberAreaM2 * ROOF_TIMBER_REF.wasteFactor;
+  const ripaLinearM = roofTimberAreaWithWaste / ROOF_TIMBER_REF.ripaSpacingM;
+  const caibroLinearM = roofTimberAreaWithWaste / ROOF_TIMBER_REF.caibroSpacingM;
+  const tercaLinearM = roofTimberAreaWithWaste / ROOF_TIMBER_REF.tercaSpacingM;
+  const roofTimber: RoofTimber = {
+    areaM2: totals.roofTimberAreaM2,
+    ripaLinearM: ripaLinearM,
+    caibroLinearM: caibroLinearM,
+    tercaLinearM: tercaLinearM,
+    volumeM3: ripaLinearM * ROOF_TIMBER_REF.ripaSectionM2
+      + caibroLinearM * ROOF_TIMBER_REF.caibroSectionM2
+      + tercaLinearM * ROOF_TIMBER_REF.tercaSectionM2
+  };
+
+  return { totals, paint, floorTile, roofTile, masonry, structure, foundation, laje, roofTimber };
 }
 
 function productLine(productId: string, areaM2: number): string {
@@ -564,6 +629,13 @@ export function render(): void {
     html += '<div class="materials-line"><span>Cimento</span><span>' + q.masonry.cementKg.toFixed(1).replace('.', ',') + ' kg (~' + Math.ceil(q.masonry.cementKg / 50) + ' sacos 50kg)</span></div>';
     html += '<div class="materials-line"><span>Cal hidratada</span><span>' + q.masonry.calKg.toFixed(1).replace('.', ',') + ' kg (~' + Math.ceil(q.masonry.calKg / 20) + ' sacos 20kg)</span></div>';
     html += '<div class="materials-line"><span>Areia média</span><span>' + q.masonry.sandM3.toFixed(2).replace('.', ',') + ' m³</span></div>';
+  }
+  if (q.roofTimber.areaM2 > 0) {
+    html += '<div class="object-panel-section-label">Madeiramento (ref. SINAPI 92539 — ripa/caibro/terça, telha cerâmica/concreto, com 10% de perda)</div>';
+    html += '<div class="materials-line"><span>Ripas</span><span>' + fmtM(q.roofTimber.ripaLinearM) + '</span></div>';
+    html += '<div class="materials-line"><span>Caibros</span><span>' + fmtM(q.roofTimber.caibroLinearM) + '</span></div>';
+    html += '<div class="materials-line"><span>Terças</span><span>' + fmtM(q.roofTimber.tercaLinearM) + '</span></div>';
+    html += '<div class="materials-line"><span>Volume total de madeira</span><span>' + q.roofTimber.volumeM3.toFixed(3).replace('.', ',') + ' m³</span></div>';
   }
   html += groupSection('Pintura — por acabamento', q.paint);
   html += groupSection('Piso — por acabamento', q.floorTile);
@@ -726,6 +798,13 @@ export function buildRows(): (string | number)[][] {
     push('Alvenaria (ref. SINAPI)', 'Cimento', q.masonry.cementKg, 'kg', q.masonry.cementKg * REFERENCE_PRICES.cementPerKg);
     push('Alvenaria (ref. SINAPI)', 'Cal hidratada', q.masonry.calKg, 'kg', q.masonry.calKg * REFERENCE_PRICES.limePerKg);
     push('Alvenaria (ref. SINAPI)', 'Areia média', q.masonry.sandM3, 'm³', q.masonry.sandM3 * REFERENCE_PRICES.sandPerM3);
+  }
+  if (q.roofTimber.areaM2 > 0) {
+    const tLabel = 'Madeiramento (ref. SINAPI 92539)';
+    push(tLabel, 'Ripas', q.roofTimber.ripaLinearM, 'm', null);
+    push(tLabel, 'Caibros', q.roofTimber.caibroLinearM, 'm', null);
+    push(tLabel, 'Terças', q.roofTimber.tercaLinearM, 'm', null);
+    push(tLabel, 'Volume total de madeira', q.roofTimber.volumeM3, 'm³', null);
   }
   function addProductRows(category: string, map: Record<string, number>) {
     Object.keys(map).forEach(function (id) {
