@@ -72,6 +72,9 @@ import {
   var placingDraw = false; // true entre o 1º e o 2º clique de Cômodo/Parede
   var drawStart: any = null, drawPreview: any = null;
   var dragElementStart: any = null, dragGroundStart: any = null;
+  var pendingRoofAttic = false;
+  var pendingGenerateRoofId: any = null;
+  var generateAtticBtnEl: any = null;
   var pendingRoofType = 'duasAguas'; // tipo do próximo telhado a ser colocado
   var ROOF_DEFAULT_SIZE = 3 * Core.GRID; // 3m — tamanho inicial ao clicar pra colocar
   var VARANDA_DEFAULT_W_M = 3, VARANDA_DEFAULT_D_M = 2; // 3m x 2m — mesma escala de um cômodo comum
@@ -362,7 +365,10 @@ import {
   function selectFurniture(furnitureId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = furnitureId; gizmoMenuOpen = false; render(); }
   function deselect() {
     commitRoomGroupIfNeeded(); // "clicou fora do objeto" — decide agora se funde
+    var leavingRoof = selectedRoofId ? Store.findRoof(selectedRoofId) : null;
+    if (leavingRoof && leavingRoof.atticMode === 'preview') pendingGenerateRoofId = leavingRoof.id;
     selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null;
+    if (generateAtticBtnEl) generateAtticBtnEl.classList.toggle('visible', !!pendingGenerateRoofId);
     gizmoMenuOpen = false; closeObjectPanel(); render();
   }
 
@@ -1021,11 +1027,13 @@ import {
     // colocado (ou coloca um novo em cima do cômodo sob o cursor).
     if (currentTool === 'telhado') {
       var handleT = pickHandle(e.clientX, e.clientY);
-      if (handleT && (handleT === 'roofRidge' || handleT === 'roofParapetHeight' || handleT.indexOf('roofEdge') === 0)) {
+      if (handleT && (handleT === 'roofRidge' || handleT === 'roofBaseHeight' || handleT === 'roofParapetHeight' || handleT.indexOf('roofEdge') === 0)) {
         dragMode = handleT;
         var rrT = Store.findRoof(selectedRoofId);
         if (handleT === 'roofRidge') {
           dragElementStart = { pitchDeg: rrT ? rrT.pitchDeg : 28, startScreenY: e.clientY };
+        } else if (handleT === 'roofBaseHeight') {
+          dragElementStart = { baseHeightM: rrT ? rrT.baseHeightM : 1.2, startScreenY: e.clientY };
         } else if (handleT === 'roofParapetHeight') {
           dragElementStart = { parapetHeight: rrT ? rrT.parapetHeight : 0.5, startScreenY: e.clientY };
         } else if (rrT) {
@@ -1052,7 +1060,7 @@ import {
       var cx = Core.snap(gpT.x), cy = Core.snap(gpT.y);
       var half = ROOF_DEFAULT_SIZE / 2;
       var rectClick = clampRectToRegion(cx - half, cy - half, cx + half, cy + half, regionClick);
-      var newRoof = Store.commands.createRoof(rectClick.x1, rectClick.y1, rectClick.x2, rectClick.y2, pendingRoofType as any);
+      var newRoof = Store.commands.createRoof(rectClick.x1, rectClick.y1, rectClick.x2, rectClick.y2, pendingRoofType as any, pendingRoofAttic);
       if (newRoof) {
         selectRoof(newRoof.id);
         // Botão "de pulso": Telhado não fica armado depois de colocar
@@ -1063,6 +1071,7 @@ import {
         // qualquer clique perto enquanto ainda estivesse editando o
         // primeiro criava um segundo telhado sem querer.
         deactivateToolKeepSelection();
+        pendingRoofAttic = false;
       }
       return;
     }
@@ -1760,6 +1769,13 @@ import {
         var deltaScreenP = dragElementStart.startScreenY - e.clientY; // positivo = arrastou pra cima
         var candidateHeight = Math.max(0.2, Math.min(1.2, dragElementStart.parapetHeight + deltaScreenP * 0.01));
         Store.commands.updateRoofParapetHeightLive(selectedRoofId, candidateHeight);
+      }
+      return;
+    }
+    if (dragMode === 'roofBaseHeight') {
+      if (dragElementStart) {
+        var deltaBase = dragElementStart.startScreenY - e.clientY;
+        Store.commands.updateRoofBaseHeightLive(selectedRoofId, dragElementStart.baseHeightM + deltaBase * 0.01);
       }
       return;
     }
@@ -2784,6 +2800,7 @@ import {
     layersContextMenuEl = document.getElementById('layersContextMenu');
     columnShapePanelEl = document.getElementById('columnShapePanel');
     roofTypePanelEl = document.getElementById('roofTypePanel');
+    generateAtticBtnEl = document.getElementById('generateAtticBtn');
     finishPanelEl = document.getElementById('finishPanel');
     paintPickerPanelEl = document.getElementById('paintPickerPanel');
     objectPanelEl = document.getElementById('objectPanel');
@@ -2843,6 +2860,17 @@ import {
       if (!btn || !selectedRoofId) return;
       Store.commands.setRoofPieceType(selectedRoofId, btn.dataset.rooftype);
     });
+    if (generateAtticBtnEl) {
+      generateAtticBtnEl.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
+      generateAtticBtnEl.addEventListener('click', function () {
+        if (!pendingGenerateRoofId) return;
+        Store.commands.generateAttic(pendingGenerateRoofId);
+        selectRoof(pendingGenerateRoofId);
+        pendingGenerateRoofId = null;
+        generateAtticBtnEl.classList.remove('visible');
+        hintEl.textContent = 'Ático gerado. As paredes agora acompanham o telhado de forma paramétrica.';
+      });
+    }
     finishPanelEl.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
     finishPanelEl.addEventListener('click', function (e: any) {
       var btn = e.target.closest('button.fn');
@@ -2941,6 +2969,7 @@ import {
   export function getSelectedLajeId() { return selectedLajeId; }
   export function getSelectedFurnitureId() { return selectedFurnitureId; }
   export function getSelectedRoomWallIds() { return selectedRoomWallIds; }
+  export function setNextRoofAtticMode(enabled: boolean) { pendingRoofAttic = enabled; }
 
 // Namespace de compatibilidade — mesma razão de Core.ts/Store.ts/Catalog.ts/
 // Scene3DRenderer.ts (chamadas ViewportController.xxx no código legado).
@@ -2949,7 +2978,7 @@ export const ViewportController = {
   select, selectColumn, selectRoof, selectOpening, selectVaranda, selectFurniture,
   getSelectedWallId, getSelectedColumnId, getSelectedRoofId,
   getSelectedOpeningId, getSelectedVarandaId, getSelectedLajeId, getSelectedFurnitureId, getSelectedRoomWallIds,
-  toggleDimensions,
+  setNextRoofAtticMode, toggleDimensions,
   toggleWallDiagnostics,
   resetCamera,
   toggleTouchCameraMode,

@@ -75,7 +75,8 @@ export function createColumnEntity(x: number, y: number, shape?: ColumnShape, id
 
 export function createRoofEntity(
   x1: number, y1: number, x2: number, y2: number,
-  type?: RoofType, pitchDeg?: number, ridgeAxis?: RidgeAxis, id?: string, parapetHeight?: number
+  type?: RoofType, pitchDeg?: number, ridgeAxis?: RidgeAxis, id?: string, parapetHeight?: number,
+  atticMode?: 'preview' | 'generated', baseHeightM?: number
 ): Roof {
   return {
     id: id || nextId('roof'), x1, y1, x2, y2,
@@ -84,8 +85,19 @@ export function createRoofEntity(
     ridgeAxis: ridgeAxis || 'x',
     // Só relevante pra type === 'platibanda' — altura do parapeito acima
     // do topo da parede, ajustável pela alça de seleção.
-    parapetHeight: parapetHeight != null ? parapetHeight : 0.5
+    parapetHeight: parapetHeight != null ? parapetHeight : 0.5,
+    ...(atticMode ? { atticMode, baseHeightM: baseHeightM != null ? baseHeightM : 1.2 } : {})
   };
+}
+
+export function wallIntersectsRoofFootprint(wall: Wall, roof: Roof): boolean {
+  const inside = (x: number, y: number) => x >= roof.x1 && x <= roof.x2 && y >= roof.y1 && y <= roof.y2;
+  if (inside(wall.x1, wall.y1) || inside(wall.x2, wall.y2)) return true;
+  const mx = (wall.x1 + wall.x2) / 2, my = (wall.y1 + wall.y2) / 2;
+  if (inside(mx, my)) return true;
+  const minX = Math.min(wall.x1, wall.x2), maxX = Math.max(wall.x1, wall.x2);
+  const minY = Math.min(wall.y1, wall.y2), maxY = Math.max(wall.y1, wall.y2);
+  return maxX >= roof.x1 && minX <= roof.x2 && maxY >= roof.y1 && minY <= roof.y2;
 }
 
 export function createVarandaEntity(
@@ -1371,7 +1383,7 @@ export const Core = {
   wallResizeEndpointNeedsBridge,
   distPointToLine, wallOBB, furnitureOBB, openingOBB, obbOverlapMTV, wallOverlapsForeignOpening, resolveWallOffsetAgainstOpenings, wallsCanFuse, wallsMeetAtEndpoint, resolveWallGroupGridDelta,
   findWallTJunctionSplits,
-  createWallEntity, createColumnEntity, createRoofEntity, createVarandaEntity, createLajeEntity, createFloorEntity,
+  createWallEntity, createColumnEntity, createRoofEntity, wallIntersectsRoofFootprint, createVarandaEntity, createLajeEntity, createFloorEntity,
   createFurnitureEntity,
   createProject, distToSegment, projectOnSegment, detectRooms
 };

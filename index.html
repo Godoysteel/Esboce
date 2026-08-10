@@ -1191,7 +1191,7 @@
         </svg>
         <span>Telhado</span>
       </button>
-      <button class="ts-btn" id="addAtticBtn" title="Configurar o pavimento atual como ático ou chalé">
+      <button class="ts-btn" id="addAtticBtn" style="display:none" title="O ático agora é criado pela ferramenta Telhado">
         <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M5 23 20 8l15 15"/>
           <path d="M9 21v11h22V21"/>
@@ -1305,6 +1305,8 @@
     <button class="roof-commit" title="Concluir e recortar o engaste entre coberturas">Engastar</button>
   </div>
   <div id="finishPanel" class="shape-panel finish-panel"></div>
+  <button id="generateAtticBtn" style="display:none; position:absolute; right:112px; bottom:82px; z-index:40; padding:13px 20px; border:0; border-radius:14px; background:#5A49C7; color:#fff; font-weight:700; box-shadow:0 8px 28px rgba(40,32,105,.3);">Gerar ático</button>
+  <style>#generateAtticBtn.visible{display:block !important}</style>
   <div id="paintPickerPanel" class="shape-panel finish-panel tool-picker"></div>
   <div id="objectPanel" class="object-panel">
     <div class="object-panel-header">

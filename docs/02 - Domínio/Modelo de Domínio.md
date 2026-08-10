@@ -134,7 +134,7 @@ portas
 janelas
 lajes
 
-Ático/Chalé é uma configuração do pavimento atual, não um novo nível obrigatório. Pode ser aplicada ao térreo ou a qualquer outro pavimento: no modo Chalé a cobertura começa praticamente junto ao piso; no modo Ático existe uma parede lateral baixa de 1,20 m. Uma laje parcial pode representar o mezanino. Projetos antigos sem o campo `tipo` são migrados como pavimentos comuns. A entidade Varanda continua reconhecida apenas para compatibilidade de arquivos anteriores, mas não aparece mais como ferramenta de criação.
+Ático/Chalé é uma configuração paramétrica de uma cobertura de duas águas, não um novo nível obrigatório. Ao criar o telhado, o usuário escolhe o modo, ajusta uma prévia transparente na altura desejada e confirma em **Gerar ático**. A cobertura guarda sua altura de beiral e os identificadores das paredes associadas; o recorte visual e o quantitativo são derivados desses dados, permitindo desfazer e recalcular sem destruir a geometria original. Uma laje parcial pode representar o mezanino. A entidade Varanda continua reconhecida apenas para compatibilidade de arquivos anteriores.
 8. Parede
 É a entidade estrutural principal.
 Identificação

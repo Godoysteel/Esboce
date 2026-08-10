@@ -309,11 +309,13 @@ export function compute(): ComputeResult {
     floor.walls.forEach(function (w) {
       const lenM = Core.wallLengthMeters(w);
       totals.wallLength += lenM;
+      const atticRoof = (floor.roofs || []).find((roof) => roof.atticMode === 'generated' && (roof.atticWallIds || []).includes(w.id));
+      const effectiveWallHeight = atticRoof ? (atticRoof.baseHeightM || 1.2) : currentWallHeight;
       let openingsArea = 0;
       floor.openings.forEach(function (op) {
         if (op.wallId === w.id) openingsArea += op.width * op.height;
       });
-      const faceArea = Math.max(0, lenM * currentWallHeight - openingsArea);
+      const faceArea = Math.max(0, lenM * effectiveWallHeight - openingsArea);
       totals.wallAreaNet += faceArea;
       if (w.finishA) addTo(paint, w.finishA, faceArea);
       if (w.finishB) addTo(paint, w.finishB, faceArea);

@@ -278,18 +278,24 @@ export class EsboceApplication {
       Store.commands.addFloor();
       ViewportController.deselect();
     });
-    this.requireElement("addAtticBtn").addEventListener("click", () => {
+    this.requireElement("toolTelhado").addEventListener("click", () => {
+      ViewportController.setNextRoofAtticMode(false);
       this.requireElement("atticModeOverlay").style.display = "flex";
     });
     this.requireElement("atticModeClose").addEventListener("click", () => {
       this.requireElement("atticModeOverlay").style.display = "none";
     });
-    document.querySelectorAll<HTMLElement>("[data-attic-mode]").forEach((button) => {
+    const atticTitle = this.requireElement("atticModeTitle");
+    atticTitle.textContent = "Como será esta cobertura?";
+    const atticButtons = Array.from(document.querySelectorAll<HTMLElement>("[data-attic-mode]"));
+    if (atticButtons[0]) atticButtons[0].textContent = "Ático / chalé";
+    if (atticButtons[1]) atticButtons[1].style.display = "none";
+    if (atticButtons[2]) atticButtons[2].textContent = "Telhado normal";
+    atticButtons.forEach((button) => {
       button.addEventListener("click", () => {
         const mode = button.dataset.atticMode;
-        Store.commands.configureCurrentFloor(mode === "standard" ? "standard" : "attic", mode === "chalet" ? 0.2 : 1.2);
+        ViewportController.setNextRoofAtticMode(mode !== "standard");
         this.requireElement("atticModeOverlay").style.display = "none";
-        ViewportController.deselect();
       });
     });
     this.requireElement("undoBtn").addEventListener("click", () => Store.commands.undo());

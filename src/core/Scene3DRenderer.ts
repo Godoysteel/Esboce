@@ -2016,7 +2016,7 @@ export function hashColorHex(key: string): number {
     }
     if (viewState.selectedRoof) {
       var r = viewState.selectedRoof, roofYOffset = viewState.editingYOffset;
-      var topY = roofYOffset + wallHeight;
+      var topY = roofYOffset + (r.atticMode ? (r.baseHeightM || 1.2) : wallHeight);
       var midX = (r.x1 + r.x2) / 2, midY = (r.y1 + r.y2) / 2;
 
       // 4 alças nas bordas — arrastar uma estica/encolhe só aquele lado
@@ -2050,6 +2050,14 @@ export function hashColorHex(key: string): number {
         mesh2.userData.handle = 'roofRidge';
         scene.add(mesh2);
         registry.handleMeshes.push(mesh2);
+        if (r.atticMode) {
+          var baseHandle = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 12), new THREE.MeshBasicMaterial({ color: 0xF4A340, depthTest: false }));
+          baseHandle.renderOrder = 999;
+          baseHandle.position.set(wx2 + 0.32, topY, wz2 + 0.32);
+          baseHandle.userData.handle = 'roofBaseHeight';
+          scene.add(baseHandle);
+          registry.handleMeshes.push(baseHandle);
+        }
         var pole = ridgeLineMesh(new THREE.Vector3(wx2, topY, wz2), new THREE.Vector3(wx2, ridgeY, wz2));
         pole.material.depthTest = false;
         pole.renderOrder = 998;
@@ -2186,6 +2194,10 @@ export function hashColorHex(key: string): number {
 
       if (wallsVisible) {
         floorData.walls.forEach(function (w) {
+          var generatedAtticRoof = (floorData.roofs || []).find(function (roof) {
+            return roof.atticMode === 'generated' && (roof.atticWallIds || []).indexOf(w.id) !== -1;
+          });
+          var renderedWallHeight = generatedAtticRoof ? (generatedAtticRoof.baseHeightM || 1.2) : currentWallHeight;
           var x1 = (w.x1 - offsetX) * scale, z1 = (w.y1 - offsetY) * scale;
           var x2 = (w.x2 - offsetX) * scale, z2 = (w.y2 - offsetY) * scale;
           var length = Math.hypot(x2 - x1, z2 - z1);
@@ -2229,12 +2241,12 @@ export function hashColorHex(key: string): number {
           // Sem abertura nenhuma: caminho de sempre, sem mudança.
           var wallOpenings = (floorData.openings || []).filter(function (o) { return o.wallId === w.id; });
           var wallLenM = Core.wallLengthMeters(w);
-          var bands = wallOpenings.length ? computeWallOpeningBands(wallLenM, wallOpenings, currentWallHeight) : null;
+          var bands = wallOpenings.length ? computeWallOpeningBands(wallLenM, wallOpenings, renderedWallHeight) : null;
           var wallAxisStart = { x: x1, z: z1 };
           var wallAxisEnd = { x: x2, z: z2 };
 
           if (!bands) {
-            var refMesh = tagCategory(buildWallMeshFromFootprint(fp, currentWallHeight, yOffset, refMat), wallCategory);
+            var refMesh = tagCategory(buildWallMeshFromFootprint(fp, renderedWallHeight, yOffset, refMat), wallCategory);
             refMesh.userData.wallId = w.id; refMesh.userData.floorIndex = floorIdx;
             scene.add(refMesh);
             registry.wallMeshes.push(refMesh);
@@ -2252,7 +2264,7 @@ export function hashColorHex(key: string): number {
           // O contorno representa somente a silhueta externa da parede.
           // As bandas internas usadas para recortar portas e janelas não
           // são quinas reais e, portanto, nunca recebem linhas próprias.
-          var edgeLines = buildWallFootprintEdgeLines(fp, currentWallHeight, yOffset, !wallSupportsRoofGable(w, floorData.roofs || []));
+          var edgeLines = buildWallFootprintEdgeLines(fp, renderedWallHeight, yOffset, !wallSupportsRoofGable(w, floorData.roofs || []));
           scene.add(edgeLines);
           registry.wallMeshes.push(edgeLines);
 
@@ -2264,7 +2276,7 @@ export function hashColorHex(key: string): number {
             side: THREE.DoubleSide,
             flatShading: true
           });
-          var topCapMesh = tagCategory(buildWallTopCapMesh(fp, yOffset + currentWallHeight, topMat), wallCategory);
+          var topCapMesh = tagCategory(buildWallTopCapMesh(fp, yOffset + renderedWallHeight, topMat), wallCategory);
           topCapMesh.userData.wallId = w.id;
           topCapMesh.userData.floorIndex = floorIdx;
           scene.add(topCapMesh);
@@ -2305,7 +2317,7 @@ export function hashColorHex(key: string): number {
             // clique próprio — a caixa de referência (mesma posição)
             // já cobre isso, então o clique passa direto pra ela.
             if (!bands) {
-              var faceMesh = buildFaceStripMesh(fp, currentWallHeight, yOffset, faceMat, side);
+              var faceMesh = buildFaceStripMesh(fp, renderedWallHeight, yOffset, faceMat, side);
               faceMesh.userData.floorIndex = floorIdx;
               faceMesh.userData.debugWallId = w.id;
               faceMesh.userData.debugSide = side;
@@ -2376,7 +2388,15 @@ export function hashColorHex(key: string): number {
         var roofTopY = yOffset + currentWallHeight;
         var wallMatchColor = computeWallMatchColor(floorData.walls);
         floorData.roofs.forEach(function (roof) {
-          var pieces = buildRoofPiece(roof, scale, offsetX, offsetY, roofTopY, viewState, wallMatchColor);
+          var pieceBaseY = yOffset + (roof.atticMode ? (roof.baseHeightM || 1.2) : currentWallHeight);
+          var pieces = buildRoofPiece(roof, scale, offsetX, offsetY, pieceBaseY, viewState, wallMatchColor);
+          if (roof.atticMode === 'preview') pieces.forEach(function (piece) {
+            var materials = Array.isArray(piece.material) ? piece.material : [piece.material];
+            materials.forEach(function (material: any) {
+              if (!material) return;
+              material.transparent = true; material.opacity = 0.32; material.depthWrite = false;
+            });
+          });
           var ownFootprint = roofWorldFootprint(roof, scale, offsetX, offsetY);
           var trimRects = floorData.roofs.filter(function (other) {
             if (!roof.compoundGroupId || other.compoundGroupId !== roof.compoundGroupId || other.id === roof.id || other.ridgeAxis === roof.ridgeAxis) return false;

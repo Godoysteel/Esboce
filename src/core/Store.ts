@@ -694,11 +694,11 @@ export const commands = {
 
   // Telhado é um objeto de verdade — nasce de um clique (igual
   // parede/coluna). x1,y1,x2,y2 são os dois cantos do retângulo que cobre.
-  createRoof(x1: number, y1: number, x2: number, y2: number, type?: RoofType): Roof | null {
+  createRoof(x1: number, y1: number, x2: number, y2: number, type?: RoofType, attic = false): Roof | null {
     // sem Core.snap() aqui de propósito — ver comentário histórico completo.
     if (x1 === x2 || y1 === y2) return null;
     pushUndoSnapshot();
-    const roof = Core.createRoofEntity(Math.min(x1, x2), Math.min(y1, y2), Math.max(x1, x2), Math.max(y1, y2), type);
+    const roof = Core.createRoofEntity(Math.min(x1, x2), Math.min(y1, y2), Math.max(x1, x2), Math.max(y1, y2), attic ? 'duasAguas' : type, undefined, undefined, undefined, undefined, attic ? 'preview' : undefined, attic ? 1.2 : undefined);
     currentRoofs().push(roof);
     emit({ type: 'RoofCreated', floorIndex: project.currentFloorIndex, roofId: roof.id });
     return roof;
@@ -722,7 +722,7 @@ export const commands = {
     const r = findRoof(roofId); if (!r) return null;
     pushUndoSnapshot();
     const offset = Core.GRID;
-    const copy = Core.createRoofEntity(r.x1 + offset, r.y1 + offset, r.x2 + offset, r.y2 + offset, r.type, r.pitchDeg, r.ridgeAxis, undefined, r.parapetHeight);
+    const copy = Core.createRoofEntity(r.x1 + offset, r.y1 + offset, r.x2 + offset, r.y2 + offset, r.type, r.pitchDeg, r.ridgeAxis, undefined, r.parapetHeight, r.atticMode, r.baseHeightM);
     currentRoofs().push(copy);
     emit({ type: 'RoofCreated', floorIndex: project.currentFloorIndex, roofId: copy.id, duplicatedFrom: roofId });
     return copy;
@@ -969,6 +969,21 @@ export const commands = {
     project.floors.push(floor);
     project.currentFloorIndex = project.floors.length - 1;
     emit({ type: 'FloorAdded', floorId: floor.id });
+  },
+
+  updateRoofBaseHeightLive(roofId: string, heightM: number): void {
+    const r = findRoof(roofId); if (!r || !r.atticMode) return;
+    r.baseHeightM = Math.max(0.1, Math.min(4.5, heightM));
+    emit({ type: 'RoofBaseHeightChanged', roofId, live: true });
+  },
+
+  generateAttic(roofId: string): void {
+    const r = findRoof(roofId); if (!r || r.atticMode !== 'preview') return;
+    pushUndoSnapshot();
+    r.type = 'duasAguas';
+    r.atticMode = 'generated';
+    r.atticWallIds = currentWalls().filter((wall) => Core.wallIntersectsRoofFootprint(wall, r)).map((wall) => wall.id);
+    emit({ type: 'AtticGenerated', roofId, wallIds: r.atticWallIds.slice() });
   },
 
   configureCurrentFloor(kind: Floor['kind'], wallHeightM?: number): Floor {

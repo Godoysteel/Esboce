@@ -2,7 +2,7 @@ import type {
   Column, Floor, Furniture, Laje, Opening, Project, ProjectLayers, Roof, Varanda, Wall,
 } from './types.js';
 
-export const CURRENT_PROJECT_SCHEMA_VERSION = 3;
+export const CURRENT_PROJECT_SCHEMA_VERSION = 4;
 
 export interface StoredProjectDocument {
   schemaVersion: number;
@@ -112,9 +112,14 @@ function parseRoof(value: unknown, path: string): Roof {
     gableFinishA: optionalString(v.gableFinishA, `${path}.gableFinishA`),
     gableFinishB: optionalString(v.gableFinishB, `${path}.gableFinishB`),
     compoundGroupId: optionalString(v.compoundGroupId, `${path}.compoundGroupId`),
+    atticMode: v.atticMode == null ? undefined : enumValue(v.atticMode, ['preview', 'generated'], `${path}.atticMode`),
   };
   for (const [key, item] of Object.entries(optionalFields)) {
     if (item !== undefined) (roof as unknown as Record<string, unknown>)[key] = item;
+  }
+  if (roof.atticMode) {
+    roof.baseHeightM = number(v.baseHeightM, `${path}.baseHeightM`, 1.2);
+    roof.atticWallIds = array(v.atticWallIds, `${path}.atticWallIds`, true).map((id, index) => string(id, `${path}.atticWallIds[${index}]`));
   }
   return roof;
 }
