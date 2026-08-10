@@ -573,6 +573,13 @@
     opacity: .45;
   }
   .ts-btn.ts-disabled:hover { background: #FFFFFF; border-color: #D3D1C7; }
+  /* CTA "+ Adicionar produto" — mesmo formato do .ts-btn (ícone +
+     label empilhados), mas roxo cheio, pra se destacar dos itens de
+     navegação normais do grupo Catálogo logo abaixo. */
+  .ts-btn-cta { background: #534AB7; border-color: #534AB7; color: #FFFFFF; font-weight: 600; }
+  .ts-btn-cta .ts-icon { color: #FFFFFF; }
+  .ts-btn-cta:hover { background: #453D9C; border-color: #453D9C; }
+  .ts-btn-cta.active { box-shadow: 0 0 0 2px rgba(44,44,42,0.35); }
   .ts-badge-soon {
     font-size: 8px; color: #9C9A92; font-weight: 700; letter-spacing: .02em;
   }
@@ -640,20 +647,35 @@
   /* Catálogo de produtos — vitrine dos parceiros (departamentos +
      produtos com foto/preço/ficha técnica). Só navegação por enquanto
      — "usar esse material" fica pra uma próxima rodada, depois de
-     decidir como ligar isso na renderização 3D com segurança. */
+     decidir como ligar isso na renderização 3D com segurança.
+     Fase 4: deixou de ser um modal centralizado com fundo escuro
+     cobrindo a tela inteira — agora é um painel ancorado ao lado do
+     sidebar (mesmo left+largura do .tool-sidebar como referência de
+     posição), igual ilha flutuante das outras fases — a viewport 3D
+     continua visível e orbitável à direita do painel enquanto ele
+     está aberto. */
   #catalogOverlay {
     display: none;
-    position: fixed; inset: 0;
-    background: rgba(44,44,42,0.6);
-    z-index: 1000;
-    align-items: center; justify-content: center;
+    position: absolute;
+    left: 104px; /* 10 (left do sidebar) + 84 (largura do sidebar) + 10 (vão) */
+    top: calc(var(--top-overlay-h) + 10px);
+    bottom: 10px;
+    z-index: 8;
+    width: min(400px, calc(100vw - 124px));
   }
   #catalogOverlay.visible { display: flex; }
+  @media (max-width: 700px) {
+    #catalogOverlay { left: 8px; width: calc(100vw - 16px); }
+  }
   .catalog-modal {
-    background: #FFFFFF;
+    background: rgba(255,255,255,0.97);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid #D3D1C7;
+    box-shadow: 0 8px 24px rgba(0,0,0,.18);
     border-radius: 12px;
-    width: min(920px, calc(100vw - 32px));
-    height: min(720px, calc(100vh - 32px));
+    width: 100%;
+    height: 100%;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -678,8 +700,8 @@
   .catalog-body { flex: 1; overflow-y: auto; padding: 16px 20px; }
   .catalog-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-    gap: 14px;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
   }
   .catalog-card {
     border: 1px solid #D3D1C7; border-radius: 10px; overflow: hidden;
@@ -974,6 +996,20 @@
     </div>
 
     <div class="ts-supergroup-label">Produtos</div>
+    <!-- CTA em destaque — pedido explícito de separar "Adicionar
+         produto" dos botões de navegação abaixo (Catálogo/Materiais).
+         Leva pro MESMO painel por enquanto — ainda não existe um
+         fluxo de "adicionar ao projeto" distinto de "navegar o
+         catálogo" (ver comentário em cima de #catalogOverlay: só
+         navegação por ora), então os dois caminhos convergem pro
+         mesmo lugar; a diferença é só de destaque visual, igual na
+         referência (botão roxo cheio vs. item de lista comum). -->
+    <button class="ts-btn ts-btn-cta" id="addProductBtn" title="Adicionar produto ao projeto — abre o catálogo">
+      <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 10v20M10 20h20"/>
+      </svg>
+      <span>Adicionar produto</span>
+    </button>
     <div class="ts-group-label">Catálogo</div>
     <div class="ts-group">
       <button class="ts-btn" id="catalogBtn" title="Ver catálogo de produtos dos parceiros">

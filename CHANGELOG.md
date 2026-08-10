@@ -39,6 +39,20 @@ Criada a primeira baseline de engenharia do projeto.
 
 # Não lançado
 
+## Alterado (catálogo)
+
+- Catálogo de produtos deixou de ser um modal centralizado com fundo escuro cobrindo a tela inteira — agora é um **painel ancorado ao lado do sidebar** (mesma referência de posição do menu Construir/Produtos), sem fundo escuro: a viewport 3D continua visível e orbitável enquanto o catálogo está aberto. Novo botão **"+ Adicionar produto"** (CTA roxo em destaque, acima do grupo Catálogo) — leva pro mesmo painel que "Catálogo"/"Materiais", já que ainda não existe um fluxo de "adicionar ao projeto" tecnicamente distinto de "navegar"; a diferença por ora é só de destaque visual, igual na referência original. Os botões de entrada (Catálogo e Adicionar produto) viraram gaveta — clicar de novo fecha, em vez de recarregar, e os dois sobem/descem o estado "ativo" juntos. Toda a lógica de dados (departamentos, fabricantes, produtos, o fluxo de "🔁 Trocar" no móvel selecionado) continua igual, só o container visual mudou. Fase 4 de 4 do redesign visual — conclui o plano das 4 fases. Ver DEC-41 no Registro de Decisões Técnicas.
+
+## Alterado (barra inferior)
+
+- Barra inferior reconstruída — a antiga faixa escura contínua (`.actions-row`, um texto estático que duplicava a dica dinâmica que já existia) foi removida, não só reestilizada. No lugar: pills flutuantes (mesmo princípio da toolbar) com toggles **Grid/Cotas/Ajustes/Visualização**, um card de estatísticas (Paredes/Área/Telhado — migrado do canto onde ficava solto) e um controle de **zoom (−/100%/+/⤢ tela cheia)**. Grid e Cotas migraram do extinto menu "⋯" da toolbar (que foi removido — ficaria vazio pra quem usa o app). "Ajustes" ainda não tem o que abrir, fica desabilitado com aviso "em breve". "Visualização" reaproveita de verdade o menu de camadas que já existia (antes só acessível por clique direito, sem nenhum jeito descobrível). Zoom e tela cheia são funcionalidade nova: `−`/`+` e a rolagem do mouse/pinça compartilham o mesmo cálculo de porcentagem, e "⤢" usa a API de tela cheia do navegador. Fase 3 de 4 do redesign visual. Ver DEC-40 no Registro de Decisões Técnicas.
+  <!-- Nota: esta seção deveria ter entrado no commit da fase 3
+       (28155c4) mas ficou de fora por um lapso — DEC-40 já existia no
+       Registro de Decisões Técnicas desde aquele commit, só o
+       CHANGELOG que ficou incompleto. Adicionada agora, junto da fase
+       4, com a fase/DEC corretas preservadas (não é mudança desta
+       sessão). -->
+
 ## Alterado (sidebar + visualização)
 
 - Sidebar de ferramentas (esquerda) dividido em duas seções: **Construir** (Cômodos, Cobertura, Aberturas, e o grupo Avançado — Parede livre/Cômodo livre/Coluna/Quebrar parede/Pintar — que veio pra cá, antes ficava depois de Acabamentos) e **Produtos** (novo grupo "Catálogo" com os botões 🏬 Catálogo e 📦 Materiais — que antes moravam no menu "⋯" da toolbar — mais os grupos Acabamentos e Mobiliário, ainda só "em breve"). Painel novo no canto direito, abaixo da casinha de orientação: **3D / 2D / Orbit / Medir** — só "3D" (sempre ativo) e "Orbit" (recentraliza a câmera de verdade) funcionam por ora; "2D" e "Medir" ficam desabilitados com aviso "em breve", mesmo padrão já usado nos outros botões não implementados do sidebar. Fase 2 de 4 do redesign visual. Ver DEC-39 no Registro de Decisões Técnicas.

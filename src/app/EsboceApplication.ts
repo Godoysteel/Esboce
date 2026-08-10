@@ -259,6 +259,10 @@ export class EsboceApplication {
     this.requireElement("shareProjectBtn").addEventListener("click", () => this.shareProject());
     this.requireElement("myProjectsBtn").addEventListener("click", () => this.openMyProjects());
     this.requireElement("catalogBtn").addEventListener("click", () => this.openCatalog());
+    // "+ Adicionar produto" (CTA em destaque) leva pro mesmo painel
+    // que "Catálogo" — ver comentário no HTML sobre por que os dois
+    // convergem pro mesmo destino por ora.
+    this.requireElement("addProductBtn").addEventListener("click", () => this.openCatalog());
     this.requireElement("accountBtn").addEventListener("click", () => this.handleAccountButtonClick());
     this.requireElement("logoutBtn").addEventListener("click", () => this.handleLogoutClick());
 
@@ -514,6 +518,7 @@ export class EsboceApplication {
     });
     this.requireElement("catalogClose").addEventListener("click", () => {
       this.requireElement("catalogOverlay").classList.remove("visible");
+      this.setCatalogEntryButtonsActive(false);
     });
     this.requireElement("catalogDetailClose").addEventListener("click", () => {
       this.requireElement("catalogDetailOverlay").style.display = "none";
@@ -700,9 +705,30 @@ export class EsboceApplication {
 
   // ---- Catálogo de produtos (vitrine) ----
 
+  // Os dois botões de entrada do catálogo (Catálogo e o CTA "+
+  // Adicionar produto") levam pro MESMO painel — então sobem/descem o
+  // estado `.active` juntos, não importa qual dos dois foi clicado
+  // (ou se foi um terceiro caminho, como o "🔁 Trocar" do móvel
+  // selecionado).
+  private setCatalogEntryButtonsActive(active: boolean): void {
+    this.requireElement("catalogBtn").classList.toggle("active", active);
+    this.requireElement("addProductBtn").classList.toggle("active", active);
+  }
+
   private async openCatalog(): Promise<void> {
     const overlay = this.requireElement("catalogOverlay");
+    // Vira gaveta: clicar em qualquer um dos botões de entrada com o
+    // painel já aberto fecha, em vez de recarregar. Faz sentido agora
+    // que não tem mais fundo escuro cobrindo a tela pra clicar fora e
+    // fechar (fase 4 — painel ancorado ao lado do sidebar, não modal
+    // centralizado).
+    if (overlay.classList.contains("visible")) {
+      overlay.classList.remove("visible");
+      this.setCatalogEntryButtonsActive(false);
+      return;
+    }
     overlay.classList.add("visible");
+    this.setCatalogEntryButtonsActive(true);
     const loaded = await this.ensureCatalogLoaded();
     if (!loaded) return;
     this.catalogActiveCategoriaFilter = null;
@@ -742,7 +768,11 @@ export class EsboceApplication {
   // Supabase, dá pra achar o produto correspondente direto por igualdade.
   private async handleSwapRequested(productId: string): Promise<void> {
     const loaded = await this.ensureCatalogLoaded();
-    if (!loaded) { this.requireElement("catalogOverlay").classList.add("visible"); return; }
+    if (!loaded) {
+      this.requireElement("catalogOverlay").classList.add("visible");
+      this.setCatalogEntryButtonsActive(true);
+      return;
+    }
     const match = this.catalogProducts?.find((p) => p.id === productId);
     if (!match) {
       alert("Esse item ainda não tem produtos alternativos cadastrados no catálogo.");
@@ -753,6 +783,7 @@ export class EsboceApplication {
 
   private openCatalogFilteredByCategoria(categoria: string): void {
     this.requireElement("catalogOverlay").classList.add("visible");
+    this.setCatalogEntryButtonsActive(true);
     const product = this.catalogProducts?.find((p) => p.categoria === categoria);
     this.catalogActiveDeptId = product?.department_id ?? this.catalogActiveDeptId;
     this.catalogActiveCategoriaFilter = categoria;
