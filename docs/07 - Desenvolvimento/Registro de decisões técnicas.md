@@ -319,6 +319,7 @@ Pendências e limitações conhecidas
     • Marco (vazado sem produto aplicado, ponta de parede livre, topo no encontro com o telhado) — conceito decidido em conversa, ainda não implementado.
     • Atualizar o Índice Mestre para incluir o CAW e refletir as fusões de documentos já concluídas.
     • Aplicar no Documento de Arquitetura a mesma troca "Motor Financeiro" → Budget Engine já feita na Atualização v2.1 do Domínio.
+    • Madeiramento de telhado (ver DEC-45) hoje só cobre telha cerâmica/concreto (SINAPI 92539). Telha metálica/fibrocimento precisa de referência própria (SINAPI 92543 — trama só com terças, sem ripa/caibro, já que a chapa vence o vão direto entre terças) e telha shingle precisa de um sistema totalmente diferente (deck contínuo de OSB/compensado cobrindo o telhado inteiro, mais próximo da lógica de Light Steel Frame já prevista na ADR-006 do que da alvenaria convencional) — nenhum dos dois implementado ainda.
 Ferramentas de depuração disponíveis
 Deixadas no protótipo de propósito, úteis para investigações futuras direto do console do navegador:
 
