@@ -89,3 +89,4 @@ A organização atual em `src/core` é uma etapa de migração, não o destino f
 - [ADR-004 — Registro de Decisões Rejeitadas](../07%20-%20Desenvolvimento/ADR/ADR-004%20-%20Registro%20de%20Decisões%20Rejeitadas.md)
 - [ADR-005 — Coberturas Compostas e Engaste Explícito](../07%20-%20Desenvolvimento/ADR/ADR-005%20-%20Coberturas%20Compostas%20e%20Engaste%20Explícito.md)
 - [ADR-006 — Quantitativos, Orçamentos e Limites de Responsabilidade Técnica](../07%20-%20Desenvolvimento/ADR/ADR-006%20-%20Quantitativos,%20Orçamentos%20e%20Limites%20de%20Responsabilidade%20Técnica.md)
+- [ADR-007 — Catálogo Multi-Loja, Vínculo com Modelos 3D e Orçamento por Loja](../07%20-%20Desenvolvimento/ADR/ADR-007%20-%20Catálogo%20Multi-Loja,%20Vínculo%20com%20Modelos%203D%20e%20Orçamento%20por%20Loja.md)

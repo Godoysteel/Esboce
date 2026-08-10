@@ -39,6 +39,11 @@ Criada a primeira baseline de engenharia do projeto.
 
 # Não lançado
 
+## Documentação
+
+- Nova **ADR-007 — Catálogo Multi-Loja, Vínculo com Modelos 3D e Orçamento por Loja**: formaliza a separação Produto/Loja/Oferta, o escopo por cidade, o vínculo (por id compartilhado) entre o catálogo do Supabase (preço/loja/foto) e o catálogo local (modelos 3D), a regra de que só produtos de departamentos de acabamento têm modelo 3D, e o fluxo de finalização de projeto → quantitativo → orçamento agrupado por loja. Indexada em "Decisões relacionadas" na Arquitetura.md.
+- Corrigido nome de arquivo da ADR-006 (estava sem `.md` e com travessão em vez de hífen, deixando o link dela na Arquitetura.md quebrado) — renomeado pra bater com a convenção das demais ADRs.
+
 ## Corrigido (sidebar + barra inferior)
 
 - Corrigida sobreposição: a pill de Grid/Cotas/Ajustes/Visualização (barra inferior) ficava por cima do rodapé do sidebar de ferramentas — os dois terminavam perto do fundo da tela na mesma faixa horizontal. Resolvida também a raiz de outro problema: a seção "Produtos" (Catálogo/Adicionar produto) ficava tão embaixo na lista do sidebar — depois de Cômodos/Cobertura/Aberturas/Avançado, mais de 1000px de conteúdo — que exigia rolar bastante pra achar. **Ordem invertida: Produtos agora vem primeiro no sidebar, Construir depois.** Corrigido um corte de texto nos rótulos "CONSTRUIR"/"PRODUTOS"/"ACABAMENTOS" (apareciam cortados tipo "CONSTRU") por uma quirk do CSS (`overflow-y` sem `overflow-x` explícito força o eixo X a cortar também); agora quebram em duas linhas em vez de cortar. **Grupos "Acabamentos" (Piso/Revestimento/Iluminação) e "Mobiliário" (Móveis) removidos do sidebar** — eram só placeholders `em breve` sem nenhuma função associada, duplicando o que o painel do catálogo já resolve de verdade com departamentos reais (dado do Supabase); "Produtos" no sidebar fica só com o CTA "Adicionar produto" e o grupo "Catálogo" (Catálogo + Materiais). Ver revisão da DEC-41 no Registro de Decisões Técnicas.
