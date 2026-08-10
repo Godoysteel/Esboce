@@ -84,6 +84,13 @@ export function findOpening(id: string): Opening | null {
   for (let i = 0; i < openings.length; i++) if (openings[i]!.id === id) return openings[i]!;
   return null;
 }
+function generatedAtticRoofForWall(wallId: string): Roof | null {
+  return currentRoofs().find((roof) => roof.atticMode === 'generated' && (roof.atticWallIds || []).includes(wallId)) || null;
+}
+function openingFitsCurrentRoof(wall: Wall, opening: Opening): boolean {
+  const roof = generatedAtticRoofForWall(wall.id);
+  return !roof || Core.openingFitsAtticRoof(wall, roof, opening);
+}
 export function findVaranda(id: string): Varanda | null {
   const varandas = currentVarandas();
   for (let i = 0; i < varandas.length; i++) if (varandas[i]!.id === id) return varandas[i]!;
@@ -587,8 +594,9 @@ export const commands = {
     const desired = Core.wallOffsetAtPoint(w, px, py);
     const offset = Core.findValidOpeningOffset(w, currentOpenings(), width, desired);
     if (offset == null) return null; // parede curta demais / sem espaço livre
-    pushUndoSnapshot();
     const op = Core.createOpeningEntity(wallId, kind, offset);
+    if (!openingFitsCurrentRoof(w, op)) return null;
+    pushUndoSnapshot();
     currentOpenings().push(op);
     emit({ type: 'OpeningCreated', floorIndex: project.currentFloorIndex, openingId: op.id });
     return op;
@@ -600,6 +608,7 @@ export const commands = {
     const w = findWall(op.wallId); if (!w) return;
     const offset = Core.findValidOpeningOffset(w, currentOpenings(), op.width, desiredOffset, openingId);
     if (offset == null) return;
+    if (!openingFitsCurrentRoof(w, { ...op, offset })) return;
     op.offset = offset;
     emit({ type: 'OpeningMoved', openingId, live: true });
   },
@@ -610,6 +619,7 @@ export const commands = {
     const w = findWall(op.wallId); if (!w) return;
     const offset = Core.findValidOpeningOffset(w, currentOpenings(), op.width, op.offset + deltaMeters, openingId);
     if (offset == null) return;
+    if (!openingFitsCurrentRoof(w, { ...op, offset })) return;
     pushUndoSnapshot();
     op.offset = offset;
     emit({ type: 'OpeningMoved', openingId });
@@ -623,6 +633,7 @@ export const commands = {
     const w = findWall(op.wallId); if (!w) return;
     const result = Core.resolveOpeningEdgeResize(w, currentOpenings(), openingId, edge, desiredOffset);
     if (!result) return;
+    if (!openingFitsCurrentRoof(w, { ...op, offset: result.offset, width: result.width })) return;
     op.offset = result.offset;
     op.width = result.width;
     emit({ type: 'OpeningResized', openingId, live: true });
@@ -632,7 +643,10 @@ export const commands = {
   // base do vão, fica fixo).
   resizeOpeningHeightLive(openingId: string, desiredTop: number): void {
     const op = findOpening(openingId); if (!op) return;
-    op.height = Core.resolveOpeningHeightResize(op, desiredTop);
+    const w = findWall(op.wallId); if (!w) return;
+    const roof = generatedAtticRoofForWall(w.id);
+    const roofLimit = roof ? Core.atticOpeningMaxTopMeters(w, roof, op.offset, op.width) - 0.02 : Infinity;
+    op.height = Core.resolveOpeningHeightResize(op, Math.min(desiredTop, roofLimit));
     emit({ type: 'OpeningResized', openingId, live: true });
   },
 

@@ -13,7 +13,7 @@ Todas as alterações relevantes do Esboce serão registradas neste arquivo.
 - Adicionados exportação e importação de backup JSON. O salvamento e a abertura pelo Supabase usam a mesma validação do backup.
 - Corrigido o ciclo de projetos autenticados: criar, atualizar, listar em **Meus projetos**, abrir por link e iniciar um projeto novo sem perder o projeto anteriormente salvo.
 - Criados gates de qualidade no GitHub Actions: testes, verificação TypeScript e build antecedem a publicação. O deploy do `main` no GitHub Pages só ocorre quando todos passam.
-- Baseline atual validada com **97 testes automatizados**.
+- Baseline atual validada com **101 testes automatizados**.
 
 ## Conta, segurança e conformidade
 
@@ -32,6 +32,7 @@ Todas as alterações relevantes do Esboce serão registradas neste arquivo.
 
 ## Interface e viewport
 
+- Portas e janelas em paredes associadas ao ático agora recortam também o complemento inclinado, incluindo o volume estrutural e as duas faces texturizadas. O limite superior disponível é calculado pelo ponto mais baixo do telhado sobre toda a largura do vão.
 - A antiga criação separada de **Ático** foi incorporada ao fluxo de **Telhado**. Ao iniciar uma cobertura, o usuário escolhe telhado normal ou ático/chalé; o ático nasce como duas águas transparente, tem altura de beiral ajustável por alça e só associa/recorta as paredes quando o usuário confirma em **Gerar ático**. A associação é paramétrica, persistida e usada no 3D e nos quantitativos. Varandas existentes continuam legíveis apenas por compatibilidade.
 - Projetos novos agora começam pela escolha obrigatória entre **Tijolos**, **Bloco estrutural** e **Steel Frame**, apresentada em três cartões visuais. A escolha integra o documento versionado, o backup e o compartilhamento; projetos legados são migrados para Tijolos.
 - A barra superior mantém o sistema construtivo do projeto visível durante toda a edição e o atualiza ao criar, abrir ou importar um projeto.
