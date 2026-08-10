@@ -67,9 +67,13 @@ Ele documenta a qualidade da engenharia.
 
 # Estado Atual
 
-Projeto em Engenharia.
+Projeto em estabilização pré-comercial, com versão pública de testes em [esboce.com.br](https://esboce.com.br).
 
-Nenhum desenvolvimento deverá ocorrer sem documentação previamente aprovada.
+O editor, a persistência autenticada, os documentos jurídicos, os e-mails transacionais, a proteção antiabuso, o monitoramento e o deploy com gates automáticos estão operacionais. A baseline atual possui 85 testes automatizados.
+
+Consulte o [Roadmap](docs/00%20-%20Projeto/Roadmap.md) para o estado das fases e o [Changelog](CHANGELOG.md) para as entregas recentes.
+
+Toda mudança relevante deve manter código, testes e documentação coerentes antes de chegar ao `main`.
 
 ---
 

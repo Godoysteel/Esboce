@@ -4,6 +4,40 @@ Todas as alterações relevantes do Esboce serão registradas neste arquivo.
 
 ---
 
+# Não lançado — estabilização pré-comercial
+
+## Plataforma, persistência e qualidade
+
+- Reconciliada a estabilização geométrica com o `main`: cálculos compartilhados de fundação, oitão e cobertura foram consolidados em `QuantityGeometry.ts`, sem duplicar as regras usadas pelo quantitativo.
+- Projetos salvos passaram a usar documento versionado (`schemaVersion`), normalização e validação de estrutura, tamanho, tipos, identificadores duplicados e referências órfãs. Documentos legados suportados são migrados na leitura; versões futuras incompatíveis são recusadas com mensagem clara.
+- Adicionados exportação e importação de backup JSON. O salvamento e a abertura pelo Supabase usam a mesma validação do backup.
+- Corrigido o ciclo de projetos autenticados: criar, atualizar, listar em **Meus projetos**, abrir por link e iniciar um projeto novo sem perder o projeto anteriormente salvo.
+- Criados gates de qualidade no GitHub Actions: testes, verificação TypeScript e build antecedem a publicação. O deploy do `main` no GitHub Pages só ocorre quando todos passam.
+- Baseline atual validada com **85 testes automatizados**.
+
+## Conta, segurança e conformidade
+
+- Publicados Termos de Uso e Política de Privacidade, com versões explícitas e aceite separado e rastreável no Supabase. Uma nova versão jurídica exige novo aceite.
+- Implementados cadastro, login, confirmação de e-mail, recuperação e redefinição de senha, troca de senha autenticada, reautenticação e exclusão integral da conta e de seus dados associados.
+- Senhas passaram a exigir no mínimo oito caracteres no cliente e no Supabase. Mensagens distinguem campos divergentes, link inválido/expirado e limite temporário de envio.
+- E-mails transacionais usam SMTP próprio via Resend, domínio verificado e remetente do domínio `esboce.com.br`; modelos de confirmação e recuperação foram personalizados em português.
+- Cloudflare Turnstile passou a proteger cadastro, login, recuperação e reautenticação contra abuso automatizado. A chave secreta permanece somente no Supabase.
+- A Política de Privacidade passou a identificar os operadores técnicos usados em produção: Supabase, GitHub Pages, Resend, Cloudflare Turnstile e Sentry.
+
+## Operação e monitoramento
+
+- Adicionado monitoramento de erros de produção com Sentry, ativo apenas no domínio oficial. A configuração desativa PII padrão, breadcrumbs, replay, tracing e logs; um filtro remove identidade, conteúdos adicionais e parâmetros sensíveis antes do envio.
+- O envio de e-mail transacional foi validado ponta a ponta com o domínio próprio e o fluxo de recuperação de senha.
+- O site oficial permanece publicado em `https://esboce.com.br`; branches de mudança visual usam prévias isoladas da Vercel antes do merge.
+
+## Interface e viewport
+
+- Melhorados layout e gestos em telas móveis, incluindo rotação da câmera com dois dedos e pinça para zoom. Uma revisão móvel mais ampla permanece planejada para depois da estabilização desktop.
+- O viewport ganhou céu em degradê gerado em código, iluminação hemisférica e solar mais natural e terreno ampliado, sem imagem panorâmica nem custo relevante de download.
+- A névoa inicialmente testada foi removida por criar uma faixa esbranquiçada artificial sobre o chão; o terreno permanece visualmente uniforme.
+
+---
+
 # v0.1.0-engineering-baseline
 
 Data: 2026
