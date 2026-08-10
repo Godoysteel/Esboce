@@ -132,12 +132,14 @@ export interface ProjectLayers {
 }
 
 export type FoundationType = 'radier' | 'baldrame';
+export type ConstructionSystem = 'ceramic_masonry' | 'structural_block' | 'light_steel_frame';
 
 export interface Project {
   floors: Floor[];
   currentFloorIndex: number;
   layers: ProjectLayers;
   foundationType: FoundationType;
+  constructionSystem: ConstructionSystem;
 }
 
 export interface Room {

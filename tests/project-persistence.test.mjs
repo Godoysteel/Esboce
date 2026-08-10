@@ -32,6 +32,19 @@ test('projeto legado sem envelope é migrado e recebe campos atuais ausentes', (
   assert.deepEqual(decoded.project.floors[0].furniture, []);
   assert.equal(decoded.project.layers.telhado, false);
   assert.equal(decoded.project.layers.fundacao, true);
+  assert.equal(decoded.project.constructionSystem, 'ceramic_masonry');
+});
+
+test('sistema construtivo escolhido faz parte do documento salvo', () => {
+  const project = createProject('light_steel_frame');
+  const restored = decodeProjectDocument(encodeProjectDocument(project));
+  assert.equal(restored.project.constructionSystem, 'light_steel_frame');
+});
+
+test('sistema construtivo desconhecido é recusado', () => {
+  const project = createProject();
+  project.constructionSystem = 'sistema-inventado';
+  assert.throws(() => encodeProjectDocument(project), /constructionSystem.*inválido/);
 });
 
 test('índice de pavimento fora do intervalo é recuperado com segurança', () => {
@@ -69,7 +82,7 @@ test('backup JSON faz ida e volta sem perder o projeto', () => {
   const json = exportProjectBackup(project);
   const restored = importProjectBackup(json);
   assert.deepEqual(restored.project, project);
-  assert.match(json, /"schemaVersion": 1/);
+  assert.match(json, new RegExp(`"schemaVersion": ${CURRENT_PROJECT_SCHEMA_VERSION}`));
 });
 
 test('backup que não é JSON apresenta erro compreensível', () => {

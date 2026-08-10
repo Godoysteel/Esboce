@@ -2,7 +2,7 @@ import type {
   Column, Floor, Furniture, Laje, Opening, Project, ProjectLayers, Roof, Varanda, Wall,
 } from './types.js';
 
-export const CURRENT_PROJECT_SCHEMA_VERSION = 1;
+export const CURRENT_PROJECT_SCHEMA_VERSION = 2;
 
 export interface StoredProjectDocument {
   schemaVersion: number;
@@ -225,6 +225,12 @@ function normalizeProject(value: unknown): Project {
     currentFloorIndex: Math.max(0, Math.min(floors.length - 1, rawIndex)),
     layers,
     foundationType: enumValue(source.foundationType, ['radier', 'baldrame'], 'project.foundationType', 'baldrame'),
+    constructionSystem: enumValue(
+      source.constructionSystem,
+      ['ceramic_masonry', 'structural_block', 'light_steel_frame'],
+      'project.constructionSystem',
+      'ceramic_masonry',
+    ),
   };
 }
 

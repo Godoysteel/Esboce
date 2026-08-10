@@ -16,6 +16,7 @@ import {
 } from './QuantityGeometry.js';
 import type { FoundationQuantity } from './QuantityGeometry.js';
 import type { Point, Wall, Roof, Column, Laje, Project } from './types.js';
+import { constructionSystemDefinition, hasCeramicMasonryEstimate } from './ConstructionSystem.js';
 
 let bodyEl: HTMLElement | null, panelEl: HTMLElement | null;
 
@@ -252,6 +253,7 @@ type Foundation = FoundationQuantity;
 interface ComputeResult {
   totals: Totals; paint: Record<string, number>; floorTile: Record<string, number>; roofTile: Record<string, number>;
   masonry: Masonry; structure: Structure; foundation: Foundation; laje: LajeQuantities; roofTimber: RoofTimber;
+  constructionSystem: Project['constructionSystem'];
 }
 
 function computeFoundation(project: Project): Foundation {
@@ -487,7 +489,7 @@ export function compute(): ComputeResult {
       + tercaLinearM * ROOF_TIMBER_REF.tercaSectionM2
   };
 
-  return { totals, paint, floorTile, roofTile, masonry, structure, foundation, laje, roofTimber };
+  return { totals, paint, floorTile, roofTile, masonry, structure, foundation, laje, roofTimber, constructionSystem: project.constructionSystem };
 }
 
 function productLine(productId: string, areaM2: number): string {
@@ -515,6 +517,15 @@ export function render(): void {
   if (!bodyEl) return;
   const q = compute();
   let html = '';
+  const system = constructionSystemDefinition(q.constructionSystem);
+  html += '<div class="object-panel-section-label">Sistema construtivo</div>';
+  html += '<div class="materials-line"><span>Escolhido no projeto</span><span>' + system.label + '</span></div>';
+  if (!hasCeramicMasonryEstimate(q.constructionSystem)) {
+    const missing = q.constructionSystem === 'light_steel_frame'
+      ? 'perfis, placas, membranas e isolamento'
+      : 'blocos estruturais, graute e armaduras';
+    html += '<div class="materials-empty">O quantitativo específico de ' + missing + ' ainda não está disponível. Áreas, acabamentos, fundação, laje e cobertura continuam calculados.</div>';
+  }
   html += '<div class="object-panel-section-label">Quantitativos gerais</div>';
   html += '<div class="materials-line"><span>Paredes</span><span>' + fmtM(q.totals.wallLength) + '</span></div>';
   html += '<div class="materials-line"><span>Piso</span><span>' + fmtM2(q.totals.floorArea) + '</span></div>';
@@ -535,13 +546,13 @@ export function render(): void {
     html += '<div class="materials-line"><span>Concreto</span><span>' + f.concreteVolume.toFixed(3).replace('.', ',') + ' m³</span></div>';
     html += '<div class="materials-line"><span>Aço (estimado)</span><span>' + f.steelKg.toFixed(1).replace('.', ',') + ' kg</span></div>';
   }
-  if (q.totals.columnCount > 0 || q.structure.pilareteCount > 0) {
+  if (q.totals.columnCount > 0 || (hasCeramicMasonryEstimate(q.constructionSystem) && q.structure.pilareteCount > 0)) {
     html += '<div class="object-panel-section-label">Estrutura</div>';
     if (q.totals.columnCount > 0) {
       html += '<div class="materials-line"><span>Colunas (posicionadas)</span><span>' + q.totals.columnCount + ' un.</span></div>';
       html += '<div class="materials-line"><span>Volume de colunas</span><span>' + q.totals.columnVolume.toFixed(3).replace('.', ',') + ' m³</span></div>';
     }
-    if (q.structure.pilareteCount > 0) {
+    if (hasCeramicMasonryEstimate(q.constructionSystem) && q.structure.pilareteCount > 0) {
       html += '<div class="materials-line"><span>Pilaretes em parede (estimado, vão ≤ 3m)</span><span>' + q.structure.pilareteCount + ' un.</span></div>';
       html += '<div class="materials-line"><span>Concreto — pilaretes</span><span>' + q.structure.pilareteVolume.toFixed(3).replace('.', ',') + ' m³</span></div>';
       html += '<div class="materials-line"><span>Aço — pilaretes</span><span>' + q.structure.pilareteSteelKg.toFixed(1).replace('.', ',') + ' kg</span></div>';
@@ -549,7 +560,7 @@ export function render(): void {
       html += '<div class="materials-line"><span>Concreto — cinta</span><span>' + q.structure.beamVolume.toFixed(3).replace('.', ',') + ' m³</span></div>';
       html += '<div class="materials-line"><span>Aço — cinta</span><span>' + q.structure.beamSteelKg.toFixed(1).replace('.', ',') + ' kg</span></div>';
     }
-    if (q.structure.vergaCount > 0) {
+    if (hasCeramicMasonryEstimate(q.constructionSystem) && q.structure.vergaCount > 0) {
       html += '<div class="materials-line"><span>Vergas acima de vãos (estimado, vão + 20cm de apoio/lado)</span><span>' + q.structure.vergaCount + ' un.</span></div>';
       html += '<div class="materials-line"><span>Concreto — vergas</span><span>' + q.structure.vergaVolume.toFixed(3).replace('.', ',') + ' m³</span></div>';
       html += '<div class="materials-line"><span>Aço — vergas</span><span>' + q.structure.vergaSteelKg.toFixed(1).replace('.', ',') + ' kg</span></div>';
@@ -562,7 +573,7 @@ export function render(): void {
     html += '<div class="materials-line"><span>Concreto</span><span>' + q.laje.volumeM3.toFixed(3).replace('.', ',') + ' m³</span></div>';
     html += '<div class="materials-line"><span>Aço (estimado)</span><span>' + q.laje.steelKg.toFixed(1).replace('.', ',') + ' kg</span></div>';
   }
-  if (q.totals.wallAreaNet > 0) {
+  if (hasCeramicMasonryEstimate(q.constructionSystem) && q.totals.wallAreaNet > 0) {
     html += '<div class="object-panel-section-label">Alvenaria (ref. SINAPI — bloco 9x19x19, traço 1:2:8, com 10% de perda)</div>';
     html += '<div class="materials-line"><span>Blocos/tijolos</span><span>' + q.masonry.blocks + ' un.</span></div>';
     html += '<div class="materials-line"><span>Argamassa de assentamento</span><span>' + q.masonry.mortarM3.toFixed(3).replace('.', ',') + ' m³</span></div>';
@@ -712,7 +723,7 @@ export function buildRows(): (string | number)[][] {
     push('Estrutura', 'Colunas (posicionadas)', q.totals.columnCount, 'un', null);
     push('Estrutura', 'Volume de colunas', q.totals.columnVolume, 'm³', q.totals.columnVolume * REFERENCE_PRICES.concretePerM3);
   }
-  if (q.structure.pilareteCount > 0) {
+  if (hasCeramicMasonryEstimate(q.constructionSystem) && q.structure.pilareteCount > 0) {
     push('Estrutura', 'Pilaretes em parede (estimado)', q.structure.pilareteCount, 'un', null);
     push('Estrutura', 'Concreto — pilaretes', q.structure.pilareteVolume, 'm³', q.structure.pilareteVolume * REFERENCE_PRICES.concretePerM3);
     push('Estrutura', 'Aço — pilaretes', q.structure.pilareteSteelKg, 'kg', q.structure.pilareteSteelKg * REFERENCE_PRICES.steelPerKg);
@@ -720,7 +731,7 @@ export function buildRows(): (string | number)[][] {
     push('Estrutura', 'Concreto — cinta', q.structure.beamVolume, 'm³', q.structure.beamVolume * REFERENCE_PRICES.concretePerM3);
     push('Estrutura', 'Aço — cinta', q.structure.beamSteelKg, 'kg', q.structure.beamSteelKg * REFERENCE_PRICES.steelPerKg);
   }
-  if (q.structure.vergaCount > 0) {
+  if (hasCeramicMasonryEstimate(q.constructionSystem) && q.structure.vergaCount > 0) {
     push('Estrutura', 'Vergas acima de vãos (estimado)', q.structure.vergaCount, 'un', null);
     push('Estrutura', 'Concreto — vergas', q.structure.vergaVolume, 'm³', q.structure.vergaVolume * REFERENCE_PRICES.concretePerM3);
     push('Estrutura', 'Aço — vergas', q.structure.vergaSteelKg, 'kg', q.structure.vergaSteelKg * REFERENCE_PRICES.steelPerKg);
@@ -732,7 +743,7 @@ export function buildRows(): (string | number)[][] {
     push(lLabel, 'Concreto', q.laje.volumeM3, 'm³', q.laje.volumeM3 * REFERENCE_PRICES.concretePerM3);
     push(lLabel, 'Aço (estimado)', q.laje.steelKg, 'kg', q.laje.steelKg * REFERENCE_PRICES.steelPerKg);
   }
-  if (q.totals.wallAreaNet > 0) {
+  if (hasCeramicMasonryEstimate(q.constructionSystem) && q.totals.wallAreaNet > 0) {
     push('Alvenaria (ref. SINAPI)', 'Blocos/tijolos', q.masonry.blocks, 'un', q.masonry.blocks * REFERENCE_PRICES.brickPerUnit);
     push('Alvenaria (ref. SINAPI)', 'Argamassa de assentamento', q.masonry.mortarM3, 'm³', null);
     push('Alvenaria (ref. SINAPI)', 'Cimento', q.masonry.cementKg, 'kg', q.masonry.cementKg * REFERENCE_PRICES.cementPerKg);

@@ -19,6 +19,8 @@ import {
   exportProjectBackup,
   importProjectBackup,
 } from "../core/ProjectPersistence.js";
+import type { ConstructionSystem } from "../core/types.js";
+import { constructionSystemDefinition } from "../core/ConstructionSystem.js";
 
 export class EsboceApplication {
   private readonly scene = new THREE.Scene();
@@ -60,6 +62,7 @@ export class EsboceApplication {
   private catalogProducts: CatalogProductWithDepartment[] | null = null;
   private catalogActiveDeptId: string | null = null;
   private catalogActiveCategoriaFilter: string | null = null;
+  private pendingConstructionSystemSelection: ((system: ConstructionSystem) => void) | null = null;
 
   public async start(): Promise<void> {
     onPasswordRecovery(() => {
@@ -129,8 +132,11 @@ export class EsboceApplication {
     this.initializeControllers();
     this.bindApplicationEvents();
     this.setupAuthModal();
+    this.setupConstructionSystemSelector();
+    this.refreshConstructionSystemIndicator();
     this.authUiReady = true;
     this.setupDisclaimerOverlay();
+    if (!this.sharedProjectId) this.openConstructionSystemSelector((system) => this.applyNewProject(system));
     this.refreshAccountButton();
     if (this.passwordRecoveryReady || new URLSearchParams(window.location.search).get("recuperar-senha") === "1") {
       this.openPasswordReset(true);
@@ -385,7 +391,15 @@ export class EsboceApplication {
       MaterialsPanel.refresh();
       MaterialsSheet.refresh();
       ViewportStats.refresh();
+      this.refreshConstructionSystemIndicator();
     });
+  }
+
+  private refreshConstructionSystemIndicator(): void {
+    const definition = constructionSystemDefinition(Store.getProject().constructionSystem);
+    const indicator = this.requireElement("constructionSystemIndicator");
+    this.requireElement("constructionSystemIndicatorLabel").textContent = definition.label;
+    indicator.title = `Sistema construtivo: ${definition.label} — ${definition.description}`;
   }
 
   // Atualiza a URL da barra de endereço com o id do projeto salvo, sem
@@ -440,7 +454,30 @@ export class EsboceApplication {
   private startNewProject(): void {
     const hasContent = Store.currentWalls().length > 0 || Store.currentColumns().length > 0;
     if (hasContent && !confirm("Isso limpa tudo que não foi salvo agora. Quer começar um projeto novo mesmo assim?")) return;
-    Store.setProject(Core.createProject());
+    this.openConstructionSystemSelector((system) => this.applyNewProject(system));
+  }
+
+  private setupConstructionSystemSelector(): void {
+    const overlay = this.requireElement("constructionSystemOverlay");
+    overlay.querySelectorAll<HTMLElement>("[data-construction-system]").forEach((option) => {
+      option.addEventListener("click", () => {
+        const system = option.dataset.constructionSystem as ConstructionSystem;
+        const onSelected = this.pendingConstructionSystemSelection;
+        if (!onSelected) return;
+        this.pendingConstructionSystemSelection = null;
+        overlay.classList.remove("visible");
+        onSelected(system);
+      });
+    });
+  }
+
+  private openConstructionSystemSelector(onSelected: (system: ConstructionSystem) => void): void {
+    this.pendingConstructionSystemSelection = onSelected;
+    this.requireElement("constructionSystemOverlay").classList.add("visible");
+  }
+
+  private applyNewProject(system: ConstructionSystem): void {
+    Store.setProject(Core.createProject(system));
     this.sharedProjectId = null;
     this.currentProjectName = null;
     document.title = "Esboce — construtor de casas online";

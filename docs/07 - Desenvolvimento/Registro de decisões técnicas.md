@@ -378,3 +378,13 @@ Alternativas descartadas:
     • Panorama fotográfico, nuvens, montanhas ou árvores — rejeitados nesta fase por distração, peso e conflito com a leitura técnica.
     • Manter a névoa para esconder totalmente o horizonte — rejeitada após teste visual do usuário.
 Status: Ativo e publicado após prévia isolada e aprovação visual.
+
+DEC-51  Sistema construtivo como decisão inicial persistida
+Sessão: 15
+Contexto: A geometria da casa pode ser comum a diferentes métodos de construção, mas os insumos e custos derivados não são intercambiáveis. Iniciar o desenho sem registrar essa intenção permitiria apresentar uma composição de alvenaria cerâmica para uma casa concebida em bloco estrutural ou Light Steel Frame.
+Decisão: Todo projeto novo exige a escolha visual entre Tijolos, Bloco estrutural e Steel Frame antes da edição. Depois da escolha, um indicador permanente na barra superior mantém o sistema atual visível e acompanha criação, abertura e importação. O valor passa a integrar `Project`, o envelope persistido, os backups e os links compartilhados. O schema sobe para a versão 2; projetos legados recebem `ceramic_masonry`, preservando o comportamento histórico. O quantitativo continua mostrando geometria e itens comuns, mas oculta composição cerâmica, pilaretes, cintas e vergas estimadas quando outro sistema está selecionado, exibindo a pendência de sua composição específica.
+Alternativas descartadas:
+    • Usar a escolha apenas como tela decorativa — rejeitada porque não orientaria persistência nem quantitativos.
+    • Reaproveitar temporariamente a composição cerâmica nos três sistemas — rejeitada por produzir números tecnicamente enganosos.
+    • Bloquear todo o quantitativo nos sistemas ainda incompletos — rejeitada porque áreas, acabamentos, fundação, laje e cobertura continuam sendo informações úteis e explicitamente separáveis.
+Status: Ativo. Composições próprias de bloco estrutural e Light Steel Frame permanecem no roadmap do piloto controlado.
