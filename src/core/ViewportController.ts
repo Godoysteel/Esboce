@@ -18,6 +18,7 @@ import { Catalog } from './Catalog.js';
 import { Store } from './Store.js';
 import { Scene3DRenderer, DEBUG_COLOR_MODE } from './Scene3DRenderer.js';
 import { NavGizmo } from './NavGizmo.js';
+import { touchCameraAnchor, updateTouchCamera, type TouchCameraAnchor } from './TouchCamera.js';
 import {
   analyzeWallResize,
   cloneWallsForDiagnostics,
@@ -86,6 +87,7 @@ import {
   var camAngle = Math.PI / 4, camElev = 0.6, camDist = 13;
   var camTarget = { x: 0, y: 0, z: 0 }; // pra onde a câmera olha e orbita — Shift+scroll desloca isso
   var MIN_DIST = 3, MAX_DIST = 35;
+  var touchCameraMode = false;
 
   var gizmoEl: any, gzSwapBtnEl: any, openingGizmoEl: any, roomGizmoEl: any, columnShapePanelEl: any, roofTypePanelEl: any, finishPanelEl: any, paintPickerPanelEl: any, objectPanelEl: any, objectPanelTitleEl: any, objectPanelBodyEl: any, hintEl: any, layersContextMenuEl: any;
   var dimLabelAEl: any, dimLabelBEl: any, liveRoomDimensionLineEl: any, liveRoomDimensionLineBEl: any;
@@ -986,6 +988,12 @@ import {
     downPos = { x: e.clientX, y: e.clientY };
     downButton = e.button;
 
+    if (touchCameraMode && e.pointerType === 'touch') {
+      downButton = 1;
+      e.preventDefault();
+      return;
+    }
+
     // Botão direito E botão do meio (scroll) só giram a câmera — nunca
     // desenham nada; a decisão de "abrir menu" (só pro direito) ou só
     // girar acontece no pointerup/pointermove.
@@ -1467,6 +1475,10 @@ import {
   }
 
   function onPointerMove(e: any) {
+    // Os navegadores tambÃ©m emitem pointermove para cada dedo. Durante
+    // o gesto de dois dedos, somente onTouchMove controla a cÃ¢mera;
+    // impedir o fluxo normal evita mover parede/mÃ³vel por acidente.
+    if (multiTouchCameraActive && e.pointerType === 'touch') return;
     if (downButton === 1 || downButton === 2) {
       if (!downPos) return;
       var movedR = Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y);
@@ -2262,24 +2274,58 @@ import {
     updateCam();
   }
 
-  var pinchStartDist: any = null, pinchStartCamDist = camDist;
+  var touchCameraGesture: TouchCameraAnchor | null = null;
+  var multiTouchCameraActive = false;
   function onTouchStart(e: any) {
     if (e.touches.length === 2) {
+      e.preventDefault();
       dragMode = null;
-      var dx = e.touches[0].clientX - e.touches[1].clientX, dy = e.touches[0].clientY - e.touches[1].clientY;
-      pinchStartDist = Math.hypot(dx, dy); pinchStartCamDist = camDist;
+      multiTouchCameraActive = true;
+      touchCameraGesture = touchCameraAnchor(e.touches[0], e.touches[1], camDist);
+      hintEl.textContent = 'Câmera: mova dois dedos para girar e aproxime/afaste para dar zoom.';
     }
   }
   function onTouchMove(e: any) {
-    if (e.touches.length === 2 && pinchStartDist) {
+    if (e.touches.length === 2 && touchCameraGesture) {
       e.preventDefault();
-      var dx = e.touches[0].clientX - e.touches[1].clientX, dy = e.touches[0].clientY - e.touches[1].clientY;
-      var newDist = Math.hypot(dx, dy);
-      camDist = Math.max(MIN_DIST, Math.min(MAX_DIST, pinchStartCamDist * (pinchStartDist / newDist)));
+      var result = updateTouchCamera(
+        { angle: camAngle, elevation: camElev, distance: camDist },
+        touchCameraGesture,
+        e.touches[0],
+        e.touches[1],
+        MIN_DIST,
+        MAX_DIST
+      );
+      camAngle = result.state.angle;
+      camElev = result.state.elevation;
+      camDist = result.state.distance;
+      touchCameraGesture = result.anchor;
       updateCam();
     }
   }
-  function onTouchEnd(e: any) { if (e.touches.length < 2) pinchStartDist = null; }
+  function onTouchEnd(e: any) {
+    if (e.touches.length < 2 && multiTouchCameraActive) {
+      touchCameraGesture = null;
+      multiTouchCameraActive = false;
+      downButton = null;
+      downPos = null;
+      dragMode = null;
+      hintEl.textContent = 'Toque para construir. Use dois dedos para girar a câmera e dar zoom.';
+    }
+  }
+
+  export function toggleTouchCameraMode(): boolean {
+    touchCameraMode = !touchCameraMode;
+    downButton = null;
+    downPos = null;
+    dragMode = null;
+    if (hintEl) {
+      hintEl.textContent = touchCameraMode
+        ? 'Modo cÃ¢mera ativo: arraste um dedo para girar. Toque em CÃ¢mera para voltar a construir.'
+        : 'Modo construÃ§Ã£o ativo. Use dois dedos para girar a cÃ¢mera e dar zoom.';
+    }
+    return touchCameraMode;
+  }
 
   var hoverMarker: any;
   var wallGridOverlay: any; // grade sobre as paredes do pavimento, só na ferramenta Telhado
@@ -2740,6 +2786,9 @@ import {
     objectPanelTitleEl = document.getElementById('objectPanelTitle');
     objectPanelBodyEl = document.getElementById('objectPanelBody');
     hintEl = document.getElementById('viewportHint');
+    if (window.matchMedia('(pointer: coarse)').matches) {
+      hintEl.textContent = 'Toque para construir. Use dois dedos para girar a cÃ¢mera e dar zoom.';
+    }
     wallDiagnosticsPanelEl = document.getElementById('wallDiagnosticsPanel');
     wallDiagnosticsOutputEl = document.getElementById('wallDiagnosticsOutput');
     dimLabelAEl = document.getElementById('dimLabelA');
@@ -2873,7 +2922,7 @@ import {
     container.addEventListener('pointermove', function (e: any) { updateHoverMarker(e.clientX, e.clientY); });
     container.addEventListener('pointerleave', function () { hoverMarker.visible = false; });
     container.addEventListener('wheel', onWheel, { passive: false });
-    container.addEventListener('touchstart', onTouchStart, { passive: true });
+    container.addEventListener('touchstart', onTouchStart, { passive: false });
     container.addEventListener('touchmove', onTouchMove, { passive: false });
     container.addEventListener('touchend', onTouchEnd, { passive: true });
 
@@ -2899,6 +2948,7 @@ export const ViewportController = {
   toggleDimensions,
   toggleWallDiagnostics,
   resetCamera,
+  toggleTouchCameraMode,
   getZoomPercent, zoomIn, zoomOut, setOnZoomChanged,
   toggleLayersMenuAtElement,
   repositionDimensions: repositionDimensionCotas
