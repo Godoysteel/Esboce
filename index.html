@@ -752,6 +752,13 @@
   .auth-submit:disabled { opacity: .6; cursor: not-allowed; }
   .auth-error { color: #D7263D; font-size: 12px; margin-top: 8px; min-height: 14px; }
   .auth-close { float: right; border: none; background: none; font-size: 18px; cursor: pointer; padding: 0 4px; }
+  .legal-checks { margin: 12px 0; padding: 12px; background: #F4F2EC; border-radius: 8px; }
+  .legal-check { display: flex; align-items: flex-start; gap: 8px; margin: 8px 0; font-size: 12px; line-height: 1.4; color: #454440; }
+  .legal-check input { width: auto; margin-top: 2px; flex: 0 0 auto; }
+  .legal-check a, .legal-links a { color: #534AB7; }
+  .legal-links { font-size: 12px; text-align: center; margin-top: 12px; color: #5F5E5A; }
+  #legalAcceptanceOverlay { display:none; position:fixed; inset:0; background:rgba(44,44,42,.62); z-index:1100; align-items:center; justify-content:center; }
+  #legalAcceptanceOverlay.visible { display:flex; }
 
   /* Catálogo de produtos — vitrine dos parceiros (departamentos +
      produtos com foto/preço/ficha técnica). Só navegação por enquanto
@@ -881,6 +888,9 @@
     <button id="exportProjectBtn" title="Baixar uma cópia de segurança em JSON">⬇️ Exportar backup</button>
     <button id="importProjectBtn" title="Abrir uma cópia de segurança em JSON">⬆️ Importar backup</button>
     <input id="importProjectInput" type="file" accept="application/json,.json,.esboce.json" hidden>
+    <div class="tb-overflow-divider"></div>
+    <a href="termos.html" target="_blank" rel="noopener" style="display:block;padding:8px 12px;font-size:13px;color:inherit;text-decoration:none;">Termos de Uso</a>
+    <a href="privacidade.html" target="_blank" rel="noopener" style="display:block;padding:8px 12px;font-size:13px;color:inherit;text-decoration:none;">Privacidade</a>
     <div class="tb-overflow-divider"></div>
     <button id="clearBtn" title="Limpar tudo do pavimento atual">🧹 Limpar pavimento atual</button>
   </div>
@@ -1305,6 +1315,11 @@ Mova uma parede para registrar a operação.</pre>
         <div class="auth-field" style="flex:1;"><label>Número</label><input id="authNumero" type="text"></div>
       </div>
       <div class="auth-field"><label>Bairro</label><input id="authBairro" type="text"></div>
+      <div class="legal-checks">
+        <label class="legal-check"><input id="authAgeConfirmed" type="checkbox"> <span>Confirmo que tenho 18 anos ou mais.</span></label>
+        <label class="legal-check"><input id="authTermsAccepted" type="checkbox"> <span>Li e aceito os <a href="termos.html" target="_blank" rel="noopener">Termos de Uso</a>.</span></label>
+        <label class="legal-check"><input id="authPrivacyAcknowledged" type="checkbox"> <span>Li a <a href="privacidade.html" target="_blank" rel="noopener">Política de Privacidade</a>.</span></label>
+      </div>
       <button class="auth-submit" id="authSignupSubmit">Criar conta e salvar projeto</button>
     </div>
 
@@ -1317,6 +1332,21 @@ Mova uma parede para registrar a operação.</pre>
     </div>
 
     <div class="auth-error" id="authError"></div>
+  </div>
+</div>
+
+<div id="legalAcceptanceOverlay" role="dialog" aria-modal="true" aria-labelledby="legalAcceptanceTitle">
+  <div class="auth-modal" style="width:460px;">
+    <h2 id="legalAcceptanceTitle">Atualização importante</h2>
+    <p class="auth-sub">Para continuar usando sua conta, confirme os documentos desta fase de testes.</p>
+    <div class="legal-checks">
+      <label class="legal-check"><input id="legalAgeConfirmed" type="checkbox"> <span>Confirmo que tenho 18 anos ou mais.</span></label>
+      <label class="legal-check"><input id="legalTermsAccepted" type="checkbox"> <span>Li e aceito os <a href="termos.html" target="_blank" rel="noopener">Termos de Uso</a>.</span></label>
+      <label class="legal-check"><input id="legalPrivacyAcknowledged" type="checkbox"> <span>Li a <a href="privacidade.html" target="_blank" rel="noopener">Política de Privacidade</a>.</span></label>
+    </div>
+    <button class="auth-submit" id="legalAcceptanceSubmit">Aceitar e continuar</button>
+    <div class="auth-error" id="legalAcceptanceError"></div>
+    <p class="legal-links">Não enviamos publicidade por e-mail ou WhatsApp nesta fase.</p>
   </div>
 </div>
 

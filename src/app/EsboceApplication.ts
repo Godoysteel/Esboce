@@ -9,7 +9,8 @@ import { NavGizmo } from "../core/NavGizmo.js";
 import { Store } from "../core/Store.js";
 import { ViewportController } from "../core/ViewportController.js";
 import { ViewportStats } from "../core/ViewportStats.js";
-import { createSharedProject, loadSharedProject, updateSharedProject, deleteProject, signUpWithProfile, signIn, signOut, getCurrentUser, listMyProjects, ensureProfileExists, listDepartments, listManufacturers, listCatalogProducts, type ProfileFields, type CatalogDepartment, type CatalogManufacturer, type CatalogProductWithDepartment } from "../core/SupabaseClient.js";
+import { createSharedProject, loadSharedProject, updateSharedProject, deleteProject, signUpWithProfile, signIn, signOut, getCurrentUser, listMyProjects, ensureProfileExists, hasCurrentLegalAcceptance, recordCurrentLegalAcceptance, listDepartments, listManufacturers, listCatalogProducts, type ProfileFields, type CatalogDepartment, type CatalogManufacturer, type CatalogProductWithDepartment } from "../core/SupabaseClient.js";
+import { CURRENT_LEGAL_ACCEPTANCE } from "../core/LegalAcceptance.js";
 import {
   ProjectFormatError,
   decodeProjectDocument,
@@ -122,6 +123,11 @@ export class EsboceApplication {
     this.setupAuthModal();
     this.setupDisclaimerOverlay();
     this.refreshAccountButton();
+    if (this.currentUserId) {
+      void this.ensureCurrentLegalAcceptance(this.currentUserId).catch((err) => {
+        console.error("Falha ao verificar aceite dos documentos:", err);
+      });
+    }
     // createInitialRoom() removido de propósito — viewport deve começar
     // vazia, sem nenhum cômodo pré-criado; o método continua disponível
     // abaixo caso essa decisão mude no futuro.
@@ -618,6 +624,7 @@ export class EsboceApplication {
     this.requireElement("authModalClose").addEventListener("click", () => this.closeAuthModal(true));
     this.requireElement("authSignupSubmit").addEventListener("click", () => this.handleSignupSubmit());
     this.requireElement("authLoginSubmit").addEventListener("click", () => this.handleLoginSubmit());
+    this.requireElement("legalAcceptanceSubmit").addEventListener("click", () => this.handleLegalAcceptanceSubmit());
     this.requireElement("myProjectsClose").addEventListener("click", () => {
       this.requireElement("myProjectsOverlay").style.display = "none";
     });
@@ -707,6 +714,46 @@ export class EsboceApplication {
     return msg;
   }
 
+  private pendingLegalUserId: string | null = null;
+  private pendingLegalResolve: (() => void) | null = null;
+
+  private async ensureCurrentLegalAcceptance(userId: string): Promise<void> {
+    if (await hasCurrentLegalAcceptance(userId)) return;
+    this.pendingLegalUserId = userId;
+    this.requireElement("legalAcceptanceError").textContent = "";
+    this.requireElement("legalAcceptanceOverlay").classList.add("visible");
+    await new Promise<void>((resolve) => { this.pendingLegalResolve = resolve; });
+  }
+
+  private async handleLegalAcceptanceSubmit(): Promise<void> {
+    const age = (this.requireElement("legalAgeConfirmed") as HTMLInputElement).checked;
+    const terms = (this.requireElement("legalTermsAccepted") as HTMLInputElement).checked;
+    const privacy = (this.requireElement("legalPrivacyAcknowledged") as HTMLInputElement).checked;
+    const errorEl = this.requireElement("legalAcceptanceError");
+    const btn = this.requireElement("legalAcceptanceSubmit") as HTMLButtonElement;
+    if (!age || !terms || !privacy) {
+      errorEl.textContent = "Confirme os três itens para continuar.";
+      return;
+    }
+    if (!this.pendingLegalUserId) return;
+    btn.disabled = true;
+    btn.textContent = "Registrando...";
+    try {
+      await recordCurrentLegalAcceptance(this.pendingLegalUserId);
+      this.requireElement("legalAcceptanceOverlay").classList.remove("visible");
+      this.pendingLegalUserId = null;
+      const resolve = this.pendingLegalResolve;
+      this.pendingLegalResolve = null;
+      resolve?.();
+    } catch (err) {
+      errorEl.textContent = "Não foi possível registrar agora. Verifique sua conexão e tente novamente.";
+      console.error("Falha ao registrar aceite:", err);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Aceitar e continuar";
+    }
+  }
+
   private async handleSignupSubmit(): Promise<void> {
     const errorEl = this.requireElement("authError");
     const btn = this.requireElement("authSignupSubmit") as HTMLButtonElement;
@@ -714,6 +761,9 @@ export class EsboceApplication {
     const email = (this.requireElement("authSignupEmail") as HTMLInputElement).value.trim();
     const telefone = (this.requireElement("authTelefone") as HTMLInputElement).value.trim();
     const senha = (this.requireElement("authSignupSenha") as HTMLInputElement).value;
+    const ageConfirmed = (this.requireElement("authAgeConfirmed") as HTMLInputElement).checked;
+    const termsAccepted = (this.requireElement("authTermsAccepted") as HTMLInputElement).checked;
+    const privacyAcknowledged = (this.requireElement("authPrivacyAcknowledged") as HTMLInputElement).checked;
     const profile: ProfileFields = {
       nome, telefone,
       cep: (this.requireElement("authCep") as HTMLInputElement).value.trim(),
@@ -733,6 +783,11 @@ export class EsboceApplication {
       return;
     }
 
+    if (!ageConfirmed || !termsAccepted || !privacyAcknowledged) {
+      errorEl.textContent = "Confirme sua idade, os Termos de Uso e a Política de Privacidade.";
+      return;
+    }
+
     errorEl.textContent = "";
     btn.disabled = true;
     btn.textContent = "Criando conta...";
@@ -745,7 +800,11 @@ export class EsboceApplication {
         // primeiro login pós-confirmação (ver handleLoginSubmit), pra
         // não perder o que a pessoa já preencheu.
         try {
-          localStorage.setItem("esboce_pending_profile", JSON.stringify({ email, profile }));
+          localStorage.setItem("esboce_pending_profile", JSON.stringify({
+            email,
+            profile,
+            legalAcceptance: CURRENT_LEGAL_ACCEPTANCE,
+          }));
         } catch (err) {
           console.error("Falha ao guardar perfil pendente:", err);
         }
@@ -754,6 +813,7 @@ export class EsboceApplication {
       }
       const user = await getCurrentUser();
       if (!user) throw new Error("Não foi possível confirmar a sessão após o cadastro.");
+      await recordCurrentLegalAcceptance(user.id);
       this.onAuthSuccess(user.id, user.email ?? email);
     } catch (err) {
       errorEl.textContent = this.friendlyAuthError(err);
@@ -777,9 +837,13 @@ export class EsboceApplication {
     }
     if (!raw) return;
     try {
-      const pending = JSON.parse(raw) as { email: string; profile: ProfileFields };
+      const pending = JSON.parse(raw) as { email: string; profile: ProfileFields; legalAcceptance?: { termsVersion: string; privacyVersion: string } };
       if (pending.email.toLowerCase() === loggedInEmail.toLowerCase()) {
         await ensureProfileExists(userId, pending.profile);
+        if (pending.legalAcceptance?.termsVersion === CURRENT_LEGAL_ACCEPTANCE.termsVersion
+          && pending.legalAcceptance?.privacyVersion === CURRENT_LEGAL_ACCEPTANCE.privacyVersion) {
+          await recordCurrentLegalAcceptance(userId);
+        }
       }
       localStorage.removeItem("esboce_pending_profile");
     } catch (err) {
@@ -804,6 +868,7 @@ export class EsboceApplication {
       const user = await signIn(email, senha);
       if (!user) throw new Error("Login não retornou um usuário.");
       await this.completePendingProfileIfAny(user.id, email);
+      await this.ensureCurrentLegalAcceptance(user.id);
       this.onAuthSuccess(user.id, user.email ?? email);
     } catch (err) {
       errorEl.textContent = this.friendlyAuthError(err);
