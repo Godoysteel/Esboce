@@ -642,10 +642,9 @@ export function hashColorHex(key: string): number {
   // parede até o beiral, cria somente a porção entre o beiral e as águas.
   // O perfil é dividido na cumeeira quando a parede a atravessa, produzindo
   // o recorte triangular/trapezoidal equivalente a uma booleana.
-  function buildAtticWallExtensions(wall: any, roof: any, scale: number, offsetX: number, offsetY: number, yOffset: number, mat: any) {
+  function atticWallExtensionSlices(wall: any, roof: any, openings: any[]) {
     var base = roof.baseHeightM || 1.2;
     var centerCoord = roof.ridgeAxis === 'x' ? (roof.y1 + roof.y2) / 2 : (roof.x1 + roof.x2) / 2;
-    var halfSpan = roof.ridgeAxis === 'x' ? (roof.y2 - roof.y1) / 2 : (roof.x2 - roof.x1) / 2;
     var c1 = roof.ridgeAxis === 'x' ? wall.y1 : wall.x1;
     var c2 = roof.ridgeAxis === 'x' ? wall.y2 : wall.x2;
     var ts = [0, 1];
@@ -653,19 +652,55 @@ export function hashColorHex(key: string): number {
       var ridgeT = (centerCoord - c1) / (c2 - c1);
       if (ridgeT > 1e-5 && ridgeT < 1 - 1e-5) ts.push(ridgeT);
     }
+    var wallLenM = Core.wallLengthMeters(wall);
+    (openings || []).forEach(function (opening) {
+      var startT = (opening.offset - opening.width / 2) / wallLenM;
+      var endT = (opening.offset + opening.width / 2) / wallLenM;
+      if (startT > 1e-5 && startT < 1 - 1e-5) ts.push(startT);
+      if (endT > 1e-5 && endT < 1 - 1e-5) ts.push(endT);
+    });
     ts.sort(function (a, b) { return a - b; });
+    ts = ts.filter(function (t, index) { return index === 0 || Math.abs(t - ts[index - 1]!) > 1e-6; });
     function pointAt(t: number) { return { x: wall.x1 + (wall.x2 - wall.x1) * t, y: wall.y1 + (wall.y2 - wall.y1) * t }; }
     function heightAt(p: any) { return Core.roofHeightAtModelPoint(roof, p.x, p.y); }
+    var slices: any[] = [];
+    ts.slice(0, -1).forEach(function (t0, index) {
+      var t1 = ts[index + 1]!;
+      var a = pointAt(t0), b = pointAt(t1);
+      var ah = heightAt(a), bh = heightAt(b);
+      var midpointM = ((t0 + t1) / 2) * wallLenM;
+      var opening = (openings || []).find(function (candidate) {
+        return midpointM > candidate.offset - candidate.width / 2 - 1e-5 && midpointM < candidate.offset + candidate.width / 2 + 1e-5;
+      });
+      if (!opening) {
+        slices.push({ t0: t0, t1: t1, lowA: base, lowB: base, highA: ah, highB: bh });
+        return;
+      }
+      if (opening.sillHeight > base + 1e-4) {
+        slices.push({ t0: t0, t1: t1, lowA: base, lowB: base, highA: Math.min(opening.sillHeight, ah), highB: Math.min(opening.sillHeight, bh) });
+      }
+      var openingTop = opening.sillHeight + opening.height;
+      if (ah > openingTop + 1e-4 || bh > openingTop + 1e-4) {
+        slices.push({ t0: t0, t1: t1, lowA: Math.min(openingTop, ah), lowB: Math.min(openingTop, bh), highA: ah, highB: bh });
+      }
+    });
+    return slices.filter(function (slice) { return slice.highA - slice.lowA > 1e-4 || slice.highB - slice.lowB > 1e-4; });
+  }
+
+  function buildAtticWallExtensions(wall: any, roof: any, openings: any[], scale: number, offsetX: number, offsetY: number, yOffset: number, mat: any) {
     var dx = wall.x2 - wall.x1, dy = wall.y2 - wall.y1, len = Math.hypot(dx, dy);
     if (len < 1e-6) return [];
     var nx = -dy / len * Core.WALL_THICK / 2 * scale, nz = dx / len * Core.WALL_THICK / 2 * scale;
-    return ts.slice(0, -1).map(function (t0, index) {
-      var t1 = ts[index + 1]!, a = pointAt(t0), b = pointAt(t1);
+    return atticWallExtensionSlices(wall, roof, openings).map(function (slice) {
+      var t0 = slice.t0, t1 = slice.t1;
+      var a = { x: wall.x1 + (wall.x2 - wall.x1) * t0, y: wall.y1 + (wall.y2 - wall.y1) * t0 };
+      var b = { x: wall.x1 + (wall.x2 - wall.x1) * t1, y: wall.y1 + (wall.y2 - wall.y1) * t1 };
       var ax = (a.x - offsetX) * scale, az = (a.y - offsetY) * scale;
       var bx = (b.x - offsetX) * scale, bz = (b.y - offsetY) * scale;
-      var low = yOffset + base, ah = yOffset + heightAt(a), bh = yOffset + heightAt(b);
+      var lowA = yOffset + slice.lowA, lowB = yOffset + slice.lowB;
+      var ah = yOffset + slice.highA, bh = yOffset + slice.highB;
       var vertices = new Float32Array([
-        ax+nx,low,az+nz, ax-nx,low,az-nz, bx+nx,low,bz+nz, bx-nx,low,bz-nz,
+        ax+nx,lowA,az+nz, ax-nx,lowA,az-nz, bx+nx,lowB,bz+nz, bx-nx,lowB,bz-nz,
         ax+nx,ah,az+nz,  ax-nx,ah,az-nz,  bx+nx,bh,bz+nz, bx-nx,bh,bz-nz
       ]);
       var indices = [0,2,6,0,6,4, 1,5,7,1,7,3, 0,4,5,0,5,1, 2,3,7,2,7,6, 4,6,7,4,7,5, 0,1,3,0,3,2];
@@ -676,31 +711,19 @@ export function hashColorHex(key: string): number {
     });
   }
 
-  function buildAtticWallFaceExtensions(wall: any, roof: any, fp: any, yOffset: number, mat: any, side: 'a' | 'b') {
-    var base = roof.baseHeightM || 1.2;
-    var centerCoord = roof.ridgeAxis === 'x' ? (roof.y1 + roof.y2) / 2 : (roof.x1 + roof.x2) / 2;
-    var c1 = roof.ridgeAxis === 'x' ? wall.y1 : wall.x1;
-    var c2 = roof.ridgeAxis === 'x' ? wall.y2 : wall.x2;
-    var ts = [0, 1];
-    if (Math.abs(c2 - c1) > 1e-6) {
-      var ridgeT = (centerCoord - c1) / (c2 - c1);
-      if (ridgeT > 1e-5 && ridgeT < 1 - 1e-5) ts.push(ridgeT);
-    }
-    ts.sort(function (a, b) { return a - b; });
+  function buildAtticWallFaceExtensions(wall: any, roof: any, openings: any[], fp: any, yOffset: number, mat: any, side: 'a' | 'b') {
     var start = side === 'a' ? fp.p1a : fp.p1b;
     var end = side === 'a' ? fp.p2a : fp.p2b;
     function scenePoint(t: number) { return { x: start.x + (end.x - start.x) * t, z: start.z + (end.z - start.z) * t }; }
-    function modelPoint(t: number) { return { x: wall.x1 + (wall.x2 - wall.x1) * t, y: wall.y1 + (wall.y2 - wall.y1) * t }; }
-    return ts.slice(0, -1).map(function (t0, index) {
-      var t1 = ts[index + 1]!, a = scenePoint(t0), b = scenePoint(t1), ma = modelPoint(t0), mb = modelPoint(t1);
-      var low = yOffset + base;
-      var ah = yOffset + Core.roofHeightAtModelPoint(roof, ma.x, ma.y);
-      var bh = yOffset + Core.roofHeightAtModelPoint(roof, mb.x, mb.y);
+    return atticWallExtensionSlices(wall, roof, openings).map(function (slice) {
+      var a = scenePoint(slice.t0), b = scenePoint(slice.t1);
+      var lowA = yOffset + slice.lowA, lowB = yOffset + slice.lowB;
+      var ah = yOffset + slice.highA, bh = yOffset + slice.highB;
       var verts = side === 'a'
-        ? [a.x,low,a.z, b.x,low,b.z, b.x,bh,b.z, a.x,low,a.z, b.x,bh,b.z, a.x,ah,a.z]
-        : [b.x,low,b.z, a.x,low,a.z, a.x,ah,a.z, b.x,low,b.z, a.x,ah,a.z, b.x,bh,b.z];
+        ? [a.x,lowA,a.z, b.x,lowB,b.z, b.x,bh,b.z, a.x,lowA,a.z, b.x,bh,b.z, a.x,ah,a.z]
+        : [b.x,lowB,b.z, a.x,lowA,a.z, a.x,ah,a.z, b.x,lowB,b.z, a.x,ah,a.z, b.x,bh,b.z];
       var segmentM = Math.hypot(b.x - a.x, b.z - a.z);
-      var maxRise = Math.max(ah - low, bh - low);
+      var maxRise = Math.max(ah - lowA, bh - lowB);
       var u = segmentM / WALL_PLASTER_TILE_METERS, v = maxRise / WALL_PLASTER_TILE_METERS;
       var geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
@@ -2366,7 +2389,7 @@ export function hashColorHex(key: string): number {
               opacity: highlighted ? 0.2 : 0,
               depthWrite: false
             });
-            buildAtticWallExtensions(w, generatedAtticRoof, scale, offsetX, offsetY, yOffset, atticExtensionMat).forEach(function (extension) {
+            buildAtticWallExtensions(w, generatedAtticRoof, wallOpenings, scale, offsetX, offsetY, yOffset, atticExtensionMat).forEach(function (extension) {
               tagCategory(extension, wallCategory);
               extension.userData.wallId = w.id;
               extension.userData.floorIndex = floorIdx;
@@ -2430,7 +2453,7 @@ export function hashColorHex(key: string): number {
               });
             }
             if (generatedAtticRoof) {
-              buildAtticWallFaceExtensions(w, generatedAtticRoof, fp, yOffset, faceMat, side).forEach(function (atticFace) {
+              buildAtticWallFaceExtensions(w, generatedAtticRoof, wallOpenings, fp, yOffset, faceMat, side).forEach(function (atticFace) {
                 atticFace.userData.floorIndex = floorIdx;
                 atticFace.userData.debugWallId = w.id;
                 atticFace.userData.debugSide = side;

@@ -114,6 +114,27 @@ export function roofHeightAtModelPoint(roof: Roof, x: number, y: number): number
   return base + riseUnits / GRID * Math.tan(pitchRad) + undersideContactOffset;
 }
 
+export function atticOpeningMaxTopMeters(wall: Wall, roof: Roof, offset: number, width: number): number {
+  const lengthM = wallLengthMeters(wall);
+  if (lengthM < 1e-6) return roof.baseHeightM ?? 1.2;
+  const startT = Math.max(0, Math.min(1, (offset - width / 2) / lengthM));
+  const endT = Math.max(0, Math.min(1, (offset + width / 2) / lengthM));
+  const pointAt = (t: number) => ({
+    x: wall.x1 + (wall.x2 - wall.x1) * t,
+    y: wall.y1 + (wall.y2 - wall.y1) * t,
+  });
+  const start = pointAt(startT);
+  const end = pointAt(endT);
+  return Math.min(
+    roofHeightAtModelPoint(roof, start.x, start.y),
+    roofHeightAtModelPoint(roof, end.x, end.y),
+  );
+}
+
+export function openingFitsAtticRoof(wall: Wall, roof: Roof, opening: Opening, clearanceM = 0.02): boolean {
+  return opening.sillHeight + opening.height <= atticOpeningMaxTopMeters(wall, roof, opening.offset, opening.width) - clearanceM;
+}
+
 export function atticWallExtensionAreaMeters(wall: Wall, roof: Roof): number {
   const coordinate1 = roof.ridgeAxis === 'x' ? wall.y1 : wall.x1;
   const coordinate2 = roof.ridgeAxis === 'x' ? wall.y2 : wall.x2;
@@ -1421,7 +1442,7 @@ export const Core = {
   wallResizeEndpointNeedsBridge,
   distPointToLine, wallOBB, furnitureOBB, openingOBB, obbOverlapMTV, wallOverlapsForeignOpening, resolveWallOffsetAgainstOpenings, wallsCanFuse, wallsMeetAtEndpoint, resolveWallGroupGridDelta,
   findWallTJunctionSplits,
-  createWallEntity, createColumnEntity, createRoofEntity, wallIntersectsRoofFootprint, roofHeightAtModelPoint, atticWallExtensionAreaMeters, createVarandaEntity, createLajeEntity, createFloorEntity,
+  createWallEntity, createColumnEntity, createRoofEntity, wallIntersectsRoofFootprint, roofHeightAtModelPoint, atticOpeningMaxTopMeters, openingFitsAtticRoof, atticWallExtensionAreaMeters, createVarandaEntity, createLajeEntity, createFloorEntity,
   createFurnitureEntity,
   createProject, distToSegment, projectOnSegment, detectRooms
 };

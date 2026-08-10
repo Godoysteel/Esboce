@@ -61,3 +61,14 @@ test('parede interna que cruza a cumeeira mantém complemento triangular', () =>
   assert.ok(Math.abs((ridgeContact - eaveContact) - 2) < 1e-9);
   assert.ok(Math.abs(Core.atticWallExtensionAreaMeters(wall, roof) - (4 + 4 * (eaveContact - 1.2))) < 1e-9);
 });
+
+test('abertura no ático usa como limite o ponto mais baixo sob o telhado', () => {
+  const roof = createRoofEntity(0, 0, 80, 80, 'duasAguas', 45, 'x', 'atico-abertura', undefined, 'generated', 1.2);
+  const wall = { id: 'frontao', x1: 0, y1: 0, x2: 0, y2: 80 };
+  const maxTop = Core.atticOpeningMaxTopMeters(wall, roof, 2, 0.6);
+  const left = Core.roofHeightAtModelPoint(roof, 0, 34);
+  const right = Core.roofHeightAtModelPoint(roof, 0, 46);
+  assert.equal(maxTop, Math.min(left, right));
+  assert.equal(Core.openingFitsAtticRoof(wall, roof, { id: 'janela', wallId: wall.id, kind: 'window', offset: 2, width: 0.6, height: maxTop - 1.05, sillHeight: 1 }), true);
+  assert.equal(Core.openingFitsAtticRoof(wall, roof, { id: 'alta', wallId: wall.id, kind: 'window', offset: 2, width: 0.6, height: maxTop, sillHeight: 1 }), false);
+});
