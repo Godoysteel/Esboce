@@ -680,6 +680,40 @@ export function hashColorHex(key: string): number {
     });
   }
 
+  function buildAtticWallFaceExtensions(wall: any, roof: any, fp: any, yOffset: number, mat: any, side: 'a' | 'b') {
+    var base = roof.baseHeightM || 1.2;
+    var centerCoord = roof.ridgeAxis === 'x' ? (roof.y1 + roof.y2) / 2 : (roof.x1 + roof.x2) / 2;
+    var c1 = roof.ridgeAxis === 'x' ? wall.y1 : wall.x1;
+    var c2 = roof.ridgeAxis === 'x' ? wall.y2 : wall.x2;
+    var ts = [0, 1];
+    if (Math.abs(c2 - c1) > 1e-6) {
+      var ridgeT = (centerCoord - c1) / (c2 - c1);
+      if (ridgeT > 1e-5 && ridgeT < 1 - 1e-5) ts.push(ridgeT);
+    }
+    ts.sort(function (a, b) { return a - b; });
+    var start = side === 'a' ? fp.p1a : fp.p1b;
+    var end = side === 'a' ? fp.p2a : fp.p2b;
+    function scenePoint(t: number) { return { x: start.x + (end.x - start.x) * t, z: start.z + (end.z - start.z) * t }; }
+    function modelPoint(t: number) { return { x: wall.x1 + (wall.x2 - wall.x1) * t, y: wall.y1 + (wall.y2 - wall.y1) * t }; }
+    return ts.slice(0, -1).map(function (t0, index) {
+      var t1 = ts[index + 1]!, a = scenePoint(t0), b = scenePoint(t1), ma = modelPoint(t0), mb = modelPoint(t1);
+      var low = yOffset + base;
+      var ah = yOffset + Core.roofHeightAtModelPoint(roof, ma.x, ma.y);
+      var bh = yOffset + Core.roofHeightAtModelPoint(roof, mb.x, mb.y);
+      var verts = side === 'a'
+        ? [a.x,low,a.z, b.x,low,b.z, b.x,bh,b.z, a.x,low,a.z, b.x,bh,b.z, a.x,ah,a.z]
+        : [b.x,low,b.z, a.x,low,a.z, a.x,ah,a.z, b.x,low,b.z, a.x,ah,a.z, b.x,bh,b.z];
+      var segmentM = Math.hypot(b.x - a.x, b.z - a.z);
+      var maxRise = Math.max(ah - low, bh - low);
+      var u = segmentM / WALL_PLASTER_TILE_METERS, v = maxRise / WALL_PLASTER_TILE_METERS;
+      var geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute([0,0,u,0,u,v, 0,0,u,v,0,v], 2));
+      geo.computeVertexNormals();
+      return new THREE.Mesh(geo, mat);
+    });
+  }
+
   // Face superior visível da parede. Ela reutiliza o footprint resolvido
   // pelo Core sem aumentar comprimento, largura ou altura; assim a cinta
   // acompanha quinas, fusões e junções da v14 sem criar outro volume.
@@ -2331,7 +2365,10 @@ export function hashColorHex(key: string): number {
               color: highlighted ? SELECTED_ACCENT : GABLE_COLOR,
               side: THREE.DoubleSide,
               flatShading: true,
-              roughness: 0.92
+              roughness: 0.92,
+              transparent: true,
+              opacity: highlighted ? 0.2 : 0,
+              depthWrite: false
             });
             buildAtticWallExtensions(w, generatedAtticRoof, scale, offsetX, offsetY, yOffset, atticExtensionMat).forEach(function (extension) {
               tagCategory(extension, wallCategory);
@@ -2351,7 +2388,7 @@ export function hashColorHex(key: string): number {
           // sem sobrepor (a mesma correção que já vale pra caixa toda).
           var wallDefaultColor = GABLE_COLOR;
           var plasterMaps = getWallPlasterMaps();
-          ['a', 'b'].forEach(function (side) {
+          (['a', 'b'] as const).forEach(function (side) {
             var productId = side === 'a' ? w.finishA : w.finishB;
             var product = productId ? Catalog.getProduct(productId) : null;
             var isCeramic = product && product.category === 'floor_tile';
@@ -2394,6 +2431,15 @@ export function hashColorHex(key: string): number {
                 faceBandMesh.userData.debugSide = side;
                 scene.add(faceBandMesh);
                 registry.wallMeshes.push(faceBandMesh);
+              });
+            }
+            if (generatedAtticRoof) {
+              buildAtticWallFaceExtensions(w, generatedAtticRoof, fp, yOffset, faceMat, side).forEach(function (atticFace) {
+                atticFace.userData.floorIndex = floorIdx;
+                atticFace.userData.debugWallId = w.id;
+                atticFace.userData.debugSide = side;
+                scene.add(atticFace);
+                registry.wallMeshes.push(atticFace);
               });
             }
           });
