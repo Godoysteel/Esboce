@@ -13,7 +13,7 @@ test("versões jurídicas atuais são explícitas e consistentes", () => {
   assert.equal(CURRENT_LEGAL_ACCEPTANCE.termsVersion, TERMS_VERSION);
   assert.equal(CURRENT_LEGAL_ACCEPTANCE.privacyVersion, PRIVACY_VERSION);
   assert.match(TERMS_VERSION, /^\d{4}-\d{2}-\d{2}$/);
-  assert.match(PRIVACY_VERSION, /^\d{4}-\d{2}-\d{2}$/);
+  assert.match(PRIVACY_VERSION, /^\d{4}-\d{2}-\d{2}(?:\.\d+)?$/);
 });
 
 test("cadastro exige confirmações separadas e não inclui marketing", async () => {
@@ -34,6 +34,10 @@ test("termos e privacidade ficam públicos e identificam operador e canal", asyn
   }
   assert.match(privacy, /Supabase/);
   assert.match(privacy, /GitHub Pages/);
+  assert.match(privacy, /Resend/);
+  assert.match(privacy, /Cloudflare Turnstile/);
+  assert.match(privacy, /Sentry/);
+  assert.match(privacy, /não enviar nome, e-mail, conteúdo dos projetos/);
   assert.match(privacy, /direitos/i);
 });
 
