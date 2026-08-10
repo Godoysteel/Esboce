@@ -20,6 +20,7 @@ import {
   importProjectBackup,
 } from "../core/ProjectPersistence.js";
 import type { ConstructionSystem } from "../core/types.js";
+import { constructionSystemDefinition } from "../core/ConstructionSystem.js";
 
 export class EsboceApplication {
   private readonly scene = new THREE.Scene();
@@ -132,6 +133,7 @@ export class EsboceApplication {
     this.bindApplicationEvents();
     this.setupAuthModal();
     this.setupConstructionSystemSelector();
+    this.refreshConstructionSystemIndicator();
     this.authUiReady = true;
     this.setupDisclaimerOverlay();
     if (!this.sharedProjectId) this.openConstructionSystemSelector((system) => this.applyNewProject(system));
@@ -389,7 +391,15 @@ export class EsboceApplication {
       MaterialsPanel.refresh();
       MaterialsSheet.refresh();
       ViewportStats.refresh();
+      this.refreshConstructionSystemIndicator();
     });
+  }
+
+  private refreshConstructionSystemIndicator(): void {
+    const definition = constructionSystemDefinition(Store.getProject().constructionSystem);
+    const indicator = this.requireElement("constructionSystemIndicator");
+    this.requireElement("constructionSystemIndicatorLabel").textContent = definition.label;
+    indicator.title = `Sistema construtivo: ${definition.label} — ${definition.description}`;
   }
 
   // Atualiza a URL da barra de endereço com o id do projeto salvo, sem

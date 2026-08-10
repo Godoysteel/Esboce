@@ -35,3 +35,8 @@ test('seletor inicial é obrigatório e não oferece fechamento sem escolha', ()
   assert.match(selector, /aria-modal="true"/);
   assert.doesNotMatch(selector, /constructionSystemClose|Fechar/);
 });
+
+test('barra superior mantém o sistema atual visível durante a edição', () => {
+  assert.match(html, /id="constructionSystemIndicator"[^>]*aria-live="polite"/);
+  assert.match(html, /id="constructionSystemIndicatorLabel"/);
+});

@@ -99,6 +99,17 @@
   .tb-btn-primary:hover { background: #453D9C; }
 
   .floor-select { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .construction-system-indicator {
+    display: flex; align-items: center; gap: 8px; min-height: 48px;
+    color: #403B37; font-size: 12px; white-space: nowrap;
+  }
+  .construction-system-indicator-dot {
+    width: 9px; height: 9px; flex: 0 0 auto; border-radius: 50%;
+    background: #C1673F; box-shadow: 0 0 0 3px rgba(193,103,63,.15);
+  }
+  .construction-system-indicator-copy { display: flex; flex-direction: column; line-height: 1.15; }
+  .construction-system-indicator-copy small { color: #77736C; font-size: 9px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+  .construction-system-indicator-copy strong { margin-top: 3px; font-size: 12px; }
   /* Menu suspenso de pavimento — mesma "casca" do .tb-overflow-menu,
      só que o conteúdo (lista de andares) é montado pelo
      FloorTabsController, então os estilos de .floor-tab entram aqui
@@ -959,6 +970,14 @@
     <div class="tb-overflow-divider"></div>
     <button id="addFloorBtn" title="Adicionar um novo pavimento">+ Novo pavimento</button>
   </div>
+</div>
+
+<div class="construction-system-indicator tb-pill" id="constructionSystemIndicator" aria-live="polite" title="Sistema construtivo deste projeto">
+  <span class="construction-system-indicator-dot" aria-hidden="true"></span>
+  <span class="construction-system-indicator-copy">
+    <small>Sistema</small>
+    <strong id="constructionSystemIndicatorLabel">Tijolos</strong>
+  </span>
 </div>
 
 <div class="tb-group tb-pill">
