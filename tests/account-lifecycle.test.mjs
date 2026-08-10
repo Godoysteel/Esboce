@@ -35,6 +35,14 @@ test("nova senha só pode ser enviada após validação e quando os campos coinc
   assert.match(app, /nova senha precisa ser diferente/i);
 });
 
+test("cadastro e recuperação exigem o mesmo mínimo de oito caracteres", async () => {
+  const [app, html] = await Promise.all([readFile(appUrl, "utf8"), readFile(indexUrl, "utf8")]);
+  assert.match(app, /senha\.length < 8/);
+  assert.match(app, /senha precisa de pelo menos 8 caracteres/);
+  assert.match(app, /password\.length < 8/);
+  assert.match(html, /id="authSignupSenha"[^>]*minlength="8"/);
+});
+
 test("recuperação explica quando o limite temporário de e-mails foi atingido", async () => {
   const app = await readFile(appUrl, "utf8");
   assert.match(app, /friendlyPasswordRecoveryRequestError/);

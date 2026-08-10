@@ -1014,8 +1014,8 @@ export class EsboceApplication {
       errorEl.textContent = "Nome, e-mail, telefone e senha são obrigatórios.";
       return;
     }
-    if (senha.length < 6) {
-      errorEl.textContent = "A senha precisa de pelo menos 6 caracteres.";
+    if (senha.length < 8) {
+      errorEl.textContent = "A senha precisa de pelo menos 8 caracteres.";
       return;
     }
 
