@@ -67,7 +67,7 @@ export class EsboceApplication {
       if (this.authUiReady) this.openPasswordReset(true);
     });
     this.viewport = this.requireElement("viewport");
-    this.scene.background = new THREE.Color(0xa9dff2);
+    this.scene.background = this.createSkyBackground();
 
     // Debug: acesso ao Store/Core pelo console do navegador, útil pra
     // testar posição/rotação de móveis ao vivo (Store.currentFurniture(),
@@ -160,14 +160,35 @@ export class EsboceApplication {
     return element;
   }
 
-  private buildEnvironment(): void {
-    this.scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+  private createSkyBackground(): THREE.CanvasTexture {
+    const canvas = document.createElement("canvas");
+    canvas.width = 2;
+    canvas.height = 512;
 
-    const mainLight = new THREE.DirectionalLight(0xffffff, 1);
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Não foi possível criar o fundo do viewport.");
+
+    const sky = context.createLinearGradient(0, 0, 0, canvas.height);
+    sky.addColorStop(0, "#78bfe0");
+    sky.addColorStop(0.48, "#b8dce7");
+    sky.addColorStop(0.78, "#dde9e6");
+    sky.addColorStop(1, "#f0eee2");
+    context.fillStyle = sky;
+    context.fillRect(0, 0, canvas.width, canvas.height);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return texture;
+  }
+
+  private buildEnvironment(): void {
+    this.scene.add(new THREE.HemisphereLight(0xd8efff, 0x8b795f, 0.72));
+
+    const mainLight = new THREE.DirectionalLight(0xfff1d6, 1.05);
     mainLight.position.set(5, 10, 5);
     this.scene.add(mainLight);
 
-    const fillLight = new THREE.DirectionalLight(0xbfe3ff, 0.3);
+    const fillLight = new THREE.DirectionalLight(0xc5e5f2, 0.28);
     fillLight.position.set(-6, 4, -4);
     this.scene.add(fillLight);
 
@@ -175,13 +196,13 @@ export class EsboceApplication {
     const configureTerrainMap = (path: string, isColor = false): THREE.Texture => {
       const texture = textureLoader.load(path);
       texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-      texture.repeat.set(15, 15);
+      texture.repeat.set(60, 60);
       texture.anisotropy = Math.min(8, this.renderer!.capabilities.getMaxAnisotropy());
       if (isColor) texture.colorSpace = THREE.SRGBColorSpace;
       return texture;
     };
     const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(30, 30),
+      new THREE.PlaneGeometry(120, 120),
       new THREE.MeshStandardMaterial({
         color: 0xffffff,
          map: configureTerrainMap(import.meta.env.BASE_URL + 'textures/grama/albedo.png', true),
