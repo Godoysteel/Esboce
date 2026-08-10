@@ -655,11 +655,7 @@ export function hashColorHex(key: string): number {
     }
     ts.sort(function (a, b) { return a - b; });
     function pointAt(t: number) { return { x: wall.x1 + (wall.x2 - wall.x1) * t, y: wall.y1 + (wall.y2 - wall.y1) * t }; }
-    function heightAt(p: any) {
-      var coord = roof.ridgeAxis === 'x' ? p.y : p.x;
-      var riseUnits = Math.max(0, halfSpan - Math.abs(coord - centerCoord));
-      return base + riseUnits / Core.GRID * Math.tan(roof.pitchDeg * Math.PI / 180);
-    }
+    function heightAt(p: any) { return Core.roofHeightAtModelPoint(roof, p.x, p.y); }
     var dx = wall.x2 - wall.x1, dy = wall.y2 - wall.y1, len = Math.hypot(dx, dy);
     if (len < 1e-6) return [];
     var nx = -dy / len * Core.WALL_THICK / 2 * scale, nz = dx / len * Core.WALL_THICK / 2 * scale;

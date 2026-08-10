@@ -55,7 +55,9 @@ test('parede que cruza a projeção do telhado pode ser associada ao ático', ()
 test('parede interna que cruza a cumeeira mantém complemento triangular', () => {
   const roof = createRoofEntity(0, 0, 80, 80, 'duasAguas', 45, 'x', 'atico-3', undefined, 'generated', 1.2);
   const wall = { id: 'interna', x1: 40, y1: 0, x2: 40, y2: 80 };
-  assert.equal(Core.roofHeightAtModelPoint(roof, 40, 0), 1.2);
-  assert.ok(Math.abs(Core.roofHeightAtModelPoint(roof, 40, 40) - 3.2) < 1e-9);
-  assert.ok(Math.abs(Core.atticWallExtensionAreaMeters(wall, roof) - 4) < 1e-9);
+  const eaveContact = Core.roofHeightAtModelPoint(roof, 40, 0);
+  const ridgeContact = Core.roofHeightAtModelPoint(roof, 40, 40);
+  assert.ok(eaveContact > 1.2, 'a parede encontra a face inferior após o avanço do beiral');
+  assert.ok(Math.abs((ridgeContact - eaveContact) - 2) < 1e-9);
+  assert.ok(Math.abs(Core.atticWallExtensionAreaMeters(wall, roof) - (4 + 4 * (eaveContact - 1.2))) < 1e-9);
 });

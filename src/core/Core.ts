@@ -102,11 +102,16 @@ export function wallIntersectsRoofFootprint(wall: Wall, roof: Roof): boolean {
 
 export function roofHeightAtModelPoint(roof: Roof, x: number, y: number): number {
   const base = roof.baseHeightM ?? 1.2;
+  // A malha da cobertura cresce 40 cm além da projeção e é extrudada
+  // 12 cm para baixo. A parede deve encontrar a face inferior real,
+  // não o plano abstrato que começa no limite do footprint.
+  const pitchRad = roof.pitchDeg * Math.PI / 180;
+  const undersideContactOffset = 0.4 * Math.tan(pitchRad) - 0.12 / Math.cos(pitchRad) - 0.006;
   const center = roof.ridgeAxis === 'x' ? (roof.y1 + roof.y2) / 2 : (roof.x1 + roof.x2) / 2;
   const halfSpan = roof.ridgeAxis === 'x' ? (roof.y2 - roof.y1) / 2 : (roof.x2 - roof.x1) / 2;
   const coordinate = roof.ridgeAxis === 'x' ? y : x;
   const riseUnits = Math.max(0, halfSpan - Math.abs(coordinate - center));
-  return base + riseUnits / GRID * Math.tan(roof.pitchDeg * Math.PI / 180);
+  return base + riseUnits / GRID * Math.tan(pitchRad) + undersideContactOffset;
 }
 
 export function atticWallExtensionAreaMeters(wall: Wall, roof: Roof): number {
