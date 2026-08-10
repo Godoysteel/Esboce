@@ -315,7 +315,8 @@ export function compute(): ComputeResult {
       floor.openings.forEach(function (op) {
         if (op.wallId === w.id) openingsArea += op.width * op.height;
       });
-      const faceArea = Math.max(0, lenM * effectiveWallHeight - openingsArea);
+      const atticExtensionArea = atticRoof ? Core.atticWallExtensionAreaMeters(w, atticRoof) : 0;
+      const faceArea = Math.max(0, lenM * effectiveWallHeight + atticExtensionArea - openingsArea);
       totals.wallAreaNet += faceArea;
       if (w.finishA) addTo(paint, w.finishA, faceArea);
       if (w.finishB) addTo(paint, w.finishB, faceArea);
@@ -377,7 +378,7 @@ export function compute(): ComputeResult {
       // O oitão é alvenaria derivada do telhado: entra como parede, mas
       // não participa do contorno dos cômodos. Duas águas possui duas
       // faces triangulares/retangulares iguais, uma em cada empena.
-      if (roof.type === 'duasAguas') {
+      if (roof.type === 'duasAguas' && roof.atticMode !== 'generated') {
         const oneGableArea = gableAreaMeters(roof);
         totals.wallAreaNet += oneGableArea * 2;
         if (roof.gableFinishA) addTo(paint, roof.gableFinishA, oneGableArea);

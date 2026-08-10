@@ -638,6 +638,48 @@ export function hashColorHex(key: string): number {
     return new THREE.Mesh(geo, mat);
   }
 
+  // Complemento superior de uma parede de ático. Em vez de baixar toda
+  // parede até o beiral, cria somente a porção entre o beiral e as águas.
+  // O perfil é dividido na cumeeira quando a parede a atravessa, produzindo
+  // o recorte triangular/trapezoidal equivalente a uma booleana.
+  function buildAtticWallExtensions(wall: any, roof: any, scale: number, offsetX: number, offsetY: number, yOffset: number, mat: any) {
+    var base = roof.baseHeightM || 1.2;
+    var centerCoord = roof.ridgeAxis === 'x' ? (roof.y1 + roof.y2) / 2 : (roof.x1 + roof.x2) / 2;
+    var halfSpan = roof.ridgeAxis === 'x' ? (roof.y2 - roof.y1) / 2 : (roof.x2 - roof.x1) / 2;
+    var c1 = roof.ridgeAxis === 'x' ? wall.y1 : wall.x1;
+    var c2 = roof.ridgeAxis === 'x' ? wall.y2 : wall.x2;
+    var ts = [0, 1];
+    if (Math.abs(c2 - c1) > 1e-6) {
+      var ridgeT = (centerCoord - c1) / (c2 - c1);
+      if (ridgeT > 1e-5 && ridgeT < 1 - 1e-5) ts.push(ridgeT);
+    }
+    ts.sort(function (a, b) { return a - b; });
+    function pointAt(t: number) { return { x: wall.x1 + (wall.x2 - wall.x1) * t, y: wall.y1 + (wall.y2 - wall.y1) * t }; }
+    function heightAt(p: any) {
+      var coord = roof.ridgeAxis === 'x' ? p.y : p.x;
+      var riseUnits = Math.max(0, halfSpan - Math.abs(coord - centerCoord));
+      return base + riseUnits / Core.GRID * Math.tan(roof.pitchDeg * Math.PI / 180);
+    }
+    var dx = wall.x2 - wall.x1, dy = wall.y2 - wall.y1, len = Math.hypot(dx, dy);
+    if (len < 1e-6) return [];
+    var nx = -dy / len * Core.WALL_THICK / 2 * scale, nz = dx / len * Core.WALL_THICK / 2 * scale;
+    return ts.slice(0, -1).map(function (t0, index) {
+      var t1 = ts[index + 1]!, a = pointAt(t0), b = pointAt(t1);
+      var ax = (a.x - offsetX) * scale, az = (a.y - offsetY) * scale;
+      var bx = (b.x - offsetX) * scale, bz = (b.y - offsetY) * scale;
+      var low = yOffset + base, ah = yOffset + heightAt(a), bh = yOffset + heightAt(b);
+      var vertices = new Float32Array([
+        ax+nx,low,az+nz, ax-nx,low,az-nz, bx+nx,low,bz+nz, bx-nx,low,bz-nz,
+        ax+nx,ah,az+nz,  ax-nx,ah,az-nz,  bx+nx,bh,bz+nz, bx-nx,bh,bz-nz
+      ]);
+      var indices = [0,2,6,0,6,4, 1,5,7,1,7,3, 0,4,5,0,5,1, 2,3,7,2,7,6, 4,6,7,4,7,5, 0,1,3,0,3,2];
+      var geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+      geo.setIndex(indices); geo.computeVertexNormals();
+      return new THREE.Mesh(geo, mat);
+    });
+  }
+
   // Face superior visível da parede. Ela reutiliza o footprint resolvido
   // pelo Core sem aumentar comprimento, largura ou altura; assim a cinta
   // acompanha quinas, fusões e junções da v14 sem criar outro volume.
@@ -2279,8 +2321,29 @@ export function hashColorHex(key: string): number {
           var topCapMesh = tagCategory(buildWallTopCapMesh(fp, yOffset + renderedWallHeight, topMat), wallCategory);
           topCapMesh.userData.wallId = w.id;
           topCapMesh.userData.floorIndex = floorIdx;
-          scene.add(topCapMesh);
-          registry.wallMeshes.push(topCapMesh);
+          if (!generatedAtticRoof) {
+            scene.add(topCapMesh);
+            registry.wallMeshes.push(topCapMesh);
+          }
+
+          if (generatedAtticRoof) {
+            var atticExtensionMat = new THREE.MeshStandardMaterial({
+              color: highlighted ? SELECTED_ACCENT : GABLE_COLOR,
+              side: THREE.DoubleSide,
+              flatShading: true,
+              roughness: 0.92
+            });
+            buildAtticWallExtensions(w, generatedAtticRoof, scale, offsetX, offsetY, yOffset, atticExtensionMat).forEach(function (extension) {
+              tagCategory(extension, wallCategory);
+              extension.userData.wallId = w.id;
+              extension.userData.floorIndex = floorIdx;
+              scene.add(extension);
+              registry.wallMeshes.push(extension);
+              var extensionEdges = new THREE.LineSegments(new THREE.EdgesGeometry(extension.geometry), new THREE.LineBasicMaterial({ color: 0x777873 }));
+              scene.add(extensionEdges);
+              registry.wallMeshes.push(extensionEdges);
+            });
+          }
 
           // As duas faces (lado A / lado B), cada uma com seu próprio
           // acabamento do Catálogo — mesmo contorno fp de cima, então
@@ -2406,6 +2469,7 @@ export function hashColorHex(key: string): number {
             return regions.concat(roofCutRegions(other, scale, offsetX, offsetY, roofTopY));
           }, []);
           pieces.forEach(function (m) {
+            if (roof.atticMode === 'generated' && m.userData.gableSide) return;
             clipMeshOutsideRects(m, trimRects);
             tagCategory(m, m.userData.gableSide ? wallCategory : 'telhado');
             m.userData.roofId = roof.id; m.userData.floorIndex = floorIdx;
