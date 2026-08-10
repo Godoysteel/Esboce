@@ -111,6 +111,7 @@ export class EsboceApplication {
     this.initializeControllers();
     this.bindApplicationEvents();
     this.setupAuthModal();
+    this.setupDisclaimerOverlay();
     this.refreshAccountButton();
     // createInitialRoom() removido de propósito — viewport deve começar
     // vazia, sem nenhum cômodo pré-criado; o método continua disponível
@@ -486,6 +487,35 @@ export class EsboceApplication {
       this.pendingAuthResolve = resolve;
       this.pendingAuthReject = reject;
       this.openAuthModal();
+    });
+  }
+
+  // Aviso de responsabilidade técnica (ADR-006) — aparece na primeira
+  // carga do navegador/perfil, some com um clique consciente em
+  // "Entendi" e fica lembrado em localStorage (não é sessionStorage de
+  // propósito: a intenção é mostrar uma vez só por navegador, não a
+  // cada aba/sessão nova). Falha de localStorage bloqueado/indisponível
+  // (modo privado restrito, por exemplo) não impede o app de
+  // funcionar — só faz o aviso aparecer de novo na próxima carga.
+  private static readonly DISCLAIMER_DISMISSED_KEY = "esboce_disclaimer_dismissed_v1";
+
+  private setupDisclaimerOverlay(): void {
+    const overlay = this.requireElement("disclaimerOverlay");
+    const dismissBtn = this.requireElement("disclaimerDismissBtn");
+    let alreadyDismissed = false;
+    try {
+      alreadyDismissed = localStorage.getItem(EsboceApplication.DISCLAIMER_DISMISSED_KEY) === "1";
+    } catch (err) {
+      console.warn("Não deu pra ler localStorage — aviso de responsabilidade vai aparecer sempre:", err);
+    }
+    if (!alreadyDismissed) overlay.classList.add("visible");
+    dismissBtn.addEventListener("click", () => {
+      overlay.classList.remove("visible");
+      try {
+        localStorage.setItem(EsboceApplication.DISCLAIMER_DISMISSED_KEY, "1");
+      } catch (err) {
+        console.warn("Não deu pra gravar localStorage — aviso de responsabilidade vai aparecer de novo na próxima carga:", err);
+      }
     });
   }
 

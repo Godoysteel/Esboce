@@ -39,6 +39,10 @@ Criada a primeira baseline de engenharia do projeto.
 
 # Não lançado
 
+## Adicionado (aviso de responsabilidade técnica)
+
+- **Card de boas-vindas com aviso de responsabilidade técnica**, centralizado sobre a viewport ao abrir o Esboce — implementa o que a ADR-006 já exigia ("o aviso não deve ficar escondido") mas nunca tinha ganhado UI. Dois parágrafos: o primeiro explica pra que o Esboce se propõe (desenhar a casa em 3D, escolher acabamento/produto de fornecedor real, quantitativo de materiais e estimativa de orçamento), o segundo deixa claro que é um complemento, não substitui arquiteto/engenheiro. Some com um clique consciente em "Entendi" (não fecha sozinho); a escolha fica lembrada por navegador (localStorage), não reaparece a cada carregamento. Paleta própria — vermelho-vinho + dourado — deliberadamente diferente do resto do app, pra se destacar. Sem fundo opaco cobrindo a viewport (backdrop leve só), coerente com o princípio de nenhum elemento tampar a cena 3D por completo. Ver DEC-46 no Registro de Decisões Técnicas.
+
 ## Documentação
 
 - Fechada a pendência "fundação pra Laje" (registrada na DEC-42/DEC-43): definido que **Laje é sempre entrepiso** — nunca fica em contato com o solo, nunca gera fundação própria. Laje em contato com o solo já é responsabilidade do tipo de fundação **radier**, que já existe. Sem mudança de código — o comportamento atual já estava certo, só faltava essa definição registrada. Ver DEC-44 no Registro de Decisões Técnicas.
