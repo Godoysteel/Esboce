@@ -45,6 +45,12 @@ export interface Roof {
   compoundGroupId?: string;
   /** Altura do parapeito acima do topo da parede, em metros — só relevante pra type === 'platibanda'. */
   parapetHeight?: number;
+  /** Fluxo paramétrico do ático: prévia transparente ou recorte confirmado. */
+  atticMode?: 'preview' | 'generated';
+  /** Altura do beiral em relação ao piso do pavimento, em metros. */
+  baseHeightM?: number;
+  /** Paredes controladas por este ático após a confirmação. */
+  atticWallIds?: string[];
 }
 
 export type VarandaFrontSide = 'minZ' | 'maxZ' | 'minX' | 'maxX';
@@ -104,9 +110,14 @@ export interface Opening {
   sillHeight: number;
 }
 
+export type FloorKind = 'standard' | 'attic';
+
 export interface Floor {
   id: string;
   name: string;
+  kind: FloorKind;
+  /** Altura das paredes laterais do ático antes do início da cobertura. */
+  wallHeightM?: number;
   walls: Wall[];
   columns: Column[];
   roofs: Roof[];

@@ -75,7 +75,8 @@ export function createColumnEntity(x: number, y: number, shape?: ColumnShape, id
 
 export function createRoofEntity(
   x1: number, y1: number, x2: number, y2: number,
-  type?: RoofType, pitchDeg?: number, ridgeAxis?: RidgeAxis, id?: string, parapetHeight?: number
+  type?: RoofType, pitchDeg?: number, ridgeAxis?: RidgeAxis, id?: string, parapetHeight?: number,
+  atticMode?: 'preview' | 'generated', baseHeightM?: number
 ): Roof {
   return {
     id: id || nextId('roof'), x1, y1, x2, y2,
@@ -84,8 +85,57 @@ export function createRoofEntity(
     ridgeAxis: ridgeAxis || 'x',
     // Só relevante pra type === 'platibanda' — altura do parapeito acima
     // do topo da parede, ajustável pela alça de seleção.
-    parapetHeight: parapetHeight != null ? parapetHeight : 0.5
+    parapetHeight: parapetHeight != null ? parapetHeight : 0.5,
+    ...(atticMode ? { atticMode, baseHeightM: baseHeightM != null ? baseHeightM : 1.2 } : {})
   };
+}
+
+export function wallIntersectsRoofFootprint(wall: Wall, roof: Roof): boolean {
+  const inside = (x: number, y: number) => x >= roof.x1 && x <= roof.x2 && y >= roof.y1 && y <= roof.y2;
+  if (inside(wall.x1, wall.y1) || inside(wall.x2, wall.y2)) return true;
+  const mx = (wall.x1 + wall.x2) / 2, my = (wall.y1 + wall.y2) / 2;
+  if (inside(mx, my)) return true;
+  const minX = Math.min(wall.x1, wall.x2), maxX = Math.max(wall.x1, wall.x2);
+  const minY = Math.min(wall.y1, wall.y2), maxY = Math.max(wall.y1, wall.y2);
+  return maxX >= roof.x1 && minX <= roof.x2 && maxY >= roof.y1 && minY <= roof.y2;
+}
+
+export function roofHeightAtModelPoint(roof: Roof, x: number, y: number): number {
+  const base = roof.baseHeightM ?? 1.2;
+  // A malha da cobertura cresce 40 cm além da projeção e é extrudada
+  // 12 cm para baixo. A parede deve encontrar a face inferior real,
+  // não o plano abstrato que começa no limite do footprint.
+  const pitchRad = roof.pitchDeg * Math.PI / 180;
+  const undersideContactOffset = 0.4 * Math.tan(pitchRad) - 0.12 / Math.cos(pitchRad) - 0.006;
+  const center = roof.ridgeAxis === 'x' ? (roof.y1 + roof.y2) / 2 : (roof.x1 + roof.x2) / 2;
+  const halfSpan = roof.ridgeAxis === 'x' ? (roof.y2 - roof.y1) / 2 : (roof.x2 - roof.x1) / 2;
+  const coordinate = roof.ridgeAxis === 'x' ? y : x;
+  const riseUnits = Math.max(0, halfSpan - Math.abs(coordinate - center));
+  return base + riseUnits / GRID * Math.tan(pitchRad) + undersideContactOffset;
+}
+
+export function atticWallExtensionAreaMeters(wall: Wall, roof: Roof): number {
+  const coordinate1 = roof.ridgeAxis === 'x' ? wall.y1 : wall.x1;
+  const coordinate2 = roof.ridgeAxis === 'x' ? wall.y2 : wall.x2;
+  const center = roof.ridgeAxis === 'x' ? (roof.y1 + roof.y2) / 2 : (roof.x1 + roof.x2) / 2;
+  const ts = [0, 1];
+  if (Math.abs(coordinate2 - coordinate1) > 1e-6) {
+    const ridgeT = (center - coordinate1) / (coordinate2 - coordinate1);
+    if (ridgeT > 0 && ridgeT < 1) ts.push(ridgeT);
+  }
+  ts.sort((a, b) => a - b);
+  const totalLengthM = wallLengthMeters(wall);
+  const base = roof.baseHeightM ?? 1.2;
+  let area = 0;
+  for (let i = 0; i < ts.length - 1; i++) {
+    const t0 = ts[i]!, t1 = ts[i + 1]!;
+    const p0 = { x: wall.x1 + (wall.x2 - wall.x1) * t0, y: wall.y1 + (wall.y2 - wall.y1) * t0 };
+    const p1 = { x: wall.x1 + (wall.x2 - wall.x1) * t1, y: wall.y1 + (wall.y2 - wall.y1) * t1 };
+    const rise0 = Math.max(0, roofHeightAtModelPoint(roof, p0.x, p0.y) - base);
+    const rise1 = Math.max(0, roofHeightAtModelPoint(roof, p1.x, p1.y) - base);
+    area += totalLengthM * (t1 - t0) * (rise0 + rise1) / 2;
+  }
+  return area;
 }
 
 export function createVarandaEntity(
@@ -119,8 +169,8 @@ export function lajeBounds(laje: Laje): { minX: number; maxX: number; minY: numb
   return { minX, maxX, minY, maxY };
 }
 
-export function createFloorEntity(name: string): Floor {
-  return { id: nextId('floor'), name, walls: [], columns: [], roofs: [], openings: [], varandas: [], lajes: [], furniture: [], roomFinishes: {}, roomFinishSettings: {} };
+export function createFloorEntity(name: string, kind: Floor['kind'] = 'standard'): Floor {
+  return { id: nextId('floor'), name, kind, walls: [], columns: [], roofs: [], openings: [], varandas: [], lajes: [], furniture: [], roomFinishes: {}, roomFinishSettings: {} };
 }
 
 // x,y: posição do "pé" do móvel no plano do pavimento. rotationDeg: passos
@@ -1371,7 +1421,7 @@ export const Core = {
   wallResizeEndpointNeedsBridge,
   distPointToLine, wallOBB, furnitureOBB, openingOBB, obbOverlapMTV, wallOverlapsForeignOpening, resolveWallOffsetAgainstOpenings, wallsCanFuse, wallsMeetAtEndpoint, resolveWallGroupGridDelta,
   findWallTJunctionSplits,
-  createWallEntity, createColumnEntity, createRoofEntity, createVarandaEntity, createLajeEntity, createFloorEntity,
+  createWallEntity, createColumnEntity, createRoofEntity, wallIntersectsRoofFootprint, roofHeightAtModelPoint, atticWallExtensionAreaMeters, createVarandaEntity, createLajeEntity, createFloorEntity,
   createFurnitureEntity,
   createProject, distToSegment, projectOnSegment, detectRooms
 };

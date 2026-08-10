@@ -17,6 +17,7 @@ import {
 import type { FoundationQuantity } from './QuantityGeometry.js';
 import type { Point, Wall, Roof, Column, Laje, Project } from './types.js';
 import { constructionSystemDefinition, hasCeramicMasonryEstimate } from './ConstructionSystem.js';
+import { floorWallHeight } from './Attic.js';
 
 let bodyEl: HTMLElement | null, panelEl: HTMLElement | null;
 
@@ -288,7 +289,8 @@ function computeFoundation(project: Project): Foundation {
 // que já foi construído embaixo).
 export function compute(): ComputeResult {
   const project = Store.getProject();
-  const wallHeight = Scene3DRenderer.WALL_HEIGHT_GETTER();
+  const standardWallHeight = Scene3DRenderer.WALL_HEIGHT_GETTER();
+  let estimatedPilareteVolume = 0;
   const totals: Totals = {
     wallLength: 0, wallAreaNet: 0, floorArea: 0, baseboard: 0, roofArea: 0,
     doors: 0, windows: 0, arcos: 0, soleiraCount: 0, soleiraLength: 0,
@@ -300,17 +302,21 @@ export function compute(): ComputeResult {
   const paint: Record<string, number> = {}, floorTile: Record<string, number> = {}, roofTile: Record<string, number> = {};
 
   project.floors.forEach(function (floor) {
+    const currentWallHeight = floorWallHeight(floor, standardWallHeight);
     // Paredes: comprimento total + área a pintar (por face, descontando
     // a área das aberturas que atravessam a parede) + área líquida (uma
     // vez só, não por face — é a base do cálculo de alvenaria).
     floor.walls.forEach(function (w) {
       const lenM = Core.wallLengthMeters(w);
       totals.wallLength += lenM;
+      const atticRoof = (floor.roofs || []).find((roof) => roof.atticMode === 'generated' && (roof.atticWallIds || []).includes(w.id));
+      const effectiveWallHeight = atticRoof ? (atticRoof.baseHeightM || 1.2) : currentWallHeight;
       let openingsArea = 0;
       floor.openings.forEach(function (op) {
         if (op.wallId === w.id) openingsArea += op.width * op.height;
       });
-      const faceArea = Math.max(0, lenM * wallHeight - openingsArea);
+      const atticExtensionArea = atticRoof ? Core.atticWallExtensionAreaMeters(w, atticRoof) : 0;
+      const faceArea = Math.max(0, lenM * effectiveWallHeight + atticExtensionArea - openingsArea);
       totals.wallAreaNet += faceArea;
       if (w.finishA) addTo(paint, w.finishA, faceArea);
       if (w.finishB) addTo(paint, w.finishB, faceArea);
@@ -372,7 +378,7 @@ export function compute(): ComputeResult {
       // O oitão é alvenaria derivada do telhado: entra como parede, mas
       // não participa do contorno dos cômodos. Duas águas possui duas
       // faces triangulares/retangulares iguais, uma em cada empena.
-      if (roof.type === 'duasAguas') {
+      if (roof.type === 'duasAguas' && roof.atticMode !== 'generated') {
         const oneGableArea = gableAreaMeters(roof);
         totals.wallAreaNet += oneGableArea * 2;
         if (roof.gableFinishA) addTo(paint, roof.gableFinishA, oneGableArea);
@@ -385,7 +391,7 @@ export function compute(): ComputeResult {
     // e do pé-direito do pavimento.
     (floor.columns || []).forEach(function (col) {
       totals.columnCount++;
-      totals.columnVolume += columnVolumeM3(col, wallHeight);
+      totals.columnVolume += columnVolumeM3(col, currentWallHeight);
     });
 
     // Laje (elemento independente, arrastável) — volume = área do
@@ -413,7 +419,9 @@ export function compute(): ComputeResult {
       const lenM = Core.wallLengthMeters(w);
       extraSpanColumns += Math.floor(lenM / COLUMN_MAX_SPAN_M);
     });
-    totals.estimatedColumnCount += junctions + extraSpanColumns;
+    const estimatedCountForFloor = junctions + extraSpanColumns;
+    totals.estimatedColumnCount += estimatedCountForFloor;
+    estimatedPilareteVolume += estimatedCountForFloor * COLUMN_SECTION_M * COLUMN_SECTION_M * currentWallHeight;
   });
 
   // Alvenaria — derivada da área líquida de parede, aplicando os índices
@@ -434,7 +442,7 @@ export function compute(): ComputeResult {
   // taxa de superestrutura. Viga de cinta/amarração: acompanha TODO o
   // comprimento de parede já somado (totals.wallLength), seção
   // espessura-da-parede × BEAM_HEIGHT_M.
-  const pilareteVolume = totals.estimatedColumnCount * COLUMN_SECTION_M * COLUMN_SECTION_M * wallHeight;
+  const pilareteVolume = estimatedPilareteVolume;
   const beamVolume = totals.wallLength * Core.WALL_THICK * BEAM_HEIGHT_M;
   const vergaVolume = totals.vergaSpanM * Core.WALL_THICK * BEAM_HEIGHT_M;
   const structure: Structure = {

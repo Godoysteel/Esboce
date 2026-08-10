@@ -2,7 +2,7 @@ import type {
   Column, Floor, Furniture, Laje, Opening, Project, ProjectLayers, Roof, Varanda, Wall,
 } from './types.js';
 
-export const CURRENT_PROJECT_SCHEMA_VERSION = 2;
+export const CURRENT_PROJECT_SCHEMA_VERSION = 4;
 
 export interface StoredProjectDocument {
   schemaVersion: number;
@@ -112,9 +112,14 @@ function parseRoof(value: unknown, path: string): Roof {
     gableFinishA: optionalString(v.gableFinishA, `${path}.gableFinishA`),
     gableFinishB: optionalString(v.gableFinishB, `${path}.gableFinishB`),
     compoundGroupId: optionalString(v.compoundGroupId, `${path}.compoundGroupId`),
+    atticMode: v.atticMode == null ? undefined : enumValue(v.atticMode, ['preview', 'generated'], `${path}.atticMode`),
   };
   for (const [key, item] of Object.entries(optionalFields)) {
     if (item !== undefined) (roof as unknown as Record<string, unknown>)[key] = item;
+  }
+  if (roof.atticMode) {
+    roof.baseHeightM = number(v.baseHeightM, `${path}.baseHeightM`, 1.2);
+    roof.atticWallIds = array(v.atticWallIds, `${path}.atticWallIds`, true).map((id, index) => string(id, `${path}.atticWallIds[${index}]`));
   }
   return roof;
 }
@@ -187,6 +192,7 @@ function parseFloor(value: unknown, path: string): Floor {
   const floor: Floor = {
     id: string(v.id, `${path}.id`),
     name: string(v.name, `${path}.name`, 'Pavimento'),
+    kind: enumValue(v.kind, ['standard', 'attic'], `${path}.kind`, 'standard'),
     walls: array(v.walls, `${path}.walls`, true).map((item, i) => parseWall(item, `${path}.walls[${i}]`)),
     columns: array(v.columns, `${path}.columns`, true).map((item, i) => parseColumn(item, `${path}.columns[${i}]`)),
     roofs: array(v.roofs, `${path}.roofs`, true).map((item, i) => parseRoof(item, `${path}.roofs[${i}]`)),
@@ -197,6 +203,7 @@ function parseFloor(value: unknown, path: string): Floor {
     roomFinishes: stringMap(v.roomFinishes, `${path}.roomFinishes`),
     roomFinishSettings: settingsMap(v.roomFinishSettings, `${path}.roomFinishSettings`),
   };
+  if (floor.kind === 'attic') floor.wallHeightM = number(v.wallHeightM, `${path}.wallHeightM`, 1.2);
   const wallIds = new Set(floor.walls.map((wall) => wall.id));
   floor.openings.forEach((opening, index) => {
     if (!wallIds.has(opening.wallId)) fail(`${path}.openings[${index}].wallId`, 'parede hospedeira não existe');

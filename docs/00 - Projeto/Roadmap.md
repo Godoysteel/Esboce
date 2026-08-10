@@ -13,7 +13,7 @@ O Esboce está em **estabilização pré-comercial**. O editor paramétrico, o v
 Baseline verificada em 10/08/2026:
 
 - produção em `https://esboce.com.br`;
-- 91 testes automatizados;
+- 97 testes automatizados;
 - CI com testes, TypeScript e build antes do deploy;
 - projetos versionados e validados no Supabase, com backup JSON;
 - Termos, Privacidade e aceite jurídico versionado;
@@ -25,7 +25,7 @@ Baseline verificada em 10/08/2026:
 
 - cômodos e paredes paramétricos, snapping estrutural e proteção de topologia;
 - portas, janelas e arcos vinculados a paredes, com afastamentos e proteção contra interseções;
-- pavimentos, lajes, varandas, fundações e coberturas compostas;
+- pavimentos comuns e configuração livre de ático/chalé por nível, com parede lateral baixa, lajes, fundações e coberturas compostas;
 - materiais por superfície, móveis GLTF, colisão e arraste;
 - quantitativos de alvenaria, fundação, estrutura, laje, verga, telhado e madeiramento;
 - exportação de planilha/CSV e aviso de responsabilidade técnica.
@@ -76,6 +76,7 @@ Critérios para iniciar um piloto com usuários convidados:
 - orçamento por loja e catálogo multi-loja conforme ADR-007;
 - refinamento estrutural para telhas metálicas, fibrocimento e shingle;
 - tratamento de junções de cobertura com três ou mais águas;
+- recorte de portas e janelas diretamente nos oitões triangulares do ático;
 - histórico/redo completo e evolução do modelo de eventos;
 - contextos de domínio separados para Wall, Room, Roof, Foundation, Catalog, Budget e Simulation;
 - evolução para o Modelo Digital da Residência e motores inteligentes descritos na visão de longo prazo.

@@ -278,6 +278,26 @@ export class EsboceApplication {
       Store.commands.addFloor();
       ViewportController.deselect();
     });
+    this.requireElement("toolTelhado").addEventListener("click", () => {
+      ViewportController.setNextRoofAtticMode(false);
+      this.requireElement("atticModeOverlay").style.display = "flex";
+    });
+    this.requireElement("atticModeClose").addEventListener("click", () => {
+      this.requireElement("atticModeOverlay").style.display = "none";
+    });
+    const atticTitle = this.requireElement("atticModeTitle");
+    atticTitle.textContent = "Como será esta cobertura?";
+    const atticButtons = Array.from(document.querySelectorAll<HTMLElement>("[data-attic-mode]"));
+    if (atticButtons[0]) atticButtons[0].textContent = "Ático / chalé";
+    if (atticButtons[1]) atticButtons[1].style.display = "none";
+    if (atticButtons[2]) atticButtons[2].textContent = "Telhado normal";
+    atticButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        const mode = button.dataset.atticMode;
+        ViewportController.setNextRoofAtticMode(mode !== "standard");
+        this.requireElement("atticModeOverlay").style.display = "none";
+      });
+    });
     this.requireElement("undoBtn").addEventListener("click", () => Store.commands.undo());
     // Painel de visualização (3D/2D/Orbit/Medir, canto direito) — só
     // "Orbit" faz algo de verdade por ora (recentraliza a câmera). "3D"
