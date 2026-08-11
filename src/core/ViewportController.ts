@@ -86,6 +86,7 @@ import {
   var roomGroupDragObjects: { object: any; startX: number; startZ: number }[] = [];
   var furnitureDragObject: any = null;
   var columnDragObjects: { object: any; startX: number; startZ: number }[] = [];
+  var lajeDragObjects: { object: any; startX: number; startZ: number }[] = [];
   var pendingRoofAttic = false;
   var pendingGenerateRoofId: any = null;
   var generateAtticBtnEl: any = null;
@@ -194,6 +195,23 @@ import {
       return object.userData && object.userData.columnId === id;
     }).map(function (object: any) {
       return { object: object, startX: object.position.x, startZ: object.position.z };
+    });
+  }
+
+  function collectLajeDragObjects(id: string) {
+    lajeDragObjects = scene.children.filter(function (object: any) {
+      var data = object.userData || {};
+      return data.lajeId === id || (typeof data.handle === 'string' && data.handle.indexOf('lajeEdge') === 0);
+    }).map(function (object: any) {
+      return { object: object, startX: object.position.x, startZ: object.position.z };
+    });
+  }
+
+  function previewLajeDelta(dx: number, dy: number) {
+    var worldDx = dx * scale, worldDz = dy * scale;
+    lajeDragObjects.forEach(function (entry) {
+      entry.object.position.x = entry.startX + worldDx;
+      entry.object.position.z = entry.startZ + worldDz;
     });
   }
 
@@ -1399,11 +1417,15 @@ import {
         } else if (mesh.userData.varandaId) {
           selectVaranda(mesh.userData.varandaId);
         } else if (mesh.userData.lajeId) {
-          selectLaje(mesh.userData.lajeId);
+          var lajeId = mesh.userData.lajeId;
+          selectLaje(lajeId);
           dragMode = 'lajeBody';
-          var lEnt = Store.findLaje(mesh.userData.lajeId)!;
-          dragElementStart = { points: lEnt.points.map(function (p: any) { return { x: p.x, y: p.y }; }) };
+          var lEnt = Store.findLaje(lajeId)!;
+          dragElementStart = { points: lEnt.points.map(function (p: any) { return { x: p.x, y: p.y }; }), lastDx: 0, lastDy: 0 };
           dragGroundStart = getGroundModelPoint(e.clientX, e.clientY);
+          // selectLaje reconstrói a cena; captura o volume e as alças
+          // recém-criados, nunca o mesh antigo atingido pelo raycast.
+          collectLajeDragObjects(lajeId);
           Store.commands.beginTransaction();
         } else if (mesh.userData.furnitureId) {
           var furnitureId = mesh.userData.furnitureId;
@@ -2022,8 +2044,9 @@ import {
         var rawDyL = Core.snap(gpLB.y - dragGroundStart.y);
         var origBoundsL = Core.lajeBounds({ id: '', points: dragElementStart.points } as any);
         var snapped = snapLajeBodyDelta(selectedLajeId, rawDxL, rawDyL, origBoundsL);
-        var movedPts = dragElementStart.points.map(function (p: any) { return { x: p.x + snapped.dx, y: p.y + snapped.dy }; });
-        Store.commands.updateLajePointsLive(selectedLajeId, movedPts);
+        dragElementStart.lastDx = snapped.dx;
+        dragElementStart.lastDy = snapped.dy;
+        previewLajeDelta(snapped.dx, snapped.dy);
       }
       return;
     }
@@ -2276,7 +2299,18 @@ import {
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }
-    if (dragMode === 'lajeBody' || dragMode === 'openingSlide' || dragMode === 'openingEdgeLeft' || dragMode === 'openingEdgeRight' || dragMode === 'openingEdgeTop' || (dragMode && dragMode.indexOf('varandaEdge') === 0)) {
+    if (dragMode === 'lajeBody') {
+      if (selectedLajeId && dragElementStart) {
+        var finalLajePoints = dragElementStart.points.map(function (p: any) {
+          return { x: p.x + dragElementStart.lastDx, y: p.y + dragElementStart.lastDy };
+        });
+        Store.commands.updateLajePointsLive(selectedLajeId, finalLajePoints);
+      }
+      lajeDragObjects = [];
+      dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
+      return;
+    }
+    if (dragMode === 'openingSlide' || dragMode === 'openingEdgeLeft' || dragMode === 'openingEdgeRight' || dragMode === 'openingEdgeTop' || (dragMode && dragMode.indexOf('varandaEdge') === 0)) {
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }
