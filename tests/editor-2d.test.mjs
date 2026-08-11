@@ -27,9 +27,34 @@ test('primeira fase representa pilares, lajes, terreno, muros e telhados', () =>
   }
 });
 
-test('viewport 2D oferece zoom e pan sem alterar coordenadas do projeto', () => {
+test('viewport 2D oferece zoom e pan sem alterar coordenadas durante a navegação', () => {
   assert.match(controller, /addEventListener\('wheel'/);
   assert.match(controller, /addEventListener\('pointermove'/);
   assert.match(controller, /setAttribute\('viewBox'/);
-  assert.doesNotMatch(controller, /Store\.commands\./);
+  assert.match(renderer, /Store\.getProject\(\)/);
+  assert.doesNotMatch(renderer, /Store\.commands\./);
+});
+
+test('fase 2 inicia seleção e criação pelo mesmo domínio geométrico', () => {
+  assert.match(renderer, /data-wall-id/);
+  assert.match(renderer, /scene2d-selected/);
+  assert.match(controller, /Core\.findIsolatedRoomWallIds\(Store\.currentWalls\(\), wallId\)/);
+  assert.match(controller, /Store\.commands\.createRoom\(/);
+  assert.match(controller, /Store\.commands\.splitWallsAtTJunctions\(\)/);
+});
+
+test('criação 2D usa snap, prévia local e confirmação somente no segundo clique', () => {
+  assert.match(controller, /Core\.snap\(model\.x\)/);
+  assert.match(controller, /drawPreview/);
+  assert.match(renderer, /scene2d-room-preview/);
+  assert.match(controller, /if \(!this\.drawStart\)/);
+});
+
+test('cômodo isolado arrasta individualmente com prévia local e confirmação única', () => {
+  assert.match(controller, /private roomDrag:/);
+  assert.match(controller, /snapshots: WallSnapshot\[\]/);
+  assert.match(controller, /this\.roomDrag\.dx = Core\.snap/);
+  assert.match(renderer, /scene2d-drag-preview/);
+  assert.match(controller, /Store\.commands\.beginTransaction\(\)/);
+  assert.match(controller, /Store\.commands\.updateWallsGroupBodyLive\(drag\.snapshots, drag\.dx, drag\.dy\)/);
 });
