@@ -106,6 +106,23 @@ test('arraste de movel usa previa 3D e confirma o Store somente ao soltar', () =
   assert.match(pointerUpFlow, /furnitureDragObject = null/);
 });
 
+test('arraste de coluna move volume e contorno sem atualizar o Store a cada quadro', () => {
+  assert.match(viewportControllerSource, /function collectColumnDragObjects\(id: string\)/);
+  assert.match(viewportControllerSource, /selectColumn\(columnId\);[\s\S]{0,500}collectColumnDragObjects\(columnId\)/);
+
+  const moveStart = viewportControllerSource.indexOf("if (dragMode === 'columnBody') {");
+  const moveEnd = viewportControllerSource.indexOf("if (dragMode === 'furnitureBody')", moveStart);
+  const pointerMoveFlow = viewportControllerSource.slice(moveStart, moveEnd);
+  assert.match(pointerMoveFlow, /columnDragObjects\.forEach/);
+  assert.doesNotMatch(pointerMoveFlow, /updateColumnBodyLive/);
+
+  const upStart = viewportControllerSource.indexOf("if (dragMode === 'columnBody') {", moveEnd);
+  const upEnd = viewportControllerSource.indexOf("if (dragMode === 'lajeBody'", upStart);
+  const pointerUpFlow = viewportControllerSource.slice(upStart, upEnd);
+  assert.match(pointerUpFlow, /updateColumnBodyLive/);
+  assert.match(pointerUpFlow, /columnDragObjects = \[\]/);
+});
+
 test('qualquer ligacao externa desativa a selecao coletiva do comodo', () => {
   const walls = rectangle();
   walls.push({ id: 'external', x1: 40, y1: 0, x2: 40, y2: -40 });
