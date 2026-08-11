@@ -8,6 +8,7 @@ import { MaterialsSheet } from "../core/MaterialsSheet.js";
 import { NavGizmo } from "../core/NavGizmo.js";
 import { Store } from "../core/Store.js";
 import { ViewportController } from "../core/ViewportController.js";
+import { Viewport2DController } from "../core/Viewport2DController.js";
 import { ViewportStats } from "../core/ViewportStats.js";
 import { createSharedProject, loadSharedProject, updateSharedProject, deleteProject, signUpWithProfile, signIn, signOut, sendPasswordRecovery, updatePassword, onPasswordRecovery, reauthenticate, deleteCurrentAccount, getCurrentUser, listMyProjects, ensureProfileExists, hasCurrentLegalAcceptance, recordCurrentLegalAcceptance, listDepartments, listManufacturers, listCatalogProducts, type ProfileFields, type CatalogDepartment, type CatalogManufacturer, type CatalogProductWithDepartment } from "../core/SupabaseClient.js";
 import { renderCaptcha, requireCaptchaToken, resetCaptcha } from "../core/Turnstile.js";
@@ -27,6 +28,8 @@ export class EsboceApplication {
   private camera?: THREE.PerspectiveCamera;
   private renderer?: THREE.WebGLRenderer;
   private viewport?: HTMLElement;
+  private viewport2D?: Viewport2DController;
+  private viewMode: '2d' | '3d' = '3d';
   private readonly terrainGrid = new THREE.Group();
   private storeUpdateScheduled = false;
   // Id do projeto no Supabase — null enquanto ainda não foi salvo
@@ -253,6 +256,10 @@ export class EsboceApplication {
       scene: this.scene,
       renderer: this.renderer!,
     });
+    this.viewport2D = new Viewport2DController(
+      this.requireElement("viewport2D"),
+      this.requireElement("scene2D") as unknown as SVGSVGElement,
+    );
     FloorTabsController.init();
     LayersPanel.init();
     GizmoController.init();
@@ -305,6 +312,19 @@ export class EsboceApplication {
     // já nascem com `disabled` no HTML, então nem chegam a disparar
     // clique — ver DEC (fase 2) no Registro de Decisões Técnicas.
     const orbitBtn = this.requireElement("viewModeOrbitBtn");
+    const view3DBtn = this.requireElement("viewMode3DBtn");
+    const view2DBtn = this.requireElement("viewMode2DBtn");
+    const setViewMode = (mode: '2d' | '3d') => {
+      this.viewMode = mode;
+      view3DBtn.classList.toggle('active', mode === '3d');
+      view2DBtn.classList.toggle('active', mode === '2d');
+      if (mode === '2d') this.viewport2D?.show();
+      else this.viewport2D?.hide();
+      this.requireElement("navGizmoCanvas").style.visibility = mode === '3d' ? 'visible' : 'hidden';
+      orbitBtn.style.display = mode === '3d' ? '' : 'none';
+    };
+    view3DBtn.addEventListener('click', () => setViewMode('3d'));
+    view2DBtn.addEventListener('click', () => setViewMode('2d'));
     const touchFirst = window.matchMedia('(pointer: coarse)').matches;
     if (touchFirst) {
       orbitBtn.textContent = "CÃ¢mera";
@@ -323,8 +343,14 @@ export class EsboceApplication {
     // ViewportController.toggleLayersMenuAtElement). O rótulo de
     // porcentagem também atualiza sozinho durante scroll/pinch — ver
     // setOnZoomChanged, chamado logo abaixo no init.
-    this.requireElement("zoomInBtn").addEventListener("click", () => ViewportController.zoomIn());
-    this.requireElement("zoomOutBtn").addEventListener("click", () => ViewportController.zoomOut());
+    this.requireElement("zoomInBtn").addEventListener("click", () => {
+      if (this.viewMode === '2d') this.viewport2D?.zoomBy(0.85);
+      else ViewportController.zoomIn();
+    });
+    this.requireElement("zoomOutBtn").addEventListener("click", () => {
+      if (this.viewMode === '2d') this.viewport2D?.zoomBy(1.18);
+      else ViewportController.zoomOut();
+    });
     this.requireElement("fullscreenBtn").addEventListener("click", () => this.toggleFullscreen());
     this.requireElement("layersToggleBtn").addEventListener("click", (event) => {
       ViewportController.toggleLayersMenuAtElement(event.currentTarget as HTMLElement);
@@ -408,6 +434,7 @@ export class EsboceApplication {
       this.storeUpdateScheduled = false;
       FloorTabsController.refresh();
       ViewportController.onModelChanged();
+      if (this.viewMode === '2d') this.viewport2D?.render();
       MaterialsPanel.refresh();
       MaterialsSheet.refresh();
       ViewportStats.refresh();
