@@ -49,3 +49,12 @@ test('criação 2D usa snap, prévia local e confirmação somente no segundo cl
   assert.match(renderer, /scene2d-room-preview/);
   assert.match(controller, /if \(!this\.drawStart\)/);
 });
+
+test('cômodo isolado arrasta individualmente com prévia local e confirmação única', () => {
+  assert.match(controller, /private roomDrag:/);
+  assert.match(controller, /snapshots: WallSnapshot\[\]/);
+  assert.match(controller, /this\.roomDrag\.dx = Core\.snap/);
+  assert.match(renderer, /scene2d-drag-preview/);
+  assert.match(controller, /Store\.commands\.beginTransaction\(\)/);
+  assert.match(controller, /Store\.commands\.updateWallsGroupBodyLive\(drag\.snapshots, drag\.dx, drag\.dy\)/);
+});

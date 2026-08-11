@@ -1,6 +1,7 @@
 import { Core } from './Core.js';
 import { Scene2DRenderer } from './Scene2DRenderer.js';
 import { Store } from './Store.js';
+import type { WallSnapshot } from './types.js';
 
 type ViewBox = { x: number; y: number; width: number; height: number };
 
@@ -12,13 +13,25 @@ export class Viewport2DController {
   private selectedWallIds = new Set<string>();
   private drawStart: { x: number; y: number } | null = null;
   private drawPreview: { x1: number; y1: number; x2: number; y2: number } | undefined;
+  private roomDrag: {
+    pointerId: number;
+    start: { x: number; y: number };
+    snapshots: WallSnapshot[];
+    furnitureSnapshots: { id: string; x: number; y: number }[];
+    dx: number;
+    dy: number;
+  } | null = null;
 
   public constructor(private readonly container: HTMLElement, private readonly svg: SVGSVGElement) {
     this.renderer = new Scene2DRenderer(svg);
     this.bindNavigation();
   }
 
-  public render(): void { this.renderer.render(this.selectedWallIds, this.drawPreview); this.applyViewBox(); this.updateScaleLabel(); }
+  public render(): void {
+    this.renderer.render(this.selectedWallIds, this.drawPreview, this.roomDrag ?? undefined);
+    this.applyViewBox();
+    this.updateScaleLabel();
+  }
   public show(): void { this.container.hidden = false; this.fitProject(); this.render(); }
   public hide(): void { this.container.hidden = true; }
 
@@ -77,6 +90,28 @@ export class Viewport2DController {
       if (wallId) {
         const roomIds = Core.findIsolatedRoomWallIds(Store.currentWalls(), wallId);
         this.selectedWallIds = new Set(roomIds ?? [wallId]);
+        if (roomIds && event.button === 0) {
+          const snapshots = roomIds.map((id) => {
+            const wall = Store.findWall(id)!;
+            return { id, x1: wall.x1, y1: wall.y1, x2: wall.x2, y2: wall.y2 };
+          });
+          const xs = snapshots.flatMap((wall) => [wall.x1, wall.x2]);
+          const ys = snapshots.flatMap((wall) => [wall.y1, wall.y2]);
+          const minX = Math.min(...xs); const maxX = Math.max(...xs);
+          const minY = Math.min(...ys); const maxY = Math.max(...ys);
+          this.roomDrag = {
+            pointerId: event.pointerId,
+            start: this.modelPoint(event),
+            snapshots,
+            furnitureSnapshots: Store.currentFurniture()
+              .filter((item) => item.x >= minX && item.x <= maxX && item.y >= minY && item.y <= maxY)
+              .map((item) => ({ id: item.id, x: item.x, y: item.y })),
+            dx: 0,
+            dy: 0,
+          };
+          this.svg.setPointerCapture(event.pointerId);
+          this.svg.classList.add('is-dragging-room');
+        }
         this.render();
         return;
       }
@@ -94,6 +129,13 @@ export class Viewport2DController {
         this.render();
         return;
       }
+      if (this.roomDrag && event.pointerId === this.roomDrag.pointerId) {
+        const point = this.modelPoint(event);
+        this.roomDrag.dx = Core.snap(point.x - this.roomDrag.start.x);
+        this.roomDrag.dy = Core.snap(point.y - this.roomDrag.start.y);
+        this.render();
+        return;
+      }
       if (!this.dragging) return;
       const dx = event.clientX - this.lastPointer.x;
       const dy = event.clientY - this.lastPointer.y;
@@ -102,7 +144,26 @@ export class Viewport2DController {
       this.viewBox.y -= dy * this.viewBox.height / Math.max(this.svg.clientHeight, 1);
       this.applyViewBox();
     });
-    const finish = (event: PointerEvent) => { event.stopPropagation(); this.dragging = false; this.svg.classList.remove('is-panning'); };
+    const finish = (event: PointerEvent) => {
+      event.stopPropagation();
+      if (this.roomDrag && event.pointerId === this.roomDrag.pointerId) {
+        const drag = this.roomDrag;
+        this.roomDrag = null;
+        this.svg.classList.remove('is-dragging-room');
+        if (drag.dx || drag.dy) {
+          Store.commands.beginTransaction();
+          Store.commands.updateWallsGroupBodyLive(drag.snapshots, drag.dx, drag.dy);
+          drag.furnitureSnapshots.forEach((item) => {
+            Store.commands.updateFurnitureBodyLive(item.id, item.x + drag.dx, item.y + drag.dy);
+          });
+          Store.commands.splitWallsAtTJunctions();
+        }
+        this.render();
+        return;
+      }
+      this.dragging = false;
+      this.svg.classList.remove('is-panning');
+    };
     this.svg.addEventListener('pointerup', finish);
     this.svg.addEventListener('pointercancel', finish);
     window.addEventListener('keydown', (event) => {

@@ -1,6 +1,6 @@
 import { Core } from './Core.js';
 import { Store } from './Store.js';
-import type { Opening, Wall } from './types.js';
+import type { Opening, Wall, WallSnapshot } from './types.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -51,7 +51,11 @@ function openingSymbol(group: SVGGElement, opening: Opening, wall: Wall): void {
 export class Scene2DRenderer {
   public constructor(private readonly svg: SVGSVGElement) {}
 
-  public render(selectedWallIds: ReadonlySet<string> = new Set(), preview?: { x1: number; y1: number; x2: number; y2: number }): void {
+  public render(
+    selectedWallIds: ReadonlySet<string> = new Set(),
+    preview?: { x1: number; y1: number; x2: number; y2: number },
+    dragPreview?: { snapshots: WallSnapshot[]; dx: number; dy: number },
+  ): void {
     this.svg.replaceChildren();
     const project = Store.getProject();
     const floor = project.floors[project.currentFloorIndex];
@@ -79,6 +83,23 @@ export class Scene2DRenderer {
         ?? project.terreno?.muros.find((candidate) => candidate.id === opening.wallId);
       if (wall) openingSymbol(scene, opening, wall);
     });
+    if (dragPreview) {
+      const previewGroup = svgElement('g', { class: 'scene2d-drag-preview' });
+      dragPreview.snapshots.forEach((snapshot) => {
+        const wall: Wall = {
+          ...snapshot,
+          x1: snapshot.x1 + dragPreview.dx,
+          y1: snapshot.y1 + dragPreview.dy,
+          x2: snapshot.x2 + dragPreview.dx,
+          y2: snapshot.y2 + dragPreview.dy,
+        };
+        wallLine(previewGroup, wall, 'scene2d-wall');
+        floor.openings
+          .filter((opening) => opening.wallId === snapshot.id)
+          .forEach((opening) => openingSymbol(previewGroup, opening, wall));
+      });
+      scene.append(previewGroup);
+    }
     floor.columns?.forEach((column) => {
       const size = Core.COLUMN_SIZE;
       scene.append(column.shape === 'redonda'
