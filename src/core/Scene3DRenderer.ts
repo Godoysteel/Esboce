@@ -1464,6 +1464,30 @@ export function hashColorHex(key: string): number {
     return mesh;
   }
 
+  // Placeholder do painel já encostado (state 'attached') — mesma
+  // matemática de posicionamento ao longo da parede usada por
+  // buildOpeningPieces (offsetM em metros -> unidades de modelo pelo
+  // GRID, depois escala pra cena). Etapa 2b: ainda é a caixa
+  // placeholder, só que agora no lugar certo, encostada na face da
+  // parede — o grid de perfis + vidro reflexivo de verdade fica pra
+  // Etapa 2c. yOffset já inclui a altura do pavimento; sillHeightM
+  // soma a altura da base do painel acima do piso desse pavimento.
+  function buildGlazingPanelAttachedMesh(panel: any, wall: any, scale: any, offsetX: any, offsetY: any, yOffset: any) {
+    var dx = wall.x2 - wall.x1, dy = wall.y2 - wall.y1;
+    var lenModel = Math.hypot(dx, dy) || 1e-6;
+    var ux = dx / lenModel, uy = dy / lenModel;
+    var offsetModel = (panel.offsetM || 0) * Core.GRID;
+    var cxModel = wall.x1 + ux * offsetModel, cyModel = wall.y1 + uy * offsetModel;
+    var geo = new THREE.BoxGeometry(panel.widthM, panel.heightM, 0.06);
+    var mat = new THREE.MeshStandardMaterial({ color: GLAZING_PLACEHOLDER_COLOR, transparent: true, opacity: 0.55 });
+    var mesh = new THREE.Mesh(geo, mat);
+    var px = (cxModel - offsetX) * scale, pz = (cyModel - offsetY) * scale;
+    var sill = panel.sillHeightM || 0;
+    mesh.position.set(px, yOffset + sill + panel.heightM / 2, pz);
+    mesh.rotation.y = -Math.atan2(uy, ux);
+    return mesh;
+  }
+
   function buildLajePiece(laje: any, scale: any, offsetX: any, offsetY: any, topY: any, wallColor: any, viewState: any) {
     var pts = laje.points;
     if (!pts || pts.length < 3) return [];
@@ -2304,12 +2328,20 @@ export function hashColorHex(key: string): number {
       }
 
       (floorData.glazingPanels || []).forEach(function (panel) {
-        // Etapa 2b desenha o grid de verdade (perfis + vidro) quando
-        // panel.state === 'attached' e faz o corte de banda na parede
-        // hospedeira; por ora só o painel solto (preview) tem
-        // representação visual, como placeholder.
-        if (panel.state !== 'preview') return;
-        var mesh = buildGlazingPanelPreviewMesh(panel, scale, offsetX, offsetY, yOffset);
+        // Etapa 2c desenha o grid de verdade (perfis + vidro reflexivo)
+        // — por ora, tanto solto (preview) quanto encostado (attached)
+        // usam o mesmo placeholder, só muda a posição/orientação (livre
+        // vs. derivada da parede hospedeira).
+        var mesh;
+        if (panel.state === 'attached' && panel.wallId) {
+          var hostWall = (floorData.walls || []).find(function (w) { return w.id === panel.wallId; });
+          if (!hostWall) return;
+          mesh = buildGlazingPanelAttachedMesh(panel, hostWall, scale, offsetX, offsetY, yOffset);
+        } else if (panel.state === 'preview') {
+          mesh = buildGlazingPanelPreviewMesh(panel, scale, offsetX, offsetY, yOffset);
+        } else {
+          return;
+        }
         tagCategory(mesh, 'glazingPanel');
         mesh.userData.glazingPanelId = panel.id; mesh.userData.floorIndex = floorIdx;
         scene.add(mesh);
@@ -2363,9 +2395,20 @@ export function hashColorHex(key: string): number {
           // buildWallBandMesh, todas com o MESMO userData.wallId (clicar
           // em qualquer trecho sólido continua selecionando a parede).
           // Sem abertura nenhuma: caminho de sempre, sem mudança.
-          var wallOpenings = (floorData.openings || []).filter(function (o) { return o.wallId === w.id; });
+          var wallOpenings: any[] = (floorData.openings || []).filter(function (o) { return o.wallId === w.id; });
+          // Painéis de Envidraçamento anexados (DEC-56) cortam a mesma
+          // banda visual que uma abertura cortaria — mas NÃO são
+          // Opening (não entram no quantitativo de aberturas nem no de
+          // alvenaria, que continua contando a parede como se estivesse
+          // inteira; ver Store.commands.attachGlazingPanelToWall). Só
+          // emprestam offset/width/sillHeight/height, o formato que
+          // computeWallOpeningBands já espera.
+          var wallGlazingBands = (floorData.glazingPanels || [])
+            .filter(function (p) { return p.state === 'attached' && p.wallId === w.id; })
+            .map(function (p) { return { offset: p.offsetM || 0, width: p.widthM, sillHeight: p.sillHeightM || 0, height: p.heightM }; });
+          var wallCuts = wallOpenings.concat(wallGlazingBands);
           var wallLenM = Core.wallLengthMeters(w);
-          var bands = wallOpenings.length ? computeWallOpeningBands(wallLenM, wallOpenings, renderedWallHeight) : null;
+          var bands = wallCuts.length ? computeWallOpeningBands(wallLenM, wallCuts, renderedWallHeight) : null;
           var wallAxisStart = { x: x1, z: z1 };
           var wallAxisEnd = { x: x2, z: z2 };
 

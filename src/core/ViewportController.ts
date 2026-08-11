@@ -61,7 +61,7 @@ import {
   var selectedPaintRoomKey: any = null;
   var floorFinishScale = 1;
   var floorFinishRotation = 0;
-  var selectedWallId: any = null, selectedColumnId: any = null, selectedRoofId: any = null, selectedOpeningId: any = null, selectedVarandaId: any = null, selectedLajeId: any = null, selectedFurnitureId: any = null;
+  var selectedWallId: any = null, selectedColumnId: any = null, selectedRoofId: any = null, selectedOpeningId: any = null, selectedVarandaId: any = null, selectedLajeId: any = null, selectedFurnitureId: any = null, selectedGlazingPanelId: any = null;
   var selectedRoomWallIds: any = null; // cômodo isolado selecionado como módulo; após qualquer junção o clique volta a ser individual
   var resizeWallId: any = null; // parede em modo de deslocamento perpendicular, iniciado no primeiro clique/arraste
   var gizmoMenuOpen = false;
@@ -126,6 +126,24 @@ import {
   };
 
   function modelToWorld(mx: any, my: any) { return { x: (mx - offsetX) * scale, z: (my - offsetY) * scale }; }
+
+  // Centro do painel de Envidraçamento em coordenadas de MODELO (antes
+  // de modelToWorld) — solto (preview) usa x/y diretos; anexado
+  // (attached) deriva do ponto a offsetM metros ao longo da parede
+  // hospedeira, mesma matemática usada em buildOpeningPieces.
+  function glazingPanelModelCenter(panel: any) {
+    if (panel.state === 'attached' && panel.wallId) {
+      var w = Store.findWall(panel.wallId);
+      if (w) {
+        var dxW = w.x2 - w.x1, dyW = w.y2 - w.y1;
+        var lenW = Math.hypot(dxW, dyW) || 1e-6;
+        var uxW = dxW / lenW, uyW = dyW / lenW;
+        var offsetModel = (panel.offsetM || 0) * Core.GRID;
+        return { x: w.x1 + uxW * offsetModel, y: w.y1 + uyW * offsetModel };
+      }
+    }
+    return { x: panel.x || 0, y: panel.y || 0 };
+  }
   function worldToModel(wx: any, wz: any) { return { x: wx / scale + offsetX, y: wz / scale + offsetY }; }
 
   function showWallDiagnostic(report: WallResizeDiagnosticReport) {
@@ -315,12 +333,12 @@ import {
   }
 
   function select(wallId: any) {
-    selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedWallId = wallId; gizmoMenuOpen = false;
+    selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedWallId = wallId; gizmoMenuOpen = false;
     if (DEBUG_COLOR_MODE && wallId) hintEl.textContent = 'Debug — parede selecionada: ' + wallId;
     render();
   }
-  function selectColumn(columnId: any) { selectedWallId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedColumnId = columnId; gizmoMenuOpen = false; render(); }
-  function selectRoof(roofId: any) { selectedWallId = null; selectedColumnId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedRoofId = roofId; gizmoMenuOpen = false; render(); }
+  function selectColumn(columnId: any) { selectedWallId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedColumnId = columnId; gizmoMenuOpen = false; render(); }
+  function selectRoof(roofId: any) { selectedWallId = null; selectedColumnId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedRoofId = roofId; gizmoMenuOpen = false; render(); }
 
   function connectedRoofIds(startId: any) {
     var selected = Store.findRoof(startId);
@@ -347,27 +365,29 @@ import {
   }
   // "Agarra" o cômodo inteiro (clique único numa parede que fecha só um
   // cômodo) — sem seleção de parede individual, sem gizmo de parede.
-  function selectRoomGroup(wallIds: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedRoomWallIds = wallIds; gizmoMenuOpen = false; render(); }
+  function selectRoomGroup(wallIds: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedRoomWallIds = wallIds; gizmoMenuOpen = false; render(); }
   // Porta/janela: gizmo próprio (deslizar/excluir), sempre visível assim
   // que seleciona — diferente de parede/coluna/telhado, não precisa de
   // um segundo clique (clique direito) pra "abrir o menu", porque não
   // existe aqui a ambiguidade de "agarrar o cômodo inteiro" que motivou
   // aquele gesto extra nos outros tipos.
-  function selectOpening(openingId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedOpeningId = openingId; gizmoMenuOpen = false; render(); }
+  function selectOpening(openingId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedOpeningId = openingId; gizmoMenuOpen = false; render(); }
   // Varanda: mesmo padrão do telhado (clique seleciona, clique direito
   // de novo abre o menu com girar/excluir).
-  function selectVaranda(varandaId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedLajeId = null; selectedFurnitureId = null; selectedVarandaId = varandaId; gizmoMenuOpen = false; render(); }
+  function selectVaranda(varandaId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedVarandaId = varandaId; gizmoMenuOpen = false; render(); }
   // Laje: mesmo padrão da varanda — clique seleciona, arraste livre nas
   // bordas (nunca trava em contorno de parede — ver DEC-35).
-  function selectLaje(lajeId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedFurnitureId = null; selectedLajeId = lajeId; gizmoMenuOpen = false; render(); }
+  function selectLaje(lajeId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedLajeId = lajeId; gizmoMenuOpen = false; render(); }
+
+  function selectGlazingPanel(glazingPanelId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = glazingPanelId; gizmoMenuOpen = false; render(); }
   // Móvel: mesmo padrão da coluna (clique seleciona e já mostra o gizmo
   // completo — girar/duplicar/excluir — sem precisar de segundo clique).
-  function selectFurniture(furnitureId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = furnitureId; gizmoMenuOpen = false; render(); }
+  function selectFurniture(furnitureId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedGlazingPanelId = null; selectedFurnitureId = furnitureId; gizmoMenuOpen = false; render(); }
   function deselect() {
     commitRoomGroupIfNeeded(); // "clicou fora do objeto" — decide agora se funde
     var leavingRoof = selectedRoofId ? Store.findRoof(selectedRoofId) : null;
     if (leavingRoof && leavingRoof.atticMode === 'preview') pendingGenerateRoofId = leavingRoof.id;
-    selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null;
+    selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null;
     if (generateAtticBtnEl) generateAtticBtnEl.classList.toggle('visible', !!pendingGenerateRoofId);
     gizmoMenuOpen = false; closeObjectPanel(); render();
   }
@@ -596,6 +616,28 @@ import {
     }
     openingGizmoEl.classList.remove('visible');
 
+    // Painel de Envidraçamento (DEC-56): mesmo raciocínio da esquadria/
+    // cômodo agrupado — gizmo próprio, só fechar/excluir, sempre
+    // visível (sem a ambiguidade de "abrir menu"). Reaproveita
+    // roomGizmoEl (mesmo elemento do cômodo agrupado — nunca os dois
+    // selecionados ao mesmo tempo).
+    if (selectedGlazingPanelId) {
+      var gpSel = Store.findGlazingPanel(selectedGlazingPanelId);
+      if (!gpSel) {
+        selectedGlazingPanelId = null;
+        roomGizmoEl.classList.remove('visible');
+      } else {
+        var centerG = glazingPanelModelCenter(gpSel);
+        var wpG = modelToWorld(centerG.x, centerG.y);
+        var topYG = currentFloorYOffset() + (gpSel.sillHeightM || 0) + gpSel.heightM + 0.15;
+        positionFloatingPanel(roomGizmoEl, wpG.x, topYG, wpG.z, 0);
+        roomGizmoEl.classList.add('visible');
+      }
+      gizmoEl.classList.remove('visible'); columnShapePanelEl.classList.remove('visible'); roofTypePanelEl.classList.remove('visible');
+      return;
+    }
+    roomGizmoEl.classList.remove('visible');
+
     // Cômodo "agarrado" inteiro (clique único numa parede que fecha só
     // um cômodo — ver selectRoomGroup): gizmo próprio, só com excluir,
     // também sempre visível (mesmo raciocínio da esquadria — não tem a
@@ -677,7 +719,7 @@ import {
     // genérico reaproveitado, sem painel extra próprio).
     if (selectedFurnitureId) {
       var fItem = Store.findFurniture(selectedFurnitureId);
-      if (!fItem) { selectedFurnitureId = null; gizmoEl.classList.remove('visible'); return; }
+      if (!fItem) { selectedFurnitureId = null; selectedGlazingPanelId = null; gizmoEl.classList.remove('visible'); return; }
       var midF = modelToWorld(fItem.x, fItem.y);
       positionFloatingPanel(gizmoEl, midF.x, yOffset + Scene3DRenderer.FLOOR_STACK_HEIGHT_GETTER(), midF.z, 0);
       gizmoEl.classList.add('visible');
@@ -826,6 +868,7 @@ import {
     if (selectedOpeningId && !Store.findOpening(selectedOpeningId)) selectedOpeningId = null;
     if (selectedVarandaId && !Store.findVaranda(selectedVarandaId)) selectedVarandaId = null;
     if (selectedLajeId && !Store.findLaje(selectedLajeId)) selectedLajeId = null;
+    if (selectedGlazingPanelId && !Store.findGlazingPanel(selectedGlazingPanelId)) selectedGlazingPanelId = null;
     if (resizeWallId && !Store.findWall(resizeWallId)) resizeWallId = null;
     if (selectedRoomWallIds) {
       selectedRoomWallIds = selectedRoomWallIds.filter(function (id: any) { return !!Store.findWall(id); });
@@ -1296,6 +1339,19 @@ import {
           dragElementStart = { x: fEnt.x, y: fEnt.y };
           dragGroundStart = getGroundModelPoint(e.clientX, e.clientY);
           Store.commands.beginTransaction();
+        } else if (mesh.userData.glazingPanelId) {
+          var gpEnt = Store.findGlazingPanel(mesh.userData.glazingPanelId)!;
+          selectGlazingPanel(mesh.userData.glazingPanelId);
+          // Painel já anexado: Etapa 2b não move mais depois de
+          // encostado na parede (reposicionar ao longo da parede fica
+          // pra uma próxima etapa) — só seleciona, pra dar acesso ao
+          // gizmo de excluir.
+          if (gpEnt.state === 'preview') {
+            dragMode = 'glazingPanelBody';
+            dragElementStart = { x: gpEnt.x || 0, y: gpEnt.y || 0 };
+            dragGroundStart = getGroundModelPoint(e.clientX, e.clientY);
+            Store.commands.beginTransaction();
+          }
         } else if (mesh.userData.openingId) {
           // Esquadria: arrasta livre (sem "segundo clique pra abrir
           // menu") desliza ao longo do EIXO da própria parede — mesma
@@ -1419,6 +1475,31 @@ import {
   // só considera paredes/lajes PERPENDICULARES a esse eixo (paredes
   // aqui são sempre 0°/90°, DEC-28, e laje é sempre retilínea, então
   // não precisa de footprint completo).
+  // Ímã de encosto do painel de Envidraçamento (DEC-56) — ao soltar o
+  // arraste do corpo, acha a parede mais próxima (menor distância
+  // perpendicular do CENTRO do painel até o segmento da parede,
+  // projetado e travado dentro do próprio segmento) dentro de uma
+  // tolerância de "perto o bastante"; fora dela, o painel só fica onde
+  // foi solto (continua 'preview', tenta de novo depois).
+  var GLAZING_ATTACH_TOLERANCE_MODEL = 1 * Core.GRID; // 1 metro
+  function nearestWallForGlazingAttach(glazingPanelId: any): string | null {
+    var p = Store.findGlazingPanel(glazingPanelId);
+    if (!p || p.state !== 'preview') return null;
+    var px = p.x || 0, py = p.y || 0;
+    var walls = Store.currentWalls();
+    var bestId: string | null = null, bestDist = GLAZING_ATTACH_TOLERANCE_MODEL;
+    walls.forEach(function (w: any) {
+      var dx = w.x2 - w.x1, dy = w.y2 - w.y1;
+      var lenSq = dx * dx + dy * dy;
+      if (lenSq < 1e-9) return;
+      var t = Math.max(0, Math.min(1, ((px - w.x1) * dx + (py - w.y1) * dy) / lenSq));
+      var projX = w.x1 + dx * t, projY = w.y1 + dy * t;
+      var dist = Math.hypot(px - projX, py - projY);
+      if (dist < bestDist) { bestDist = dist; bestId = w.id; }
+    });
+    return bestId;
+  }
+
   function nearestWallFaceCoord(axis: 'x' | 'y', rawValue: any, skipLajeId?: any) {
     var walls = Store.currentWalls();
     var halfThick = (Core.WALL_THICK / 2) * Core.GRID;
@@ -1723,6 +1804,14 @@ import {
         var dxF = gpF.x - dragGroundStart.x, dyF = gpF.y - dragGroundStart.y;
         var resolvedF = resolveFurniturePosition(selectedFurnitureId, dragElementStart.x + dxF, dragElementStart.y + dyF);
         Store.commands.updateFurnitureBodyLive(selectedFurnitureId, resolvedF.x, resolvedF.y);
+      }
+      return;
+    }
+    if (dragMode === 'glazingPanelBody') {
+      var gpG = getGroundModelPoint(e.clientX, e.clientY);
+      if (gpG && dragGroundStart) {
+        var dxG = gpG.x - dragGroundStart.x, dyG = gpG.y - dragGroundStart.y;
+        Store.commands.updateGlazingPanelBodyLive(selectedGlazingPanelId, dragElementStart.x + dxG, dragElementStart.y + dyG);
       }
       return;
     }
@@ -2043,6 +2132,15 @@ import {
         hintEl.textContent = 'Junção criada — a parede transversal foi dividida no encontro.';
       }
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
+      return;
+    }
+    if (dragMode === 'glazingPanelBody') {
+      var gpId = selectedGlazingPanelId;
+      dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
+      if (gpId) {
+        var nearWallId = nearestWallForGlazingAttach(gpId);
+        if (nearWallId) Store.commands.attachGlazingPanelToWall(gpId, nearWallId);
+      }
       return;
     }
     if (dragMode === 'columnBody' || dragMode === 'furnitureBody' || dragMode === 'lajeBody' || dragMode === 'openingSlide' || dragMode === 'openingEdgeLeft' || dragMode === 'openingEdgeRight' || dragMode === 'openingEdgeTop' || (dragMode && dragMode.indexOf('varandaEdge') === 0)) {
@@ -2992,6 +3090,7 @@ import {
   export function getSelectedVarandaId() { return selectedVarandaId; }
   export function getSelectedLajeId() { return selectedLajeId; }
   export function getSelectedFurnitureId() { return selectedFurnitureId; }
+  export function getSelectedGlazingPanelId() { return selectedGlazingPanelId; }
   export function getSelectedRoomWallIds() { return selectedRoomWallIds; }
   export function setNextRoofAtticMode(enabled: boolean) { pendingRoofAttic = enabled; }
 
@@ -2999,9 +3098,9 @@ import {
 // Scene3DRenderer.ts (chamadas ViewportController.xxx no código legado).
 export const ViewportController = {
   init, render, onModelChanged, deselect,
-  select, selectColumn, selectRoof, selectOpening, selectVaranda, selectFurniture,
+  select, selectColumn, selectRoof, selectOpening, selectVaranda, selectFurniture, selectGlazingPanel,
   getSelectedWallId, getSelectedColumnId, getSelectedRoofId,
-  getSelectedOpeningId, getSelectedVarandaId, getSelectedLajeId, getSelectedFurnitureId, getSelectedRoomWallIds,
+  getSelectedOpeningId, getSelectedVarandaId, getSelectedLajeId, getSelectedFurnitureId, getSelectedGlazingPanelId, getSelectedRoomWallIds,
   setNextRoofAtticMode, toggleDimensions,
   toggleWallDiagnostics,
   resetCamera,

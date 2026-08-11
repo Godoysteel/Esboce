@@ -939,6 +939,40 @@ export const commands = {
     return p;
   },
 
+  // Arrasta o corpo do painel ainda solto (state 'preview') — mesmo
+  // padrão "Live" de updateColumnBodyLive/updateFurnitureBodyLive (sem
+  // empilhar undo a cada frame; o snapshot de undo já foi criado no
+  // início do arraste, por beginTransaction).
+  updateGlazingPanelBodyLive(glazingPanelId: string, x: number, y: number): void {
+    const p = findGlazingPanel(glazingPanelId); if (!p || p.state !== 'preview') return;
+    p.x = x; p.y = y;
+    emit({ type: 'GlazingPanelMoved', glazingPanelId, live: true });
+  },
+
+  // Confirma o encosto numa parede (ímã calculado no
+  // ViewportController, ao soltar o arraste) — DEC-56: painel some da
+  // posição livre e passa a ser derivado de wallId + offsetM;
+  // widthM/heightM ficam travados no limite disponível da parede
+  // (nunca sobra painel pra fora do vão). sillHeightM = 0 (do chão ao
+  // teto) por padrão nesta etapa — ajuste fino fica pra depois.
+  attachGlazingPanelToWall(glazingPanelId: string, wallId: string): void {
+    const p = findGlazingPanel(glazingPanelId); if (!p || p.state !== 'preview') return;
+    const w = findWall(wallId); if (!w) return;
+    const wallLenM = Core.wallLengthMeters(w);
+    if (wallLenM < 1e-6) return;
+    pushUndoSnapshot();
+    const widthM = Math.min(p.widthM, wallLenM);
+    const heightM = Math.min(p.heightM, Core.WALL_HEIGHT);
+    const ux = (w.x2 - w.x1) / (wallLenM * Core.GRID), uy = (w.y2 - w.y1) / (wallLenM * Core.GRID);
+    const rawOffsetM = (((p.x ?? w.x1) - w.x1) * ux + ((p.y ?? w.y1) - w.y1) * uy) / Core.GRID;
+    const offsetM = Math.max(widthM / 2, Math.min(wallLenM - widthM / 2, rawOffsetM));
+    p.state = 'attached';
+    p.widthM = widthM; p.heightM = heightM;
+    p.wallId = wallId; p.offsetM = offsetM; p.sillHeightM = 0;
+    delete p.x; delete p.y; delete p.rotationDeg;
+    emit({ type: 'GlazingPanelAttached', glazingPanelId, wallId });
+  },
+
   deleteGlazingPanel(glazingPanelId: string): void {
     const list = currentGlazingPanels();
     let idx = -1;

@@ -71,6 +71,17 @@ function handleLajeAction(lajeId: string, action: string): void {
   if (action === 'delete') { Store.commands.deleteLaje(lajeId); ViewportController.deselect(); return; }
 }
 
+// Painel de Envidraçamento (DEC-56) — só close/delete, mesmo espírito
+// de Laje: sem girar (a orientação vem da parede quando anexado, ou é
+// sempre 0 quando solto) nem duplicar (nasce pelo botão "Fachada" da
+// barra lateral, um de cada vez).
+function handleGlazingPanelAction(glazingPanelId: string, action: string): void {
+  const p = Store.findGlazingPanel(glazingPanelId);
+  if (!p) return;
+  if (action === 'close') { ViewportController.deselect(); return; }
+  if (action === 'delete') { Store.commands.deleteGlazingPanel(glazingPanelId); ViewportController.deselect(); return; }
+}
+
 // Móvel: girar (90° por clique)/duplicar/excluir. Mover é só arrasto
 // livre direto na peça (ver ViewportController — dragMode
 // 'furnitureBody'); os botões de seta não fazem sentido aqui porque o
@@ -173,9 +184,13 @@ export function init(): void {
   roomGizmoEl?.addEventListener('click', function (e: any) {
     const btn = e.target.closest('button.gz');
     if (!btn) return;
+    const action = btn.dataset.action;
+
+    const glazingPanelId = ViewportController.getSelectedGlazingPanelId();
+    if (glazingPanelId) { handleGlazingPanelAction(glazingPanelId, action); return; }
+
     const wallIds = ViewportController.getSelectedRoomWallIds();
     if (!wallIds || !wallIds.length) return;
-    const action = btn.dataset.action;
     if (action === 'close') { ViewportController.deselect(); return; }
     if (action === 'delete') { Store.commands.deleteRoomGroup(wallIds); ViewportController.deselect(); return; }
   });
