@@ -18,6 +18,15 @@ function wallLine(group: SVGGElement, wall: Wall, className = 'scene2d-wall', se
     'data-wall-id': wall.id,
   });
   group.append(line);
+  if (selected && className === 'scene2d-wall') {
+    group.append(svgElement('circle', {
+      cx: (wall.x1 + wall.x2) * 0.5,
+      cy: (wall.y1 + wall.y2) * 0.5,
+      r: 4.5,
+      class: 'scene2d-wall-handle',
+      'data-wall-resize-id': wall.id,
+    }));
+  }
 }
 
 function openingSymbol(group: SVGGElement, opening: Opening, wall: Wall): void {
@@ -55,6 +64,7 @@ export class Scene2DRenderer {
     selectedWallIds: ReadonlySet<string> = new Set(),
     preview?: { x1: number; y1: number; x2: number; y2: number },
     dragPreview?: { snapshots: WallSnapshot[]; dx: number; dy: number },
+    wallDragPreview?: WallSnapshot[],
   ): void {
     this.svg.replaceChildren();
     const project = Store.getProject();
@@ -98,6 +108,11 @@ export class Scene2DRenderer {
           .filter((opening) => opening.wallId === snapshot.id)
           .forEach((opening) => openingSymbol(previewGroup, opening, wall));
       });
+      scene.append(previewGroup);
+    }
+    if (wallDragPreview) {
+      const previewGroup = svgElement('g', { class: 'scene2d-drag-preview' });
+      wallDragPreview.forEach((wall) => wallLine(previewGroup, wall, 'scene2d-wall'));
       scene.append(previewGroup);
     }
     floor.columns?.forEach((column) => {
