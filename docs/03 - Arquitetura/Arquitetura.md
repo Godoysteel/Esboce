@@ -106,7 +106,7 @@ A organização atual em `src/core` é uma etapa de migração, não o destino f
 
 ## 9. Verificação
 
-- Testes automatizados: `npm test` (baseline atual: 121 testes).
+- Testes automatizados: `npm test` (baseline atual: 122 testes).
 - Verificação de tipos: `npm run typecheck`.
 - Build de produção: `npm run build`.
 - Validação visual: prévia Vite e cenários descritos na SPEC-001.

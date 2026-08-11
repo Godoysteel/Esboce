@@ -87,6 +87,7 @@ import {
   var furnitureDragObject: any = null;
   var columnDragObjects: { object: any; startX: number; startZ: number }[] = [];
   var lajeDragObjects: { object: any; startX: number; startZ: number }[] = [];
+  var roofGroupDragObjects: { object: any; startX: number; startZ: number }[] = [];
   var pendingRoofAttic = false;
   var pendingGenerateRoofId: any = null;
   var generateAtticBtnEl: any = null;
@@ -210,6 +211,25 @@ import {
   function previewLajeDelta(dx: number, dy: number) {
     var worldDx = dx * scale, worldDz = dy * scale;
     lajeDragObjects.forEach(function (entry) {
+      entry.object.position.x = entry.startX + worldDx;
+      entry.object.position.z = entry.startZ + worldDz;
+    });
+  }
+
+  function collectRoofGroupDragObjects(roofIds: string[], selectedId: string) {
+    var roofSet: { [id: string]: boolean } = {};
+    roofIds.forEach(function (id) { roofSet[id] = true; });
+    roofGroupDragObjects = scene.children.filter(function (object: any) {
+      var data = object.userData || {};
+      return !!(data.roofId && roofSet[data.roofId]) || data.roofHandleForId === selectedId;
+    }).map(function (object: any) {
+      return { object: object, startX: object.position.x, startZ: object.position.z };
+    });
+  }
+
+  function previewRoofGroupDelta(dx: number, dy: number) {
+    var worldDx = dx * scale, worldDz = dy * scale;
+    roofGroupDragObjects.forEach(function (entry) {
       entry.object.position.x = entry.startX + worldDx;
       entry.object.position.z = entry.startZ + worldDz;
     });
@@ -1404,15 +1424,17 @@ import {
           collectColumnDragObjects(columnId);
           Store.commands.beginTransaction();
         } else if (mesh.userData.roofId) {
-          selectRoof(mesh.userData.roofId);
-          var connectedIds = connectedRoofIds(mesh.userData.roofId);
+          var roofId = mesh.userData.roofId;
+          selectRoof(roofId);
+          var connectedIds = connectedRoofIds(roofId);
           var roofSnapshots = connectedIds.map(function (id) {
             var roof = Store.findRoof(id)!;
             return { id: id, x1: roof.x1, y1: roof.y1, x2: roof.x2, y2: roof.y2 };
           });
           dragMode = 'roofGroup';
-          dragElementStart = { snapshots: roofSnapshots };
+          dragElementStart = { snapshots: roofSnapshots, lastDx: 0, lastDy: 0 };
           dragGroundStart = getGroundModelPoint(e.clientX, e.clientY);
+          collectRoofGroupDragObjects(connectedIds, roofId);
           Store.commands.beginTransaction();
         } else if (mesh.userData.varandaId) {
           selectVaranda(mesh.userData.varandaId);
@@ -1750,7 +1772,9 @@ import {
       if (gpRoofGroup && dragGroundStart && dragElementStart) {
         var roofDx = Core.snap(gpRoofGroup.x - dragGroundStart.x);
         var roofDy = Core.snap(gpRoofGroup.y - dragGroundStart.y);
-        Store.commands.updateRoofsGroupBodyLive(dragElementStart.snapshots, roofDx, roofDy);
+        dragElementStart.lastDx = roofDx;
+        dragElementStart.lastDy = roofDy;
+        previewRoofGroupDelta(roofDx, roofDy);
       }
       return;
     }
@@ -2219,6 +2243,14 @@ import {
       return;
     }
     if (dragMode === 'roofGroup') {
+      if (dragElementStart && dragElementStart.snapshots) {
+        Store.commands.updateRoofsGroupBodyLive(
+          dragElementStart.snapshots,
+          dragElementStart.lastDx || 0,
+          dragElementStart.lastDy || 0
+        );
+      }
+      roofGroupDragObjects = [];
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       hintEl.textContent = 'Cobertura conectada movida como um conjunto.';
       return;
