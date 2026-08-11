@@ -13,7 +13,7 @@ O Esboce está em **estabilização pré-comercial**. O editor paramétrico, o v
 Baseline verificada em 10/08/2026:
 
 - produção em `https://esboce.com.br`;
-- 121 testes automatizados;
+- 123 testes automatizados;
 - CI com testes, TypeScript e build antes do deploy;
 - projetos versionados e validados no Supabase, com backup JSON;
 - Termos, Privacidade e aceite jurídico versionado;

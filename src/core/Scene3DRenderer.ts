@@ -1434,6 +1434,22 @@ export function hashColorHex(key: string): number {
     return buildRoofDuasAguas(bounds, floorTopY, roofColor, gableColors, pitchDeg, ridgeAxis, tabeiraColor);
   }
 
+  export function createRoofResizePreviewMeshes(roof: any, scale: number, offsetX: number, offsetY: number, floorTopY: number): THREE.Object3D[] {
+    return buildRoofPiece(roof, scale, offsetX, offsetY, floorTopY, {}).map(function (piece: any) {
+      var materials = Array.isArray(piece.material) ? piece.material : [piece.material];
+      var previewMaterials = materials.map(function (material: any) {
+        var previewMaterial = material.clone();
+        previewMaterial.transparent = true;
+        previewMaterial.opacity = 0.38;
+        previewMaterial.depthWrite = false;
+        return previewMaterial;
+      });
+      piece.material = Array.isArray(piece.material) ? previewMaterials : previewMaterials[0];
+      piece.userData = { roofResizePreview: true };
+      return piece;
+    });
+  }
+
   // Laje colocável de verdade (ver DEC-35) — uma caixa achatada com a
   // MESMA textura de reboco das paredes (reaproveita
   // buildParapetSegmentMaterial, já usado no parapeito da platibanda),
@@ -2166,6 +2182,7 @@ export function hashColorHex(key: string): number {
         meshE.renderOrder = 999;
         meshE.position.set(ex, topY + 0.15, ez);
         meshE.userData.handle = 'roofEdge' + edge[0];
+        meshE.userData.roofHandleForId = r.id;
         scene.add(meshE);
         registry.handleMeshes.push(meshE);
       });
@@ -2183,6 +2200,7 @@ export function hashColorHex(key: string): number {
         mesh2.renderOrder = 999;
         mesh2.position.set(wx2, ridgeY, wz2);
         mesh2.userData.handle = 'roofRidge';
+        mesh2.userData.roofHandleForId = r.id;
         scene.add(mesh2);
         registry.handleMeshes.push(mesh2);
         if (r.atticMode) {
@@ -2190,12 +2208,14 @@ export function hashColorHex(key: string): number {
           baseHandle.renderOrder = 999;
           baseHandle.position.set(wx2 + 0.32, topY, wz2 + 0.32);
           baseHandle.userData.handle = 'roofBaseHeight';
+          baseHandle.userData.roofHandleForId = r.id;
           scene.add(baseHandle);
           registry.handleMeshes.push(baseHandle);
         }
         var pole = ridgeLineMesh(new THREE.Vector3(wx2, topY, wz2), new THREE.Vector3(wx2, ridgeY, wz2));
         pole.material.depthTest = false;
         pole.renderOrder = 998;
+        pole.userData.roofHandleForId = r.id;
         scene.add(pole);
         registry.handleMeshes.push(pole);
       } else {
@@ -2210,11 +2230,13 @@ export function hashColorHex(key: string): number {
         meshP2.renderOrder = 999;
         meshP2.position.set(wxP, parapetY, wzP);
         meshP2.userData.handle = 'roofParapetHeight';
+        meshP2.userData.roofHandleForId = r.id;
         scene.add(meshP2);
         registry.handleMeshes.push(meshP2);
         var poleP2 = ridgeLineMesh(new THREE.Vector3(wxP, topY, wzP), new THREE.Vector3(wxP, parapetY, wzP));
         poleP2.material.depthTest = false;
         poleP2.renderOrder = 998;
+        poleP2.userData.roofHandleForId = r.id;
         scene.add(poleP2);
         registry.handleMeshes.push(poleP2);
       }
@@ -2823,6 +2845,7 @@ export function hashColorHex(key: string): number {
 // ViewportController ainda não foi migrado).
 export const Scene3DRenderer = {
   rebuild,
+  createRoofResizePreviewMeshes,
   setOnFurnitureAssetLoaded,
   getFurnitureMeshes,
   getFurnitureFootprint,
