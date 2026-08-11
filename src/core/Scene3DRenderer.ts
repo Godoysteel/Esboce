@@ -1448,6 +1448,22 @@ export function hashColorHex(key: string): number {
   // mundo x/z), com a MESMA textura de reboco das paredes
   // (buildParapetSegmentMaterial, já usado no parapeito da
   // platibanda) em vez do material liso genérico de makeSlabMesh.
+  // Placeholder do painel de Envidraçamento (DEC-56, Etapa 2a) — caixa
+  // preta semitransparente na posição/rotação/tamanho do painel ainda
+  // solto (state 'preview'). Sem grid de perfis, sem vidro reflexivo,
+  // sem seleção/arraste: só torna o painel visível na cena depois de
+  // criado pelo botão "Fachada". Evolui na Etapa 2b.
+  var GLAZING_PLACEHOLDER_COLOR = 0x000000;
+  function buildGlazingPanelPreviewMesh(panel: any, scale: any, offsetX: any, offsetY: any, yOffset: any) {
+    var geo = new THREE.BoxGeometry(panel.widthM, panel.heightM, 0.06);
+    var mat = new THREE.MeshStandardMaterial({ color: GLAZING_PLACEHOLDER_COLOR, transparent: true, opacity: 0.55 });
+    var mesh = new THREE.Mesh(geo, mat);
+    var px = ((panel.x || 0) - offsetX) * scale, pz = ((panel.y || 0) - offsetY) * scale;
+    mesh.position.set(px, yOffset + panel.heightM / 2, pz);
+    mesh.rotation.y = -((panel.rotationDeg || 0) * Math.PI / 180);
+    return mesh;
+  }
+
   function buildLajePiece(laje: any, scale: any, offsetX: any, offsetY: any, topY: any, wallColor: any, viewState: any) {
     var pts = laje.points;
     if (!pts || pts.length < 3) return [];
@@ -2286,6 +2302,19 @@ export function hashColorHex(key: string): number {
           });
         });
       }
+
+      (floorData.glazingPanels || []).forEach(function (panel) {
+        // Etapa 2b desenha o grid de verdade (perfis + vidro) quando
+        // panel.state === 'attached' e faz o corte de banda na parede
+        // hospedeira; por ora só o painel solto (preview) tem
+        // representação visual, como placeholder.
+        if (panel.state !== 'preview') return;
+        var mesh = buildGlazingPanelPreviewMesh(panel, scale, offsetX, offsetY, yOffset);
+        tagCategory(mesh, 'glazingPanel');
+        mesh.userData.glazingPanelId = panel.id; mesh.userData.floorIndex = floorIdx;
+        scene.add(mesh);
+        registry.structureMeshes.push(mesh);
+      });
 
       if (wallsVisible) {
         floorData.walls.forEach(function (w) {

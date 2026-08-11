@@ -172,9 +172,15 @@ function parseGlazingPanel(value: unknown, path: string): GlazingPanel {
   const wallId = optionalString(v.wallId, `${path}.wallId`);
   const offsetM = optionalNumber(v.offsetM, `${path}.offsetM`);
   const sillHeightM = optionalNumber(v.sillHeightM, `${path}.sillHeightM`);
+  const x = optionalNumber(v.x, `${path}.x`);
+  const y = optionalNumber(v.y, `${path}.y`);
+  const rotationDeg = optionalNumber(v.rotationDeg, `${path}.rotationDeg`);
   if (wallId !== undefined) panel.wallId = wallId;
   if (offsetM !== undefined) panel.offsetM = offsetM;
   if (sillHeightM !== undefined) panel.sillHeightM = sillHeightM;
+  if (x !== undefined) panel.x = x;
+  if (y !== undefined) panel.y = y;
+  if (rotationDeg !== undefined) panel.rotationDeg = rotationDeg;
   if (panel.state === 'attached' && !panel.wallId) fail(`${path}.wallId`, 'painel anexado precisa de parede hospedeira');
   return panel;
 }

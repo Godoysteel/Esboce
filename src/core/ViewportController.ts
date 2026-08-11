@@ -2754,6 +2754,30 @@ import {
         : 'Laje criada cobrindo o pavimento — arraste o corpo pra reposicionar, ou as bordas pra ajustar o formato (inclusive além da parede, pra criar um balanço/sacada).';
       return;
     }
+    if (key === 'glazing') {
+      // Painel de Envidraçamento (DEC-56) — Etapa 2a: nasce solto,
+      // numa posição padrão perto do que já existe no pavimento (mesmo
+      // espírito de gap usado por laje/cômodo). Arraste, ímã de
+      // encosto na parede e o corte visual ficam pra Etapa 2b — por
+      // ora o painel só existe e aparece na cena como um placeholder.
+      var wallsG = Store.currentWalls();
+      var minXg = Infinity, maxXg = -Infinity, minYg = Infinity;
+      wallsG.forEach(function (w) {
+        [[w.x1, w.y1], [w.x2, w.y2]].forEach(function (p: any) {
+          if (p[0] < minXg) minXg = p[0]; if (p[0] > maxXg) maxXg = p[0];
+          if (p[1] < minYg) minYg = p[1];
+        });
+      });
+      var gapG = 1 * Core.GRID;
+      var gx = isFinite(maxXg) ? maxXg + gapG : 0;
+      var gy = isFinite(minYg) ? minYg : 0;
+      deselect();
+      var newPanel = Store.commands.createGlazingPanel(gx, gy);
+      hintEl.textContent = newPanel
+        ? 'Painel de Fachada criado — posicionamento por arraste ainda não está disponível nesta versão.'
+        : 'Não foi possível criar o painel de Fachada.';
+      return;
+    }
     var preset = ROOM_PRESETS[key];
     if (!preset) return;
     var rect = computeNextRoomSlot(preset.widthM, preset.depthM);
@@ -2931,7 +2955,7 @@ import {
     });
     document.querySelectorAll('[data-room-preset]').forEach(function (btn: any) {
       btn.addEventListener('click', function () {
-        if (btn.dataset.roomPreset !== 'varanda' && btn.dataset.roomPreset !== 'laje' && !requireLajeBelowOrHint()) return;
+        if (btn.dataset.roomPreset !== 'varanda' && btn.dataset.roomPreset !== 'laje' && btn.dataset.roomPreset !== 'glazing' && !requireLajeBelowOrHint()) return;
         placeRoomPreset(btn.dataset.roomPreset);
       });
     });

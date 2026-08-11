@@ -133,6 +133,15 @@ export interface GlazingPanel {
   heightM: number;
   /** Largura-alvo do módulo (vidro + junta), configurável na interface — mantém a simetria do grid. */
   moduleTargetM: number;
+  // Posição/orientação do painel enquanto solto (state === 'preview')
+  // — mesma unidade de grade de Wall.x1/y1 e Furniture.x/y (20 =
+  // 1 metro), não metros direto (diferente de widthM/heightM, que são
+  // o TAMANHO do painel, sempre em metros). Deixam de ser usados
+  // assim que o painel vira 'attached' (posição passa a vir de
+  // wallId + offsetM).
+  x?: number;
+  y?: number;
+  rotationDeg?: number;
   // Só existem quando state === 'attached':
   wallId?: string;
   /** Distância ao longo da parede, mesma convenção de Opening.offset. */

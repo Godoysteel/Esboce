@@ -8,7 +8,7 @@ import { Core } from './Core.js';
 import type {
   Project, Floor, Wall, Column, Roof, Opening, OpeningKind, Varanda, Laje, Furniture, ColumnShape, RoofType,
   RidgeAxis, VarandaFrontSide, FoundationType, StoreEvent, StoreListener,
-  WallSnapshot, LinkedWallUpdate
+  WallSnapshot, LinkedWallUpdate, GlazingPanel
 } from './types.js';
 
 let project: Project = Core.createProject();
@@ -64,6 +64,16 @@ export function lajesOfFloor(floor: Floor): Laje[] {
   if (!floor.lajes) floor.lajes = [];
   return floor.lajes;
 }
+
+export function currentGlazingPanels(): GlazingPanel[] {
+  const f = currentFloor();
+  if (!f.glazingPanels) f.glazingPanels = [];
+  return f.glazingPanels;
+}
+export function glazingPanelsOfFloor(floor: Floor): GlazingPanel[] {
+  if (!floor.glazingPanels) floor.glazingPanels = [];
+  return floor.glazingPanels;
+}
 export function findWall(id: string): Wall | null {
   const walls = currentWalls();
   for (let i = 0; i < walls.length; i++) if (walls[i]!.id === id) return walls[i]!;
@@ -99,6 +109,12 @@ export function findVaranda(id: string): Varanda | null {
 export function findLaje(id: string): Laje | null {
   const lajes = currentLajes();
   for (let i = 0; i < lajes.length; i++) if (lajes[i]!.id === id) return lajes[i]!;
+  return null;
+}
+
+export function findGlazingPanel(id: string): GlazingPanel | null {
+  const panels = currentGlazingPanels();
+  for (let i = 0; i < panels.length; i++) if (panels[i]!.id === id) return panels[i]!;
   return null;
 }
 export function currentFurniture(): Furniture[] {
@@ -911,6 +927,28 @@ export const commands = {
     emit({ type: 'LajeDeleted', lajeId });
   },
 
+  // Painel de Envidraçamento (DEC-56) — nasce solto (state: 'preview'),
+  // na posição dada, com tamanho/módulo padrão. Etapa 2a: só criação e
+  // exclusão; arraste de redimensionamento, ímã de encosto na parede e
+  // a transição pra 'attached' ficam pra Etapa 2b.
+  createGlazingPanel(x: number, y: number): GlazingPanel | null {
+    pushUndoSnapshot();
+    const p = Core.createGlazingPanelEntity(x, y);
+    currentGlazingPanels().push(p);
+    emit({ type: 'GlazingPanelCreated', floorIndex: project.currentFloorIndex, glazingPanelId: p.id });
+    return p;
+  },
+
+  deleteGlazingPanel(glazingPanelId: string): void {
+    const list = currentGlazingPanels();
+    let idx = -1;
+    for (let i = 0; i < list.length; i++) if (list[i]!.id === glazingPanelId) { idx = i; break; }
+    if (idx < 0) return;
+    pushUndoSnapshot();
+    list.splice(idx, 1);
+    emit({ type: 'GlazingPanelDeleted', glazingPanelId });
+  },
+
   // Móvel: mesmo padrão de Coluna — um único ponto (x,y), arrastável
   // livremente, mais rotação em passos de 90°. productId aponta pro
   // Catalog (categoria 'furniture'), que resolve qual .glb carregar.
@@ -1060,6 +1098,7 @@ export const Store = {
   currentOpenings,
   currentVarandas,
   currentLajes,
+  currentGlazingPanels,
   currentFurniture,
   findWall,
   findColumn,
@@ -1067,6 +1106,7 @@ export const Store = {
   findOpening,
   findVaranda,
   findLaje,
+  findGlazingPanel,
   findFurniture,
   onChange,
   commands

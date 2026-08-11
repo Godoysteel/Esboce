@@ -10,7 +10,7 @@
 import type {
   Point, Wall, Column, ColumnShape, Roof, RoofType, RidgeAxis,
   Varanda, VarandaFrontSide, Laje, Opening, OpeningKind, Floor, Project,
-  Room, WallFootprint, WallOBB, MTV, Interval, Furniture
+  Room, WallFootprint, WallOBB, MTV, Interval, Furniture, GlazingPanel
 } from './types.js';
 
 export const GRID = 20; // unidade de grade do modelo (1 unidade = 1 metro)
@@ -157,6 +157,27 @@ export function atticWallExtensionAreaMeters(wall: Wall, roof: Roof): number {
     area += totalLengthM * (t1 - t0) * (rise0 + rise1) / 2;
   }
   return area;
+}
+
+// Painel de Envidraçamento (DEC-56) — nasce em 'preview', solto na
+// viewport, na posição/rotação dadas (unidades de grade, mesmo padrão
+// de Furniture). widthM/heightM/moduleTargetM continuam em metros.
+export const GLAZING_DEFAULT_WIDTH_M = 1.5;
+export const GLAZING_DEFAULT_HEIGHT_M = 2.0;
+export const GLAZING_DEFAULT_MODULE_TARGET_M = 1.2;
+
+export function createGlazingPanelEntity(
+  x: number, y: number, rotationDeg?: number,
+  widthM?: number, heightM?: number, moduleTargetM?: number, id?: string
+): GlazingPanel {
+  return {
+    id: id || nextId('glazing'),
+    state: 'preview',
+    widthM: widthM != null ? widthM : GLAZING_DEFAULT_WIDTH_M,
+    heightM: heightM != null ? heightM : GLAZING_DEFAULT_HEIGHT_M,
+    moduleTargetM: moduleTargetM != null ? moduleTargetM : GLAZING_DEFAULT_MODULE_TARGET_M,
+    x, y, rotationDeg: rotationDeg || 0,
+  };
 }
 
 export function createVarandaEntity(
@@ -1444,5 +1465,6 @@ export const Core = {
   findWallTJunctionSplits,
   createWallEntity, createColumnEntity, createRoofEntity, wallIntersectsRoofFootprint, roofHeightAtModelPoint, atticOpeningMaxTopMeters, openingFitsAtticRoof, atticWallExtensionAreaMeters, createVarandaEntity, createLajeEntity, createFloorEntity,
   createFurnitureEntity,
+  createGlazingPanelEntity, GLAZING_DEFAULT_WIDTH_M, GLAZING_DEFAULT_HEIGHT_M, GLAZING_DEFAULT_MODULE_TARGET_M,
   createProject, distToSegment, projectOnSegment, detectRooms
 };
