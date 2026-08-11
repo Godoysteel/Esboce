@@ -445,3 +445,13 @@ Alternativas descartadas:
     • Adiar todas as atualizações visuais até o `pointerup` — descartada porque eliminaria a resposta visual durante o arraste.
     • Migrar todos os tipos de objeto de uma vez — descartada pelo risco de regressão; a adoção será incremental por ferramenta, começando pelos gargalos já medidos e testados.
 Status: Ativo. Cômodos isolados, móveis, colunas, lajes e fachadas de glazing usam prévia incremental; os demais tipos continuam no fluxo anterior até serem migrados e validados individualmente.
+
+DEC-58  Perfil comercial criado de forma transacional no cadastro
+Sessão: 21
+Contexto: com confirmação de e-mail ativa, `signUp` não devolve sessão. A RLS impedia o navegador de inserir `public.profiles`, deixando nome, telefone e endereço apenas no `localStorage` até um primeiro login no mesmo dispositivo. Contas confirmadas sem esse retorno apareciam em `auth.users`, mas não na base comercial usada para contato e orçamento.
+Decisão: (1) O formulário envia os campos do perfil em `raw_user_meta_data` no próprio `signUp`. (2) Um trigger `security definer`, sem permissão de execução para clientes, cria o perfil imediatamente após a inclusão em `auth.users`. (3) O trigger exige nome e telefone e copia os demais campos de endereço sem fabricar dados. (4) A inserção é idempotente e nunca sobrescreve perfil existente. (5) A migração tenta recuperar contas anteriores que já possuam os metadados; contas antigas sem metadados precisam completar os dados novamente. (6) O fallback do primeiro login é mantido para tolerar implantação parcial entre frontend e banco. (7) A cobertura automatizada passa a incluir 121 testes.
+Alternativas descartadas:
+    • Manter os dados apenas no `localStorage` até o login — descartada porque depende do mesmo navegador e pode perder informação comercial.
+    • Desativar confirmação de e-mail para obter sessão imediata — descartada porque reduziria a confiabilidade das contas.
+    • Usar chave `service_role` no frontend — proibido, pois exporia acesso administrativo ao banco.
+Status: Implementado no código e na migração; exige aplicar a nova migração no projeto Supabase antes da publicação definitiva.
