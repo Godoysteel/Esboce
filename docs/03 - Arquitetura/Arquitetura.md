@@ -106,7 +106,7 @@ A organização atual em `src/core` é uma etapa de migração, não o destino f
 
 ## 9. Verificação
 
-- Testes automatizados: `npm test` (baseline atual: 123 testes).
+- Testes automatizados: `npm test` (baseline atual: 134 testes).
 - Verificação de tipos: `npm run typecheck`.
 - Build de produção: `npm run build`.
 - Validação visual: prévia Vite e cenários descritos na SPEC-001.
@@ -119,3 +119,4 @@ A organização atual em `src/core` é uma etapa de migração, não o destino f
 - [ADR-005 — Coberturas Compostas e Engaste Explícito](../07%20-%20Desenvolvimento/ADR/ADR-005%20-%20Coberturas%20Compostas%20e%20Engaste%20Explícito.md)
 - [ADR-006 — Quantitativos, Orçamentos e Limites de Responsabilidade Técnica](../07%20-%20Desenvolvimento/ADR/ADR-006%20-%20Quantitativos,%20Orçamentos%20e%20Limites%20de%20Responsabilidade%20Técnica.md)
 - [ADR-007 — Catálogo Multi-Loja, Vínculo com Modelos 3D e Orçamento por Loja](../07%20-%20Desenvolvimento/ADR/ADR-007%20-%20Catálogo%20Multi-Loja,%20Vínculo%20com%20Modelos%203D%20e%20Orçamento%20por%20Loja.md)
+- [ADR-008 — Terreno Opcional e Muros de Perímetro por Lado](../07%20-%20Desenvolvimento/ADR/ADR-008%20-%20Terreno%20Opcional%20e%20Muros%20de%20Perímetro%20por%20Lado.md)

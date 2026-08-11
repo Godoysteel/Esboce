@@ -1,25 +1,80 @@
-# Documentação Oficial do Esboce
+# Esboce
 
-Este diretório reúne as fontes canônicas de produto, domínio, arquitetura e desenvolvimento do Esboce. Código e documentação devem evoluir juntos, conforme a [ADR-003](../07%20-%20Desenvolvimento/ADR/ADR-003%20-%20Documentação%20como%20Fonte%20da%20Verdade.md).
+> Sonhe, esboce, construa.
 
-## Estado documentado
+O Esboce é uma plataforma para projeto, gestão e inteligência aplicada ao ciclo de vida completo de uma residência.
 
-- **Produto:** editor paramétrico residencial v19 em validação local.
-- **Implementação atual:** aplicação web Vite/TypeScript com renderização Three.js.
-- **Modelo:** paredes e coberturas paramétricas; cômodos, geometria e quantitativos derivados.
-- **Precisão de edição:** encaixe estrutural de 500 mm nesta fase.
+O projeto vai além de um construtor de plantas ou modelador 3D. Seu objetivo é criar um Modelo Digital da Residência capaz de acompanhar a construção desde a concepção até a operação, manutenção e evolução do imóvel.
 
-## Navegação
+---
 
-- [Visão e glossário](./Glossário.md)
-- [Princípios de produto e UX](../01%20-%20Produto/Princípios%20de%20Produto%20e%20UX.md)
-- [Modelo de domínio](../02%20-%20Domínio/Modelo%20de%20Domínio.md)
-- [Arquitetura](../03%20-%20Arquitetura/Arquitetura.md)
-- [SPEC-001 — Editor Paramétrico v19](../06%20-%20Especificações/SPEC-001%20-%20Editor%20Paramétrico%20v19.md)
-- [ADRs aceitas](../07%20-%20Desenvolvimento/ADR)
-- [ADRs rejeitadas](../07%20-%20Desenvolvimento/ADR-Rejeitadas)
-- [Roadmap de migração](../../migration/Migration%20Roadmap.md)
+# Estrutura do Repositório
 
-## Regra de manutenção
+```
+Esboce/
 
-Uma funcionalidade não é considerada concluída quando seu comportamento real diverge da especificação, do modelo de domínio ou de uma ADR aceita. Experimentos descartados que possam voltar a ser propostos devem ser preservados como ADR rejeitada.
+├── docs/          Engenharia Oficial do Produto
+├── atlas/         Projeto Atlas (Auditoria da Engenharia)
+├── src/           Código-fonte
+├── tests/         Testes
+├── assets/        Diagramas, imagens e recursos
+└── README.md
+```
+
+---
+
+# Documentação
+
+Toda a documentação oficial do produto está localizada em:
+
+```
+docs/
+```
+
+A documentação é considerada a fonte oficial da verdade do projeto.
+
+Nenhuma implementação deve contradizer a documentação aprovada.
+
+---
+
+# Projeto Atlas
+
+O Projeto Atlas é responsável pela auditoria, consolidação e evolução da engenharia do Esboce.
+
+Toda a documentação relacionada à auditoria encontra-se em:
+
+```
+atlas/
+```
+
+O Atlas não documenta funcionalidades.
+
+Ele documenta a qualidade da engenharia.
+
+---
+
+# Princípios
+
+- Engenharia antes da implementação.
+- Uma única fonte da verdade.
+- Conhecimento rastreável.
+- Arquitetura orientada ao domínio.
+- Evolução contínua.
+- Simplicidade para o usuário.
+- Complexidade controlada internamente.
+
+---
+
+# Estado Atual
+
+Projeto em estabilização pré-comercial, com versão pública de testes em [esboce.com.br](https://esboce.com.br).
+
+O editor, a persistência autenticada, os documentos jurídicos, os e-mails transacionais, a proteção antiabuso, o monitoramento e o deploy com gates automáticos estão operacionais. A baseline atual possui 134 testes automatizados.
+
+Consulte o [Roadmap](docs/00%20-%20Projeto/Roadmap.md) para o estado das fases e o [Changelog](CHANGELOG.md) para as entregas recentes.
+
+Toda mudança relevante deve manter código, testes e documentação coerentes antes de chegar ao `main`.
+
+---
+
+© Projeto Esboce

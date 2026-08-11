@@ -95,8 +95,9 @@ orientaçãoSolar
 latitude
 longitude
 ventoPredominante
-Futuramente
 Muros
+Muro por lado do lote, opcional, definível a qualquer momento — ver ADR-008.
+Futuramente
 Piscina
 Calçada
 Garagem
