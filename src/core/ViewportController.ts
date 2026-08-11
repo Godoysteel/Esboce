@@ -72,6 +72,18 @@ import {
   var placingDraw = false; // true entre o 1º e o 2º clique de Cômodo/Parede
   var drawStart: any = null, drawPreview: any = null;
   var dragElementStart: any = null, dragGroundStart: any = null;
+  // Painel de Envidraçamento em arraste (DEC-56, correção de
+  // performance): referência DIRETA ao mesh Three.js do painel sendo
+  // arrastado — durante o pointermove, move só ESSE objeto (mutação
+  // local, sem passar pelo Store), evitando reconstruir a cena inteira
+  // dezenas de vezes por segundo. O Store só é atualizado UMA VEZ, ao
+  // soltar o mouse.
+  var glazingPanelDragMesh: any = null;
+  // Prévia incremental do arraste de um cômodo isolado. Guardamos os
+  // objetos 3D recém-reconstruídos pela seleção e movemos somente suas
+  // transforms durante o pointermove. A geometria persistida continua
+  // intacta até o pointerup, quando o Store recebe o delta final uma vez.
+  var roomGroupDragObjects: { object: any; startX: number; startZ: number }[] = [];
   var pendingRoofAttic = false;
   var pendingGenerateRoofId: any = null;
   var generateAtticBtnEl: any = null;
@@ -126,6 +138,48 @@ import {
   };
 
   function modelToWorld(mx: any, my: any) { return { x: (mx - offsetX) * scale, z: (my - offsetY) * scale }; }
+
+  function collectRoomGroupDragObjects(wallIds: string[], furnitureSnapshots: any[]) {
+    var wallSet: { [id: string]: boolean } = {};
+    wallIds.forEach(function (id) { wallSet[id] = true; });
+    var furnitureSet: { [id: string]: boolean } = {};
+    (furnitureSnapshots || []).forEach(function (f: any) { furnitureSet[f.id] = true; });
+    var roomKey = wallIds.slice().sort().join(',');
+    var seen: any[] = [];
+    roomGroupDragObjects = [];
+
+    scene.children.forEach(function (object: any) {
+      var data = object.userData || {};
+      var belongs = !!(data.wallId && wallSet[data.wallId]);
+      if (!belongs && data.openingId) {
+        var opening = Store.findOpening(data.openingId);
+        belongs = !!(opening && wallSet[opening.wallId]);
+      }
+      if (!belongs && data.glazingPanelId) {
+        var panel = Store.findGlazingPanel(data.glazingPanelId);
+        belongs = !!(panel && panel.wallId && wallSet[panel.wallId]);
+      }
+      if (!belongs && data.roomKey === roomKey) belongs = true;
+      if (!belongs && data.furnitureId && furnitureSet[data.furnitureId]) belongs = true;
+      if (!belongs || seen.indexOf(object) !== -1) return;
+      seen.push(object);
+      roomGroupDragObjects.push({ object: object, startX: object.position.x, startZ: object.position.z });
+    });
+  }
+
+  function previewRoomGroupDelta(dx: number, dy: number) {
+    var worldDx = dx * scale, worldDz = dy * scale;
+    roomGroupDragObjects.forEach(function (entry) {
+      entry.object.position.x = entry.startX + worldDx;
+      entry.object.position.z = entry.startZ + worldDz;
+    });
+  }
+
+  function findGlazingPanelSceneObject(id: string) {
+    return scene.children.find(function (object: any) {
+      return object.userData && object.userData.glazingPanelId === id;
+    }) || null;
+  }
 
   // Centro do painel de Envidraçamento em coordenadas de MODELO (antes
   // de modelToWorld) — solto (preview) usa x/y diretos; anexado
@@ -329,7 +383,7 @@ import {
     if (!mesh) return false;
     var editingIdx = Store.getProject().currentFloorIndex;
     if (mesh.userData.floorIndex !== editingIdx) return false;
-    return mesh.userData.category === 'paredesTerreo' || mesh.userData.category === 'paredesSuperiores' || mesh.userData.category === 'colunas' || mesh.userData.category === 'telhado' || mesh.userData.category === 'aberturas' || mesh.userData.category === 'varanda' || mesh.userData.category === 'furniture' || !!mesh.userData.lajeId;
+    return mesh.userData.category === 'paredesTerreo' || mesh.userData.category === 'paredesSuperiores' || mesh.userData.category === 'colunas' || mesh.userData.category === 'telhado' || mesh.userData.category === 'aberturas' || mesh.userData.category === 'varanda' || mesh.userData.category === 'furniture' || mesh.userData.category === 'glazingPanel' || !!mesh.userData.lajeId;
   }
 
   function select(wallId: any) {
@@ -1300,6 +1354,7 @@ import {
             selectRoomGroup(isolatedRoomWallIds);
             dragElementStart = { snapshots: snapshots, furnitureSnapshots: furnitureSnapshots, lastValidDx: 0, lastValidDy: 0 };
             dragGroundStart = getGroundModelPoint(e.clientX, e.clientY);
+            collectRoomGroupDragObjects(isolatedRoomWallIds, furnitureSnapshots);
             dragMode = 'roomGroup';
             Store.commands.beginTransaction();
           } else {
@@ -1340,8 +1395,9 @@ import {
           dragGroundStart = getGroundModelPoint(e.clientX, e.clientY);
           Store.commands.beginTransaction();
         } else if (mesh.userData.glazingPanelId) {
-          var gpEnt = Store.findGlazingPanel(mesh.userData.glazingPanelId)!;
-          selectGlazingPanel(mesh.userData.glazingPanelId);
+          var glazingPanelId = mesh.userData.glazingPanelId;
+          var gpEnt = Store.findGlazingPanel(glazingPanelId)!;
+          selectGlazingPanel(glazingPanelId);
           // Painel já anexado: Etapa 2b não move mais depois de
           // encostado na parede (reposicionar ao longo da parede fica
           // pra uma próxima etapa) — só seleciona, pra dar acesso ao
@@ -1350,6 +1406,9 @@ import {
             dragMode = 'glazingPanelBody';
             dragElementStart = { x: gpEnt.x || 0, y: gpEnt.y || 0 };
             dragGroundStart = getGroundModelPoint(e.clientX, e.clientY);
+            // selectGlazingPanel reconstrói a cena. Recaptura o objeto
+            // recém-criado em vez de guardar o mesh anterior, já removido.
+            glazingPanelDragMesh = findGlazingPanelSceneObject(glazingPanelId);
             Store.commands.beginTransaction();
           }
         } else if (mesh.userData.openingId) {
@@ -1638,15 +1697,7 @@ import {
         var resolved = resolveRoomGroupCollision(dragElementStart.snapshots, gdx, gdy);
         dragElementStart.lastValidDx = resolved.x;
         dragElementStart.lastValidDy = resolved.y;
-        Store.commands.updateWallsGroupBodyLive(dragElementStart.snapshots, resolved.x, resolved.y);
-        // Móveis do cômodo viajam junto, mesmo delta das paredes — sem
-        // isso a cama ficaria "presa no chão" enquanto o quarto desliza
-        // por cima dela.
-        if (dragElementStart.furnitureSnapshots) {
-          dragElementStart.furnitureSnapshots.forEach(function (fs: any) {
-            Store.commands.updateFurnitureBodyLive(fs.id, fs.x + resolved.x, fs.y + resolved.y);
-          });
-        }
+        previewRoomGroupDelta(resolved.x, resolved.y);
       }
       return;
     }
@@ -1808,10 +1859,21 @@ import {
       return;
     }
     if (dragMode === 'glazingPanelBody') {
+      // Correção de performance (mesma sessão): NÃO chama Store aqui —
+      // isso disparava reconstrução da cena inteira (paredes, telhado,
+      // móveis, materiais, planilha, estatísticas) a cada pointermove,
+      // dezenas de vezes por segundo, travando a interface em projetos
+      // maiores (coluna e móvel já tinham esse mesmo custo antes,
+      // menos perceptível; aqui ficou evidente). Move só o mesh
+      // visual direto (mutação local, sem passar pelo Store/render());
+      // o Store só é atualizado UMA VEZ, no soltar do mouse.
       var gpG = getGroundModelPoint(e.clientX, e.clientY);
-      if (gpG && dragGroundStart) {
+      if (gpG && dragGroundStart && glazingPanelDragMesh) {
         var dxG = gpG.x - dragGroundStart.x, dyG = gpG.y - dragGroundStart.y;
-        Store.commands.updateGlazingPanelBodyLive(selectedGlazingPanelId, dragElementStart.x + dxG, dragElementStart.y + dyG);
+        var liveXG = dragElementStart.x + dxG, liveYG = dragElementStart.y + dyG;
+        var wpG = modelToWorld(liveXG, liveYG);
+        glazingPanelDragMesh.position.x = wpG.x;
+        glazingPanelDragMesh.position.z = wpG.z;
       }
       return;
     }
@@ -2083,6 +2145,12 @@ import {
     }
     if (dragMode === 'roomGroup') {
       if (dragElementStart && dragElementStart.snapshots) {
+        var finalDx = dragElementStart.lastValidDx || 0;
+        var finalDy = dragElementStart.lastValidDy || 0;
+        Store.commands.updateWallsGroupBodyLive(dragElementStart.snapshots, finalDx, finalDy);
+        (dragElementStart.furnitureSnapshots || []).forEach(function (fs: any) {
+          Store.commands.updateFurnitureBodyLive(fs.id, fs.x + finalDx, fs.y + finalDy);
+        });
         dragElementStart.snapshots.forEach(function (s: any) { snapWallToGridExact(s.id); });
         if (fuseAllOverlaps(dragElementStart.snapshots.map(function (s: any) { return s.id; }))) {
           hintEl.textContent = 'Paredes encaixadas e fundidas no eixo do grid.';
@@ -2091,6 +2159,7 @@ import {
           hintEl.textContent = 'Junções criadas — paredes transversais divididas nos encontros.';
         }
       }
+      roomGroupDragObjects = [];
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }
@@ -2135,8 +2204,20 @@ import {
       return;
     }
     if (dragMode === 'glazingPanelBody') {
+      // Única atualização de Store do arraste inteiro — commita a
+      // posição final (o mesh visual já estava lá, movido direto no
+      // pointermove) antes de rodar o ímã, senão nearestWallForGlazingAttach
+      // leria o x/y ANTIGO (de antes do arraste) direto do Store.
       var gpId = selectedGlazingPanelId;
+      if (gpId && dragElementStart && dragGroundStart) {
+        var gpUp = getGroundModelPoint(e.clientX, e.clientY);
+        if (gpUp) {
+          var dxUp = gpUp.x - dragGroundStart.x, dyUp = gpUp.y - dragGroundStart.y;
+          Store.commands.updateGlazingPanelBodyLive(gpId, dragElementStart.x + dxUp, dragElementStart.y + dyUp);
+        }
+      }
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
+      glazingPanelDragMesh = null;
       if (gpId) {
         var nearWallId = nearestWallForGlazingAttach(gpId);
         if (nearWallId) Store.commands.attachGlazingPanelToWall(gpId, nearWallId);
@@ -2853,11 +2934,14 @@ import {
       return;
     }
     if (key === 'glazing') {
-      // Painel de Envidraçamento (DEC-56) — Etapa 2a: nasce solto,
-      // numa posição padrão perto do que já existe no pavimento (mesmo
-      // espírito de gap usado por laje/cômodo). Arraste, ímã de
-      // encosto na parede e o corte visual ficam pra Etapa 2b — por
-      // ora o painel só existe e aparece na cena como um placeholder.
+      // Painel de Envidraçamento (DEC-56) — nasce solto, numa posição
+      // padrão perto do que já existe no pavimento (mesmo espírito de
+      // gap usado por laje/cômodo). Arraste o corpo até perto de uma
+      // parede pra encostar (ímã automático) e recortar a camada
+      // visível dela — ver nearestWallForGlazingAttach/
+      // attachGlazingPanelToWall (Etapa 2b). O grid de perfis + vidro
+      // reflexivo de verdade (Etapa 2c) ainda não existe — o painel
+      // aparece como placeholder até lá.
       var wallsG = Store.currentWalls();
       var minXg = Infinity, maxXg = -Infinity, minYg = Infinity;
       wallsG.forEach(function (w) {
@@ -2872,7 +2956,7 @@ import {
       deselect();
       var newPanel = Store.commands.createGlazingPanel(gx, gy);
       hintEl.textContent = newPanel
-        ? 'Painel de Fachada criado — posicionamento por arraste ainda não está disponível nesta versão.'
+        ? 'Painel de Fachada criado — arraste o corpo dele até perto de uma parede pra encostar (o grid de perfis e o vidro reflexivo ainda não estão prontos, por enquanto é só o volume).'
         : 'Não foi possível criar o painel de Fachada.';
       return;
     }

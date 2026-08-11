@@ -2712,6 +2712,7 @@ export function hashColorHex(key: string): number {
         scene.add(mesh);
         registry.roomMeshes.push(mesh);
         var roomEdgeLines = buildRoomFloorOutline(insetPoints, insetWallIds, floorData.walls, floorData.openings, offsetX, offsetY, scale, pisoTopY);
+        roomEdgeLines.userData.roomKey = roomKey;
         scene.add(roomEdgeLines);
         registry.roomMeshes.push(roomEdgeLines);
 
