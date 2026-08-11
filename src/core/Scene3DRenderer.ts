@@ -2578,6 +2578,7 @@ export function hashColorHex(key: string): number {
           registry.wallMeshes.push(mesh);
           var edges = new THREE.EdgesGeometry(geo);
           var edgeLines = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x1B1C1E }));
+          edgeLines.userData.columnId = c.id; edgeLines.userData.floorIndex = floorIdx;
           edgeLines.position.copy(mesh.position);
           scene.add(edgeLines);
           registry.wallMeshes.push(edgeLines);

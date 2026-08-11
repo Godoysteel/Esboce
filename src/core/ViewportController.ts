@@ -85,6 +85,7 @@ import {
   // intacta até o pointerup, quando o Store recebe o delta final uma vez.
   var roomGroupDragObjects: { object: any; startX: number; startZ: number }[] = [];
   var furnitureDragObject: any = null;
+  var columnDragObjects: { object: any; startX: number; startZ: number }[] = [];
   var pendingRoofAttic = false;
   var pendingGenerateRoofId: any = null;
   var generateAtticBtnEl: any = null;
@@ -186,6 +187,14 @@ import {
     return scene.children.find(function (object: any) {
       return object.userData && object.userData.furnitureId === id;
     }) || null;
+  }
+
+  function collectColumnDragObjects(id: string) {
+    columnDragObjects = scene.children.filter(function (object: any) {
+      return object.userData && object.userData.columnId === id;
+    }).map(function (object: any) {
+      return { object: object, startX: object.position.x, startZ: object.position.z };
+    });
   }
 
   // Centro do painel de Envidraçamento em coordenadas de MODELO (antes
@@ -1368,11 +1377,13 @@ import {
             startWallResizeDrag(clickedWallId, e.clientX, e.clientY);
           }
         } else if (mesh.userData.columnId) {
-          selectColumn(mesh.userData.columnId);
+          var columnId = mesh.userData.columnId;
+          selectColumn(columnId);
           dragMode = 'columnBody';
-          var c = Store.findColumn(mesh.userData.columnId)!;
-          dragElementStart = { x: c.x, y: c.y };
+          var c = Store.findColumn(columnId)!;
+          dragElementStart = { x: c.x, y: c.y, lastX: c.x, lastY: c.y };
           dragGroundStart = getGroundModelPoint(e.clientX, e.clientY);
+          collectColumnDragObjects(columnId);
           Store.commands.beginTransaction();
         } else if (mesh.userData.roofId) {
           selectRoof(mesh.userData.roofId);
@@ -1856,7 +1867,13 @@ import {
       var gp3 = getGroundModelPoint(e.clientX, e.clientY);
       if (gp3 && dragGroundStart) {
         var dx3 = gp3.x - dragGroundStart.x, dy3 = gp3.y - dragGroundStart.y;
-        Store.commands.updateColumnBodyLive(selectedColumnId, dragElementStart.x + dx3, dragElementStart.y + dy3);
+        dragElementStart.lastX = dragElementStart.x + dx3;
+        dragElementStart.lastY = dragElementStart.y + dy3;
+        var worldDx3 = dx3 * scale, worldDz3 = dy3 * scale;
+        columnDragObjects.forEach(function (entry) {
+          entry.object.position.x = entry.startX + worldDx3;
+          entry.object.position.z = entry.startZ + worldDz3;
+        });
       }
       return;
     }
@@ -2251,7 +2268,15 @@ import {
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }
-    if (dragMode === 'columnBody' || dragMode === 'lajeBody' || dragMode === 'openingSlide' || dragMode === 'openingEdgeLeft' || dragMode === 'openingEdgeRight' || dragMode === 'openingEdgeTop' || (dragMode && dragMode.indexOf('varandaEdge') === 0)) {
+    if (dragMode === 'columnBody') {
+      if (selectedColumnId && dragElementStart) {
+        Store.commands.updateColumnBodyLive(selectedColumnId, dragElementStart.lastX, dragElementStart.lastY);
+      }
+      columnDragObjects = [];
+      dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
+      return;
+    }
+    if (dragMode === 'lajeBody' || dragMode === 'openingSlide' || dragMode === 'openingEdgeLeft' || dragMode === 'openingEdgeRight' || dragMode === 'openingEdgeTop' || (dragMode && dragMode.indexOf('varandaEdge') === 0)) {
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }
