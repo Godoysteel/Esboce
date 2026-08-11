@@ -1237,7 +1237,12 @@ export function hashColorHex(key: string): number {
     var dx = x2 - x1, dz = z2 - z1, len = Math.hypot(dx, dz);
     var height = muro.heightM != null ? muro.heightM : Core.TERRENO_MURO_HEIGHT_M;
     var thick = Core.WALL_THICK;
-    var geo = new THREE.BoxGeometry(len, height, thick);
+    // Estende a caixa pela espessura em cada ponta (mesmo truque de
+    // buildParapetWalls) — sem isso, dois muros adjacentes se
+    // encontrando na quina do terreno deixam uma fresta triangular
+    // (o corpo de cada caixa termina exatamente na linha do eixo, não
+    // cobre a espessura da outra parede que chega perpendicular ali).
+    var geo = new THREE.BoxGeometry(len + thick, height, thick);
     var mesh = new THREE.Mesh(geo, mat);
     mesh.position.set((x1 + x2) / 2, height / 2, (z1 + z2) / 2);
     mesh.rotation.y = -Math.atan2(dz, dx);
