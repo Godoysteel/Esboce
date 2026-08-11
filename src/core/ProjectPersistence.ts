@@ -1,8 +1,8 @@
 import type {
-  Column, Floor, Furniture, Laje, Opening, Project, ProjectLayers, Roof, Varanda, Wall,
+  Column, Floor, Furniture, GlazingPanel, Laje, Opening, Project, ProjectLayers, Roof, Varanda, Wall,
 } from './types.js';
 
-export const CURRENT_PROJECT_SCHEMA_VERSION = 4;
+export const CURRENT_PROJECT_SCHEMA_VERSION = 5;
 
 export interface StoredProjectDocument {
   schemaVersion: number;
@@ -60,6 +60,11 @@ function string(value: unknown, path: string, fallback?: string): string {
 function optionalString(value: unknown, path: string): string | undefined {
   if (value == null) return undefined;
   return string(value, path);
+}
+
+function optionalNumber(value: unknown, path: string): number | undefined {
+  if (value == null) return undefined;
+  return number(value, path);
 }
 
 function number(value: unknown, path: string, fallback?: number): number {
@@ -155,6 +160,25 @@ function parseLaje(value: unknown, path: string): Laje {
   return { id: string(v.id, `${path}.id`), points };
 }
 
+function parseGlazingPanel(value: unknown, path: string): GlazingPanel {
+  const v = record(value, path);
+  const panel: GlazingPanel = {
+    id: string(v.id, `${path}.id`),
+    state: enumValue(v.state, ['preview', 'attached'], `${path}.state`, 'preview'),
+    widthM: number(v.widthM, `${path}.widthM`),
+    heightM: number(v.heightM, `${path}.heightM`),
+    moduleTargetM: number(v.moduleTargetM, `${path}.moduleTargetM`, 1.2),
+  };
+  const wallId = optionalString(v.wallId, `${path}.wallId`);
+  const offsetM = optionalNumber(v.offsetM, `${path}.offsetM`);
+  const sillHeightM = optionalNumber(v.sillHeightM, `${path}.sillHeightM`);
+  if (wallId !== undefined) panel.wallId = wallId;
+  if (offsetM !== undefined) panel.offsetM = offsetM;
+  if (sillHeightM !== undefined) panel.sillHeightM = sillHeightM;
+  if (panel.state === 'attached' && !panel.wallId) fail(`${path}.wallId`, 'painel anexado precisa de parede hospedeira');
+  return panel;
+}
+
 function parseFurniture(value: unknown, path: string): Furniture {
   const v = record(value, path);
   return {
@@ -200,6 +224,7 @@ function parseFloor(value: unknown, path: string): Floor {
     varandas: array(v.varandas, `${path}.varandas`, true).map((item, i) => parseVaranda(item, `${path}.varandas[${i}]`)),
     lajes: array(v.lajes, `${path}.lajes`, true).map((item, i) => parseLaje(item, `${path}.lajes[${i}]`)),
     furniture: array(v.furniture, `${path}.furniture`, true).map((item, i) => parseFurniture(item, `${path}.furniture[${i}]`)),
+    glazingPanels: array(v.glazingPanels, `${path}.glazingPanels`, true).map((item, i) => parseGlazingPanel(item, `${path}.glazingPanels[${i}]`)),
     roomFinishes: stringMap(v.roomFinishes, `${path}.roomFinishes`),
     roomFinishSettings: settingsMap(v.roomFinishSettings, `${path}.roomFinishSettings`),
   };
@@ -208,7 +233,10 @@ function parseFloor(value: unknown, path: string): Floor {
   floor.openings.forEach((opening, index) => {
     if (!wallIds.has(opening.wallId)) fail(`${path}.openings[${index}].wallId`, 'parede hospedeira não existe');
   });
-  const ids = [...floor.walls, ...floor.columns, ...floor.roofs, ...floor.openings, ...floor.varandas, ...floor.lajes, ...floor.furniture].map((item) => item.id);
+  floor.glazingPanels.forEach((panel, index) => {
+    if (panel.wallId && !wallIds.has(panel.wallId)) fail(`${path}.glazingPanels[${index}].wallId`, 'parede hospedeira não existe');
+  });
+  const ids = [...floor.walls, ...floor.columns, ...floor.roofs, ...floor.openings, ...floor.varandas, ...floor.lajes, ...floor.furniture, ...floor.glazingPanels].map((item) => item.id);
   if (new Set(ids).size !== ids.length) fail(path, 'há identificadores de entidades duplicados');
   return floor;
 }

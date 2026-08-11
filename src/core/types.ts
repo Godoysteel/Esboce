@@ -112,6 +112,35 @@ export interface Opening {
 
 export type FloorKind = 'standard' | 'attic';
 
+// Painel de Envidraçamento (categoria "Envidraçamento", ferramenta
+// "Fachada" — DEC-56, substitui o campo Wall.glazingModuleWidthM do
+// DEC-55). Mesmo espírito de objeto livre de Laje: nasce solto na
+// viewport (`state: 'preview'`), redimensiona por arraste de borda
+// (widthM/heightM). Ao encostar numa parede e confirmar, grava
+// wallId/offsetM/sillHeightM e vira `state: 'attached'` — nesse
+// momento widthM/heightM ficam travados no limite da parede
+// hospedeira. O painel NÃO cria Opening nem afeta o quantitativo de
+// alvenaria: a parede hospedeira continua contando como se estivesse
+// inteira; só a malha 3D visível é que pula o trecho coberto pelo
+// painel (técnica de banda já usada por Opening/buildWallOpeningBands,
+// reaplicada sem gerar uma entidade Opening de verdade).
+export type GlazingPanelState = 'preview' | 'attached';
+
+export interface GlazingPanel {
+  id: string;
+  state: GlazingPanelState;
+  widthM: number;
+  heightM: number;
+  /** Largura-alvo do módulo (vidro + junta), configurável na interface — mantém a simetria do grid. */
+  moduleTargetM: number;
+  // Só existem quando state === 'attached':
+  wallId?: string;
+  /** Distância ao longo da parede, mesma convenção de Opening.offset. */
+  offsetM?: number;
+  /** Altura da base do painel em relação ao piso — 0 = do chão ao teto. */
+  sillHeightM?: number;
+}
+
 export interface Floor {
   id: string;
   name: string;
@@ -125,6 +154,7 @@ export interface Floor {
   varandas: Varanda[];
   lajes: Laje[];
   furniture: Furniture[];
+  glazingPanels: GlazingPanel[];
   roomFinishes: Record<string, string>;
   roomFinishSettings?: Record<string, { scale: number; rotation: number }>;
 }
