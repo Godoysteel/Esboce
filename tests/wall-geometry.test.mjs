@@ -88,6 +88,23 @@ test('arraste incremental da fachada recaptura o mesh depois da selecao reconstr
   assert.doesNotMatch(viewportControllerSource, /glazingPanelDragMesh = mesh/);
 });
 
+test('arraste de laje move somente a previa 3D e confirma os pontos ao soltar', () => {
+  assert.match(viewportControllerSource, /function collectLajeDragObjects\(id: string\)/);
+  assert.match(viewportControllerSource, /selectLaje\(lajeId\);[\s\S]{0,700}collectLajeDragObjects\(lajeId\)/);
+
+  const moveStart = viewportControllerSource.indexOf("if (dragMode === 'lajeBody') {");
+  const moveEnd = viewportControllerSource.indexOf("if (dragMode === 'openingEdgeLeft'", moveStart);
+  const pointerMoveFlow = viewportControllerSource.slice(moveStart, moveEnd);
+  assert.match(pointerMoveFlow, /previewLajeDelta\(snapped\.dx, snapped\.dy\)/);
+  assert.doesNotMatch(pointerMoveFlow, /updateLajePointsLive/);
+
+  const upStart = viewportControllerSource.indexOf("if (dragMode === 'lajeBody') {", moveEnd);
+  const upEnd = viewportControllerSource.indexOf("if \(dragMode === 'openingSlide'", upStart);
+  const pointerUpFlow = viewportControllerSource.slice(upStart, upEnd);
+  assert.match(pointerUpFlow, /updateLajePointsLive/);
+  assert.match(pointerUpFlow, /lajeDragObjects = \[\]/);
+});
+
 test('arraste de movel usa previa 3D e confirma o Store somente ao soltar', () => {
   assert.match(viewportControllerSource, /function findFurnitureSceneObject\(id: string\)/);
   assert.match(viewportControllerSource, /selectFurniture\(furnitureId\);[\s\S]{0,700}furnitureDragObject = findFurnitureSceneObject\(furnitureId\)/);
