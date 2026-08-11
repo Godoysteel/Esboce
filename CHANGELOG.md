@@ -83,6 +83,13 @@ Criada a primeira baseline de engenharia do projeto.
 
 # Não lançado
 
+## Adicionado — editor 2D (fase 1)
+
+- O botão **2D** abre uma planta técnica sincronizada com o mesmo projeto usado pela viewport 3D.
+- A planta apresenta grid branco, paredes, aberturas, pilares, lajes, telhados, terreno e muros do pavimento atual.
+- A navegação 2D oferece enquadramento automático, zoom e deslocamento sem modificar a geometria do projeto.
+- A implementação foi isolada em `Scene2DRenderer` e `Viewport2DController`, preparando a edição 2D e os fluxos de PDF das próximas fases.
+
 ## Adicionado (aviso de responsabilidade técnica)
 
 - **Card de boas-vindas com aviso de responsabilidade técnica**, centralizado sobre a viewport ao abrir o Esboce — implementa o que a ADR-006 já exigia ("o aviso não deve ficar escondido") mas nunca tinha ganhado UI. Dois parágrafos: o primeiro explica pra que o Esboce se propõe (desenhar a casa em 3D, escolher acabamento/produto de fornecedor real, quantitativo de materiais e estimativa de orçamento), o segundo deixa claro que é um complemento, não substitui arquiteto/engenheiro. Some com um clique consciente em "Entendi" (não fecha sozinho); a escolha fica lembrada por navegador (localStorage), não reaparece a cada carregamento. Paleta própria — vermelho-vinho + dourado — deliberadamente diferente do resto do app, pra se destacar. Sem fundo opaco cobrindo a viewport (backdrop leve só), coerente com o princípio de nenhum elemento tampar a cena 3D por completo. Ver DEC-46 no Registro de Decisões Técnicas.
