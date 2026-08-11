@@ -1,10 +1,10 @@
 # Roadmap do Esboce
 
-**Versão:** 1.0
+**Versão:** 1.1
 
 **Status:** Canônico
 
-**Atualização:** 10/08/2026
+**Atualização:** 11/08/2026
 
 ## Estado atual
 
@@ -73,6 +73,10 @@ Critérios para iniciar um piloto com usuários convidados:
 
 ## Evoluções posteriores
 
+- editor 2D sincronizado com o modelo paramétrico 3D, conforme ADR-009;
+- edição de planta com grid técnico, câmera ortográfica, simbologia arquitetônica, cotas e pavimentos;
+- exportação vetorial de planta em PDF nas escalas iniciais 1:50 e 1:100;
+- importação de PDF como referência local calibrável, posicionável, rotacionável, bloqueável e com transparência ajustável;
 - composições de quantitativo próprias para bloco estrutural e Light Steel Frame;
 - orçamento por loja e catálogo multi-loja conforme ADR-007;
 - refinamento estrutural para telhas metálicas, fibrocimento e shingle;

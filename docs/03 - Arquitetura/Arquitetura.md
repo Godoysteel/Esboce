@@ -1,10 +1,10 @@
 # Arquitetura do Esboce
 
-**Versão:** 2.2
+**Versão:** 2.3
 
 **Status:** Canônico
 
-**Atualização:** 10/08/2026
+**Atualização:** 11/08/2026
 
 ## 1. Objetivo
 
@@ -39,6 +39,16 @@ ViewportStats / MaterialsPanel ── valores derivados
 Persistência validada ── ProjectPersistence ── Supabase
 Serviços externos ────── Resend / Turnstile / Sentry
 ```
+
+A arquitetura-alvo da ADR-009 acrescenta uma segunda projeção do mesmo estado, sem duplicar o projeto:
+
+```text
+Store.commands / Project
+    ├── Scene3DRenderer + ViewportController
+    └── Scene2DRenderer + Viewport2DController
+```
+
+O 2D terá câmera ortográfica, simbologia e interação próprias. Alterações confirmadas em qualquer vista passam pelos mesmos comandos de domínio; linhas 2D e malhas 3D continuam sendo projeções descartáveis do modelo paramétrico.
 
 Responsabilidades atuais:
 
@@ -120,3 +130,4 @@ A organização atual em `src/core` é uma etapa de migração, não o destino f
 - [ADR-006 — Quantitativos, Orçamentos e Limites de Responsabilidade Técnica](../07%20-%20Desenvolvimento/ADR/ADR-006%20-%20Quantitativos,%20Orçamentos%20e%20Limites%20de%20Responsabilidade%20Técnica.md)
 - [ADR-007 — Catálogo Multi-Loja, Vínculo com Modelos 3D e Orçamento por Loja](../07%20-%20Desenvolvimento/ADR/ADR-007%20-%20Catálogo%20Multi-Loja,%20Vínculo%20com%20Modelos%203D%20e%20Orçamento%20por%20Loja.md)
 - [ADR-008 — Terreno Opcional e Muros de Perímetro por Lado](../07%20-%20Desenvolvimento/ADR/ADR-008%20-%20Terreno%20Opcional%20e%20Muros%20de%20Perímetro%20por%20Lado.md)
+- [ADR-009 — Editor 2D Sincronizado e Plantas em PDF](../07%20-%20Desenvolvimento/ADR/ADR-009%20-%20Editor%202D%20Sincronizado%20e%20Plantas%20em%20PDF.md)
