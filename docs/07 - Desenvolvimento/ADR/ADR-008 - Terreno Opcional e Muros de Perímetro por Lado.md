@@ -44,9 +44,10 @@ Se o usuário já marcou muros e depois muda o tamanho do terreno (`25x10` → `
 
 ## 7. Fora de escopo desta decisão (registrado como pendência)
 
-- **UI de clique nos lados do retângulo e renderização do terreno na cena** — esta ADR cobre o modelo de dados e os comandos (`Store.setTerreno`, `Store.toggleTerrenoMuroSide`), que já estão implementados e testados. A integração em `ViewportController.ts` (detecção de clique nos quatro lados) e `Scene3DRenderer.ts` (desenho do retângulo em vista de topo e extrusão dos muros com `heightM` próprio) fica como próxima etapa de implementação — são arquivos grandes, com uma máquina de estados de arraste (`dragMode`) já intrincada, que merecem atenção dedicada em vez de uma integração apressada.
+- **UI de clique nos lados e renderização do terreno** — implementada na DEC-60 (sessão seguinte a esta ADR): botão na sidebar, modal de tamanho, retângulo-guia com faixa clicável por lado, muros extrudados sempre visíveis. Ver DEC-60 para as simplificações assumidas (câmera de topo aproximada, não ortográfica; muros como caixa simples, sem miter de canto).
+- **Ferramenta Porta/Janela em muro de terreno** — o modelo de dados aceita (`Opening.wallId` pode referenciar um muro), mas `Store.commands.insertOpening` e comandos relacionados de abertura ainda só buscam em `Floor.walls`. Muros não foram marcados com `userData.wallId` de propósito, pra a ferramenta não parecer funcionar sem funcionar de fato (ver DEC-60).
 - **Posicionamento da casa dentro do terreno** — hoje a casa e o terreno compartilham a mesma origem `(0,0)`; mover a casa livremente dentro do retângulo do terreno (drag do conjunto de paredes) não faz parte desta decisão.
-- **Materiais/acabamento padrão do muro** — o muro nasce sem `finishA`/`finishB` definidos (mesmo comportamento de uma parede nova da casa); não foi definido um material "padrão de muro" diferente do padrão de parede.
+- **Materiais/acabamento padrão do muro** — o muro nasce sem `finishA`/`finishB` definidos (mesmo comportamento de uma parede nova da casa); não há UI de pintura para muro ainda, nem foi definido um material "padrão de muro" diferente do padrão de parede.
 
 ---
 

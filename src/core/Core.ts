@@ -85,7 +85,12 @@ export function terrenoMuroSegment(
   terreno: { larguraM: number; comprimentoM: number },
   side: TerrenoMuroSide
 ): { x1: number; y1: number; x2: number; y2: number } {
-  const w = terreno.larguraM, c = terreno.comprimentoM;
+  // Terreno.larguraM/comprimentoM são metros reais (nome do campo), mas
+  // Wall.x1/y1/x2/y2 são unidades de grade (GRID=20 unidades por metro —
+  // ver Core.wallLengthMeters, que divide por GRID pra voltar a metros).
+  // Sem essa conversão, um terreno "25x10" geraria muros de 1,25m/0,5m
+  // de comprimento real em vez de 25m/10m.
+  const w = terreno.larguraM * GRID, c = terreno.comprimentoM * GRID;
   switch (side) {
     case 'minZ': return { x1: 0, y1: 0, x2: w, y2: 0 };
     case 'maxZ': return { x1: 0, y1: c, x2: w, y2: c };

@@ -1121,7 +1121,13 @@ export function setTerreno(larguraM: number, comprimentoM: number): void {
   if (!(larguraM > 0) || !(comprimentoM > 0)) return;
   pushUndoSnapshot();
   const sides = project.terreno ? project.terreno.muros.map((m) => m.id) : [];
-  const terreno = Core.createTerrenoEntity(Core.snap(larguraM), Core.snap(comprimentoM));
+  // Core.snap() opera em unidades de grade (Core.GRID por metro), não
+  // em metros — larguraM/comprimentoM já chegam em metros (o que o
+  // usuário digitou), então arredondamos aqui no mesmo módulo de 0,5m
+  // (Core.SNAP_UNIT / Core.GRID), sem passar por Core.snap().
+  const stepM = Core.SNAP_UNIT / Core.GRID;
+  const roundToStep = (m: number) => Math.round(m / stepM) * stepM;
+  const terreno = Core.createTerrenoEntity(roundToStep(larguraM), roundToStep(comprimentoM));
   const sideNames: TerrenoMuroSide[] = ['minX', 'maxX', 'minZ', 'maxZ'];
   terreno.muros = sideNames
     .filter((side) => sides.includes(Core.terrenoMuroId(side)))

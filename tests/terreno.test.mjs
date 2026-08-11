@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import {
   createProject, createTerrenoEntity, createTerrenoMuroEntity, terrenoMuroSegment, terrenoMuroId,
-  TERRENO_MURO_HEIGHT_M, WALL_HEIGHT,
+  TERRENO_MURO_HEIGHT_M, WALL_HEIGHT, GRID, wallLengthMeters,
 } from '../src/core/Core.ts';
 import {
   CURRENT_PROJECT_SCHEMA_VERSION, ProjectFormatError, decodeProjectDocument, encodeProjectDocument,
@@ -27,12 +27,21 @@ test('createTerrenoEntity: nasce sem muros', () => {
   assert.deepEqual(terreno.muros, []);
 });
 
-test('terrenoMuroSegment: cada lado do retângulo 25×10 bate com a aresta correspondente', () => {
+test('terrenoMuroSegment: cada lado do retângulo 25×10 bate com a aresta correspondente, em unidades de grade (metros × GRID)', () => {
   const terreno = createTerrenoEntity(25, 10);
-  assert.deepEqual(terrenoMuroSegment(terreno, 'minZ'), { x1: 0, y1: 0, x2: 25, y2: 0 });
-  assert.deepEqual(terrenoMuroSegment(terreno, 'maxZ'), { x1: 0, y1: 10, x2: 25, y2: 10 });
-  assert.deepEqual(terrenoMuroSegment(terreno, 'minX'), { x1: 0, y1: 0, x2: 0, y2: 10 });
-  assert.deepEqual(terrenoMuroSegment(terreno, 'maxX'), { x1: 25, y1: 0, x2: 25, y2: 10 });
+  const w = 25 * GRID, c = 10 * GRID;
+  assert.deepEqual(terrenoMuroSegment(terreno, 'minZ'), { x1: 0, y1: 0, x2: w, y2: 0 });
+  assert.deepEqual(terrenoMuroSegment(terreno, 'maxZ'), { x1: 0, y1: c, x2: w, y2: c });
+  assert.deepEqual(terrenoMuroSegment(terreno, 'minX'), { x1: 0, y1: 0, x2: 0, y2: c });
+  assert.deepEqual(terrenoMuroSegment(terreno, 'maxX'), { x1: w, y1: 0, x2: w, y2: c });
+});
+
+test('terrenoMuroSegment: comprimento real do muro (Core.wallLengthMeters) bate com o metro digitado — não é 1/GRID do valor', () => {
+  const terreno = createTerrenoEntity(25, 10);
+  const minZ = createTerrenoMuroEntity(terreno, 'minZ'); // lado "largura", 25m
+  const minX = createTerrenoMuroEntity(terreno, 'minX'); // lado "comprimento", 10m
+  assert.equal(wallLengthMeters(minZ), 25);
+  assert.equal(wallLengthMeters(minX), 10);
 });
 
 test('createTerrenoMuroEntity: gera parede com id determinístico por lado e altura própria (menor que a da casa)', () => {
