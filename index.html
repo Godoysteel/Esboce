@@ -1181,6 +1181,18 @@
     </div>
 
     <div class="ts-divider"></div>
+    <div class="ts-group-label">Terreno</div>
+    <div class="ts-group">
+      <button class="ts-btn tool-btn" id="toolTerreno" data-tool="terreno" title="Terreno — defina o tamanho do lote e clique nos lados do retângulo pra adicionar ou remover muro">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="5" y="8" width="30" height="24" rx="1"/>
+          <path d="M5 20h30M20 8v24" stroke-opacity="0.4"/>
+        </svg>
+        <span>Terreno</span>
+      </button>
+    </div>
+
+    <div class="ts-divider"></div>
     <div class="ts-group-label">Cobertura</div>
     <div class="ts-group">
       <button class="ts-btn tool-btn" id="toolTelhado" data-tool="telhado" title="Telhado">
@@ -1548,6 +1560,20 @@ Mova uma parede para registrar a operação.</pre>
     <div class="auth-field"><input id="projectNameInput" type="text" placeholder="Ex.: Casa da Praia, Sobrado Jardins..." maxlength="120"></div>
     <button class="auth-submit" id="projectNameSubmit">Salvar projeto</button>
     <div class="auth-error" id="projectNameError"></div>
+  </div>
+</div>
+
+<div id="terrenoModalOverlay" style="display:none; position:fixed; inset:0; background:rgba(44,44,42,0.55); z-index:1000; align-items:center; justify-content:center;">
+  <div class="auth-modal" style="width:360px;">
+    <button class="auth-close" id="terrenoModalClose" title="Fechar">✕</button>
+    <h2>Tamanho do terreno</h2>
+    <p class="auth-sub">Digite a largura e o comprimento do lote, em metros. Depois, clique em cada lado do retângulo pra adicionar ou remover muro ali.</p>
+    <div class="auth-row">
+      <div class="auth-field"><label>Largura (m)</label><input id="terrenoLarguraInput" type="number" min="1" max="500" step="0.5" placeholder="Ex.: 25"></div>
+      <div class="auth-field"><label>Comprimento (m)</label><input id="terrenoComprimentoInput" type="number" min="1" max="500" step="0.5" placeholder="Ex.: 10"></div>
+    </div>
+    <button class="auth-submit" id="terrenoSubmit">Definir terreno</button>
+    <div class="auth-error" id="terrenoError"></div>
   </div>
 </div>
 

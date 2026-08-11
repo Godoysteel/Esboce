@@ -36,6 +36,10 @@ export interface ViewState {
   selectedVaranda?: Varanda | null;
   selectedLaje?: Laje | null;
   selectedWall?: Wall | null;
+  // Ferramenta Terreno ativa — só enquanto ativa, o retângulo-guia e as
+  // 4 faixas clicáveis de lado são desenhados (ver ADR-008). Muros já
+  // confirmados (Terreno.muros) aparecem sempre, independente disso.
+  terrenoToolActive?: boolean;
   [key: string]: any;
 }
 
@@ -1217,6 +1221,84 @@ export function hashColorHex(key: string): number {
       flatShading: true
     });
   }
+  // Terreno — ver ADR-008. Muros já confirmados (Terreno.muros) sempre
+  // aparecem, extrudados como caixa simples (sem o sistema de footprint
+  // com miter de canto usado por Floor.walls — simplificação desta
+  // etapa; os cantos entre dois muros adjacentes não recebem tratamento
+  // especial, só se sobrepõem geometricamente na espessura). Enquanto a
+  // ferramenta Terreno está ativa, desenha também o retângulo-guia e
+  // uma faixa clicável por lado (pickável via a mesma convenção de
+  // userData.category que todo o resto da cena usa — ver pickMesh em
+  // ViewportController).
+  var TERRENO_GUIDE_COLOR = 0x378ADD, TERRENO_MURO_MARKED_COLOR = 0x4CAF50;
+  function buildTerrenoMuroBoxMesh(muro: Wall, scale: number, offsetX: number, offsetY: number, mat: THREE.Material) {
+    var x1 = (muro.x1 - offsetX) * scale, z1 = (muro.y1 - offsetY) * scale;
+    var x2 = (muro.x2 - offsetX) * scale, z2 = (muro.y2 - offsetY) * scale;
+    var dx = x2 - x1, dz = z2 - z1, len = Math.hypot(dx, dz);
+    var height = muro.heightM != null ? muro.heightM : Core.TERRENO_MURO_HEIGHT_M;
+    var thick = Core.WALL_THICK;
+    // Estende a caixa pela espessura em cada ponta (mesmo truque de
+    // buildParapetWalls) — sem isso, dois muros adjacentes se
+    // encontrando na quina do terreno deixam uma fresta triangular
+    // (o corpo de cada caixa termina exatamente na linha do eixo, não
+    // cobre a espessura da outra parede que chega perpendicular ali).
+    var geo = new THREE.BoxGeometry(len + thick, height, thick);
+    var mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set((x1 + x2) / 2, height / 2, (z1 + z2) / 2);
+    mesh.rotation.y = -Math.atan2(dz, dx);
+    return mesh;
+  }
+
+  function buildTerrenoSideStripMesh(seg: { x1: number; y1: number; x2: number; y2: number }, scale: number, offsetX: number, offsetY: number, hasMuro: boolean) {
+    var x1 = (seg.x1 - offsetX) * scale, z1 = (seg.y1 - offsetY) * scale;
+    var x2 = (seg.x2 - offsetX) * scale, z2 = (seg.y2 - offsetY) * scale;
+    var dx = x2 - x1, dz = z2 - z1, len = Math.hypot(dx, dz);
+    var stripWidth = Math.max(0.3, Math.min(1, len * 0.06));
+    var geo = new THREE.BoxGeometry(len, 0.03, stripWidth);
+    var mat = new THREE.MeshBasicMaterial({
+      color: hasMuro ? TERRENO_MURO_MARKED_COLOR : TERRENO_GUIDE_COLOR,
+      transparent: true, opacity: hasMuro ? 0.55 : 0.35, depthWrite: false,
+    });
+    var mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set((x1 + x2) / 2, 0.02, (z1 + z2) / 2);
+    mesh.rotation.y = -Math.atan2(dz, dx);
+    return mesh;
+  }
+
+  function buildTerrenoOutlineLines(terreno: { larguraM: number; comprimentoM: number }, scale: number, offsetX: number, offsetY: number) {
+    var w = terreno.larguraM * Core.GRID, c = terreno.comprimentoM * Core.GRID;
+    function toScene(mx: number, my: number) { return new THREE.Vector3((mx - offsetX) * scale, 0.01, (my - offsetY) * scale); }
+    var points = [toScene(0, 0), toScene(w, 0), toScene(w, c), toScene(0, c), toScene(0, 0)];
+    var geo = new THREE.BufferGeometry().setFromPoints(points);
+    return new THREE.Line(geo, new THREE.LineBasicMaterial({ color: TERRENO_GUIDE_COLOR }));
+  }
+
+  function buildTerrenoPieces(scene: any, terreno: Project['terreno'], viewState: ViewState, scale: number, offsetX: number, offsetY: number) {
+    if (!terreno) return;
+    var wallColor = computeWallMatchColor(terreno.muros);
+    var mat = new THREE.MeshStandardMaterial({ color: wallColor, roughness: 0.85, metalness: 0.02 });
+    terreno.muros.forEach(function (muro) {
+      var mesh = tagCategory(buildTerrenoMuroBoxMesh(muro, scale, offsetX, offsetY, mat), 'terrenoMuro');
+      mesh.userData.terrenoMuroId = muro.id;
+      scene.add(mesh);
+      registry.structureMeshes.push(mesh);
+    });
+
+    if (viewState.terrenoToolActive) {
+      var outline = buildTerrenoOutlineLines(terreno, scale, offsetX, offsetY);
+      scene.add(outline);
+      registry.structureMeshes.push(outline);
+      (['minX', 'maxX', 'minZ', 'maxZ'] as const).forEach(function (side) {
+        var seg = Core.terrenoMuroSegment(terreno, side);
+        var hasMuro = terreno!.muros.some(function (m) { return m.id === Core.terrenoMuroId(side); });
+        var strip = tagCategory(buildTerrenoSideStripMesh(seg, scale, offsetX, offsetY, hasMuro), 'terrenoSide');
+        strip.userData.terrenoSide = side;
+        scene.add(strip);
+        registry.structureMeshes.push(strip);
+      });
+    }
+  }
+
   function buildParapetWalls(bounds: any, topY: any, height: any, thickness: any, color: any) {
     var meshes: any[] = [];
     function seg(x1: any, z1: any, x2: any, z2: any) {
@@ -2813,6 +2895,8 @@ export function hashColorHex(key: string): number {
       var marquise = tagCategory(makeSlabMesh(marquiseShape, MARQUISE_THICKNESS, topY + MARQUISE_THICKNESS, pickColor(0xB5D4F4, 'marquise', viewState), 0.9), 'marquise');
       scene.add(marquise); registry.structureMeshes.push(marquise);
     }
+
+    if (project.terreno) buildTerrenoPieces(scene, project.terreno, viewState, scale, offsetX, offsetY);
 
     renderDrawPreview(scene, viewState, scale, offsetX, offsetY);
     renderSelectionHandles(

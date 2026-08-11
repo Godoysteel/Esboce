@@ -15,6 +15,10 @@ export interface Wall {
   // Acabamento de cada face da parede (lado A / lado B) — id de Produto do Catalog.
   finishA?: string;
   finishB?: string;
+  // Altura própria, em metros — só usada por muros de terreno
+  // (Terreno.muros). Paredes da casa (Floor.walls) ignoram este campo e
+  // continuam com a altura fixa Core.WALL_HEIGHT.
+  heightM?: number;
 }
 
 export type ColumnShape = 'quadrada' | 'redonda';
@@ -62,6 +66,26 @@ export interface Varanda {
   x2: number;
   y2: number;
   frontSide: VarandaFrontSide;
+}
+
+// Terreno (lote) — ver docs/02 - Domínio/Modelo de Domínio.md, seção 5, e
+// ADR-008. Retângulo com origem em (0,0): largura no eixo X, comprimento
+// no eixo Z (chamado 'y' no plano 2D, mesma convenção de Wall/Varanda).
+// Definir o terreno é opcional e pode ser feito a qualquer momento do
+// projeto, não só na criação.
+export type TerrenoMuroSide = 'minX' | 'maxX' | 'minZ' | 'maxZ';
+
+export interface Terreno {
+  larguraM: number;
+  comprimentoM: number;
+  // Um Wall por lado com muro confirmado pelo usuário — reaproveita o
+  // mesmo tipo de parede da casa (aceita Opening — portão/porta — e
+  // acabamento por face). Vive fora de Floor.walls de propósito: um muro
+  // de terreno não fecha com as paredes da casa, então não deve entrar
+  // na detecção de cômodos nem na validação topológica da Casa. O id de
+  // cada muro é determinístico (`terreno_muro_<side>`), então cada lado
+  // tem no máximo um muro.
+  muros: Wall[];
 }
 
 // Laje entre pavimentos (ou cobertura plana no último) — objeto
@@ -190,6 +214,8 @@ export interface Project {
   layers: ProjectLayers;
   foundationType: FoundationType;
   constructionSystem: ConstructionSystem;
+  // Opcional: ausente até o usuário definir o tamanho do terreno.
+  terreno?: Terreno;
 }
 
 export interface Room {

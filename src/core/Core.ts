@@ -10,7 +10,8 @@
 import type {
   Point, Wall, Column, ColumnShape, Roof, RoofType, RidgeAxis,
   Varanda, VarandaFrontSide, Laje, Opening, OpeningKind, Floor, Project,
-  Room, WallFootprint, WallOBB, MTV, Interval, Furniture, GlazingPanel
+  Room, WallFootprint, WallOBB, MTV, Interval, Furniture, GlazingPanel,
+  Terreno, TerrenoMuroSide
 } from './types.js';
 
 export const GRID = 20; // unidade de grade do modelo (1 unidade = 1 metro)
@@ -67,6 +68,46 @@ export function nextId(prefix: string): string {
 
 export function createWallEntity(x1: number, y1: number, x2: number, y2: number, id?: string): Wall {
   return { id: id || nextId('wall'), x1, y1, x2, y2 };
+}
+
+// Altura padrão do muro de terreno — deliberadamente mais baixa que
+// WALL_HEIGHT (parede da casa). Guardada por muro em Wall.heightM;
+// paredes da casa não usam esse campo e continuam com WALL_HEIGHT fixo.
+export const TERRENO_MURO_HEIGHT_M = 1.8;
+
+export function terrenoMuroId(side: TerrenoMuroSide): string {
+  return `terreno_muro_${side}`;
+}
+
+// Segmento (em metros, mesmo plano 2D de Wall) do lado indicado do
+// retângulo do terreno, que vai de (0,0) a (larguraM, comprimentoM).
+export function terrenoMuroSegment(
+  terreno: { larguraM: number; comprimentoM: number },
+  side: TerrenoMuroSide
+): { x1: number; y1: number; x2: number; y2: number } {
+  // Terreno.larguraM/comprimentoM são metros reais (nome do campo), mas
+  // Wall.x1/y1/x2/y2 são unidades de grade (GRID=20 unidades por metro —
+  // ver Core.wallLengthMeters, que divide por GRID pra voltar a metros).
+  // Sem essa conversão, um terreno "25x10" geraria muros de 1,25m/0,5m
+  // de comprimento real em vez de 25m/10m.
+  const w = terreno.larguraM * GRID, c = terreno.comprimentoM * GRID;
+  switch (side) {
+    case 'minZ': return { x1: 0, y1: 0, x2: w, y2: 0 };
+    case 'maxZ': return { x1: 0, y1: c, x2: w, y2: c };
+    case 'minX': return { x1: 0, y1: 0, x2: 0, y2: c };
+    case 'maxX': return { x1: w, y1: 0, x2: w, y2: c };
+  }
+}
+
+export function createTerrenoEntity(larguraM: number, comprimentoM: number): Terreno {
+  return { larguraM, comprimentoM, muros: [] };
+}
+
+export function createTerrenoMuroEntity(terreno: { larguraM: number; comprimentoM: number }, side: TerrenoMuroSide): Wall {
+  const seg = terrenoMuroSegment(terreno, side);
+  const wall = createWallEntity(seg.x1, seg.y1, seg.x2, seg.y2, terrenoMuroId(side));
+  wall.heightM = TERRENO_MURO_HEIGHT_M;
+  return wall;
 }
 
 export function createColumnEntity(x: number, y: number, shape?: ColumnShape, id?: string): Column {
@@ -1466,5 +1507,6 @@ export const Core = {
   createWallEntity, createColumnEntity, createRoofEntity, wallIntersectsRoofFootprint, roofHeightAtModelPoint, atticOpeningMaxTopMeters, openingFitsAtticRoof, atticWallExtensionAreaMeters, createVarandaEntity, createLajeEntity, createFloorEntity,
   createFurnitureEntity,
   createGlazingPanelEntity, GLAZING_DEFAULT_WIDTH_M, GLAZING_DEFAULT_HEIGHT_M, GLAZING_DEFAULT_MODULE_TARGET_M,
-  createProject, distToSegment, projectOnSegment, detectRooms
+  createProject, distToSegment, projectOnSegment, detectRooms,
+  TERRENO_MURO_HEIGHT_M, terrenoMuroId, terrenoMuroSegment, createTerrenoEntity, createTerrenoMuroEntity
 };

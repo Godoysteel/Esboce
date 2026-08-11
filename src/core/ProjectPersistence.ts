@@ -1,8 +1,11 @@
 import type {
-  Column, Floor, Furniture, GlazingPanel, Laje, Opening, Project, ProjectLayers, Roof, Varanda, Wall,
+  Column, Floor, Furniture, GlazingPanel, Laje, Opening, Project, ProjectLayers, Roof, Terreno, Varanda, Wall,
 } from './types.js';
 
-export const CURRENT_PROJECT_SCHEMA_VERSION = 5;
+// v6: adiciona `project.terreno` (opcional) — tamanho do lote e muros de
+// perímetro. Documentos v5 e anteriores não têm o campo; abrem
+// normalmente sem terreno definido (ver ADR-008).
+export const CURRENT_PROJECT_SCHEMA_VERSION = 6;
 
 export interface StoredProjectDocument {
   schemaVersion: number;
@@ -88,8 +91,10 @@ function parseWall(value: unknown, path: string): Wall {
   };
   const finishA = optionalString(v.finishA, `${path}.finishA`);
   const finishB = optionalString(v.finishB, `${path}.finishB`);
+  const heightM = optionalNumber(v.heightM, `${path}.heightM`);
   if (finishA !== undefined) wall.finishA = finishA;
   if (finishB !== undefined) wall.finishB = finishB;
+  if (heightM !== undefined) wall.heightM = heightM;
   return wall;
 }
 
@@ -247,6 +252,27 @@ function parseFloor(value: unknown, path: string): Floor {
   return floor;
 }
 
+const TERRENO_MURO_SIDES = ['minX', 'maxX', 'minZ', 'maxZ'] as const;
+
+function parseTerreno(value: unknown, path: string): Terreno {
+  const v = record(value, path);
+  const larguraM = number(v.larguraM, `${path}.larguraM`);
+  const comprimentoM = number(v.comprimentoM, `${path}.comprimentoM`);
+  if (!(larguraM > 0) || !(comprimentoM > 0)) fail(path, 'largura e comprimento devem ser maiores que zero');
+  const muros = array(v.muros, `${path}.muros`, true).map((item, i) => parseWall(item, `${path}.muros[${i}]`));
+  // Cada muro só faz sentido geométrico associado a um lado do
+  // retângulo — o id é a fonte da verdade de qual lado é (ver
+  // Core.terrenoMuroId), não a posição bruta salva.
+  const ids = muros.map((m) => m.id);
+  if (new Set(ids).size !== ids.length) fail(`${path}.muros`, 'há muros duplicados');
+  ids.forEach((id, index) => {
+    if (!TERRENO_MURO_SIDES.some((side) => `terreno_muro_${side}` === id)) {
+      fail(`${path}.muros[${index}].id`, 'muro de terreno com id fora do padrão esperado');
+    }
+  });
+  return { larguraM, comprimentoM, muros };
+}
+
 function normalizeProject(value: unknown): Project {
   const source = record(value, 'project');
   const floors = array(source.floors, 'project.floors').map((floor, index) => parseFloor(floor, `project.floors[${index}]`));
@@ -261,7 +287,7 @@ function normalizeProject(value: unknown): Project {
     if (value != null && typeof value !== 'boolean') fail(`project.layers.${key}`, 'booleano esperado');
     if (typeof value === 'boolean') layers[key] = value;
   }
-  return {
+  const project: Project = {
     floors,
     currentFloorIndex: Math.max(0, Math.min(floors.length - 1, rawIndex)),
     layers,
@@ -273,6 +299,8 @@ function normalizeProject(value: unknown): Project {
       'ceramic_masonry',
     ),
   };
+  if (source.terreno != null) project.terreno = parseTerreno(source.terreno, 'project.terreno');
+  return project;
 }
 
 export function encodeProjectDocument(project: Project): StoredProjectDocument {

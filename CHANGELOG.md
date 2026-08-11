@@ -13,7 +13,8 @@ Todas as alterações relevantes do Esboce serão registradas neste arquivo.
 - Adicionados exportação e importação de backup JSON. O salvamento e a abertura pelo Supabase usam a mesma validação do backup.
 - Corrigido o ciclo de projetos autenticados: criar, atualizar, listar em **Meus projetos**, abrir por link e iniciar um projeto novo sem perder o projeto anteriormente salvo.
 - Criados gates de qualidade no GitHub Actions: testes, verificação TypeScript e build antecedem a publicação. O deploy do `main` no GitHub Pages só ocorre quando todos passam.
-- Baseline atual validada com **123 testes automatizados**.
+- Baseline atual validada com **135 testes automatizados**.
+- Adicionado o **Terreno** (opcional, definível a qualquer momento pelo botão na sidebar): digite a largura e o comprimento do lote e um retângulo-guia aparece na cena; clique em cada lado pra adicionar ou remover um muro ali. O muro reaproveita parede completa (acabamento por face; portão/porta ainda não tem ferramenta própria — pendente). Documento versionado sobe para `schemaVersion` 6. Ver ADR-008 e DEC-59/DEC-60.
 
 ## Conta, segurança e conformidade
 

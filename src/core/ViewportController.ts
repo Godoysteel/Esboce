@@ -111,6 +111,7 @@ import {
   var touchCameraMode = false;
 
   var gizmoEl: any, gzSwapBtnEl: any, openingGizmoEl: any, roomGizmoEl: any, columnShapePanelEl: any, roofTypePanelEl: any, finishPanelEl: any, paintPickerPanelEl: any, objectPanelEl: any, objectPanelTitleEl: any, objectPanelBodyEl: any, hintEl: any, layersContextMenuEl: any;
+  var terrenoModalOverlayEl: any, terrenoLarguraInputEl: any, terrenoComprimentoInputEl: any, terrenoErrorEl: any;
   var dimLabelAEl: any, dimLabelBEl: any, liveRoomDimensionLineEl: any, liveRoomDimensionLineBEl: any;
   // Cotas persistentes de largura/altura de parede (ligar/desligar) —
   // ver rebuildDimensionCotas mais abaixo. Diferente do dimLabelA/B
@@ -140,7 +141,8 @@ import {
     arco: 'Clique sobre uma parede pra abrir um vão ali — sacada, garagem, conceito aberto. Selecione um arco colocado pra arrastar os lados ou o topo.',
     varanda: 'Clique no chão pra colocar uma varanda. Selecione uma já colocada, clique direito nela pra girar qual lado é a frente ou excluir.',
     demolish: 'Clique numa parede pra quebrar ela. Os cantos vizinhos se fecham sozinhos, sem deixar vão.',
-    paintBucket: 'Escolha a superfície no menu acima e siga o fluxo indicado para aplicar o acabamento.'
+    paintBucket: 'Escolha a superfície no menu acima e siga o fluxo indicado para aplicar o acabamento.',
+    terreno: 'Clique num lado destacado do retângulo pra adicionar ou remover o muro daquele lado.'
   };
 
   function modelToWorld(mx: any, my: any) { return { x: (mx - offsetX) * scale, z: (my - offsetY) * scale }; }
@@ -994,7 +996,8 @@ import {
       selectedLaje: selectedLaje,
       roomGroupWallIds: selectedRoomWallIds,
       resizeWallId: resizeWallId,
-      drawPreview: drawPreview
+      drawPreview: drawPreview,
+      terrenoToolActive: currentTool === 'terreno'
     });
     positionGizmoAndShapePanel();
     refreshFinishPanel();
@@ -1032,6 +1035,59 @@ import {
     cancelPlacing();
     deselect();
     updateWallGridOverlay();
+    if (tool === 'terreno') openTerrenoModal(); else closeTerrenoModal(false);
+  }
+
+  // Modal de tamanho do terreno — mesmo padrão de projectNameModalOverlay
+  // (EsboceApplication), mas mantido inteiramente aqui: o terreno é
+  // conceitualmente uma ferramenta do viewport (como Telhado, Cômodo
+  // etc.), não um fluxo de conta/projeto.
+  function openTerrenoModal() {
+    var terreno = Store.currentTerreno();
+    terrenoLarguraInputEl.value = terreno ? String(terreno.larguraM) : '';
+    terrenoComprimentoInputEl.value = terreno ? String(terreno.comprimentoM) : '';
+    terrenoErrorEl.textContent = '';
+    terrenoModalOverlayEl.style.display = 'flex';
+    terrenoLarguraInputEl.focus();
+  }
+
+  function closeTerrenoModal(revertToolIfUndefined: boolean) {
+    terrenoModalOverlayEl.style.display = 'none';
+    if (revertToolIfUndefined && !Store.currentTerreno()) setTool(null);
+  }
+
+  function submitTerrenoModal() {
+    var largura = parseFloat(terrenoLarguraInputEl.value);
+    var comprimento = parseFloat(terrenoComprimentoInputEl.value);
+    if (!(largura > 0) || !(comprimento > 0)) {
+      terrenoErrorEl.textContent = 'Digite largura e comprimento maiores que zero.';
+      return;
+    }
+    Store.setTerreno(largura, comprimento);
+    terrenoModalOverlayEl.style.display = 'none';
+    fitCameraToTerreno();
+    render();
+  }
+
+  // Aproximação de "vista de topo": o viewport só tem câmera
+  // perspectiva (sem projeção ortográfica/paralela de verdade — ver
+  // ADR-008, pendência de escopo). Inclina a câmera existente bem de
+  // cima e centraliza no terreno, próximo o bastante de uma vista
+  // paralela pra marcar os lados com confiança, mas continua sendo
+  // perspectiva por baixo.
+  function fitCameraToTerreno() {
+    var terreno = Store.currentTerreno();
+    if (!terreno) return;
+    var w = terreno.larguraM, c = terreno.comprimentoM;
+    // Centro do retângulo do terreno, em metros — mesma unidade de
+    // mundo usada pela câmera (camTarget), já que a cena Three.js
+    // trabalha em metros (a conversão de unidades de grade pra metros
+    // acontece na hora de gerar a geometria, não na câmera).
+    camTarget = { x: w / 2, y: 0, z: c / 2 };
+    camElev = 1.4; // máximo já permitido pelo clamp normal de órbita — o mais perto de "de cima" sem abrir exceção nova
+    camAngle = Math.PI / 4;
+    camDist = Math.max(8, Math.max(w, c) * 0.95);
+    updateCam();
   }
 
   // Desativa a ferramenta atual (volta pro modo seleção, sem nenhuma
@@ -1333,6 +1389,16 @@ import {
 
     // 2) elemento existente
     var mesh = pickMesh(e.clientX, e.clientY);
+
+    // Ferramenta Terreno ativa + clicou numa das 4 faixas do lado do
+    // retângulo-guia (só existem enquanto a ferramenta está ativa, ver
+    // Scene3DRenderer.rebuild/viewState.terrenoToolActive): alterna
+    // muro daquele lado. Não seleciona/arrasta nada, igual Porta/Janela.
+    if (currentTool === 'terreno' && mesh && mesh.userData.terrenoSide) {
+      Store.toggleTerrenoMuroSide(mesh.userData.terrenoSide);
+      render();
+      return;
+    }
 
     // Ferramenta Porta/Janela/Arco ativa + clicou numa parede: insere a
     // abertura ali (não seleciona/arrasta a parede como o normal) —
@@ -3189,6 +3255,17 @@ import {
     liveRoomDimensionLineEl = document.getElementById('liveRoomDimensionLine');
     liveRoomDimensionLineBEl = document.getElementById('liveRoomDimensionLineB');
     dimCotaLayerEl = document.getElementById('dimCotaLayer');
+
+    terrenoModalOverlayEl = document.getElementById('terrenoModalOverlay');
+    terrenoLarguraInputEl = document.getElementById('terrenoLarguraInput');
+    terrenoComprimentoInputEl = document.getElementById('terrenoComprimentoInput');
+    terrenoErrorEl = document.getElementById('terrenoError');
+    terrenoModalOverlayEl.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
+    document.getElementById('terrenoModalClose')!.addEventListener('click', function () { closeTerrenoModal(true); });
+    document.getElementById('terrenoSubmit')!.addEventListener('click', submitTerrenoModal);
+    [terrenoLarguraInputEl, terrenoComprimentoInputEl].forEach(function (input: any) {
+      input.addEventListener('keydown', function (e: any) { if (e.key === 'Enter') submitTerrenoModal(); });
+    });
 
     // A barra lateral fica DENTRO do #viewport (pedido explícito), mas
     // ela não pode deixar o clique "vazar" pro raycaster do 3D por trás

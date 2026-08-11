@@ -8,7 +8,7 @@ import { Core } from './Core.js';
 import type {
   Project, Floor, Wall, Column, Roof, Opening, OpeningKind, Varanda, Laje, Furniture, ColumnShape, RoofType,
   RidgeAxis, VarandaFrontSide, FoundationType, StoreEvent, StoreListener,
-  WallSnapshot, LinkedWallUpdate, GlazingPanel
+  WallSnapshot, LinkedWallUpdate, GlazingPanel, Terreno, TerrenoMuroSide
 } from './types.js';
 
 let project: Project = Core.createProject();
@@ -1107,6 +1107,58 @@ export const commands = {
   }
 };
 
+export function currentTerreno(): Terreno | null {
+  return project.terreno || null;
+}
+
+// Define (ou redefine) o tamanho do terreno. Opcional e disponível a
+// qualquer momento — não é passo obrigatório de criação de projeto. Ao
+// redefinir um terreno já existente, os muros dos lados que continuam
+// dentro do novo retângulo são recalculados (mesmo lado, novo
+// comprimento); lados que deixaram de existir simplesmente não têm mais
+// sentido geométrico, então o usuário marca de novo se quiser.
+export function setTerreno(larguraM: number, comprimentoM: number): void {
+  if (!(larguraM > 0) || !(comprimentoM > 0)) return;
+  pushUndoSnapshot();
+  const sides = project.terreno ? project.terreno.muros.map((m) => m.id) : [];
+  // Core.snap() opera em unidades de grade (Core.GRID por metro), não
+  // em metros — larguraM/comprimentoM já chegam em metros (o que o
+  // usuário digitou), então arredondamos aqui no mesmo módulo de 0,5m
+  // (Core.SNAP_UNIT / Core.GRID), sem passar por Core.snap().
+  const stepM = Core.SNAP_UNIT / Core.GRID;
+  const roundToStep = (m: number) => Math.round(m / stepM) * stepM;
+  const terreno = Core.createTerrenoEntity(roundToStep(larguraM), roundToStep(comprimentoM));
+  const sideNames: TerrenoMuroSide[] = ['minX', 'maxX', 'minZ', 'maxZ'];
+  terreno.muros = sideNames
+    .filter((side) => sides.includes(Core.terrenoMuroId(side)))
+    .map((side) => Core.createTerrenoMuroEntity(terreno, side));
+  project.terreno = terreno;
+  emit({ type: 'terrenoSet' });
+}
+
+// Alterna o muro de um lado do terreno: cria se não existir, remove se
+// já existir. O muro criado é uma parede completa igual às da casa —
+// aceita Opening (portão/porta) e acabamento por face.
+export function toggleTerrenoMuroSide(side: TerrenoMuroSide): void {
+  const terreno = project.terreno;
+  if (!terreno) return;
+  pushUndoSnapshot();
+  const id = Core.terrenoMuroId(side);
+  const index = terreno.muros.findIndex((m) => m.id === id);
+  if (index >= 0) {
+    terreno.muros.splice(index, 1);
+  } else {
+    terreno.muros.push(Core.createTerrenoMuroEntity(terreno, side));
+  }
+  emit({ type: 'terrenoMuroToggled', side });
+}
+
+export function findTerrenoMuro(id: string): Wall | null {
+  const terreno = project.terreno;
+  if (!terreno) return null;
+  return terreno.muros.find((m) => m.id === id) || null;
+}
+
 export function getProject(): Project { return project; }
 
 // Substitui o projeto inteiro em memória — usado só ao carregar um
@@ -1142,6 +1194,10 @@ export const Store = {
   findLaje,
   findGlazingPanel,
   findFurniture,
+  currentTerreno,
+  setTerreno,
+  toggleTerrenoMuroSide,
+  findTerrenoMuro,
   onChange,
   commands
 };
