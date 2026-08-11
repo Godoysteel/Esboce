@@ -13,7 +13,7 @@ Todas as alterações relevantes do Esboce serão registradas neste arquivo.
 - Adicionados exportação e importação de backup JSON. O salvamento e a abertura pelo Supabase usam a mesma validação do backup.
 - Corrigido o ciclo de projetos autenticados: criar, atualizar, listar em **Meus projetos**, abrir por link e iniciar um projeto novo sem perder o projeto anteriormente salvo.
 - Criados gates de qualidade no GitHub Actions: testes, verificação TypeScript e build antecedem a publicação. O deploy do `main` no GitHub Pages só ocorre quando todos passam.
-- Baseline atual validada com **122 testes automatizados**.
+- Baseline atual validada com **123 testes automatizados**.
 
 ## Conta, segurança e conformidade
 

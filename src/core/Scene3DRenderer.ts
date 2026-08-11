@@ -1434,6 +1434,22 @@ export function hashColorHex(key: string): number {
     return buildRoofDuasAguas(bounds, floorTopY, roofColor, gableColors, pitchDeg, ridgeAxis, tabeiraColor);
   }
 
+  export function createRoofResizePreviewMeshes(roof: any, scale: number, offsetX: number, offsetY: number, floorTopY: number): THREE.Object3D[] {
+    return buildRoofPiece(roof, scale, offsetX, offsetY, floorTopY, {}).map(function (piece: any) {
+      var materials = Array.isArray(piece.material) ? piece.material : [piece.material];
+      var previewMaterials = materials.map(function (material: any) {
+        var previewMaterial = material.clone();
+        previewMaterial.transparent = true;
+        previewMaterial.opacity = 0.38;
+        previewMaterial.depthWrite = false;
+        return previewMaterial;
+      });
+      piece.material = Array.isArray(piece.material) ? previewMaterials : previewMaterials[0];
+      piece.userData = { roofResizePreview: true };
+      return piece;
+    });
+  }
+
   // Laje colocável de verdade (ver DEC-35) — uma caixa achatada com a
   // MESMA textura de reboco das paredes (reaproveita
   // buildParapetSegmentMaterial, já usado no parapeito da platibanda),
@@ -2829,6 +2845,7 @@ export function hashColorHex(key: string): number {
 // ViewportController ainda não foi migrado).
 export const Scene3DRenderer = {
   rebuild,
+  createRoofResizePreviewMeshes,
   setOnFurnitureAssetLoaded,
   getFurnitureMeshes,
   getFurnitureFootprint,

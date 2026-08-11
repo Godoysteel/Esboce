@@ -122,6 +122,23 @@ test('arraste de telhado move o conjunto 3D e confirma o Store somente ao soltar
   assert.match(pointerUpFlow, /roofGroupDragObjects = \[\]/);
 });
 
+test('redimensionar telhado usa uma previa transparente e confirma os limites ao soltar', () => {
+  assert.match(viewportControllerSource, /function previewRoofResize\(bounds:/);
+  assert.match(viewportControllerSource, /createRoofResizePreviewMeshes\(previewRoof, scale, offsetX, offsetY, floorTopY\)/);
+
+  const moveStart = viewportControllerSource.indexOf("if (dragMode && dragMode.indexOf('roofEdge') === 0) {");
+  const moveEnd = viewportControllerSource.indexOf("if (dragMode && dragMode.indexOf('varandaEdge')", moveStart);
+  const pointerMoveFlow = viewportControllerSource.slice(moveStart, moveEnd);
+  assert.match(pointerMoveFlow, /previewRoofResize\(dragElementStart.lastBounds\)/);
+  assert.doesNotMatch(pointerMoveFlow, /updateRoofBoundsLive/);
+
+  const upStart = viewportControllerSource.indexOf("if (dragMode && dragMode.indexOf('roofEdge') === 0) {", moveEnd);
+  const upEnd = viewportControllerSource.indexOf("if (dragMode === 'roofRidge'", upStart);
+  const pointerUpFlow = viewportControllerSource.slice(upStart, upEnd);
+  assert.match(pointerUpFlow, /clearRoofResizePreview\(\)/);
+  assert.match(pointerUpFlow, /updateRoofBoundsLive/);
+});
+
 test('arraste de movel usa previa 3D e confirma o Store somente ao soltar', () => {
   assert.match(viewportControllerSource, /function findFurnitureSceneObject\(id: string\)/);
   assert.match(viewportControllerSource, /selectFurniture\(furnitureId\);[\s\S]{0,700}furnitureDragObject = findFurnitureSceneObject\(furnitureId\)/);

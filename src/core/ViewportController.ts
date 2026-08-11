@@ -88,6 +88,8 @@ import {
   var columnDragObjects: { object: any; startX: number; startZ: number }[] = [];
   var lajeDragObjects: { object: any; startX: number; startZ: number }[] = [];
   var roofGroupDragObjects: { object: any; startX: number; startZ: number }[] = [];
+  var roofResizePreviewMeshes: THREE.Object3D[] = [];
+  var roofResizeHiddenObjects: THREE.Object3D[] = [];
   var pendingRoofAttic = false;
   var pendingGenerateRoofId: any = null;
   var generateAtticBtnEl: any = null;
@@ -233,6 +235,36 @@ import {
       entry.object.position.x = entry.startX + worldDx;
       entry.object.position.z = entry.startZ + worldDz;
     });
+  }
+
+  function beginRoofResizePreview(roofId: string) {
+    roofResizeHiddenObjects = scene.children.filter(function (object: any) {
+      return object.userData && object.userData.roofId === roofId;
+    });
+    roofResizeHiddenObjects.forEach(function (object) { object.visible = false; });
+  }
+
+  function clearRoofResizePreview() {
+    roofResizePreviewMeshes.forEach(function (object: any) {
+      scene.remove(object);
+      if (object.geometry) object.geometry.dispose();
+      var materials = Array.isArray(object.material) ? object.material : [object.material];
+      materials.forEach(function (material: any) { if (material && material.dispose) material.dispose(); });
+    });
+    roofResizePreviewMeshes = [];
+    roofResizeHiddenObjects.forEach(function (object) { object.visible = true; });
+    roofResizeHiddenObjects = [];
+  }
+
+  function previewRoofResize(bounds: { x1: number; y1: number; x2: number; y2: number }) {
+    var roof = Store.findRoof(selectedRoofId);
+    if (!roof) return;
+    clearRoofResizePreview();
+    beginRoofResizePreview(roof.id);
+    var previewRoof = Object.assign({}, roof, bounds);
+    var floorTopY = currentFloorYOffset() + (roof.atticMode ? (roof.baseHeightM || 1.2) : Scene3DRenderer.WALL_HEIGHT_GETTER());
+    roofResizePreviewMeshes = Scene3DRenderer.createRoofResizePreviewMeshes(previewRoof, scale, offsetX, offsetY, floorTopY);
+    roofResizePreviewMeshes.forEach(function (object) { scene.add(object); });
   }
 
   // Centro do painel de Envidraçamento em coordenadas de MODELO (antes
@@ -1189,7 +1221,8 @@ import {
           dragElementStart = { parapetHeight: rrT ? rrT.parapetHeight : 0.5, startScreenY: e.clientY };
         } else if (rrT) {
           var regionForDrag = findGridRegionAt((rrT.x1 + rrT.x2) / 2, (rrT.y1 + rrT.y2) / 2);
-          dragElementStart = { x1: rrT.x1, y1: rrT.y1, x2: rrT.x2, y2: rrT.y2, region: regionForDrag };
+          dragElementStart = { x1: rrT.x1, y1: rrT.y1, x2: rrT.x2, y2: rrT.y2, region: regionForDrag, lastBounds: null };
+          beginRoofResizePreview(rrT.id);
         }
         Store.commands.beginTransaction();
         return;
@@ -1268,7 +1301,8 @@ import {
         var rrE = Store.findRoof(selectedRoofId);
         if (rrE) {
           var regionForDragE = findGridRegionAt((rrE.x1 + rrE.x2) / 2, (rrE.y1 + rrE.y2) / 2);
-          dragElementStart = { x1: rrE.x1, y1: rrE.y1, x2: rrE.x2, y2: rrE.y2, region: regionForDragE };
+          dragElementStart = { x1: rrE.x1, y1: rrE.y1, x2: rrE.x2, y2: rrE.y2, region: regionForDragE, lastBounds: null };
+          beginRoofResizePreview(rrE.id);
         }
       } else if (handle.indexOf('varandaEdge') === 0) {
         // Varanda não trava em região de cômodo nenhuma (decisão
@@ -2023,7 +2057,8 @@ import {
         else if (edge === 'MaxX') nx2 = Math.max(snappedX, nx1 + Core.SNAP_UNIT);
         else if (edge === 'MinY') ny1 = Math.min(snappedY, ny2 - Core.SNAP_UNIT);
         else if (edge === 'MaxY') ny2 = Math.max(snappedY, ny1 + Core.SNAP_UNIT);
-        Store.commands.updateRoofBoundsLive(selectedRoofId, nx1, ny1, nx2, ny2);
+        dragElementStart.lastBounds = { x1: nx1, y1: ny1, x2: nx2, y2: ny2 };
+        previewRoofResize(dragElementStart.lastBounds);
       }
       return;
     }
@@ -2264,7 +2299,20 @@ import {
     // tentar calcular vale entre dois telhados que NÃO são a mesma água
     // continuando, esse caso genérico continua fora de escopo — ver
     // Registro de Decisões Técnicas, Sessão 4).
-    if (dragMode === 'roofRidge' || dragMode === 'roofParapetHeight' || (dragMode && dragMode.indexOf('roofEdge') === 0)) {
+    if (dragMode && dragMode.indexOf('roofEdge') === 0) {
+      var finalRoofBounds = dragElementStart && dragElementStart.lastBounds;
+      clearRoofResizePreview();
+      if (finalRoofBounds) {
+        Store.commands.updateRoofBoundsLive(selectedRoofId, finalRoofBounds.x1, finalRoofBounds.y1, finalRoofBounds.x2, finalRoofBounds.y2);
+      }
+      if (selectedRoofId && fuseRoofsIfTouching(selectedRoofId)) {
+        hintEl.textContent = 'Telhados fundidos — a cumeeira agora é uma só.';
+        onModelChanged();
+      }
+      dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
+      return;
+    }
+    if (dragMode === 'roofRidge' || dragMode === 'roofParapetHeight') {
       if (selectedRoofId && fuseRoofsIfTouching(selectedRoofId)) {
         hintEl.textContent = 'Telhados fundidos — a cumeeira agora é uma só.';
         onModelChanged();
