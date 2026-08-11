@@ -10,11 +10,14 @@ function svgElement<K extends keyof SVGElementTagNameMap>(name: K, attributes: R
   return element;
 }
 
-function wallLine(group: SVGGElement, wall: Wall, className = 'scene2d-wall'): void {
-  group.append(svgElement('line', {
+function wallLine(group: SVGGElement, wall: Wall, className = 'scene2d-wall', selected = false): void {
+  const line = svgElement('line', {
     x1: wall.x1, y1: wall.y1, x2: wall.x2, y2: wall.y2,
-    class: className, 'stroke-width': Math.max(Core.WALL_THICK * Core.GRID, 2.4),
-  }));
+    class: `${className}${selected ? ' scene2d-selected' : ''}`,
+    'stroke-width': Math.max(Core.WALL_THICK * Core.GRID, 2.4),
+    'data-wall-id': wall.id,
+  });
+  group.append(line);
 }
 
 function openingSymbol(group: SVGGElement, opening: Opening, wall: Wall): void {
@@ -48,7 +51,7 @@ function openingSymbol(group: SVGGElement, opening: Opening, wall: Wall): void {
 export class Scene2DRenderer {
   public constructor(private readonly svg: SVGSVGElement) {}
 
-  public render(): void {
+  public render(selectedWallIds: ReadonlySet<string> = new Set(), preview?: { x1: number; y1: number; x2: number; y2: number }): void {
     this.svg.replaceChildren();
     const project = Store.getProject();
     const floor = project.floors[project.currentFloorIndex];
@@ -59,7 +62,7 @@ export class Scene2DRenderer {
         x: 0, y: 0, width: project.terreno.larguraM * Core.GRID,
         height: project.terreno.comprimentoM * Core.GRID, class: 'scene2d-terreno',
       }));
-      project.terreno.muros.forEach((wall) => wallLine(scene, wall, 'scene2d-muro'));
+      project.terreno.muros.forEach((wall) => wallLine(scene, wall, 'scene2d-muro', selectedWallIds.has(wall.id)));
     }
     floor.lajes?.forEach((laje) => {
       if (laje.points.length >= 3) scene.append(svgElement('polygon', {
@@ -70,7 +73,7 @@ export class Scene2DRenderer {
       x: Math.min(roof.x1, roof.x2), y: Math.min(roof.y1, roof.y2),
       width: Math.abs(roof.x2 - roof.x1), height: Math.abs(roof.y2 - roof.y1), class: 'scene2d-roof',
     })));
-    floor.walls.forEach((wall) => wallLine(scene, wall));
+    floor.walls.forEach((wall) => wallLine(scene, wall, 'scene2d-wall', selectedWallIds.has(wall.id)));
     floor.openings.forEach((opening) => {
       const wall = floor.walls.find((candidate) => candidate.id === opening.wallId)
         ?? project.terreno?.muros.find((candidate) => candidate.id === opening.wallId);
@@ -82,6 +85,11 @@ export class Scene2DRenderer {
         ? svgElement('circle', { cx: column.x, cy: column.y, r: size * 0.5, class: 'scene2d-column' })
         : svgElement('rect', { x: column.x - size * 0.5, y: column.y - size * 0.5, width: size, height: size, class: 'scene2d-column' }));
     });
+    if (preview) scene.append(svgElement('rect', {
+      x: Math.min(preview.x1, preview.x2), y: Math.min(preview.y1, preview.y2),
+      width: Math.abs(preview.x2 - preview.x1), height: Math.abs(preview.y2 - preview.y1),
+      class: 'scene2d-room-preview',
+    }));
     this.svg.append(scene);
   }
 }

@@ -9,13 +9,16 @@ export class Viewport2DController {
   private viewBox: ViewBox = { x: -100, y: -100, width: 600, height: 450 };
   private dragging = false;
   private lastPointer = { x: 0, y: 0 };
+  private selectedWallIds = new Set<string>();
+  private drawStart: { x: number; y: number } | null = null;
+  private drawPreview: { x1: number; y1: number; x2: number; y2: number } | undefined;
 
   public constructor(private readonly container: HTMLElement, private readonly svg: SVGSVGElement) {
     this.renderer = new Scene2DRenderer(svg);
     this.bindNavigation();
   }
 
-  public render(): void { this.renderer.render(); this.applyViewBox(); this.updateScaleLabel(); }
+  public render(): void { this.renderer.render(this.selectedWallIds, this.drawPreview); this.applyViewBox(); this.updateScaleLabel(); }
   public show(): void { this.container.hidden = false; this.fitProject(); this.render(); }
   public hide(): void { this.container.hidden = true; }
 
@@ -52,13 +55,45 @@ export class Viewport2DController {
   }
 
   private bindNavigation(): void {
-    this.svg.addEventListener('wheel', (event) => { event.preventDefault(); this.zoomBy(event.deltaY > 0 ? 1.12 : 0.89); }, { passive: false });
+    this.svg.addEventListener('wheel', (event) => { event.preventDefault(); event.stopPropagation(); this.zoomBy(event.deltaY > 0 ? 1.12 : 0.89); }, { passive: false });
     this.svg.addEventListener('pointerdown', (event) => {
+      event.stopPropagation();
+      const activeTool = document.querySelector<HTMLElement>('.tool-btn[data-tool].active')?.dataset.tool;
+      if (activeTool === 'room') {
+        const point = this.modelPoint(event);
+        if (!this.drawStart) {
+          this.drawStart = point;
+          this.drawPreview = { x1: point.x, y1: point.y, x2: point.x, y2: point.y };
+        } else {
+          Store.commands.createRoom(this.drawStart.x, this.drawStart.y, point.x, point.y);
+          Store.commands.splitWallsAtTJunctions();
+          this.drawStart = null;
+          this.drawPreview = undefined;
+        }
+        this.render();
+        return;
+      }
+      const wallId = (event.target as SVGElement).closest<SVGElement>('[data-wall-id]')?.dataset.wallId;
+      if (wallId) {
+        const roomIds = Core.findIsolatedRoomWallIds(Store.currentWalls(), wallId);
+        this.selectedWallIds = new Set(roomIds ?? [wallId]);
+        this.render();
+        return;
+      }
+      this.selectedWallIds.clear();
+      this.render();
       if (event.button !== 0 && event.button !== 1) return;
       this.dragging = true; this.lastPointer = { x: event.clientX, y: event.clientY };
       this.svg.setPointerCapture(event.pointerId); this.svg.classList.add('is-panning');
     });
     this.svg.addEventListener('pointermove', (event) => {
+      event.stopPropagation();
+      if (this.drawStart) {
+        const point = this.modelPoint(event);
+        this.drawPreview = { x1: this.drawStart.x, y1: this.drawStart.y, x2: point.x, y2: point.y };
+        this.render();
+        return;
+      }
       if (!this.dragging) return;
       const dx = event.clientX - this.lastPointer.x;
       const dy = event.clientY - this.lastPointer.y;
@@ -67,9 +102,21 @@ export class Viewport2DController {
       this.viewBox.y -= dy * this.viewBox.height / Math.max(this.svg.clientHeight, 1);
       this.applyViewBox();
     });
-    const finish = () => { this.dragging = false; this.svg.classList.remove('is-panning'); };
+    const finish = (event: PointerEvent) => { event.stopPropagation(); this.dragging = false; this.svg.classList.remove('is-panning'); };
     this.svg.addEventListener('pointerup', finish);
     this.svg.addEventListener('pointercancel', finish);
+    window.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape' || !this.drawStart) return;
+      this.drawStart = null; this.drawPreview = undefined; this.render();
+    });
+  }
+
+  private modelPoint(event: PointerEvent): { x: number; y: number } {
+    const point = this.svg.createSVGPoint();
+    point.x = event.clientX; point.y = event.clientY;
+    const matrix = this.svg.getScreenCTM();
+    const model = matrix ? point.matrixTransform(matrix.inverse()) : point;
+    return { x: Core.snap(model.x), y: Core.snap(model.y) };
   }
 
   private applyViewBox(): void {
