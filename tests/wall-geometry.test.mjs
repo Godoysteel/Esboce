@@ -88,6 +88,24 @@ test('arraste incremental da fachada recaptura o mesh depois da selecao reconstr
   assert.doesNotMatch(viewportControllerSource, /glazingPanelDragMesh = mesh/);
 });
 
+test('arraste de movel usa previa 3D e confirma o Store somente ao soltar', () => {
+  assert.match(viewportControllerSource, /function findFurnitureSceneObject\(id: string\)/);
+  assert.match(viewportControllerSource, /selectFurniture\(furnitureId\);[\s\S]{0,700}furnitureDragObject = findFurnitureSceneObject\(furnitureId\)/);
+
+  const moveStart = viewportControllerSource.indexOf("if (dragMode === 'furnitureBody') {");
+  const moveEnd = viewportControllerSource.indexOf("if (dragMode === 'glazingPanelBody')", moveStart);
+  const pointerMoveFlow = viewportControllerSource.slice(moveStart, moveEnd);
+  assert.match(pointerMoveFlow, /furnitureDragObject\.position\.x = worldF\.x/);
+  assert.match(pointerMoveFlow, /furnitureDragObject\.position\.z = worldF\.z/);
+  assert.doesNotMatch(pointerMoveFlow, /updateFurnitureBodyLive/);
+
+  const upStart = viewportControllerSource.indexOf("if (dragMode === 'furnitureBody') {", moveEnd);
+  const upEnd = viewportControllerSource.indexOf("if (dragMode === 'columnBody'", upStart);
+  const pointerUpFlow = viewportControllerSource.slice(upStart, upEnd);
+  assert.match(pointerUpFlow, /updateFurnitureBodyLive/);
+  assert.match(pointerUpFlow, /furnitureDragObject = null/);
+});
+
 test('qualquer ligacao externa desativa a selecao coletiva do comodo', () => {
   const walls = rectangle();
   walls.push({ id: 'external', x1: 40, y1: 0, x2: 40, y2: -40 });

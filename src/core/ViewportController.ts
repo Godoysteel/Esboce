@@ -84,6 +84,7 @@ import {
   // transforms durante o pointermove. A geometria persistida continua
   // intacta até o pointerup, quando o Store recebe o delta final uma vez.
   var roomGroupDragObjects: { object: any; startX: number; startZ: number }[] = [];
+  var furnitureDragObject: any = null;
   var pendingRoofAttic = false;
   var pendingGenerateRoofId: any = null;
   var generateAtticBtnEl: any = null;
@@ -178,6 +179,12 @@ import {
   function findGlazingPanelSceneObject(id: string) {
     return scene.children.find(function (object: any) {
       return object.userData && object.userData.glazingPanelId === id;
+    }) || null;
+  }
+
+  function findFurnitureSceneObject(id: string) {
+    return scene.children.find(function (object: any) {
+      return object.userData && object.userData.furnitureId === id;
     }) || null;
   }
 
@@ -1388,11 +1395,15 @@ import {
           dragGroundStart = getGroundModelPoint(e.clientX, e.clientY);
           Store.commands.beginTransaction();
         } else if (mesh.userData.furnitureId) {
-          selectFurniture(mesh.userData.furnitureId);
+          var furnitureId = mesh.userData.furnitureId;
+          selectFurniture(furnitureId);
           dragMode = 'furnitureBody';
-          var fEnt = Store.findFurniture(mesh.userData.furnitureId)!;
-          dragElementStart = { x: fEnt.x, y: fEnt.y };
+          var fEnt = Store.findFurniture(furnitureId)!;
+          dragElementStart = { x: fEnt.x, y: fEnt.y, lastValidX: fEnt.x, lastValidY: fEnt.y };
           dragGroundStart = getGroundModelPoint(e.clientX, e.clientY);
+          // A seleção reconstrói a cena. Usa o grupo glTF recém-criado,
+          // nunca o objeto atingido pelo raycast antes do render.
+          furnitureDragObject = findFurnitureSceneObject(furnitureId);
           Store.commands.beginTransaction();
         } else if (mesh.userData.glazingPanelId) {
           var glazingPanelId = mesh.userData.glazingPanelId;
@@ -1851,10 +1862,14 @@ import {
     }
     if (dragMode === 'furnitureBody') {
       var gpF = getGroundModelPoint(e.clientX, e.clientY);
-      if (gpF && dragGroundStart) {
+      if (gpF && dragGroundStart && furnitureDragObject) {
         var dxF = gpF.x - dragGroundStart.x, dyF = gpF.y - dragGroundStart.y;
         var resolvedF = resolveFurniturePosition(selectedFurnitureId, dragElementStart.x + dxF, dragElementStart.y + dyF);
-        Store.commands.updateFurnitureBodyLive(selectedFurnitureId, resolvedF.x, resolvedF.y);
+        dragElementStart.lastValidX = resolvedF.x;
+        dragElementStart.lastValidY = resolvedF.y;
+        var worldF = modelToWorld(resolvedF.x, resolvedF.y);
+        furnitureDragObject.position.x = worldF.x;
+        furnitureDragObject.position.z = worldF.z;
       }
       return;
     }
@@ -2224,7 +2239,19 @@ import {
       }
       return;
     }
-    if (dragMode === 'columnBody' || dragMode === 'furnitureBody' || dragMode === 'lajeBody' || dragMode === 'openingSlide' || dragMode === 'openingEdgeLeft' || dragMode === 'openingEdgeRight' || dragMode === 'openingEdgeTop' || (dragMode && dragMode.indexOf('varandaEdge') === 0)) {
+    if (dragMode === 'furnitureBody') {
+      if (selectedFurnitureId && dragElementStart) {
+        Store.commands.updateFurnitureBodyLive(
+          selectedFurnitureId,
+          dragElementStart.lastValidX,
+          dragElementStart.lastValidY
+        );
+      }
+      furnitureDragObject = null;
+      dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
+      return;
+    }
+    if (dragMode === 'columnBody' || dragMode === 'lajeBody' || dragMode === 'openingSlide' || dragMode === 'openingEdgeLeft' || dragMode === 'openingEdgeRight' || dragMode === 'openingEdgeTop' || (dragMode && dragMode.indexOf('varandaEdge') === 0)) {
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }
