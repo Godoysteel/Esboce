@@ -4,6 +4,7 @@ import { Store } from './Store.js';
 import type { WallSnapshot } from './types.js';
 
 type ViewBox = { x: number; y: number; width: number; height: number };
+type WallEndpointLink = { id: string; which: 1 | 2 };
 
 export class Viewport2DController {
   private readonly renderer: Scene2DRenderer;
@@ -21,6 +22,18 @@ export class Viewport2DController {
     dx: number;
     dy: number;
   } | null = null;
+  private wallDrag: {
+    pointerId: number;
+    start: { x: number; y: number };
+    target: WallSnapshot;
+    wallsAtStart: WallSnapshot[];
+    linksStart: WallEndpointLink[];
+    linksEnd: WallEndpointLink[];
+    nx: number;
+    ny: number;
+    offset: number;
+    preview: WallSnapshot[];
+  } | null = null;
 
   public constructor(private readonly container: HTMLElement, private readonly svg: SVGSVGElement) {
     this.renderer = new Scene2DRenderer(svg);
@@ -28,7 +41,12 @@ export class Viewport2DController {
   }
 
   public render(): void {
-    this.renderer.render(this.selectedWallIds, this.drawPreview, this.roomDrag ?? undefined);
+    this.renderer.render(
+      this.selectedWallIds,
+      this.drawPreview,
+      this.roomDrag ?? undefined,
+      this.wallDrag?.preview,
+    );
     this.applyViewBox();
     this.updateScaleLabel();
   }
@@ -86,6 +104,12 @@ export class Viewport2DController {
         this.render();
         return;
       }
+      const resizeWallId = (event.target as SVGElement)
+        .closest<SVGElement>('[data-wall-resize-id]')?.dataset.wallResizeId;
+      if (resizeWallId && event.button === 0) {
+        this.startWallDrag(resizeWallId, event);
+        return;
+      }
       const wallId = (event.target as SVGElement).closest<SVGElement>('[data-wall-id]')?.dataset.wallId;
       if (wallId) {
         const roomIds = Core.findIsolatedRoomWallIds(Store.currentWalls(), wallId);
@@ -111,6 +135,9 @@ export class Viewport2DController {
           };
           this.svg.setPointerCapture(event.pointerId);
           this.svg.classList.add('is-dragging-room');
+        } else if (event.button === 0) {
+          this.startWallDrag(wallId, event);
+          return;
         }
         this.render();
         return;
@@ -133,6 +160,23 @@ export class Viewport2DController {
         const point = this.modelPoint(event);
         this.roomDrag.dx = Core.snap(point.x - this.roomDrag.start.x);
         this.roomDrag.dy = Core.snap(point.y - this.roomDrag.start.y);
+        this.render();
+        return;
+      }
+      if (this.wallDrag && event.pointerId === this.wallDrag.pointerId) {
+        const point = this.modelPoint(event);
+        const rawDx = point.x - this.wallDrag.start.x;
+        const rawDy = point.y - this.wallDrag.start.y;
+        const requested = Core.snap(rawDx * this.wallDrag.nx + rawDy * this.wallDrag.ny);
+        const resolved = Core.resolveWallResizeOffset(
+          this.wallDrag.target,
+          this.wallDrag.wallsAtStart,
+          requested,
+          this.wallDrag.nx,
+          this.wallDrag.ny,
+        );
+        this.wallDrag.offset = resolved.offset;
+        this.wallDrag.preview = this.wallResizePreview(this.wallDrag, resolved.offset);
         this.render();
         return;
       }
@@ -161,6 +205,24 @@ export class Viewport2DController {
         this.render();
         return;
       }
+      if (this.wallDrag && event.pointerId === this.wallDrag.pointerId) {
+        const drag = this.wallDrag;
+        this.wallDrag = null;
+        this.svg.classList.remove('is-dragging-wall');
+        if (drag.offset) {
+          const x1 = drag.target.x1 + drag.nx * drag.offset;
+          const y1 = drag.target.y1 + drag.ny * drag.offset;
+          const x2 = drag.target.x2 + drag.nx * drag.offset;
+          const y2 = drag.target.y2 + drag.ny * drag.offset;
+          const linked = drag.linksStart.map((link) => ({ ...link, x: x1, y: y1 }))
+            .concat(drag.linksEnd.map((link) => ({ ...link, x: x2, y: y2 })));
+          Store.commands.beginTransaction();
+          Store.commands.updateWallResizeLive(drag.target.id, x1, y1, x2, y2, linked);
+          Store.commands.splitWallsAtTJunctions();
+        }
+        this.render();
+        return;
+      }
       this.dragging = false;
       this.svg.classList.remove('is-panning');
     };
@@ -169,6 +231,57 @@ export class Viewport2DController {
     window.addEventListener('keydown', (event) => {
       if (event.key !== 'Escape' || !this.drawStart) return;
       this.drawStart = null; this.drawPreview = undefined; this.render();
+    });
+  }
+
+  private startWallDrag(wallId: string, event: PointerEvent): void {
+    const wall = Store.findWall(wallId);
+    if (!wall) return;
+    const dx = wall.x2 - wall.x1;
+    const dy = wall.y2 - wall.y1;
+    const length = Math.hypot(dx, dy) || 1;
+    const topology = Core.wallResizeTopology(Store.currentWalls(), wallId);
+    const target = { id: wall.id, x1: wall.x1, y1: wall.y1, x2: wall.x2, y2: wall.y2 };
+    this.selectedWallIds = new Set([wallId]);
+    this.wallDrag = {
+      pointerId: event.pointerId,
+      start: this.modelPoint(event),
+      target,
+      wallsAtStart: Store.currentWalls().map((item) => ({
+        id: item.id, x1: item.x1, y1: item.y1, x2: item.x2, y2: item.y2,
+      })),
+      linksStart: topology.start,
+      linksEnd: topology.end,
+      nx: Math.abs(dy / length) < 1e-6 ? 0 : -dy / length,
+      ny: Math.abs(dx / length) < 1e-6 ? 0 : dx / length,
+      offset: 0,
+      preview: [target],
+    };
+    this.svg.setPointerCapture(event.pointerId);
+    this.svg.classList.add('is-dragging-wall');
+    this.render();
+  }
+
+  private wallResizePreview(drag: NonNullable<Viewport2DController['wallDrag']>, offset: number): WallSnapshot[] {
+    const x1 = drag.target.x1 + drag.nx * offset;
+    const y1 = drag.target.y1 + drag.ny * offset;
+    const x2 = drag.target.x2 + drag.nx * offset;
+    const y2 = drag.target.y2 + drag.ny * offset;
+    const affected = new Set([
+      drag.target.id,
+      ...drag.linksStart.map((link) => link.id),
+      ...drag.linksEnd.map((link) => link.id),
+    ]);
+    return drag.wallsAtStart.filter((wall) => affected.has(wall.id)).map((wall) => {
+      if (wall.id === drag.target.id) return { ...wall, x1, y1, x2, y2 };
+      const copy = { ...wall };
+      drag.linksStart.filter((link) => link.id === wall.id).forEach((link) => {
+        if (link.which === 1) { copy.x1 = x1; copy.y1 = y1; } else { copy.x2 = x1; copy.y2 = y1; }
+      });
+      drag.linksEnd.filter((link) => link.id === wall.id).forEach((link) => {
+        if (link.which === 1) { copy.x1 = x2; copy.y1 = y2; } else { copy.x2 = x2; copy.y2 = y2; }
+      });
+      return copy;
     });
   }
 

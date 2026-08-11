@@ -94,6 +94,7 @@ Criada a primeira baseline de engenharia do projeto.
 
 - Paredes e cômodos isolados agora podem ser selecionados diretamente na planta 2D.
 - Cômodos isolados podem ser arrastados individualmente: o gesto move uma prévia vetorial transparente e confirma paredes e móveis uma única vez ao soltar.
+- Paredes selecionadas exibem uma alça central no 2D; o arraste move somente a parede e preserva as quinas conectadas, com confirmação única ao soltar.
 - A ferramenta **Cômodo livre** cria um retângulo por dois cliques, com snap e prévia vetorial antes da confirmação no mesmo `Store` do 3D.
 - `Esc` cancela uma criação 2D em andamento sem modificar o projeto.
 

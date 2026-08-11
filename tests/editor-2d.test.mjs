@@ -58,3 +58,12 @@ test('cômodo isolado arrasta individualmente com prévia local e confirmação 
   assert.match(controller, /Store\.commands\.beginTransaction\(\)/);
   assert.match(controller, /Store\.commands\.updateWallsGroupBodyLive\(drag\.snapshots, drag\.dx, drag\.dy\)/);
 });
+
+test('parede selecionada arrasta pela alça sem atualizar o Store durante a prévia', () => {
+  assert.match(renderer, /data-wall-resize-id/);
+  assert.match(controller, /private wallDrag:/);
+  assert.match(controller, /Core\.wallResizeTopology/);
+  assert.match(controller, /Core\.resolveWallResizeOffset/);
+  assert.match(controller, /this\.wallDrag\.preview = this\.wallResizePreview/);
+  assert.match(controller, /Store\.commands\.updateWallResizeLive/);
+});
