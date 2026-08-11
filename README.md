@@ -69,7 +69,7 @@ Ele documenta a qualidade da engenharia.
 
 Projeto em estabilização pré-comercial, com versão pública de testes em [esboce.com.br](https://esboce.com.br).
 
-O editor, a persistência autenticada, os documentos jurídicos, os e-mails transacionais, a proteção antiabuso, o monitoramento e o deploy com gates automáticos estão operacionais. A baseline atual possui 101 testes automatizados.
+O editor, a persistência autenticada, os documentos jurídicos, os e-mails transacionais, a proteção antiabuso, o monitoramento e o deploy com gates automáticos estão operacionais. A baseline atual possui 117 testes automatizados.
 
 Consulte o [Roadmap](docs/00%20-%20Projeto/Roadmap.md) para o estado das fases e o [Changelog](CHANGELOG.md) para as entregas recentes.
 

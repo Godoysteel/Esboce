@@ -65,6 +65,29 @@ test('parede de comodo totalmente isolado seleciona o contorno inteiro', () => {
   assert.deepEqual(findIsolatedRoomWallIds(walls, 'top')?.sort(), ['bottom', 'left', 'right', 'top']);
 });
 
+test('arraste de comodo move somente a previa 3D e confirma o Store ao soltar', () => {
+  const moveStart = viewportControllerSource.indexOf("if (dragMode === 'roomGroup') {");
+  const moveEnd = viewportControllerSource.indexOf("if (dragMode === 'roofGroup')", moveStart);
+  const pointerMoveFlow = viewportControllerSource.slice(moveStart, moveEnd);
+
+  assert.match(pointerMoveFlow, /previewRoomGroupDelta\(resolved\.x, resolved\.y\)/);
+  assert.doesNotMatch(pointerMoveFlow, /updateWallsGroupBodyLive/);
+  assert.doesNotMatch(pointerMoveFlow, /updateFurnitureBodyLive/);
+
+  const upStart = viewportControllerSource.indexOf("if (dragMode === 'roomGroup') {", moveEnd);
+  const upEnd = viewportControllerSource.indexOf("if (dragMode === 'roofGroup')", upStart);
+  const pointerUpFlow = viewportControllerSource.slice(upStart, upEnd);
+
+  assert.match(pointerUpFlow, /updateWallsGroupBodyLive/);
+  assert.match(pointerUpFlow, /updateFurnitureBodyLive/);
+});
+
+test('arraste incremental da fachada recaptura o mesh depois da selecao reconstruir a cena', () => {
+  assert.match(viewportControllerSource, /function findGlazingPanelSceneObject\(id: string\)/);
+  assert.match(viewportControllerSource, /selectGlazingPanel\(glazingPanelId\);[\s\S]{0,700}glazingPanelDragMesh = findGlazingPanelSceneObject\(glazingPanelId\)/);
+  assert.doesNotMatch(viewportControllerSource, /glazingPanelDragMesh = mesh/);
+});
+
 test('qualquer ligacao externa desativa a selecao coletiva do comodo', () => {
   const walls = rectangle();
   walls.push({ id: 'external', x1: 40, y1: 0, x2: 40, y2: -40 });
