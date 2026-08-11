@@ -13,7 +13,7 @@ Todas as alterações relevantes do Esboce serão registradas neste arquivo.
 - Adicionados exportação e importação de backup JSON. O salvamento e a abertura pelo Supabase usam a mesma validação do backup.
 - Corrigido o ciclo de projetos autenticados: criar, atualizar, listar em **Meus projetos**, abrir por link e iniciar um projeto novo sem perder o projeto anteriormente salvo.
 - Criados gates de qualidade no GitHub Actions: testes, verificação TypeScript e build antecedem a publicação. O deploy do `main` no GitHub Pages só ocorre quando todos passam.
-- Baseline atual validada com **120 testes automatizados**.
+- Baseline atual validada com **121 testes automatizados**.
 
 ## Conta, segurança e conformidade
 
@@ -33,6 +33,7 @@ Todas as alterações relevantes do Esboce serão registradas neste arquivo.
 ## Interface e viewport
 
 - O arraste de cômodos isolados, móveis, colunas, lajes e fachadas de glazing passou a usar prévia incremental: durante o movimento, somente os objetos 3D envolvidos mudam de posição; o documento do projeto é atualizado uma única vez ao soltar. Isso elimina reconstruções completas da cena a cada evento do ponteiro e reduz fortemente o atraso em projetos maiores.
+- O cadastro passa a enviar nome, telefone e endereço como metadados do Auth; um trigger seguro cria `public.profiles` junto com `auth.users`, sem depender da confirmação de e-mail, do primeiro login ou do `localStorage`. A migração também recupera contas anteriores quando esses metadados estiverem disponíveis, sem sobrescrever perfis existentes.
 - Adicionada a categoria **Envidraçamento**, com a primeira ferramenta **Fachada**: o botão cria um painel de vidro solto na cena — arraste o corpo pra posicionar e, ao soltar perto de uma parede, ele encosta sozinho (ímã) e recorta de verdade a camada visível dela nesse trecho, mantendo a parede contando normalmente no quantitativo de alvenaria. O painel trava no tamanho disponível da parede ao encostar. Selecione o painel pra excluir. O preenchimento com grid de perfis pretos e vidro reflexivo ainda está em desenvolvimento — por ora o painel aparece como um placeholder simples. Substitui por completo a fachada de vidro paramétrica anterior (botão 🪟 numa parede inteira), que nunca chegou a ser publicada. Ver DEC-56 no Registro de Decisões Técnicas (revisão da DEC-55).
 - Portas e janelas em paredes associadas ao ático agora recortam também o complemento inclinado, incluindo o volume estrutural e as duas faces texturizadas. O limite superior disponível é calculado pelo ponto mais baixo do telhado sobre toda a largura do vão.
 - A antiga criação separada de **Ático** foi incorporada ao fluxo de **Telhado**. Ao iniciar uma cobertura, o usuário escolhe telhado normal ou ático/chalé; o ático nasce como duas águas transparente, tem altura de beiral ajustável por alça e só associa/recorta as paredes quando o usuário confirma em **Gerar ático**. A associação é paramétrica, persistida e usada no 3D e nos quantitativos. Varandas existentes continuam legíveis apenas por compatibilidade.

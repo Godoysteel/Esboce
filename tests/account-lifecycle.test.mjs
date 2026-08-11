@@ -7,6 +7,7 @@ const clientUrl = new URL("../src/core/SupabaseClient.ts", import.meta.url);
 const appUrl = new URL("../src/app/EsboceApplication.ts", import.meta.url);
 const turnstileUrl = new URL("../src/core/Turnstile.ts", import.meta.url);
 const migrationUrl = new URL("../supabase/migrations/20260810183000_account_self_deletion.sql", import.meta.url);
+const profileMigrationUrl = new URL("../supabase/migrations/20260811123000_create_profile_on_signup.sql", import.meta.url);
 
 test("recuperação de senha usa o fluxo nativo do Supabase e retorno controlado", async () => {
   const [client, app, html] = await Promise.all([
@@ -70,7 +71,7 @@ test("Turnstile protege cadastro, login, recuperação e reautenticação", asyn
   assert.match(turnstile, /0x4AAAAAAEMLuO062rDllQlZ/);
   assert.match(turnstile, /challenges\.cloudflare\.com\/turnstile\/v0\/api\.js/);
   assert.match(turnstile, /expired-callback/);
-  assert.match(client, /signUp\(\{ email, password, options: \{ captchaToken \} \}\)/);
+  assert.match(client, /signUp\(\{[\s\S]*captchaToken,[\s\S]*data: \{[\s\S]*\.\.\.profile/);
   assert.match(client, /signInWithPassword\(\{ email, password, options: \{ captchaToken \} \}\)/);
   assert.match(client, /resetPasswordForEmail\(email, \{ redirectTo: redirectTo\.toString\(\), captchaToken \}\)/);
   for (const id of ["signupCaptcha", "loginCaptcha", "recoveryCaptcha", "deleteAccountCaptcha"]) {
@@ -78,6 +79,22 @@ test("Turnstile protege cadastro, login, recuperação e reautenticação", asyn
     assert.match(app, new RegExp(`requireCaptchaToken\\("${id}"\\)`));
     assert.match(app, new RegExp(`resetCaptcha\\("${id}"\\)`));
   }
+});
+
+test("cadastro cria o perfil comercial no banco sem depender do primeiro login", async () => {
+  const [client, sql] = await Promise.all([
+    readFile(clientUrl, "utf8"),
+    readFile(profileMigrationUrl, "utf8"),
+  ]);
+
+  assert.match(client, /data: \{[\s\S]*\.\.\.profile/);
+  assert.match(sql, /function public\.handle_new_user_profile\(\)/i);
+  assert.match(sql, /after insert on auth\.users/i);
+  assert.match(sql, /insert into public\.profiles/i);
+  assert.match(sql, /raw_user_meta_data\s*->>\s*'telefone'/i);
+  assert.match(sql, /on conflict \(id\) do nothing/i);
+  assert.match(sql, /from auth\.users as users/i);
+  assert.doesNotMatch(sql, /grant execute[\s\S]*to (anon|authenticated)/i);
 });
 
 test("RPC de exclusão deriva o alvo somente de auth.uid e não aceita id externo", async () => {

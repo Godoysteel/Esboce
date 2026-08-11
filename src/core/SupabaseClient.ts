@@ -141,7 +141,22 @@ export async function getCurrentUser() {
 // chamar isso precisa avisar o usuário pra confirmar o e-mail antes de
 // tentar salvar de novo.
 export async function signUpWithProfile(email: string, password: string, profile: ProfileFields, captchaToken: string): Promise<{ needsEmailConfirmation: boolean }> {
-  const { data, error } = await supabase.auth.signUp({ email, password, options: { captchaToken } });
+  // Os dados cadastrais seguem também como metadados do Auth. Um
+  // trigger no banco os copia para public.profiles no mesmo instante em
+  // que auth.users nasce, inclusive quando a confirmação de e-mail
+  // impede a criação imediata de uma sessão no navegador.
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      captchaToken,
+      data: {
+        ...profile,
+        terms_version: CURRENT_LEGAL_ACCEPTANCE.termsVersion,
+        privacy_version: CURRENT_LEGAL_ACCEPTANCE.privacyVersion,
+      },
+    },
+  });
   if (error) throw error;
   if (!data.user) throw new Error('Cadastro não retornou um usuário.');
 
@@ -152,8 +167,7 @@ export async function signUpWithProfile(email: string, password: string, profile
   // ensureProfileExists, chamado no fluxo de login).
   if (!data.session) return { needsEmailConfirmation: true };
 
-  const { error: profileError } = await supabase.from('profiles').insert({ id: data.user.id, ...profile });
-  if (profileError) throw profileError;
+  await ensureProfileExists(data.user.id, profile);
   return { needsEmailConfirmation: false };
 }
 
