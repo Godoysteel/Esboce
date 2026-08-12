@@ -5,6 +5,7 @@
 // var/function trocados por const/arrow onde natural.
 
 import { Core } from './Core.js';
+import { buildColdWaterKitchenPrototype } from './Hydraulics.js';
 import type {
   Project, Floor, Wall, Column, Roof, Opening, OpeningKind, Varanda, Laje, Furniture, ColumnShape, RoofType,
   RidgeAxis, VarandaFrontSide, FoundationType, StoreEvent, StoreListener,
@@ -139,31 +140,7 @@ function applyBody(w: Wall, x1: number, y1: number, x2: number, y2: number): voi
 export const commands = {
   createHydraulicPrototype(): void {
     pushUndoSnapshot();
-    const floor = currentFloor();
-    const points = floor.walls.flatMap((wall) => [{ x: wall.x1, y: wall.y1 }, { x: wall.x2, y: wall.y2 }]);
-    const minX = points.length ? Math.min(...points.map((point) => point.x)) : -40;
-    const maxX = points.length ? Math.max(...points.map((point) => point.x)) : 40;
-    const minY = points.length ? Math.min(...points.map((point) => point.y)) : -30;
-    const maxY = points.length ? Math.max(...points.map((point) => point.y)) : 30;
-    const centerX = (minX + maxX) / 2;
-    const centerY = (minY + maxY) / 2;
-    const sourceId = Core.nextId('hyd-node');
-    const junctionId = Core.nextId('hyd-node');
-    const fixtureId = Core.nextId('hyd-node');
-    const sewerId = Core.nextId('hyd-node');
-    project.hydraulics = {
-      nodes: [
-        { id: sourceId, kind: 'source', networkType: 'cold_water', label: "Caixa d'água", x: minX, y: centerY, elevationM: 3.2 },
-        { id: junctionId, kind: 'junction', networkType: 'cold_water', label: 'Prumada de água fria', x: centerX, y: centerY, elevationM: 2.2 },
-        { id: fixtureId, kind: 'fixture', networkType: 'cold_water', label: 'Ponto de consumo', x: maxX, y: centerY, elevationM: 1.1 },
-        { id: sewerId, kind: 'destination', networkType: 'sanitary_sewer', label: 'Saída de esgoto', x: maxX, y: maxY, elevationM: 0.15 },
-      ],
-      segments: [
-        { id: Core.nextId('hyd-segment'), networkType: 'cold_water', startNodeId: sourceId, endNodeId: junctionId, diameterMm: 25 },
-        { id: Core.nextId('hyd-segment'), networkType: 'cold_water', startNodeId: junctionId, endNodeId: fixtureId, diameterMm: 20 },
-        { id: Core.nextId('hyd-segment'), networkType: 'sanitary_sewer', startNodeId: fixtureId, endNodeId: sewerId, diameterMm: 100 },
-      ],
-    };
+    project.hydraulics = buildColdWaterKitchenPrototype(currentFloor());
     project.layers.instalacoes = true;
     emit({ type: 'HydraulicPrototypeCreated' });
   },
