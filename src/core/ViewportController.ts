@@ -825,6 +825,8 @@ import {
     if (gzSwapBtnEl) gzSwapBtnEl.style.display = 'none';
     if (selectedHydraulicNodeId) {
       var hydraulicNode = Store.findHydraulicNode(selectedHydraulicNodeId);
+      var hydraulicFlipButton = roomGizmoEl.querySelector('[data-action="flipHydraulicFace"]');
+      if (hydraulicFlipButton) hydraulicFlipButton.style.display = hydraulicNode && hydraulicNode.placementSurface === 'wall' ? '' : 'none';
       if (!hydraulicNode) {
         selectedHydraulicNodeId = null;
         roomGizmoEl.classList.remove('visible');
@@ -837,6 +839,8 @@ import {
       gizmoEl.classList.remove('visible'); openingGizmoEl.classList.remove('visible'); columnShapePanelEl.classList.remove('visible'); roofTypePanelEl.classList.remove('visible');
       return;
     }
+    var inactiveHydraulicFlipButton = roomGizmoEl.querySelector('[data-action="flipHydraulicFace"]');
+    if (inactiveHydraulicFlipButton) inactiveHydraulicFlipButton.style.display = 'none';
     // Esquadria selecionada: gizmo próprio, sempre visível (não depende
     // de gizmoMenuOpen — ver selectOpening). Posicionado um pouco acima
     // do topo do vão, pra não tampar a folha/vidro.

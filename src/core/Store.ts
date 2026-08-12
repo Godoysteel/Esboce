@@ -5,7 +5,7 @@
 // var/function trocados por const/arrow onde natural.
 
 import { Core } from './Core.js';
-import { buildColdWaterKitchenPrototype, buildColdWaterNetworkFromFixtures, createPositionedHydraulicFixture, resolveHydraulicFixturePosition } from './Hydraulics.js';
+import { buildColdWaterKitchenPrototype, buildColdWaterNetworkFromFixtures, createPositionedHydraulicFixture, hydraulicFixtureVisualPosition, resolveHydraulicFixturePosition } from './Hydraulics.js';
 import type {
   Project, Floor, Wall, Column, Roof, Opening, OpeningKind, Varanda, Laje, Furniture, ColumnShape, RoofType,
   RidgeAxis, VarandaFrontSide, FoundationType, StoreEvent, StoreListener,
@@ -172,6 +172,25 @@ export const commands = {
     if (networkWasGenerated) project.hydraulics = buildColdWaterNetworkFromFixtures(project.floors, project.hydraulics);
     emit({ type: 'HydraulicFixtureMoved', hydraulicNodeId: node.id });
     return node;
+  },
+
+  flipHydraulicFixtureFace(nodeId: string): void {
+    const node = findHydraulicNode(nodeId);
+    if (!node || node.kind !== 'fixture' || node.placementSurface !== 'wall' || !node.wallId) return;
+    const wall = findWall(node.wallId);
+    if (!wall) return;
+    pushUndoSnapshot();
+    if (node.wallFaceSide === 1 || node.wallFaceSide === -1) {
+      node.wallFaceSide = node.wallFaceSide === 1 ? -1 : 1;
+    } else {
+      const visual = hydraulicFixtureVisualPosition(node, wall, project.floors.flatMap((floor) => floor.walls));
+      const dx = wall.x2 - wall.x1, dy = wall.y2 - wall.y1;
+      const nx = -dy / (Math.hypot(dx, dy) || 1);
+      const ny = dx / (Math.hypot(dx, dy) || 1);
+      const currentSide = (visual.x - node.x) * nx + (visual.y - node.y) * ny >= 0 ? 1 : -1;
+      node.wallFaceSide = currentSide === 1 ? -1 : 1;
+    }
+    emit({ type: 'HydraulicFixtureFaceFlipped', hydraulicNodeId: node.id });
   },
 
   deleteHydraulicFixture(nodeId: string): void {

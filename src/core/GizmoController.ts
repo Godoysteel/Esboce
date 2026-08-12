@@ -190,6 +190,7 @@ export function init(): void {
     if (hydraulicNodeId) {
       if (action === 'close') ViewportController.deselect();
       if (action === 'delete') { Store.commands.deleteHydraulicFixture(hydraulicNodeId); ViewportController.deselect(); }
+      if (action === 'flipHydraulicFace') Store.commands.flipHydraulicFixtureFace(hydraulicNodeId);
       return;
     }
 

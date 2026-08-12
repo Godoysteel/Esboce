@@ -76,7 +76,8 @@ export function hydraulicFixtureVisualPosition(node: HydraulicNode, wall: Wall |
     y: points.reduce((sum, point) => sum + point.y, 0) / points.length,
   } : { x: node.x, y: node.y };
   const towardCenter = (center.x - node.x) * nx + (center.y - node.y) * ny >= 0 ? 1 : -1;
-  const side = node.fixtureType === 'external_faucet' ? -towardCenter : towardCenter;
+  const defaultSide = node.fixtureType === 'external_faucet' ? -towardCenter : towardCenter;
+  const side = node.wallFaceSide === -1 || node.wallFaceSide === 1 ? node.wallFaceSide : defaultSide;
   // meia parede (1,2 unidade) + raio da esfera (1,4) + pequena folga (0,3)
   const clearance = 2.9;
   return { x: node.x + nx * side * clearance, y: node.y + ny * side * clearance };

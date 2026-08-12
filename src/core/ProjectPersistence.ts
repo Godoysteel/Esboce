@@ -65,6 +65,11 @@ function parseHydraulicNode(value: unknown, path: string): HydraulicNode {
   if (fixtureType !== undefined) node.fixtureType = fixtureType;
   if (wallId !== undefined) node.wallId = wallId;
   if (placementSurface !== undefined) node.placementSurface = placementSurface;
+  if (v.wallFaceSide != null) {
+    const wallFaceSide = number(v.wallFaceSide, `${path}.wallFaceSide`);
+    if (wallFaceSide !== -1 && wallFaceSide !== 1) fail(`${path}.wallFaceSide`, 'face da parede inválida');
+    node.wallFaceSide = wallFaceSide;
+  }
   return node;
 }
 

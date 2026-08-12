@@ -102,6 +102,16 @@ test('water outlet marker is rendered beyond the wall face while its technical p
   assert.ok(Math.abs(visual.y) > 2.6);
 });
 
+test('hydraulic fixture can explicitly choose either face of a shared wall', () => {
+  const wall = { id: 'shared', x1: 0, y1: 0, x2: 100, y2: 0 };
+  const point = createPositionedHydraulicFixture('shower', 50, 0, wall);
+  const positive = hydraulicFixtureVisualPosition({ ...point, wallFaceSide: 1 }, wall, [wall]);
+  const negative = hydraulicFixtureVisualPosition({ ...point, wallFaceSide: -1 }, wall, [wall]);
+  assert.equal(positive.x, negative.x);
+  assert.ok(positive.y > point.y);
+  assert.ok(negative.y < point.y);
+});
+
 test('active hydraulic placement tool still gives drag priority to an existing fixture', () => {
   const source = readFileSync(new URL('../src/core/ViewportController.ts', import.meta.url), 'utf8');
   assert.match(source, /hydraulicMesh\.userData\.hydraulicEditable/);

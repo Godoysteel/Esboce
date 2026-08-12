@@ -234,6 +234,8 @@ export interface HydraulicNode {
   fixtureType?: string;
   placementSurface?: HydraulicPlacementSurface;
   wallId?: string;
+  /** Face visual da parede. Permite escolher o lado em paredes compartilhadas. */
+  wallFaceSide?: 1 | -1;
   equipmentId?: string;
   connectorKey?: string;
 }
