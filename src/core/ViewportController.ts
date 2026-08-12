@@ -19,6 +19,7 @@ import { Store } from './Store.js';
 import { Scene3DRenderer, DEBUG_COLOR_MODE } from './Scene3DRenderer.js';
 import { NavGizmo } from './NavGizmo.js';
 import { touchCameraAnchor, updateTouchCamera, type TouchCameraAnchor } from './TouchCamera.js';
+import { DEFAULT_GLAZING_GLASS_MATERIAL } from './Glazing.js';
 import {
   analyzeWallResize,
   cloneWallsForDiagnostics,
@@ -79,6 +80,8 @@ import {
   // dezenas de vezes por segundo. O Store só é atualizado UMA VEZ, ao
   // soltar o mouse.
   var glazingPanelDragMesh: any = null;
+  var glazingResizePreview: any = null;
+  var glazingResizeHiddenObject: any = null;
   // Prévia incremental do arraste de um cômodo isolado. Guardamos os
   // objetos 3D recém-reconstruídos pela seleção e movemos somente suas
   // transforms durante o pointermove. A geometria persistida continua
@@ -187,6 +190,43 @@ import {
     return scene.children.find(function (object: any) {
       return object.userData && object.userData.glazingPanelId === id;
     }) || null;
+  }
+
+  function clearGlazingResizePreview() {
+    if (glazingResizePreview) {
+      scene.remove(glazingResizePreview);
+      glazingResizePreview.traverse(function (object: any) {
+        if (object.geometry && object.geometry.dispose) object.geometry.dispose();
+        var materials = object.material ? (Array.isArray(object.material) ? object.material : [object.material]) : [];
+        materials.forEach(function (material: any) { if (material && material.dispose) material.dispose(); });
+      });
+    }
+    glazingResizePreview = null;
+    if (glazingResizeHiddenObject) glazingResizeHiddenObject.visible = true;
+    glazingResizeHiddenObject = null;
+  }
+
+  function beginGlazingResizePreview(panelId: string) {
+    clearGlazingResizePreview();
+    var source: any = findGlazingPanelSceneObject(panelId);
+    if (!source) return;
+    glazingResizeHiddenObject = source;
+    source.visible = false;
+    var panel = Store.findGlazingPanel(panelId);
+    if (!panel) { source.visible = true; glazingResizeHiddenObject = null; return; }
+    // Durante o gesto não clonamos nem esticamos perfis/vidros reais.
+    // Um único volume fantasma representa o tamanho pretendido; a malha
+    // procedural definitiva só é reconstruída depois do pointerup.
+    var previewGeometry = new THREE.BoxGeometry(panel.widthM, panel.heightM, 0.035);
+    var previewMaterial = new THREE.MeshBasicMaterial({
+      color: 0x79c8ee, transparent: true, opacity: 0.28,
+      depthWrite: false, side: THREE.DoubleSide,
+    });
+    glazingResizePreview = new THREE.Mesh(previewGeometry, previewMaterial);
+    glazingResizePreview.position.copy(source.position);
+    glazingResizePreview.rotation.copy(source.rotation);
+    glazingResizePreview.renderOrder = 998;
+    scene.add(glazingResizePreview);
   }
 
   function findFurnitureSceneObject(id: string) {
@@ -521,7 +561,7 @@ import {
   // bordas (nunca trava em contorno de parede — ver DEC-35).
   function selectLaje(lajeId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedLajeId = lajeId; gizmoMenuOpen = false; render(); }
 
-  function selectGlazingPanel(glazingPanelId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = glazingPanelId; gizmoMenuOpen = false; render(); }
+  function selectGlazingPanel(glazingPanelId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = glazingPanelId; gizmoMenuOpen = false; openObjectPanel('glazingMaterial'); render(); }
   // Móvel: mesmo padrão da coluna (clique seleciona e já mostra o gizmo
   // completo — girar/duplicar/excluir — sem precisar de segundo clique).
   function selectFurniture(furnitureId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedGlazingPanelId = null; selectedFurnitureId = furnitureId; gizmoMenuOpen = false; render(); }
@@ -568,10 +608,46 @@ import {
     row.appendChild(input); row.appendChild(document.createTextNode(' Visível'));
     objectPanelBodyEl.appendChild(row);
   }
+  function addMaterialRange(label: string, value: number, min: number, max: number, step: number, onPreview: (value: number) => void) {
+    var row = document.createElement('label'); row.className = 'material-control';
+    var caption = document.createElement('span'); caption.textContent = label;
+    var input = document.createElement('input'); input.type = 'range'; input.min = String(min); input.max = String(max); input.step = String(step); input.value = String(value);
+    var output = document.createElement('output'); output.textContent = value.toFixed(step < 0.1 ? 2 : 1);
+    var transactionOpen = false;
+    input.addEventListener('pointerdown', function () { Store.commands.beginTransaction(); transactionOpen = true; });
+    input.addEventListener('input', function () { output.textContent = Number(input.value).toFixed(step < 0.1 ? 2 : 1); onPreview(Number(input.value)); });
+    input.addEventListener('change', function () { if (!transactionOpen) { Store.commands.beginTransaction(); onPreview(Number(input.value)); } transactionOpen = false; });
+    row.appendChild(caption); row.appendChild(input); row.appendChild(output); objectPanelBodyEl.appendChild(row);
+  }
+  function renderGlazingMaterialControls() {
+    var panel = selectedGlazingPanelId ? Store.findGlazingPanel(selectedGlazingPanelId) : null;
+    if (!panel) { closeObjectPanel(); return; }
+    var material: any = { ...DEFAULT_GLAZING_GLASS_MATERIAL, ...(panel.glassMaterial || {}) };
+    function preview(key: string, value: any) { material = { ...material, [key]: value }; Store.commands.updateGlazingGlassMaterialLive(panel!.id, material); }
+    addSectionLabel('Vidro espelhado');
+    var colorRow = document.createElement('label'); colorRow.className = 'material-control';
+    var colorLabel = document.createElement('span'); colorLabel.textContent = 'Cor';
+    var colorInput = document.createElement('input'); colorInput.type = 'color'; colorInput.value = material.color;
+    var colorOutput = document.createElement('output'); colorOutput.textContent = material.color.toUpperCase();
+    colorInput.addEventListener('input', function () { colorOutput.textContent = colorInput.value.toUpperCase(); });
+    colorInput.addEventListener('pointerdown', function () { Store.commands.beginTransaction(); });
+    colorInput.addEventListener('input', function () { colorOutput.textContent = colorInput.value.toUpperCase(); preview('color', colorInput.value); });
+    colorRow.appendChild(colorLabel); colorRow.appendChild(colorInput); colorRow.appendChild(colorOutput); objectPanelBodyEl.appendChild(colorRow);
+    addMaterialRange('Opacidade', material.opacity, 0.5, 1, 0.01, function (v) { preview('opacity', v); });
+    addMaterialRange('Rugosidade', material.roughness, 0, 0.5, 0.01, function (v) { preview('roughness', v); });
+    addMaterialRange('Metalicidade', material.metalness, 0, 1, 0.01, function (v) { preview('metalness', v); });
+    addMaterialRange('Reflexo', material.reflectionIntensity, 0, 3, 0.02, function (v) { preview('reflectionIntensity', v); });
+    var actions = document.createElement('div'); actions.className = 'material-actions';
+    var reset = document.createElement('button'); reset.textContent = 'Restaurar padrão'; reset.title = 'Usar novamente o vidro inicial oficial do Esboce';
+    reset.addEventListener('click', function () { Store.commands.setGlazingGlassMaterial(panel!.id, null); renderObjectPanelBody('glazingMaterial'); });
+    actions.appendChild(reset); objectPanelBodyEl.appendChild(actions);
+  }
   function renderObjectPanelBody(category: any) {
     objectPanelBodyEl.innerHTML = '';
     var project = Store.getProject();
-    if (category === 'fundacao') {
+    if (category === 'glazingMaterial') {
+      renderGlazingMaterialControls();
+    } else if (category === 'fundacao') {
       addSectionLabel('Tipo');
       addTypeOption('Radier', project.foundationType === 'radier', function () { Store.commands.setFoundationType('radier'); });
       addTypeOption('Baldrame', project.foundationType === 'baldrame', function () { Store.commands.setFoundationType('baldrame'); });
@@ -994,6 +1070,7 @@ import {
       selectedOpening: selectedOpening,
       selectedVaranda: selectedVaranda,
       selectedLaje: selectedLaje,
+      selectedGlazingPanel: selectedGlazingPanelId ? Store.findGlazingPanel(selectedGlazingPanelId) : null,
       roomGroupWallIds: selectedRoomWallIds,
       resizeWallId: resizeWallId,
       drawPreview: drawPreview,
@@ -1359,6 +1436,40 @@ import {
           var regionForDragE = findGridRegionAt((rrE.x1 + rrE.x2) / 2, (rrE.y1 + rrE.y2) / 2);
           dragElementStart = { x1: rrE.x1, y1: rrE.y1, x2: rrE.x2, y2: rrE.y2, region: regionForDragE, lastBounds: null };
           beginRoofResizePreview(rrE.id);
+        }
+      } else if (handle.indexOf('glazingWidth') === 0) {
+        var gpWidth = Store.findGlazingPanel(selectedGlazingPanelId);
+        if (gpWidth) {
+          var gpCenter = glazingPanelModelCenter(gpWidth);
+          var axisX = 1, axisY = 0;
+          if (gpWidth.state === 'attached' && gpWidth.wallId) {
+            var gpWall = Store.findWall(gpWidth.wallId);
+            if (gpWall) {
+              var gpWallLen = Math.hypot(gpWall.x2 - gpWall.x1, gpWall.y2 - gpWall.y1) || 1;
+              axisX = (gpWall.x2 - gpWall.x1) / gpWallLen; axisY = (gpWall.y2 - gpWall.y1) / gpWallLen;
+            }
+          } else if (gpWidth.rotationDeg) {
+            var gpAngle = gpWidth.rotationDeg * Math.PI / 180;
+            axisX = Math.cos(gpAngle); axisY = Math.sin(gpAngle);
+          }
+          var gpSide = handle === 'glazingWidthRight' ? 1 : -1;
+          var gpMaxWidth = 20;
+          if (gpWidth.state === 'attached' && gpWidth.wallId) {
+            var gpHostWall = Store.findWall(gpWidth.wallId);
+            if (gpHostWall) {
+              var gpHostLen = Core.wallLengthMeters(gpHostWall);
+              var gpOffset = gpWidth.offsetM || gpHostLen / 2;
+              gpMaxWidth = gpSide > 0 ? gpHostLen - (gpOffset - gpWidth.widthM / 2) : gpOffset + gpWidth.widthM / 2;
+            }
+          }
+          dragElementStart = { widthM: gpWidth.widthM, heightM: gpWidth.heightM, center: gpCenter, axisX: axisX, axisY: axisY, side: gpSide, maxWidthM: gpMaxWidth, lastWidthM: gpWidth.widthM, lastHeightM: gpWidth.heightM, centerDeltaM: 0 };
+          beginGlazingResizePreview(gpWidth.id);
+        }
+      } else if (handle === 'glazingHeight') {
+        var gpHeight = Store.findGlazingPanel(selectedGlazingPanelId);
+        if (gpHeight) {
+          dragElementStart = { widthM: gpHeight.widthM, heightM: gpHeight.heightM, startScreenY: e.clientY, lastWidthM: gpHeight.widthM, lastHeightM: gpHeight.heightM };
+          beginGlazingResizePreview(gpHeight.id);
         }
       } else if (handle.indexOf('varandaEdge') === 0) {
         // Varanda não trava em região de cômodo nenhuma (decisão
@@ -2128,6 +2239,34 @@ import {
       }
       return;
     }
+    if (dragMode && dragMode.indexOf('glazingWidth') === 0) {
+      var gpResizeW = Store.findGlazingPanel(selectedGlazingPanelId);
+      var groundResizeW = getGroundModelPoint(e.clientX, e.clientY);
+      if (gpResizeW && groundResizeW && dragElementStart) {
+        var along = ((groundResizeW.x - dragElementStart.center.x) * dragElementStart.axisX + (groundResizeW.y - dragElementStart.center.y) * dragElementStart.axisY) / Core.GRID;
+        var candidateW = Math.max(0.5, Math.min(dragElementStart.maxWidthM, dragElementStart.widthM / 2 + along * dragElementStart.side));
+        var centerDeltaW = dragElementStart.side * (candidateW - dragElementStart.widthM) / 2;
+        dragElementStart.lastWidthM = candidateW;
+        dragElementStart.centerDeltaM = centerDeltaW;
+        if (glazingResizePreview) {
+          glazingResizePreview.scale.x = candidateW / gpResizeW.widthM;
+          var worldDeltaW = centerDeltaW * Core.GRID * scale;
+          glazingResizePreview.position.x = glazingResizeHiddenObject.position.x + dragElementStart.axisX * worldDeltaW;
+          glazingResizePreview.position.z = glazingResizeHiddenObject.position.z + dragElementStart.axisY * worldDeltaW;
+        }
+      }
+      return;
+    }
+    if (dragMode === 'glazingHeight') {
+      var gpResizeH = Store.findGlazingPanel(selectedGlazingPanelId);
+      if (gpResizeH && dragElementStart && glazingResizePreview) {
+        var candidateH = Math.max(0.5, dragElementStart.heightM + (dragElementStart.startScreenY - e.clientY) * 0.01);
+        dragElementStart.lastHeightM = candidateH;
+        glazingResizePreview.scale.y = candidateH / gpResizeH.heightM;
+        glazingResizePreview.position.y = glazingResizeHiddenObject.position.y + (candidateH - gpResizeH.heightM) / 2;
+      }
+      return;
+    }
     if (dragMode && dragMode.indexOf('varandaEdge') === 0) {
       var gpVE = getGroundModelPoint(e.clientX, e.clientY);
       if (gpVE && dragElementStart) {
@@ -2374,6 +2513,16 @@ import {
       if (selectedRoofId && fuseRoofsIfTouching(selectedRoofId)) {
         hintEl.textContent = 'Telhados fundidos — a cumeeira agora é uma só.';
         onModelChanged();
+      }
+      dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
+      return;
+    }
+    if ((dragMode && dragMode.indexOf('glazingWidth') === 0) || dragMode === 'glazingHeight') {
+      var finalGlazingWidth = dragElementStart && dragElementStart.lastWidthM;
+      var finalGlazingHeight = dragElementStart && dragElementStart.lastHeightM;
+      clearGlazingResizePreview();
+      if (selectedGlazingPanelId && finalGlazingWidth && finalGlazingHeight) {
+        Store.commands.updateGlazingPanelSizeLive(selectedGlazingPanelId, finalGlazingWidth, finalGlazingHeight, dragElementStart.centerDeltaM || 0);
       }
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
@@ -3172,8 +3321,8 @@ import {
       // parede pra encostar (ímã automático) e recortar a camada
       // visível dela — ver nearestWallForGlazingAttach/
       // attachGlazingPanelToWall (Etapa 2b). O grid de perfis + vidro
-      // reflexivo de verdade (Etapa 2c) ainda não existe — o painel
-      // aparece como placeholder até lá.
+      // reflexivo de verdade (Etapa 2c) já existe, ver
+      // Scene3DRenderer.buildGlazingPanelGroup.
       var wallsG = Store.currentWalls();
       var minXg = Infinity, maxXg = -Infinity, minYg = Infinity;
       wallsG.forEach(function (w) {
@@ -3188,7 +3337,7 @@ import {
       deselect();
       var newPanel = Store.commands.createGlazingPanel(gx, gy);
       hintEl.textContent = newPanel
-        ? 'Painel de Fachada criado — arraste o corpo dele até perto de uma parede pra encostar (o grid de perfis e o vidro reflexivo ainda não estão prontos, por enquanto é só o volume).'
+        ? 'Painel de Fachada criado — arraste o corpo dele até perto de uma parede pra encostar.'
         : 'Não foi possível criar o painel de Fachada.';
       return;
     }

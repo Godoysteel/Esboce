@@ -180,6 +180,18 @@ function parseGlazingPanel(value: unknown, path: string): GlazingPanel {
   const x = optionalNumber(v.x, `${path}.x`);
   const y = optionalNumber(v.y, `${path}.y`);
   const rotationDeg = optionalNumber(v.rotationDeg, `${path}.rotationDeg`);
+  if (v.glassMaterial != null) {
+    const material = record(v.glassMaterial, `${path}.glassMaterial`);
+    const color = string(material.color, `${path}.glassMaterial.color`);
+    if (!/^#[0-9a-f]{6}$/i.test(color)) fail(`${path}.glassMaterial.color`, 'cor deve estar no formato #RRGGBB');
+    panel.glassMaterial = {
+      color,
+      opacity: number(material.opacity, `${path}.glassMaterial.opacity`, 1),
+      roughness: number(material.roughness, `${path}.glassMaterial.roughness`, 0.1),
+      metalness: number(material.metalness, `${path}.glassMaterial.metalness`, 0.72),
+      reflectionIntensity: number(material.reflectionIntensity, `${path}.glassMaterial.reflectionIntensity`, 1.65),
+    };
+  }
   if (wallId !== undefined) panel.wallId = wallId;
   if (offsetM !== undefined) panel.offsetM = offsetM;
   if (sillHeightM !== undefined) panel.sillHeightM = sillHeightM;

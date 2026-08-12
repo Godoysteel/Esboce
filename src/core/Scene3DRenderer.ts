@@ -20,6 +20,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { Core } from './Core.js';
 import { Catalog } from './Catalog.js';
 import { computeOpeningAssemblyLayout, wallBandSideParameters, wallTopTriangleVertices } from './Scene3DGeometry.js';
+import { computeGlazingLayout, netGlassSizeM, MULLION_VERTICAL_WIDTH_M, MULLION_HORIZONTAL_WIDTH_M, FRAME_WIDTH_M, PROFILE_DEPTH_M, DEFAULT_GLAZING_GLASS_MATERIAL } from './Glazing.js';
 import type { Project, Wall, Column, Roof, Varanda, Laje, Opening } from './types.js';
 import { floorWallHeight } from './Attic.js';
 
@@ -1548,42 +1549,197 @@ export function hashColorHex(key: string): number {
   // platibanda) em vez do material liso genérico de makeSlabMesh.
   // Placeholder do painel de Envidraçamento (DEC-56, Etapa 2a) — caixa
   // preta semitransparente na posição/rotação/tamanho do painel ainda
-  // solto (state 'preview'). Sem grid de perfis, sem vidro reflexivo,
-  // sem seleção/arraste: só torna o painel visível na cena depois de
-  // criado pelo botão "Fachada". Evolui na Etapa 2b.
-  var GLAZING_PLACEHOLDER_COLOR = 0x000000;
-  function buildGlazingPanelPreviewMesh(panel: any, scale: any, offsetX: any, offsetY: any, yOffset: any) {
-    var geo = new THREE.BoxGeometry(panel.widthM, panel.heightM, 0.06);
-    var mat = new THREE.MeshStandardMaterial({ color: GLAZING_PLACEHOLDER_COLOR, transparent: true, opacity: 0.55 });
-    var mesh = new THREE.Mesh(geo, mat);
-    var px = ((panel.x || 0) - offsetX) * scale, pz = ((panel.y || 0) - offsetY) * scale;
-    mesh.position.set(px, yOffset + panel.heightM / 2, pz);
-    mesh.rotation.y = -((panel.rotationDeg || 0) * Math.PI / 180);
-    return mesh;
+  // solto (state 'preview'). Etapa 2c: grid de verdade (moldura +
+  // perfis internos + vidro), com proporções e material extraídos do
+  // modelo de referência feito no Blender pelo usuário
+  // (Fachada_Glazing.glb — ver DEC-56).
+
+  // Mapa de ambiente procedural pro vidro espelhado — mesmo degradê de
+  // céu já usado como fundo da cena (EsboceApplication.
+  // createSkyBackground), com mapeamento equirretangular pra servir de
+  // reflexo. Sem depender de textura externa. Cacheado uma vez — é um
+  // degradê fixo, não muda entre reconstruções da cena.
+  var glazingEnvMapCache: any = null;
+  function getGlazingEnvMap() {
+    if (glazingEnvMapCache) return glazingEnvMapCache;
+    var canvas = document.createElement('canvas');
+    canvas.width = 1024; canvas.height = 512;
+    var ctx = canvas.getContext('2d');
+    if (ctx) {
+      var sky = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      sky.addColorStop(0, '#78bfe0');
+      sky.addColorStop(0.48, '#b8dce7');
+      sky.addColorStop(0.78, '#dde9e6');
+      sky.addColorStop(1, '#f0eee2');
+      ctx.fillStyle = sky;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // Um espelho só parece espelho quando há contraste e formas para
+      // refletir. Nuvens, horizonte e volumes distantes dão referências
+      // visuais sem depender de HDRI externo ou de uma fotografia.
+      ctx.fillStyle = 'rgba(255,255,255,.72)';
+      ([[110,105,150,34],[365,75,210,42],[720,125,175,35],[930,82,125,28]] as [number, number, number, number][]).forEach(function (cloud) {
+        ctx!.beginPath(); ctx!.ellipse(cloud[0], cloud[1], cloud[2], cloud[3], 0, 0, Math.PI * 2); ctx!.fill();
+      });
+      var ground = ctx.createLinearGradient(0, 330, 0, 512);
+      ground.addColorStop(0, '#718466'); ground.addColorStop(0.48, '#35483b'); ground.addColorStop(1, '#151d20');
+      ctx.fillStyle = ground; ctx.fillRect(0, 330, 1024, 182);
+      ctx.fillStyle = 'rgba(25,38,42,.82)';
+      ([[30,282,150,72],[210,300,120,54],[610,272,190,78],[850,304,130,50]] as [number, number, number, number][]).forEach(function (mass) {
+        ctx!.fillRect(mass[0], mass[1], mass[2], mass[3]);
+      });
+      ctx.fillStyle = 'rgba(244,222,168,.68)'; ctx.fillRect(0, 326, 1024, 5);
+    }
+    var tex = new THREE.CanvasTexture(canvas);
+    tex.mapping = THREE.EquirectangularReflectionMapping;
+    tex.colorSpace = THREE.SRGBColorSpace;
+    glazingEnvMapCache = tex;
+    return tex;
   }
 
-  // Placeholder do painel já encostado (state 'attached') — mesma
-  // matemática de posicionamento ao longo da parede usada por
-  // buildOpeningPieces (offsetM em metros -> unidades de modelo pelo
-  // GRID, depois escala pra cena). Etapa 2b: ainda é a caixa
-  // placeholder, só que agora no lugar certo, encostada na face da
-  // parede — o grid de perfis + vidro reflexivo de verdade fica pra
-  // Etapa 2c. yOffset já inclui a altura do pavimento; sillHeightM
-  // soma a altura da base do painel acima do piso desse pavimento.
+  function buildGlazingFrameMaterial() {
+    // Preto, metalness/roughness exatos do material "Perfis" do
+    // modelo Blender de referência.
+    return new THREE.MeshStandardMaterial({ color: 0x000000, metalness: 0.4553571343421936, roughness: 0.5892857313156128 });
+  }
+
+  function buildGlazingGlassMaterial(settings: any) {
+    // Vidro espelhado da fachada. Mantém metalness e roughness do
+    // material "Material.001" do GLB, mas não aplica seu alpha: no
+    // ambiente claro do Esboce ele deixava o painel praticamente
+    // invisível. A presença de vidro vem do reflexo forte e da
+    // rugosidade muito baixa, não da transparência física.
+    var resolved = settings || DEFAULT_GLAZING_GLASS_MATERIAL;
+    var opacity = Math.max(0.1, Math.min(1, Number(resolved.opacity)));
+    return new THREE.MeshPhysicalMaterial({
+      // Metalness absoluto fica preto quando a cena não tem um HDRI com
+      // energia suficiente. A mistura abaixo conserva o reflexo, mas
+      // devolve uma pequena parcela difusa/ambiente para o vidro nunca
+      // desaparecer em ângulos escuros.
+      color: new THREE.Color(resolved.color),
+      metalness: Math.max(0, Math.min(1, Number(resolved.metalness))),
+      roughness: Math.max(0, Math.min(1, Number(resolved.roughness))),
+      envMap: getGlazingEnvMap(), envMapIntensity: Math.max(0, Math.min(3, Number(resolved.reflectionIntensity))),
+      clearcoat: 1, clearcoatRoughness: Math.max(0, Math.min(0.25, Number(resolved.roughness) * 0.5)),
+      emissive: new THREE.Color(0.025, 0.045, 0.055), emissiveIntensity: 0.18,
+      transparent: opacity < 0.999, opacity: opacity,
+      side: THREE.DoubleSide,
+      depthWrite: opacity >= 0.999,
+    });
+  }
+
+  // Monta o grid 2D completo (moldura de contorno + perfis internos +
+  // vidros) num Group Three.js, em coordenadas LOCAIS do próprio
+  // painel: eixo X de -widthM/2 a +widthM/2 (centralizado), eixo Y de
+  // 0 (base/soleira) a heightM (topo). Quem chama só precisa
+  // posicionar/rotacionar esse Group inteiro (como filho do hitMesh —
+  // ver buildGlazingPanelPreviewMesh) — sem repetir a matemática do
+  // grid em dois lugares.
+  function buildGlazingPanelGroup(widthM: any, heightM: any, moduleTargetM: any, glassMaterial: any) {
+    var group = new THREE.Group();
+    var layout = computeGlazingLayout(widthM, heightM, moduleTargetM);
+    var frameMat = buildGlazingFrameMaterial();
+    var glassMat = buildGlazingGlassMaterial(glassMaterial);
+
+    function addBar(cx: any, cyBottom: any, w: any, h: any) {
+      var geo = new THREE.BoxGeometry(Math.max(w, 0.001), Math.max(h, 0.001), PROFILE_DEPTH_M);
+      var m = new THREE.Mesh(geo, frameMat);
+      m.position.set(cx, cyBottom + h / 2, 0);
+      group.add(m);
+    }
+
+    // Moldura de contorno (4 barras). No modelo de referência do
+    // usuário, moldura e travessa interna têm a MESMA largura — sem
+    // diferenciação vertical/horizontal (ver Glazing.ts). Cantos
+    // sobrepõem sem tratamento especial (mesmo material, a
+    // sobreposição não aparece).
+    addBar(0, 0, widthM, FRAME_WIDTH_M);
+    addBar(0, heightM - FRAME_WIDTH_M, widthM, FRAME_WIDTH_M);
+    addBar(-widthM / 2 + FRAME_WIDTH_M / 2, 0, FRAME_WIDTH_M, heightM);
+    addBar(widthM / 2 - FRAME_WIDTH_M / 2, 0, FRAME_WIDTH_M, heightM);
+
+    // Perfis verticais internos, um por fronteira entre colunas.
+    var colX = -widthM / 2;
+    for (var c = 0; c < layout.columns.count - 1; c++) {
+      colX += layout.columns.moduleSizeM;
+      addBar(colX, 0, MULLION_VERTICAL_WIDTH_M, heightM);
+    }
+
+    // Perfis horizontais internos, um por fronteira entre linhas.
+    var rowY = 0;
+    for (var r = 0; r < layout.rows.count - 1; r++) {
+      rowY += layout.rows.moduleSizeM;
+      addBar(0, rowY - MULLION_HORIZONTAL_WIDTH_M / 2, widthM, MULLION_HORIZONTAL_WIDTH_M);
+    }
+
+    // Vidros — um por célula do grid, com a junta de 10mm descontada
+    // em todas as bordas (netGlassSizeM).
+    var cw = layout.columns.moduleSizeM, rh = layout.rows.moduleSizeM;
+    var glassW = netGlassSizeM(cw), glassH = netGlassSizeM(rh);
+    // O GLB de referência traz todos os quatro vidros numa única malha.
+    // Mantemos a mesma característica com InstancedMesh: um único draw
+    // transparente evita que o Three.js reordene cada célula de maneira
+    // diferente quando a câmera passa de frente para trás do painel.
+    var glassGeo = new THREE.BoxGeometry(Math.max(glassW, 0.001), Math.max(glassH, 0.001), 0.01);
+    var glassCount = layout.columns.count * layout.rows.count;
+    var glassInstances = new THREE.InstancedMesh(glassGeo, glassMat, glassCount);
+    var glassMatrix = new THREE.Matrix4();
+    var glassIndex = 0;
+    for (var ci = 0; ci < layout.columns.count; ci++) {
+      for (var ri = 0; ri < layout.rows.count; ri++) {
+        glassMatrix.makeTranslation(-widthM / 2 + cw * ci + cw / 2, rh * ri + rh / 2, 0);
+        glassInstances.setMatrixAt(glassIndex++, glassMatrix);
+      }
+    }
+    glassInstances.instanceMatrix.needsUpdate = true;
+    glassInstances.renderOrder = 1;
+    group.add(glassInstances);
+
+    return group;
+  }
+
+  function buildGlazingPanelPreviewMesh(panel: any, scale: any, offsetX: any, offsetY: any, yOffset: any) {
+    // hitMesh: box invisível que pickMesh/arraste enxergam e movem
+    // (THREE.Mesh direto filho da cena — pickMesh não reconhece Group
+    // nem recursa em filhos). O grid de verdade entra como FILHO dele,
+    // então acompanha posição/rotação automaticamente pelo grafo de
+    // cena do Three.js, sem duplicar a lógica de arraste em dois
+    // lugares.
+    var hitGeo = new THREE.BoxGeometry(panel.widthM, panel.heightM, PROFILE_DEPTH_M);
+    var hitMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 });
+    var hitMesh = new THREE.Mesh(hitGeo, hitMat);
+    var group = buildGlazingPanelGroup(panel.widthM, panel.heightM, panel.moduleTargetM, panel.glassMaterial);
+    group.position.set(0, -panel.heightM / 2, 0);
+    hitMesh.add(group);
+    var px = ((panel.x || 0) - offsetX) * scale, pz = ((panel.y || 0) - offsetY) * scale;
+    hitMesh.position.set(px, yOffset + panel.heightM / 2, pz);
+    hitMesh.rotation.y = -((panel.rotationDeg || 0) * Math.PI / 180);
+    return hitMesh;
+  }
+
+  // Painel já encostado (state 'attached') — mesma matemática de
+  // posicionamento ao longo da parede usada por buildOpeningPieces
+  // (offsetM em metros -> unidades de modelo pelo GRID, depois escala
+  // pra cena) — mesmo esquema de hitMesh invisível + grid como filho
+  // (ver buildGlazingPanelPreviewMesh). yOffset já inclui a altura do
+  // pavimento; sillHeightM soma a altura da base do painel acima do
+  // piso desse pavimento.
   function buildGlazingPanelAttachedMesh(panel: any, wall: any, scale: any, offsetX: any, offsetY: any, yOffset: any) {
     var dx = wall.x2 - wall.x1, dy = wall.y2 - wall.y1;
     var lenModel = Math.hypot(dx, dy) || 1e-6;
     var ux = dx / lenModel, uy = dy / lenModel;
     var offsetModel = (panel.offsetM || 0) * Core.GRID;
     var cxModel = wall.x1 + ux * offsetModel, cyModel = wall.y1 + uy * offsetModel;
-    var geo = new THREE.BoxGeometry(panel.widthM, panel.heightM, 0.06);
-    var mat = new THREE.MeshStandardMaterial({ color: GLAZING_PLACEHOLDER_COLOR, transparent: true, opacity: 0.55 });
-    var mesh = new THREE.Mesh(geo, mat);
+    var hitGeo = new THREE.BoxGeometry(panel.widthM, panel.heightM, PROFILE_DEPTH_M);
+    var hitMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 });
+    var hitMesh = new THREE.Mesh(hitGeo, hitMat);
+    var group = buildGlazingPanelGroup(panel.widthM, panel.heightM, panel.moduleTargetM, panel.glassMaterial);
+    group.position.set(0, -panel.heightM / 2, 0);
+    hitMesh.add(group);
     var px = (cxModel - offsetX) * scale, pz = (cyModel - offsetY) * scale;
     var sill = panel.sillHeightM || 0;
-    mesh.position.set(px, yOffset + sill + panel.heightM / 2, pz);
-    mesh.rotation.y = -Math.atan2(uy, ux);
-    return mesh;
+    hitMesh.position.set(px, yOffset + sill + panel.heightM / 2, pz);
+    hitMesh.rotation.y = -Math.atan2(uy, ux);
+    return hitMesh;
   }
 
   function buildLajePiece(laje: any, scale: any, offsetX: any, offsetY: any, topY: any, wallColor: any, viewState: any) {
@@ -2323,6 +2479,35 @@ export function hashColorHex(key: string): number {
         registry.handleMeshes.push(poleP2);
       }
     }
+    if (viewState.selectedGlazingPanel) {
+      var gp = viewState.selectedGlazingPanel;
+      var gpYOffset = viewState.editingYOffset;
+      var gpCx = gp.x || 0, gpCy = gp.y || 0, gpAngle = (gp.rotationDeg || 0) * Math.PI / 180;
+      if (gp.state === 'attached' && gp.wallId) {
+        var gpWall = walls.find(function (wall: any) { return wall.id === gp.wallId; });
+        if (gpWall) {
+          var gpDx = gpWall.x2 - gpWall.x1, gpDy = gpWall.y2 - gpWall.y1;
+          var gpLen = Math.hypot(gpDx, gpDy) || 1;
+          gpCx = gpWall.x1 + gpDx / gpLen * (gp.offsetM || 0) * Core.GRID;
+          gpCy = gpWall.y1 + gpDy / gpLen * (gp.offsetM || 0) * Core.GRID;
+          gpAngle = Math.atan2(gpDy, gpDx);
+        }
+      }
+      var gpAxisX = Math.cos(gpAngle), gpAxisY = Math.sin(gpAngle);
+      var gpCenterWorldX = (gpCx - offsetX) * scale, gpCenterWorldZ = (gpCy - offsetY) * scale;
+      var gpHandleY = gpYOffset + (gp.sillHeightM || 0) + gp.heightM / 2;
+      [-1, 1].forEach(function (side) {
+        var modelOffset = gp.widthM * Core.GRID / 2 * side;
+        var handle = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 12), new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false }));
+        handle.position.set(gpCenterWorldX + gpAxisX * modelOffset * scale, gpHandleY, gpCenterWorldZ + gpAxisY * modelOffset * scale);
+        handle.userData.handle = side < 0 ? 'glazingWidthLeft' : 'glazingWidthRight';
+        handle.renderOrder = 999; scene.add(handle); registry.handleMeshes.push(handle);
+      });
+      var heightHandle = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 12), new THREE.MeshBasicMaterial({ color: SELECTED_ACCENT, depthTest: false }));
+      heightHandle.position.set(gpCenterWorldX, gpYOffset + (gp.sillHeightM || 0) + gp.heightM + 0.15, gpCenterWorldZ);
+      heightHandle.userData.handle = 'glazingHeight'; heightHandle.renderOrder = 999;
+      scene.add(heightHandle); registry.handleMeshes.push(heightHandle);
+    }
 
     if (viewState.selectedVaranda) {
       var vSel = viewState.selectedVaranda, vYOffset = viewState.editingYOffset;
@@ -2432,10 +2617,16 @@ export function hashColorHex(key: string): number {
       }
 
       (floorData.glazingPanels || []).forEach(function (panel) {
-        // Etapa 2c desenha o grid de verdade (perfis + vidro reflexivo)
-        // — por ora, tanto solto (preview) quanto encostado (attached)
-        // usam o mesmo placeholder, só muda a posição/orientação (livre
-        // vs. derivada da parede hospedeira).
+        // Etapa 2c: grid de verdade (moldura + perfis internos + vidro
+        // reflexivo) dentro de um hitMesh invisível (ver
+        // buildGlazingPanelPreviewMesh/AttachedMesh). Registra em
+        // furnitureMeshes (não structureMeshes) de propósito: esse é o
+        // ÚNICO outro registro que usa disposeObject3DTree (limpeza
+        // RECURSIVA via .traverse()) — necessário porque o painel tem
+        // várias peças filhas dentro do hitMesh, e structureMeshes só
+        // descarta um nível (disposeObject3D simples), o que vazaria
+        // memória a cada reconstrução da cena (rebuild roda a cada
+        // pointermove durante boa parte da interação — ver DEC-57).
         var mesh;
         if (panel.state === 'attached' && panel.wallId) {
           var hostWall = (floorData.walls || []).find(function (w) { return w.id === panel.wallId; });
@@ -2449,7 +2640,7 @@ export function hashColorHex(key: string): number {
         tagCategory(mesh, 'glazingPanel');
         mesh.userData.glazingPanelId = panel.id; mesh.userData.floorIndex = floorIdx;
         scene.add(mesh);
-        registry.structureMeshes.push(mesh);
+        registry.furnitureMeshes.push(mesh);
       });
 
       if (wallsVisible) {

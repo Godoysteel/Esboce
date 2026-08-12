@@ -150,6 +150,14 @@ export type FloorKind = 'standard' | 'attic';
 // reaplicada sem gerar uma entidade Opening de verdade).
 export type GlazingPanelState = 'preview' | 'attached';
 
+export interface GlazingGlassMaterial {
+  color: string;
+  opacity: number;
+  roughness: number;
+  metalness: number;
+  reflectionIntensity: number;
+}
+
 export interface GlazingPanel {
   id: string;
   state: GlazingPanelState;
@@ -157,6 +165,8 @@ export interface GlazingPanel {
   heightM: number;
   /** Largura-alvo do módulo (vidro + junta), configurável na interface — mantém a simetria do grid. */
   moduleTargetM: number;
+  /** Ajuste visual próprio; ausente significa usar o padrão oficial da plataforma. */
+  glassMaterial?: GlazingGlassMaterial;
   // Posição/orientação do painel enquanto solto (state === 'preview')
   // — mesma unidade de grade de Wall.x1/y1 e Furniture.x/y (20 =
   // 1 metro), não metros direto (diferente de widthM/heightM, que são

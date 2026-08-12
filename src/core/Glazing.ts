@@ -19,6 +19,29 @@ export const MIN_MODULE_M = 0.6;
 /** Folga (junta) entre vidros vizinhos, em milímetros — espaço do silicone estrutural. */
 export const JOINT_MM = 10;
 
+// Largura/profundidade dos perfis — valores extraídos do modelo de
+// referência feito no Blender pelo usuário (Fachada_Glazing.glb,
+// mesh "Perfis"): moldura de contorno e travessa central com a MESMA
+// largura (~4,9cm cada, medido nos vértices exportados), profundidade
+// ~9,58cm. Nesse modelo de referência o perfil é uma caixa retangular
+// simples (sem entalhe/reentrância — confirmado inspecionando os
+// vértices: só 2 valores no eixo de profundidade), então a mesma
+// geometria por caixas já usada aqui reproduz o formato corretamente,
+// sem precisar de extrusão de seção 2D.
+export const MULLION_VERTICAL_WIDTH_M = 0.049;
+export const MULLION_HORIZONTAL_WIDTH_M = 0.049;
+export const FRAME_WIDTH_M = 0.049;
+export const PROFILE_DEPTH_M = 0.0958;
+
+/** Calibração oficial inicial do vidro. Fachadas antigas sem override usam estes valores. */
+export const DEFAULT_GLAZING_GLASS_MATERIAL = Object.freeze({
+  color: '#a9c5cf',
+  opacity: 1,
+  roughness: 0.06,
+  metalness: 0.92,
+  reflectionIntensity: 2.15,
+});
+
 export interface AxisLayout {
   /** Número de módulos ao longo do eixo (sempre >= 1). */
   count: number;

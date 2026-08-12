@@ -8,7 +8,7 @@ import { Core } from './Core.js';
 import type {
   Project, Floor, Wall, Column, Roof, Opening, OpeningKind, Varanda, Laje, Furniture, ColumnShape, RoofType,
   RidgeAxis, VarandaFrontSide, FoundationType, StoreEvent, StoreListener,
-  WallSnapshot, LinkedWallUpdate, GlazingPanel, Terreno, TerrenoMuroSide
+  WallSnapshot, LinkedWallUpdate, GlazingPanel, GlazingGlassMaterial, Terreno, TerrenoMuroSide
 } from './types.js';
 
 let project: Project = Core.createProject();
@@ -947,6 +947,50 @@ export const commands = {
     const p = findGlazingPanel(glazingPanelId); if (!p || p.state !== 'preview') return;
     p.x = x; p.y = y;
     emit({ type: 'GlazingPanelMoved', glazingPanelId, live: true });
+  },
+
+  // Confirma o redimensionamento da fachada uma única vez ao soltar a
+  // alça. A prévia é responsabilidade exclusiva do viewport, portanto
+  // esta operação não participa do pointermove e não reconstrói a cena
+  // dezenas de vezes por segundo.
+  updateGlazingPanelSizeLive(glazingPanelId: string, widthM: number, heightM: number, centerDeltaM = 0): void {
+    const p = findGlazingPanel(glazingPanelId); if (!p) return;
+    let maxWidthM = 20;
+    let maxHeightM = 10;
+    if (p.state === 'attached' && p.wallId) {
+      const wall = findWall(p.wallId);
+      if (!wall) return;
+      const wallLenM = Core.wallLengthMeters(wall);
+      maxWidthM = Math.max(0.5, wallLenM);
+      maxHeightM = Math.max(0.5, Core.WALL_HEIGHT - (p.sillHeightM || 0));
+    }
+    const finalWidthM = Math.max(0.5, Math.min(maxWidthM, widthM));
+    if (p.state === 'attached' && p.wallId) {
+      const wall = findWall(p.wallId)!;
+      const wallLenM = Core.wallLengthMeters(wall);
+      p.offsetM = Math.max(finalWidthM / 2, Math.min(wallLenM - finalWidthM / 2, (p.offsetM ?? wallLenM / 2) + centerDeltaM));
+    } else if (centerDeltaM) {
+      const angle = (p.rotationDeg || 0) * Math.PI / 180;
+      p.x = (p.x || 0) + Math.cos(angle) * centerDeltaM * Core.GRID;
+      p.y = (p.y || 0) + Math.sin(angle) * centerDeltaM * Core.GRID;
+    }
+    p.widthM = finalWidthM;
+    p.heightM = Math.max(0.5, Math.min(maxHeightM, heightM));
+    emit({ type: 'GlazingPanelResized', glazingPanelId, live: true });
+  },
+
+  setGlazingGlassMaterial(glazingPanelId: string, material: GlazingGlassMaterial | null): void {
+    const panel = findGlazingPanel(glazingPanelId); if (!panel) return;
+    pushUndoSnapshot();
+    if (material) panel.glassMaterial = { ...material };
+    else delete panel.glassMaterial;
+    emit({ type: 'GlazingPanelMaterialChanged', glazingPanelId });
+  },
+
+  updateGlazingGlassMaterialLive(glazingPanelId: string, material: GlazingGlassMaterial): void {
+    const panel = findGlazingPanel(glazingPanelId); if (!panel) return;
+    panel.glassMaterial = { ...material };
+    emit({ type: 'GlazingPanelMaterialChanged', glazingPanelId, live: true });
   },
 
   // Confirma o encosto numa parede (ímã calculado no

@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   computeGlazingLayout, netGlassSizeM, MIN_MODULE_M, JOINT_MM,
+  MULLION_VERTICAL_WIDTH_M, MULLION_HORIZONTAL_WIDTH_M, FRAME_WIDTH_M, PROFILE_DEPTH_M,
 } from '../src/core/Glazing.ts';
 import { decodeProjectDocument, encodeProjectDocument, CURRENT_PROJECT_SCHEMA_VERSION } from '../src/core/ProjectPersistence.ts';
 import { createFloorEntity } from '../src/core/Core.ts';
@@ -99,6 +100,19 @@ test('GlazingPanel: painel em preview não exige wallId', () => {
   assert.equal(decoded.project.floors[0].glazingPanels[0].wallId, undefined);
 });
 
+test('GlazingPanel: ajuste visual do vidro sobrevive ao salvamento', () => {
+  const floor = createFloorEntity('Térreo');
+  floor.glazingPanels.push({
+    id: 'gp-material', state: 'preview', widthM: 2, heightM: 2, moduleTargetM: 1.2,
+    glassMaterial: { color: '#789abc', opacity: 0.8, roughness: 0.22, metalness: 0.65, reflectionIntensity: 1.9 },
+  });
+  const project = { floors: [floor], currentFloorIndex: 0, layers: {}, foundationType: 'radier', constructionSystem: 'ceramic_masonry' };
+  const decoded = decodeProjectDocument(encodeProjectDocument(project));
+  assert.deepEqual(decoded.project.floors[0].glazingPanels[0].glassMaterial, {
+    color: '#789abc', opacity: 0.8, roughness: 0.22, metalness: 0.65, reflectionIntensity: 1.9,
+  });
+});
+
 test('GlazingPanel: attached sem wallId é rejeitado', () => {
   const floor = createFloorEntity('Térreo');
   floor.glazingPanels.push({ id: 'gp1', state: 'attached', widthM: 2.0, heightM: 2.0, moduleTargetM: 1.2 });
@@ -122,4 +136,33 @@ test('projeto sem nenhum GlazingPanel continua decodificando normalmente (pavime
   delete doc.project.floors[0].glazingPanels;
   const decoded = decodeProjectDocument(doc);
   assert.deepEqual(decoded.project.floors[0].glazingPanels, []);
+});
+
+// --- Largura/profundidade dos perfis (Etapa 2c) -------------------------
+// Valores extraídos do modelo de referência feito no Blender pelo
+// usuário (Fachada_Glazing.glb) — moldura e travessa interna com a
+// MESMA largura (perfil retangular simples, sem entalhe).
+
+test('largura da moldura e dos perfis internos batem com o modelo de referência (~4,9cm)', () => {
+  assert.ok(Math.abs(FRAME_WIDTH_M - 0.049) < 0.001);
+  assert.ok(Math.abs(MULLION_VERTICAL_WIDTH_M - 0.049) < 0.001);
+  assert.ok(Math.abs(MULLION_HORIZONTAL_WIDTH_M - 0.049) < 0.001);
+});
+
+test('moldura de contorno usa a mesma largura dos perfis internos (modelo de referência não diferencia vertical/horizontal)', () => {
+  assert.equal(FRAME_WIDTH_M, MULLION_VERTICAL_WIDTH_M);
+  assert.equal(MULLION_VERTICAL_WIDTH_M, MULLION_HORIZONTAL_WIDTH_M);
+});
+
+test('profundidade do perfil bate com o modelo de referência (~9,58cm)', () => {
+  assert.ok(Math.abs(PROFILE_DEPTH_M - 0.0958) < 0.001);
+});
+
+test('largura e profundidade dos perfis são positivas e com piso de segurança razoável', () => {
+  assert.ok(MULLION_VERTICAL_WIDTH_M > 0);
+  assert.ok(MULLION_HORIZONTAL_WIDTH_M > 0);
+  assert.ok(PROFILE_DEPTH_M > 0);
+  // Nenhum perfil deve ser mais largo que o próprio módulo mínimo,
+  // senão o grid não teria espaço pra abrigar vidro nenhum.
+  assert.ok(MULLION_VERTICAL_WIDTH_M < MIN_MODULE_M);
 });
