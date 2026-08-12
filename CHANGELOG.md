@@ -1,5 +1,7 @@
 # Changelog
 
+> Pontos hidráulicos instalados em paredes compartilhadas agora permitem alternar explicitamente entre as duas faces pelo comando **Trocar lado** (`⇄`). A escolha fica salva no projeto, sem alterar a posição técnica no eixo da parede, a altura do ponto ou o percurso da tubulação.
+
 > Pontos hidráulicos passam a aceitar reposicionamento em duas direções: arraste lateral desliza pela parede e arraste vertical altera a altura entre 5 cm e 2,60 m. A legenda é ocultada durante o gesto e os marcadores de saída permanecem visíveis mesmo quando a face da parede estaria à frente deles.
 
 > Corrigido o reposicionamento posterior dos pontos hidráulicos: um ponto existente agora recebe prioridade mesmo quando a ferramenta de inserção continua ativa. Ao soltar um ponto depois de gerar a rede, o percurso de água fria é recalculado para a nova posição.
