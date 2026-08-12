@@ -2289,6 +2289,13 @@ export function hashColorHex(key: string): number {
     return 0x7c3aed;
   }
 
+  function hydraulicFixtureColor(networkType: string) {
+    if (networkType === 'cold_water') return 0x39c6f4;
+    if (networkType === 'sanitary_sewer') return 0xa66b45;
+    if (networkType === 'kitchen_sewer') return 0xf59e0b;
+    return hydraulicColor(networkType);
+  }
+
   function hydraulicLabelSprite(label: string, color: number) {
     var canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 96;
     var ctx = canvas.getContext('2d')!;
@@ -2332,16 +2339,14 @@ export function hashColorHex(key: string): number {
       registry.structureMeshes.push(mesh);
     });
     (project.hydraulics.nodes || []).forEach(function (node) {
-      var radius = node.kind === 'junction' ? 0.035 : 0.055;
-      var geometry = node.kind === 'fixture'
-        ? new THREE.TorusGeometry(radius, Math.max(0.009, radius * 0.22), 10, 20)
-        : new THREE.SphereGeometry(radius, 14, 10);
+      var radius = node.kind === 'junction' ? 0.035 : node.kind === 'fixture' ? 0.07 : 0.055;
+      var geometry = new THREE.SphereGeometry(radius, 18, 14);
       var selected = viewState && viewState.selectedHydraulicNode && viewState.selectedHydraulicNode.id === node.id;
+      var baseColor = node.kind === 'fixture' ? hydraulicFixtureColor(node.networkType) : hydraulicColor(node.networkType);
       var marker = new THREE.Mesh(
         geometry,
-        new THREE.MeshStandardMaterial({ color: selected ? 0xf4a340 : hydraulicColor(node.networkType), emissive: selected ? 0xf4a340 : hydraulicColor(node.networkType), emissiveIntensity: selected ? 0.5 : 0.12 })
+        new THREE.MeshStandardMaterial({ color: selected ? 0xf4a340 : baseColor, emissive: selected ? 0xf4a340 : baseColor, emissiveIntensity: selected ? 0.5 : 0.22, roughness: 0.32 })
       );
-      if (node.kind === 'fixture') marker.rotation.x = Math.PI / 2;
       var nodeFloorOffset = (node.floorIndex || 0) * FLOOR_STACK_HEIGHT;
       marker.position.set((node.x - offsetX) * scale, nodeFloorOffset + node.elevationM, (node.y - offsetY) * scale);
       tagCategory(marker, 'instalacoes');
@@ -2350,8 +2355,8 @@ export function hashColorHex(key: string): number {
       marker.userData.hydraulicEditable = node.kind === 'fixture' && !!node.fixtureType;
       scene.add(marker);
       registry.structureMeshes.push(marker);
-      if (node.kind === 'fixture' && node.fixtureType) {
-        var labelSprite = hydraulicLabelSprite(node.label, hydraulicColor(node.networkType));
+      if (node.kind === 'fixture' && node.fixtureType && selected) {
+        var labelSprite = hydraulicLabelSprite(node.label, hydraulicFixtureColor(node.networkType));
         labelSprite.position.copy(marker.position); labelSprite.position.y += 0.28;
         labelSprite.userData.hydraulicNodeId = node.id;
         labelSprite.userData.floorIndex = node.floorIndex || 0;
