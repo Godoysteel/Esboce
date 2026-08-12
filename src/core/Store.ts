@@ -160,7 +160,7 @@ export const commands = {
     return node;
   },
 
-  updateHydraulicFixtureBodyLive(nodeId: string, x: number, y: number) {
+  updateHydraulicFixtureBodyLive(nodeId: string, x: number, y: number, elevationM?: number) {
     const node = findHydraulicNode(nodeId);
     if (!node || node.kind !== 'fixture' || !node.fixtureType) return null;
     const networkWasGenerated = project.hydraulics.nodes.some((item) => item.kind === 'source' && item.networkType === 'cold_water');
@@ -168,6 +168,7 @@ export const commands = {
     const resolved = resolveHydraulicFixturePosition(node, x, y, wall);
     node.x = resolved.x;
     node.y = resolved.y;
+    if (Number.isFinite(elevationM)) node.elevationM = Math.max(0.05, Math.min(2.6, elevationM!));
     if (networkWasGenerated) project.hydraulics = buildColdWaterNetworkFromFixtures(project.floors, project.hydraulics);
     emit({ type: 'HydraulicFixtureMoved', hydraulicNodeId: node.id });
     return node;

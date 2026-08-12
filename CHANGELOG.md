@@ -1,5 +1,7 @@
 # Changelog
 
+> Pontos hidráulicos passam a aceitar reposicionamento em duas direções: arraste lateral desliza pela parede e arraste vertical altera a altura entre 5 cm e 2,60 m. A legenda é ocultada durante o gesto e os marcadores de saída permanecem visíveis mesmo quando a face da parede estaria à frente deles.
+
 > Corrigido o reposicionamento posterior dos pontos hidráulicos: um ponto existente agora recebe prioridade mesmo quando a ferramenta de inserção continua ativa. Ao soltar um ponto depois de gerar a rede, o percurso de água fria é recalculado para a nova posição.
 
 > Pontos de saída hidráulica continuam tecnicamente presos ao eixo da parede, mas seus marcadores agora são deslocados para além da face acabada. Pontos internos aparecem na face voltada à planta; a torneira externa aparece na face oposta.

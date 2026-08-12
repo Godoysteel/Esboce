@@ -1732,9 +1732,10 @@ import {
           if (!hydraulicEntity || !hydraulicEntity.fixtureType) return;
           selectHydraulicNode(hydraulicId);
           dragMode = 'hydraulicFixtureBody';
-          dragElementStart = { x: hydraulicEntity.x, y: hydraulicEntity.y, lastX: hydraulicEntity.x, lastY: hydraulicEntity.y };
+          dragElementStart = { x: hydraulicEntity.x, y: hydraulicEntity.y, elevationM: hydraulicEntity.elevationM, lastX: hydraulicEntity.x, lastY: hydraulicEntity.y, lastElevationM: hydraulicEntity.elevationM, startScreenX: e.clientX, startScreenY: e.clientY };
           dragGroundStart = getGroundModelPoint(e.clientX, e.clientY);
           hydraulicFixtureDragObjects = findHydraulicFixtureSceneObjects(hydraulicId);
+          hydraulicFixtureDragObjects.forEach(function (object: any) { if (object.userData.hydraulicLabel) object.visible = false; });
           Store.commands.beginTransaction();
         } else if (mesh.userData.glazingPanelId) {
           var glazingPanelId = mesh.userData.glazingPanelId;
@@ -2308,17 +2309,27 @@ import {
       var hydraulicGround = getGroundModelPoint(e.clientX, e.clientY);
       var hydraulicNode = selectedHydraulicNodeId ? Store.findHydraulicNode(selectedHydraulicNodeId) : null;
       if (hydraulicGround && dragGroundStart && hydraulicFixtureDragObjects.length && hydraulicNode) {
-        var hydraulicDx = hydraulicGround.x - dragGroundStart.x, hydraulicDy = hydraulicGround.y - dragGroundStart.y;
         var hydraulicWall = hydraulicNode.wallId ? Store.findWall(hydraulicNode.wallId) || undefined : undefined;
-        var hydraulicResolved = resolveHydraulicFixturePosition(hydraulicNode, dragElementStart.x + hydraulicDx, dragElementStart.y + hydraulicDy, hydraulicWall);
+        var screenDx = e.clientX - dragElementStart.startScreenX, screenDy = e.clientY - dragElementStart.startScreenY;
+        var verticalGesture = Math.abs(screenDy) > Math.abs(screenDx) * 1.15;
+        var hydraulicDx = hydraulicGround.x - dragGroundStart.x, hydraulicDy = hydraulicGround.y - dragGroundStart.y;
+        var hydraulicResolved = verticalGesture
+          ? { x: dragElementStart.x, y: dragElementStart.y }
+          : resolveHydraulicFixturePosition(hydraulicNode, dragElementStart.x + hydraulicDx, dragElementStart.y + hydraulicDy, hydraulicWall);
+        var nextElevationM = verticalGesture
+          ? Math.max(0.05, Math.min(2.6, dragElementStart.elevationM - screenDy * 0.01))
+          : dragElementStart.elevationM;
         dragElementStart.lastX = hydraulicResolved.x;
         dragElementStart.lastY = hydraulicResolved.y;
-        var previewNode = { ...hydraulicNode, x: hydraulicResolved.x, y: hydraulicResolved.y };
+        dragElementStart.lastElevationM = nextElevationM;
+        var previewNode = { ...hydraulicNode, x: hydraulicResolved.x, y: hydraulicResolved.y, elevationM: nextElevationM };
         var hydraulicVisual = hydraulicFixtureVisualPosition(previewNode, hydraulicWall, Store.getProject().floors.flatMap(function (floor) { return floor.walls; }));
         var hydraulicWorld = modelToWorld(hydraulicVisual.x, hydraulicVisual.y);
+        var hydraulicFloorIndex = hydraulicNode.floorIndex || 0;
         hydraulicFixtureDragObjects.forEach(function (object: any) {
           object.position.x = hydraulicWorld.x;
           object.position.z = hydraulicWorld.z;
+          if (!object.userData.hydraulicLabel) object.position.y = hydraulicFloorIndex * Scene3DRenderer.FLOOR_STACK_HEIGHT_GETTER() + nextElevationM;
         });
       }
       return;
@@ -2672,7 +2683,7 @@ import {
     }
     if (dragMode === 'hydraulicFixtureBody') {
       if (selectedHydraulicNodeId && dragElementStart) {
-        Store.commands.updateHydraulicFixtureBodyLive(selectedHydraulicNodeId, dragElementStart.lastX, dragElementStart.lastY);
+        Store.commands.updateHydraulicFixtureBodyLive(selectedHydraulicNodeId, dragElementStart.lastX, dragElementStart.lastY, dragElementStart.lastElevationM);
       }
       hydraulicFixtureDragObjects = [];
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;

@@ -2346,8 +2346,9 @@ export function hashColorHex(key: string): number {
       var baseColor = node.kind === 'fixture' ? hydraulicFixtureColor(node.networkType) : hydraulicColor(node.networkType);
       var marker = new THREE.Mesh(
         geometry,
-        new THREE.MeshStandardMaterial({ color: selected ? 0xf4a340 : baseColor, emissive: selected ? 0xf4a340 : baseColor, emissiveIntensity: selected ? 0.5 : 0.22, roughness: 0.32 })
+        new THREE.MeshStandardMaterial({ color: selected ? 0xf4a340 : baseColor, emissive: selected ? 0xf4a340 : baseColor, emissiveIntensity: selected ? 0.5 : 0.22, roughness: 0.32, depthTest: node.kind !== 'fixture' })
       );
+      if (node.kind === 'fixture') marker.renderOrder = 900;
       var nodeFloorOffset = (node.floorIndex || 0) * FLOOR_STACK_HEIGHT;
       var hostWall = node.wallId ? project.floors.flatMap(function (floor) { return floor.walls; }).find(function (wall) { return wall.id === node.wallId; }) : undefined;
       var allProjectWalls = project.floors.flatMap(function (floor) { return floor.walls; });
@@ -2365,6 +2366,7 @@ export function hashColorHex(key: string): number {
         labelSprite.userData.hydraulicNodeId = node.id;
         labelSprite.userData.floorIndex = node.floorIndex || 0;
         labelSprite.userData.hydraulicEditable = true;
+        labelSprite.userData.hydraulicLabel = true;
         tagCategory(labelSprite, 'instalacoes');
         scene.add(labelSprite); registry.structureMeshes.push(labelSprite);
       }

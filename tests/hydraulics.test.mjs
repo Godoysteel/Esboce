@@ -108,6 +108,14 @@ test('active hydraulic placement tool still gives drag priority to an existing f
   assert.match(source, /clicar nele deve selecionar\/arrastar/);
 });
 
+test('hydraulic fixture drag supports elevation and hides its label during movement', () => {
+  const viewport = readFileSync(new URL('../src/core/ViewportController.ts', import.meta.url), 'utf8');
+  const store = readFileSync(new URL('../src/core/Store.ts', import.meta.url), 'utf8');
+  assert.match(viewport, /verticalGesture/);
+  assert.match(viewport, /hydraulicLabel\) object\.visible = false/);
+  assert.match(store, /node\.elevationM = Math\.max\(0\.05, Math\.min\(2\.6/);
+});
+
 test('cold-water generation places a tank above the last floor and routes every water point', () => {
   const project = createProject();
   project.floors.push({ ...structuredClone(project.floors[0]), id: 'upper', name: 'Superior', walls: [], openings: [], columns: [], roofs: [], varandas: [], lajes: [], furniture: [] });
