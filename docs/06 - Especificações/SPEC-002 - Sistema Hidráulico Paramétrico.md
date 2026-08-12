@@ -6,6 +6,8 @@
 
 **Escopo:** instalações residenciais de água fria e esgoto sanitário
 
+**Base técnica inicial:** [H0 — Base Técnica do Sistema Hidráulico](H0%20-%20Base%20Técnica%20do%20Sistema%20Hidráulico.md)
+
 ## 1. Visão
 
 O Esboce deverá permitir que o usuário conceba e visualize as instalações hidráulicas como parte do mesmo Modelo Digital da Residência usado pela arquitetura.

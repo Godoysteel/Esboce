@@ -1,0 +1,177 @@
+{
+  "schemaVersion": 1,
+  "profile": {
+    "id": "br-sc-joinville-residential-h0",
+    "name": "Residencial térreo — Joinville — H0",
+    "status": "draft",
+    "country": "BR",
+    "state": "SC",
+    "city": "Joinville",
+    "utility": "Companhia Águas de Joinville",
+    "review": {
+      "required": true,
+      "reviewer": null,
+      "professionalRegistration": null,
+      "reviewedAt": null
+    }
+  },
+  "networkTypes": [
+    "cold_water",
+    "sanitary_sewer",
+    "kitchen_sewer",
+    "sanitary_vent"
+  ],
+  "equipmentFamilies": [
+    {
+      "id": "water_tank",
+      "name": "Caixa d'água",
+      "connectors": [
+        { "id": "inlet", "role": "inlet", "network": "cold_water", "required": true, "direction": "configurable", "diameterMm": null },
+        { "id": "outlet", "role": "outlet", "network": "cold_water", "required": true, "direction": "configurable", "diameterMm": null },
+        { "id": "overflow", "role": "maintenance_outlet", "network": null, "required": true, "direction": "lateral", "diameterMm": null },
+        { "id": "drain", "role": "maintenance_outlet", "network": null, "required": true, "direction": "down", "diameterMm": null }
+      ]
+    },
+    {
+      "id": "toilet",
+      "name": "Vaso sanitário",
+      "connectors": [
+        { "id": "water_inlet", "role": "inlet", "network": "cold_water", "required": true, "direction": "product_defined", "diameterMm": null },
+        { "id": "waste_outlet", "role": "outlet", "network": "sanitary_sewer", "required": true, "direction": "product_defined", "diameterMm": null }
+      ]
+    },
+    {
+      "id": "washbasin",
+      "name": "Lavatório",
+      "connectors": [
+        { "id": "cold_water_inlet", "role": "inlet", "network": "cold_water", "required": true, "direction": "back_or_down", "diameterMm": null },
+        { "id": "waste_outlet", "role": "outlet", "network": "sanitary_sewer", "required": true, "direction": "down", "diameterMm": null }
+      ]
+    },
+    {
+      "id": "shower",
+      "name": "Chuveiro",
+      "connectors": [
+        { "id": "cold_water_inlet", "role": "inlet", "network": "cold_water", "required": true, "direction": "back", "diameterMm": null },
+        { "id": "floor_waste", "role": "outlet", "network": "sanitary_sewer", "required": true, "direction": "down", "diameterMm": null }
+      ]
+    },
+    {
+      "id": "kitchen_sink",
+      "name": "Pia de cozinha",
+      "connectors": [
+        { "id": "cold_water_inlet", "role": "inlet", "network": "cold_water", "required": true, "direction": "back_or_down", "diameterMm": null },
+        { "id": "waste_outlet", "role": "outlet", "network": "kitchen_sewer", "required": true, "direction": "down", "diameterMm": null }
+      ]
+    },
+    {
+      "id": "floor_drain_box",
+      "name": "Caixa sifonada",
+      "connectors": [
+        { "id": "inlets", "role": "multi_inlet", "network": "sanitary_sewer", "required": true, "direction": "configurable", "diameterMm": null },
+        { "id": "outlet", "role": "outlet", "network": "sanitary_sewer", "required": true, "direction": "lateral", "diameterMm": null }
+      ]
+    },
+    {
+      "id": "grease_box",
+      "name": "Caixa de gordura",
+      "connectors": [
+        { "id": "inlet", "role": "inlet", "network": "kitchen_sewer", "required": true, "direction": "lateral", "diameterMm": null },
+        { "id": "outlet", "role": "outlet", "network": "sanitary_sewer", "required": true, "direction": "lateral", "diameterMm": null }
+      ]
+    },
+    {
+      "id": "shutoff_valve",
+      "name": "Registro",
+      "connectors": [
+        { "id": "inlet", "role": "inlet", "network": "cold_water", "required": true, "direction": "axial", "diameterMm": null },
+        { "id": "outlet", "role": "outlet", "network": "cold_water", "required": true, "direction": "axial", "diameterMm": null }
+      ]
+    },
+    {
+      "id": "inspection_point",
+      "name": "Ponto de inspeção",
+      "connectors": [
+        { "id": "ports", "role": "inspection", "network": "sanitary_sewer", "required": true, "direction": "configurable", "diameterMm": null }
+      ]
+    },
+    {
+      "id": "building_sewer_outlet",
+      "name": "Saída predial de esgoto",
+      "connectors": [
+        { "id": "internal_inlet", "role": "destination", "network": "sanitary_sewer", "required": true, "direction": "utility_defined", "diameterMm": null }
+      ]
+    },
+    {
+      "id": "vent_terminal",
+      "name": "Terminal de ventilação",
+      "connectors": [
+        { "id": "vent_inlet", "role": "destination", "network": "sanitary_vent", "required": true, "direction": "up", "diameterMm": null }
+      ]
+    }
+  ],
+  "rules": [
+    {
+      "id": "HYD-INT-001",
+      "title": "Geometria vinculada à rede lógica",
+      "severity": "block",
+      "scope": "universal",
+      "status": "approved_software_invariant",
+      "source": "SPEC-002",
+      "condition": "Every rendered confirmed pipe segment references an existing logical segment."
+    },
+    {
+      "id": "HYD-INT-002",
+      "title": "Redes incompatíveis não podem ser conectadas",
+      "severity": "block",
+      "scope": "universal",
+      "status": "approved_software_invariant",
+      "source": "SPEC-002",
+      "condition": "Source and destination connectors accept the same compatible network type."
+    },
+    {
+      "id": "HYD-INT-003",
+      "title": "Rede confirmada sem trecho órfão",
+      "severity": "block",
+      "scope": "universal",
+      "status": "approved_software_invariant",
+      "source": "SPEC-002",
+      "condition": "Every confirmed segment has two valid endpoint nodes."
+    },
+    {
+      "id": "HYD-ES-003",
+      "title": "Separação entre água pluvial e esgoto sanitário",
+      "severity": "block",
+      "scope": "br-sc-joinville",
+      "status": "source_confirmed_review_required",
+      "source": "Companhia Águas de Joinville — Resolução Normativa nº 19/2019, compilada em 2024",
+      "condition": null
+    },
+    {
+      "id": "HYD-ES-004",
+      "title": "Efluente de cozinha encaminhado à caixa de gordura",
+      "severity": "warning",
+      "scope": "br-sc-joinville",
+      "status": "source_confirmed_review_required",
+      "source": "Companhia Águas de Joinville — guia de caixa de gordura",
+      "condition": null
+    },
+    {
+      "id": "HYD-LOC-001",
+      "title": "Saída interna correspondente ao ponto de coleta",
+      "severity": "warning",
+      "scope": "regional",
+      "status": "source_confirmed_review_required",
+      "source": "ANA NR 11/2024 e prestador local",
+      "condition": null
+    }
+  ],
+  "technicalParameters": {
+    "minimumDiametersMm": null,
+    "minimumSlopes": null,
+    "pressureLimits": null,
+    "reservoirSizing": null,
+    "inspectionDistances": null,
+    "ventilationSizing": null
+  }
+}
