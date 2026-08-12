@@ -89,7 +89,7 @@ import {
   // intacta até o pointerup, quando o Store recebe o delta final uma vez.
   var roomGroupDragObjects: { object: any; startX: number; startZ: number }[] = [];
   var furnitureDragObject: any = null;
-  var hydraulicFixtureDragObject: any = null;
+  var hydraulicFixtureDragObjects: any[] = [];
   var columnDragObjects: { object: any; startX: number; startZ: number }[] = [];
   var lajeDragObjects: { object: any; startX: number; startZ: number }[] = [];
   var roofGroupDragObjects: { object: any; startX: number; startZ: number }[] = [];
@@ -616,10 +616,10 @@ import {
     objectPanelBodyEl.appendChild(row);
   }
 
-  function findHydraulicFixtureSceneObject(id: string) {
-    return scene.children.find(function (object: any) {
+  function findHydraulicFixtureSceneObjects(id: string) {
+    return scene.children.filter(function (object: any) {
       return object.userData && object.userData.hydraulicNodeId === id;
-    }) || null;
+    });
   }
   function addMaterialRange(label: string, value: number, min: number, max: number, step: number, onPreview: (value: number) => void) {
     var row = document.createElement('label'); row.className = 'material-control';
@@ -1730,7 +1730,7 @@ import {
           dragMode = 'hydraulicFixtureBody';
           dragElementStart = { x: hydraulicEntity.x, y: hydraulicEntity.y, lastX: hydraulicEntity.x, lastY: hydraulicEntity.y };
           dragGroundStart = getGroundModelPoint(e.clientX, e.clientY);
-          hydraulicFixtureDragObject = findHydraulicFixtureSceneObject(hydraulicId);
+          hydraulicFixtureDragObjects = findHydraulicFixtureSceneObjects(hydraulicId);
           Store.commands.beginTransaction();
         } else if (mesh.userData.glazingPanelId) {
           var glazingPanelId = mesh.userData.glazingPanelId;
@@ -2303,15 +2303,17 @@ import {
     if (dragMode === 'hydraulicFixtureBody') {
       var hydraulicGround = getGroundModelPoint(e.clientX, e.clientY);
       var hydraulicNode = selectedHydraulicNodeId ? Store.findHydraulicNode(selectedHydraulicNodeId) : null;
-      if (hydraulicGround && dragGroundStart && hydraulicFixtureDragObject && hydraulicNode) {
+      if (hydraulicGround && dragGroundStart && hydraulicFixtureDragObjects.length && hydraulicNode) {
         var hydraulicDx = hydraulicGround.x - dragGroundStart.x, hydraulicDy = hydraulicGround.y - dragGroundStart.y;
         var hydraulicWall = hydraulicNode.wallId ? Store.findWall(hydraulicNode.wallId) || undefined : undefined;
         var hydraulicResolved = resolveHydraulicFixturePosition(hydraulicNode, dragElementStart.x + hydraulicDx, dragElementStart.y + hydraulicDy, hydraulicWall);
         dragElementStart.lastX = hydraulicResolved.x;
         dragElementStart.lastY = hydraulicResolved.y;
         var hydraulicWorld = modelToWorld(hydraulicResolved.x, hydraulicResolved.y);
-        hydraulicFixtureDragObject.position.x = hydraulicWorld.x;
-        hydraulicFixtureDragObject.position.z = hydraulicWorld.z;
+        hydraulicFixtureDragObjects.forEach(function (object: any) {
+          object.position.x = hydraulicWorld.x;
+          object.position.z = hydraulicWorld.z;
+        });
       }
       return;
     }
@@ -2666,7 +2668,7 @@ import {
       if (selectedHydraulicNodeId && dragElementStart) {
         Store.commands.updateHydraulicFixtureBodyLive(selectedHydraulicNodeId, dragElementStart.lastX, dragElementStart.lastY);
       }
-      hydraulicFixtureDragObject = null;
+      hydraulicFixtureDragObjects = [];
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }

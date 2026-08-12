@@ -5,7 +5,7 @@
 // var/function trocados por const/arrow onde natural.
 
 import { Core } from './Core.js';
-import { buildColdWaterKitchenPrototype, createPositionedHydraulicFixture, resolveHydraulicFixturePosition } from './Hydraulics.js';
+import { buildColdWaterKitchenPrototype, buildColdWaterNetworkFromFixtures, createPositionedHydraulicFixture, resolveHydraulicFixturePosition } from './Hydraulics.js';
 import type {
   Project, Floor, Wall, Column, Roof, Opening, OpeningKind, Varanda, Laje, Furniture, ColumnShape, RoofType,
   RidgeAxis, VarandaFrontSide, FoundationType, StoreEvent, StoreListener,
@@ -178,6 +178,16 @@ export const commands = {
     project.hydraulics.nodes = project.hydraulics.nodes.filter((item) => item.id !== nodeId);
     project.hydraulics.segments = project.hydraulics.segments.filter((segment) => segment.startNodeId !== nodeId && segment.endNodeId !== nodeId);
     emit({ type: 'HydraulicFixtureDeleted', hydraulicNodeId: nodeId });
+  },
+
+  generateHydraulicNetwork(): boolean {
+    const hasWaterPoint = project.hydraulics.nodes.some((node) => node.kind === 'fixture' && node.networkType === 'cold_water' && !!node.fixtureType);
+    if (!hasWaterPoint) return false;
+    pushUndoSnapshot();
+    project.hydraulics = buildColdWaterNetworkFromFixtures(project.floors, project.hydraulics);
+    project.layers.instalacoes = true;
+    emit({ type: 'HydraulicNetworkGenerated' });
+    return true;
   },
 
   toggleHydraulicLayer(): void {

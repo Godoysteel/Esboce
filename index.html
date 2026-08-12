@@ -779,6 +779,13 @@
   }
   .ts-divider { height: 1px; background: #EDEAE1; margin: 2px 0; }
   .ts-small-group { display: flex; flex-direction: column; gap: 4px; }
+  .hydraulic-tools { display: none; border: 1px solid #D3D1C7; border-radius: 10px; background: rgba(255,255,255,.72); overflow: hidden; }
+  .hydraulic-tools.visible { display: flex; flex-direction: column; }
+  .hydraulic-tools > summary { padding: 9px 8px; cursor: pointer; font-size: 12px; font-weight: 700; color: #47433E; list-style: none; }
+  .hydraulic-tools > summary::after { content: 'v'; float: right; }
+  .hydraulic-tools:not([open]) > summary::after { content: '>'; }
+  .hydraulic-tools .ts-small-group { padding: 0 6px 7px; }
+  .hydraulic-generate { margin: 5px 6px 7px; width: calc(100% - 12px); padding: 9px 5px; border: 0; background: #2F80ED; color: white; font-size: 11px; font-weight: 700; }
   .ts-small-btn {
     display: flex; align-items: center; gap: 6px;
     padding: 6px 6px;

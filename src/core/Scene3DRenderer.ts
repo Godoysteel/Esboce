@@ -2289,9 +2289,23 @@ export function hashColorHex(key: string): number {
     return 0x7c3aed;
   }
 
+  function hydraulicLabelSprite(label: string, color: number) {
+    var canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 96;
+    var ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = 'rgba(255,255,255,.94)'; ctx.strokeStyle = '#d3d1c7'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.roundRect(4, 4, 504, 88, 18); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#' + color.toString(16).padStart(6, '0'); ctx.beginPath(); ctx.arc(40, 48, 14, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#302e2b'; ctx.font = '600 27px Arial'; ctx.textBaseline = 'middle';
+    var text = label.length > 29 ? label.slice(0, 28) + '…' : label; ctx.fillText(text, 68, 49);
+    var texture = new THREE.CanvasTexture(canvas);
+    var sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, depthTest: false, transparent: true }));
+    sprite.scale.set(2.45, 0.46, 1); sprite.renderOrder = 1000;
+    return sprite;
+  }
+
   function buildHydraulicSegment(start: any, end: any, segment: any, scale: number, offsetX: number, offsetY: number) {
-    var a = new THREE.Vector3((start.x - offsetX) * scale, start.elevationM, (start.y - offsetY) * scale);
-    var b = new THREE.Vector3((end.x - offsetX) * scale, end.elevationM, (end.y - offsetY) * scale);
+    var a = new THREE.Vector3((start.x - offsetX) * scale, (start.floorIndex || 0) * FLOOR_STACK_HEIGHT + start.elevationM, (start.y - offsetY) * scale);
+    var b = new THREE.Vector3((end.x - offsetX) * scale, (end.floorIndex || 0) * FLOOR_STACK_HEIGHT + end.elevationM, (end.y - offsetY) * scale);
     var direction = new THREE.Vector3().subVectors(b, a);
     var length = direction.length();
     var radiusM = Math.max(0.012, segment.diameterMm / 2000);
@@ -2336,6 +2350,28 @@ export function hashColorHex(key: string): number {
       marker.userData.hydraulicEditable = node.kind === 'fixture' && !!node.fixtureType;
       scene.add(marker);
       registry.structureMeshes.push(marker);
+      if (node.kind === 'fixture' && node.fixtureType) {
+        var labelSprite = hydraulicLabelSprite(node.label, hydraulicColor(node.networkType));
+        labelSprite.position.copy(marker.position); labelSprite.position.y += 0.28;
+        labelSprite.userData.hydraulicNodeId = node.id;
+        labelSprite.userData.floorIndex = node.floorIndex || 0;
+        labelSprite.userData.hydraulicEditable = true;
+        tagCategory(labelSprite, 'instalacoes');
+        scene.add(labelSprite); registry.structureMeshes.push(labelSprite);
+      }
+      if (node.kind === 'source' && node.networkType === 'cold_water') {
+        var tank = new THREE.Group();
+        var tankMaterial = new THREE.MeshStandardMaterial({ color: 0x4f8fc4, roughness: 0.42, metalness: 0.04 });
+        var body = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.46, 0.72, 28), tankMaterial);
+        var lid = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.08, 28), tankMaterial);
+        lid.position.y = 0.4;
+        tank.add(body, lid);
+        tank.position.set((node.x - offsetX) * scale, nodeFloorOffset + node.elevationM + 0.36, (node.y - offsetY) * scale);
+        tank.userData.hydraulicNodeId = node.id;
+        tank.userData.category = 'instalacoes';
+        scene.add(tank);
+        registry.structureMeshes.push(tank);
+      }
     });
   }
 

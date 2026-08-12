@@ -315,6 +315,22 @@ export class EsboceApplication {
     const view3DBtn = this.requireElement("viewMode3DBtn");
     const view2DBtn = this.requireElement("viewMode2DBtn");
     const hydraulicsBtn = this.requireElement("hydraulicsBtn");
+    const firstHydraulicTool = document.querySelector<HTMLElement>('[data-tool="hydraulic:kitchen_faucet"]');
+    const hydraulicToolsPanel = firstHydraulicTool?.closest<HTMLElement>('.ts-small-group') || null;
+    if (hydraulicToolsPanel) {
+      hydraulicToolsPanel.classList.add('hydraulic-tools');
+      const generateButton = document.createElement('button');
+      generateButton.id = 'generateHydraulicNetworkBtn';
+      generateButton.className = 'hydraulic-generate';
+      generateButton.textContent = 'Gerar tubulaÃ§Ã£o';
+      hydraulicToolsPanel.appendChild(generateButton);
+      generateButton.addEventListener('click', () => {
+        const generated = Store.commands.generateHydraulicNetwork();
+        this.requireElement('viewportHint').textContent = generated
+          ? "TubulaÃ§Ã£o de Ã¡gua fria gerada desde a caixa d'Ã¡gua atÃ© os pontos posicionados."
+          : 'Posicione ao menos um ponto de Ã¡gua na parede antes de gerar a tubulaÃ§Ã£o.';
+      });
+    }
     const setViewMode = (mode: '2d' | '3d') => {
       this.viewMode = mode;
       view3DBtn.classList.toggle('active', mode === '3d');
@@ -336,8 +352,11 @@ export class EsboceApplication {
     };
     hydraulicsBtn.addEventListener('click', () => {
       const project = Store.getProject();
-      if (project.hydraulics.nodes.length === 0) Store.commands.createHydraulicPrototype();
-      else Store.commands.toggleHydraulicLayer();
+      if (hydraulicToolsPanel) {
+        hydraulicToolsPanel.classList.toggle('visible');
+        hydraulicToolsPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+      if (!project.layers.instalacoes) Store.commands.toggleHydraulicLayer();
       refreshHydraulicsButton();
     });
     refreshHydraulicsButton();

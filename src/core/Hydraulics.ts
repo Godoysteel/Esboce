@@ -1,6 +1,7 @@
 import type { Floor, Furniture, HydraulicNetworkType, HydraulicNode, HydraulicPlacementSurface, HydraulicSystem, Point, Wall } from './types.js';
 
 const GRID = 20;
+const FLOOR_STACK_HEIGHT_M = 2.85;
 let hydraulicIdSequence = 0;
 function nextHydraulicId(prefix: string) { return `${prefix}_${Date.now().toString(36)}_${hydraulicIdSequence++}`; }
 
@@ -61,6 +62,49 @@ export function resolveHydraulicFixturePosition(node: HydraulicNode, x: number, 
     return projectOnWall(x, y, wall);
   }
   return { x: Math.round(x / GRID) * GRID, y: Math.round(y / GRID) * GRID };
+}
+
+export function buildColdWaterNetworkFromFixtures(floors: Floor[], existing: HydraulicSystem): HydraulicSystem {
+  const fixtures = existing.nodes.filter((node) => node.kind === 'fixture' && !!node.fixtureType);
+  const waterFixtures = fixtures.filter((node) => node.networkType === 'cold_water');
+  if (!waterFixtures.length) return { nodes: fixtures, segments: [] };
+  const topFloorIndex = Math.max(0, floors.length - 1);
+  const allWalls = floors.flatMap((floor) => floor.walls);
+  const bounds = allWalls.length ? {
+    minX: Math.min(...allWalls.flatMap((wall) => [wall.x1, wall.x2])), maxX: Math.max(...allWalls.flatMap((wall) => [wall.x1, wall.x2])),
+    minY: Math.min(...allWalls.flatMap((wall) => [wall.y1, wall.y2])), maxY: Math.max(...allWalls.flatMap((wall) => [wall.y1, wall.y2])),
+  } : { minX: -40, maxX: 40, minY: -40, maxY: 40 };
+  const source: HydraulicNode = {
+    id: nextHydraulicId('hyd-tank'), kind: 'source', networkType: 'cold_water', label: "Caixa d'água",
+    x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2,
+    elevationM: 3.35, floorIndex: topFloorIndex,
+  };
+  const nodes: HydraulicNode[] = [...fixtures, source];
+  const segments: HydraulicSystem['segments'] = [];
+  waterFixtures.forEach((fixture) => {
+    const fixtureFloor = fixture.floorIndex || 0;
+    const horizontalA: HydraulicNode = {
+      id: nextHydraulicId('hyd-junction'), kind: 'junction', networkType: 'cold_water', label: 'Distribuição superior',
+      x: fixture.x, y: source.y, elevationM: source.elevationM, floorIndex: topFloorIndex,
+    };
+    const horizontalB: HydraulicNode = {
+      id: nextHydraulicId('hyd-junction'), kind: 'junction', networkType: 'cold_water', label: 'Descida do ponto',
+      x: fixture.x, y: fixture.y, elevationM: source.elevationM, floorIndex: topFloorIndex,
+    };
+    const verticalBase: HydraulicNode = {
+      id: nextHydraulicId('hyd-junction'), kind: 'junction', networkType: 'cold_water', label: 'Base da descida',
+      x: fixture.x, y: fixture.y, elevationM: fixture.elevationM, floorIndex: fixtureFloor,
+    };
+    nodes.push(horizontalA, horizontalB, verticalBase);
+    [[source, horizontalA], [horizontalA, horizontalB], [horizontalB, verticalBase], [verticalBase, fixture]].forEach(([start, end]) => {
+      var startGlobal = (start!.floorIndex || 0) * FLOOR_STACK_HEIGHT_M + start!.elevationM;
+      var endGlobal = (end!.floorIndex || 0) * FLOOR_STACK_HEIGHT_M + end!.elevationM;
+      if (start!.x !== end!.x || start!.y !== end!.y || startGlobal !== endGlobal) {
+        segments.push({ id: nextHydraulicId('hyd-segment'), networkType: 'cold_water', startNodeId: start!.id, endNodeId: end!.id, diameterMm: 20 });
+      }
+    });
+  });
+  return { nodes, segments };
 }
 
 export interface EquipmentConnectorTemplate {
@@ -157,5 +201,7 @@ export function segmentIsOrthogonal3D(system: HydraulicSystem, segmentId: string
   const start = system.nodes.find((node) => node.id === segment.startNodeId);
   const end = system.nodes.find((node) => node.id === segment.endNodeId);
   if (!start || !end) return false;
-  return [start.x !== end.x, start.y !== end.y, start.elevationM !== end.elevationM].filter(Boolean).length === 1;
+  const startGlobalElevation = (start.floorIndex || 0) * FLOOR_STACK_HEIGHT_M + start.elevationM;
+  const endGlobalElevation = (end.floorIndex || 0) * FLOOR_STACK_HEIGHT_M + end.elevationM;
+  return [start.x !== end.x, start.y !== end.y, startGlobalElevation !== endGlobalElevation].filter(Boolean).length === 1;
 }
