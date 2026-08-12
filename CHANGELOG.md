@@ -1,5 +1,7 @@
 # Changelog
 
+> Corrigido o reposicionamento posterior dos pontos hidráulicos: um ponto existente agora recebe prioridade mesmo quando a ferramenta de inserção continua ativa. Ao soltar um ponto depois de gerar a rede, o percurso de água fria é recalculado para a nova posição.
+
 > Pontos de saída hidráulica continuam tecnicamente presos ao eixo da parede, mas seus marcadores agora são deslocados para além da face acabada. Pontos internos aparecem na face voltada à planta; a torneira externa aparece na face oposta.
 
 > Refinamento visual dos pontos hidráulicos: saídas de água passam a ser pequenas esferas ciano permanentemente visíveis. O nome técnico fica oculto durante a edição normal e aparece somente quando o usuário seleciona o ponto.

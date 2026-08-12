@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { createProject } from '../src/core/Core.ts';
 import { decodeProjectDocument, encodeProjectDocument } from '../src/core/ProjectPersistence.ts';
 import { buildColdWaterKitchenPrototype, buildColdWaterNetworkFromFixtures, createPositionedHydraulicFixture, findKitchenFixturePoint, hydraulicFixtureTemplate, hydraulicFixtureVisualPosition, resolveEquipmentConnector, resolveHydraulicFixturePosition, segmentIsOrthogonal3D } from '../src/core/Hydraulics.ts';
@@ -99,6 +100,12 @@ test('water outlet marker is rendered beyond the wall face while its technical p
   const visual = hydraulicFixtureVisualPosition(point, wall, [wall]);
   assert.equal(point.y, 0);
   assert.ok(Math.abs(visual.y) > 2.6);
+});
+
+test('active hydraulic placement tool still gives drag priority to an existing fixture', () => {
+  const source = readFileSync(new URL('../src/core/ViewportController.ts', import.meta.url), 'utf8');
+  assert.match(source, /hydraulicMesh\.userData\.hydraulicEditable/);
+  assert.match(source, /clicar nele deve selecionar\/arrastar/);
 });
 
 test('cold-water generation places a tank above the last floor and routes every water point', () => {

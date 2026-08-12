@@ -1356,20 +1356,24 @@ import {
     var hydraulicFixtureKey = hydraulicFixtureKeyFromTool(currentTool);
     if (hydraulicFixtureKey) {
       var hydraulicMesh = pickMesh(e.clientX, e.clientY);
-      var hydraulicGround = getGroundModelPoint(e.clientX, e.clientY);
-      if (!hydraulicGround) return;
-      var requiresFloor = hydraulicFixtureKey === 'toilet_waste' || hydraulicFixtureKey === 'shower_drain' || hydraulicFixtureKey === 'floor_drain';
-      var hydraulicWallId = hydraulicMesh && hydraulicMesh.userData.wallId ? hydraulicMesh.userData.wallId : undefined;
-      if (!requiresFloor && !hydraulicWallId) {
-        hintEl.textContent = 'Este ponto precisa ser colocado diretamente sobre uma parede.';
+      // Um ponto existente tem prioridade sobre a ferramenta ainda armada:
+      // clicar nele deve selecionar/arrastar, nunca criar uma cópia.
+      if (!(hydraulicMesh && hydraulicMesh.userData.hydraulicEditable)) {
+        var hydraulicGround = getGroundModelPoint(e.clientX, e.clientY);
+        if (!hydraulicGround) return;
+        var requiresFloor = hydraulicFixtureKey === 'toilet_waste' || hydraulicFixtureKey === 'shower_drain' || hydraulicFixtureKey === 'floor_drain';
+        var hydraulicWallId = hydraulicMesh && hydraulicMesh.userData.wallId ? hydraulicMesh.userData.wallId : undefined;
+        if (!requiresFloor && !hydraulicWallId) {
+          hintEl.textContent = 'Este ponto precisa ser colocado diretamente sobre uma parede.';
+          return;
+        }
+        var hydraulicNode = Store.commands.createHydraulicFixture(hydraulicFixtureKey, hydraulicGround.x, hydraulicGround.y, requiresFloor ? undefined : hydraulicWallId);
+        if (hydraulicNode) {
+          hintEl.textContent = requiresFloor ? 'Ponto de piso posicionado.' : 'Ponto encaixado no eixo da parede.';
+          render();
+        }
         return;
       }
-      var hydraulicNode = Store.commands.createHydraulicFixture(hydraulicFixtureKey, hydraulicGround.x, hydraulicGround.y, requiresFloor ? undefined : hydraulicWallId);
-      if (hydraulicNode) {
-        hintEl.textContent = requiresFloor ? 'Ponto de piso posicionado.' : 'Ponto encaixado no eixo da parede.';
-        render();
-      }
-      return;
     }
 
     // Já estamos "colocando" (depois do primeiro clique): este é o

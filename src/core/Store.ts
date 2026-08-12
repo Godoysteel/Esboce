@@ -163,10 +163,12 @@ export const commands = {
   updateHydraulicFixtureBodyLive(nodeId: string, x: number, y: number) {
     const node = findHydraulicNode(nodeId);
     if (!node || node.kind !== 'fixture' || !node.fixtureType) return null;
+    const networkWasGenerated = project.hydraulics.nodes.some((item) => item.kind === 'source' && item.networkType === 'cold_water');
     const wall = node.wallId ? findWall(node.wallId) || undefined : undefined;
     const resolved = resolveHydraulicFixturePosition(node, x, y, wall);
     node.x = resolved.x;
     node.y = resolved.y;
+    if (networkWasGenerated) project.hydraulics = buildColdWaterNetworkFromFixtures(project.floors, project.hydraulics);
     emit({ type: 'HydraulicFixtureMoved', hydraulicNodeId: node.id });
     return node;
   },
