@@ -1,5 +1,7 @@
 # Changelog
 
+> Correção da interface hidráulica: o botão **Hid.** abre um painel flutuante próprio, sem ficar recortado pela sidebar. A arquitetura de percurso também foi definida: o usuário posicionará somente pontos-guia e o Esboce escolherá automaticamente joelhos, tês e demais conexões conforme a geometria e as regras técnicas.
+
 > Atualização hidráulica: o botão **Hid.** agora abre as ferramentas de pontos empilhadas. Cada ponto técnico permanece identificado na cena, acompanha o reposicionamento e pode ser usado para gerar a primeira rede de água fria. A geração cria uma caixa d'água genérica acima do último pavimento e traça ramais ortogonais até todos os pontos de água posicionados.
 
 > AtualizaÃ§Ã£o hidrÃ¡ulica: pontos posicionÃ¡veis agora podem ser selecionados, arrastados e excluÃ­dos. Pontos de parede permanecem na parede hospedeira, pontos de piso permanecem no grid e o projeto sÃ³ Ã© atualizado ao soltar.

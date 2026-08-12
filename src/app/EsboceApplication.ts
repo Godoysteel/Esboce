@@ -315,10 +315,8 @@ export class EsboceApplication {
     const view3DBtn = this.requireElement("viewMode3DBtn");
     const view2DBtn = this.requireElement("viewMode2DBtn");
     const hydraulicsBtn = this.requireElement("hydraulicsBtn");
-    const firstHydraulicTool = document.querySelector<HTMLElement>('[data-tool="hydraulic:kitchen_faucet"]');
-    const hydraulicToolsPanel = firstHydraulicTool?.closest<HTMLElement>('.ts-small-group') || null;
+    const hydraulicToolsPanel = document.getElementById('hydraulicToolsPanel');
     if (hydraulicToolsPanel) {
-      hydraulicToolsPanel.classList.add('hydraulic-tools');
       const generateButton = document.createElement('button');
       generateButton.id = 'generateHydraulicNetworkBtn';
       generateButton.className = 'hydraulic-generate';
@@ -353,8 +351,10 @@ export class EsboceApplication {
     hydraulicsBtn.addEventListener('click', () => {
       const project = Store.getProject();
       if (hydraulicToolsPanel) {
-        hydraulicToolsPanel.classList.toggle('visible');
-        hydraulicToolsPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        const willOpen = !hydraulicToolsPanel.classList.contains('visible');
+        hydraulicToolsPanel.classList.toggle('visible', willOpen);
+        hydraulicToolsPanel.setAttribute('aria-hidden', String(!willOpen));
+        hydraulicsBtn.setAttribute('aria-expanded', String(willOpen));
       }
       if (!project.layers.instalacoes) Store.commands.toggleHydraulicLayer();
       refreshHydraulicsButton();
