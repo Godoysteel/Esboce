@@ -2305,7 +2305,7 @@ export function hashColorHex(key: string): number {
     return mesh;
   }
 
-  function renderHydraulics(scene: THREE.Scene, project: Project, scale: number, offsetX: number, offsetY: number) {
+  function renderHydraulics(scene: THREE.Scene, project: Project, scale: number, offsetX: number, offsetY: number, viewState: any) {
     if (!project.layers.instalacoes || !project.hydraulics) return;
     var nodes = new Map((project.hydraulics.nodes || []).map(function (node) { return [node.id, node]; }));
     (project.hydraulics.segments || []).forEach(function (segment) {
@@ -2322,15 +2322,18 @@ export function hashColorHex(key: string): number {
       var geometry = node.kind === 'fixture'
         ? new THREE.TorusGeometry(radius, Math.max(0.009, radius * 0.22), 10, 20)
         : new THREE.SphereGeometry(radius, 14, 10);
+      var selected = viewState && viewState.selectedHydraulicNode && viewState.selectedHydraulicNode.id === node.id;
       var marker = new THREE.Mesh(
         geometry,
-        new THREE.MeshStandardMaterial({ color: hydraulicColor(node.networkType), emissive: hydraulicColor(node.networkType), emissiveIntensity: 0.12 })
+        new THREE.MeshStandardMaterial({ color: selected ? 0xf4a340 : hydraulicColor(node.networkType), emissive: selected ? 0xf4a340 : hydraulicColor(node.networkType), emissiveIntensity: selected ? 0.5 : 0.12 })
       );
       if (node.kind === 'fixture') marker.rotation.x = Math.PI / 2;
       var nodeFloorOffset = (node.floorIndex || 0) * FLOOR_STACK_HEIGHT;
       marker.position.set((node.x - offsetX) * scale, nodeFloorOffset + node.elevationM, (node.y - offsetY) * scale);
       tagCategory(marker, 'instalacoes');
       marker.userData.hydraulicNodeId = node.id;
+      marker.userData.floorIndex = node.floorIndex || 0;
+      marker.userData.hydraulicEditable = node.kind === 'fixture' && !!node.fixtureType;
       scene.add(marker);
       registry.structureMeshes.push(marker);
     });
@@ -2644,7 +2647,7 @@ export function hashColorHex(key: string): number {
     var layers = project.layers;
     var editingIdx = viewState.editingFloorIndex != null ? viewState.editingFloorIndex : project.currentFloorIndex;
 
-    renderHydraulics(scene, project, scale, offsetX, offsetY);
+    renderHydraulics(scene, project, scale, offsetX, offsetY, viewState);
 
     project.floors.forEach(function (floorData, floorIdx) {
       // pavimentos ACIMA do que está sendo editado ficam escondidos, pra

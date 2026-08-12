@@ -20,6 +20,7 @@ import { Scene3DRenderer, DEBUG_COLOR_MODE } from './Scene3DRenderer.js';
 import { NavGizmo } from './NavGizmo.js';
 import { touchCameraAnchor, updateTouchCamera, type TouchCameraAnchor } from './TouchCamera.js';
 import { DEFAULT_GLAZING_GLASS_MATERIAL } from './Glazing.js';
+import { resolveHydraulicFixturePosition } from './Hydraulics.js';
 import {
   analyzeWallResize,
   cloneWallsForDiagnostics,
@@ -62,7 +63,7 @@ import {
   var selectedPaintRoomKey: any = null;
   var floorFinishScale = 1;
   var floorFinishRotation = 0;
-  var selectedWallId: any = null, selectedColumnId: any = null, selectedRoofId: any = null, selectedOpeningId: any = null, selectedVarandaId: any = null, selectedLajeId: any = null, selectedFurnitureId: any = null, selectedGlazingPanelId: any = null;
+  var selectedWallId: any = null, selectedColumnId: any = null, selectedRoofId: any = null, selectedOpeningId: any = null, selectedVarandaId: any = null, selectedLajeId: any = null, selectedFurnitureId: any = null, selectedGlazingPanelId: any = null, selectedHydraulicNodeId: any = null;
   var selectedRoomWallIds: any = null; // cômodo isolado selecionado como módulo; após qualquer junção o clique volta a ser individual
   var resizeWallId: any = null; // parede em modo de deslocamento perpendicular, iniciado no primeiro clique/arraste
   var gizmoMenuOpen = false;
@@ -88,6 +89,7 @@ import {
   // intacta até o pointerup, quando o Store recebe o delta final uma vez.
   var roomGroupDragObjects: { object: any; startX: number; startZ: number }[] = [];
   var furnitureDragObject: any = null;
+  var hydraulicFixtureDragObject: any = null;
   var columnDragObjects: { object: any; startX: number; startZ: number }[] = [];
   var lajeDragObjects: { object: any; startX: number; startZ: number }[] = [];
   var roofGroupDragObjects: { object: any; startX: number; startZ: number }[] = [];
@@ -515,7 +517,7 @@ import {
     if (!mesh) return false;
     var editingIdx = Store.getProject().currentFloorIndex;
     if (mesh.userData.floorIndex !== editingIdx) return false;
-    return mesh.userData.category === 'paredesTerreo' || mesh.userData.category === 'paredesSuperiores' || mesh.userData.category === 'colunas' || mesh.userData.category === 'telhado' || mesh.userData.category === 'aberturas' || mesh.userData.category === 'varanda' || mesh.userData.category === 'furniture' || mesh.userData.category === 'glazingPanel' || !!mesh.userData.lajeId;
+    return mesh.userData.category === 'paredesTerreo' || mesh.userData.category === 'paredesSuperiores' || mesh.userData.category === 'colunas' || mesh.userData.category === 'telhado' || mesh.userData.category === 'aberturas' || mesh.userData.category === 'varanda' || mesh.userData.category === 'furniture' || mesh.userData.category === 'glazingPanel' || !!mesh.userData.lajeId || !!mesh.userData.hydraulicEditable;
   }
 
   function select(wallId: any) {
@@ -569,11 +571,12 @@ import {
   // Móvel: mesmo padrão da coluna (clique seleciona e já mostra o gizmo
   // completo — girar/duplicar/excluir — sem precisar de segundo clique).
   function selectFurniture(furnitureId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedGlazingPanelId = null; selectedFurnitureId = furnitureId; gizmoMenuOpen = false; render(); }
+  function selectHydraulicNode(hydraulicNodeId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedHydraulicNodeId = hydraulicNodeId; gizmoMenuOpen = true; render(); }
   function deselect() {
     commitRoomGroupIfNeeded(); // "clicou fora do objeto" — decide agora se funde
     var leavingRoof = selectedRoofId ? Store.findRoof(selectedRoofId) : null;
     if (leavingRoof && leavingRoof.atticMode === 'preview') pendingGenerateRoofId = leavingRoof.id;
-    selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null;
+    selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedHydraulicNodeId = null;
     if (generateAtticBtnEl) generateAtticBtnEl.classList.toggle('visible', !!pendingGenerateRoofId);
     gizmoMenuOpen = false; closeObjectPanel(); render();
   }
@@ -611,6 +614,12 @@ import {
     input.addEventListener('change', function (e: any) { Store.commands.setLayerVisible(layerKey, e.target.checked); });
     row.appendChild(input); row.appendChild(document.createTextNode(' Visível'));
     objectPanelBodyEl.appendChild(row);
+  }
+
+  function findHydraulicFixtureSceneObject(id: string) {
+    return scene.children.find(function (object: any) {
+      return object.userData && object.userData.hydraulicNodeId === id;
+    }) || null;
   }
   function addMaterialRange(label: string, value: number, min: number, max: number, step: number, onPreview: (value: number) => void) {
     var row = document.createElement('label'); row.className = 'material-control';
@@ -814,6 +823,20 @@ import {
     // categoria de produto trocável no catálogo por enquanto) —
     // escondido por padrão, cada branch abaixo decide se mostra.
     if (gzSwapBtnEl) gzSwapBtnEl.style.display = 'none';
+    if (selectedHydraulicNodeId) {
+      var hydraulicNode = Store.findHydraulicNode(selectedHydraulicNodeId);
+      if (!hydraulicNode) {
+        selectedHydraulicNodeId = null;
+        roomGizmoEl.classList.remove('visible');
+      } else {
+        var hydraulicWorld = modelToWorld(hydraulicNode.x, hydraulicNode.y);
+        var hydraulicTop = (hydraulicNode.floorIndex || 0) * Scene3DRenderer.FLOOR_STACK_HEIGHT_GETTER() + hydraulicNode.elevationM + 0.18;
+        positionFloatingPanel(roomGizmoEl, hydraulicWorld.x, hydraulicTop, hydraulicWorld.z, 0);
+        roomGizmoEl.classList.add('visible');
+      }
+      gizmoEl.classList.remove('visible'); openingGizmoEl.classList.remove('visible'); columnShapePanelEl.classList.remove('visible'); roofTypePanelEl.classList.remove('visible');
+      return;
+    }
     // Esquadria selecionada: gizmo próprio, sempre visível (não depende
     // de gizmoMenuOpen — ver selectOpening). Posicionado um pouco acima
     // do topo do vão, pra não tampar a folha/vidro.
@@ -1057,6 +1080,7 @@ import {
   }
 
   function render() {
+    if (selectedHydraulicNodeId && (selectedWallId || selectedColumnId || selectedRoofId || selectedOpeningId || selectedVarandaId || selectedLajeId || selectedFurnitureId || selectedGlazingPanelId || selectedRoomWallIds)) selectedHydraulicNodeId = null;
     var project = Store.getProject();
     var selectedWall = selectedWallId ? Store.findWall(selectedWallId) : null;
     var selectedColumn = selectedColumnId ? Store.findColumn(selectedColumnId) : null;
@@ -1075,6 +1099,7 @@ import {
       selectedVaranda: selectedVaranda,
       selectedLaje: selectedLaje,
       selectedGlazingPanel: selectedGlazingPanelId ? Store.findGlazingPanel(selectedGlazingPanelId) : null,
+      selectedHydraulicNode: selectedHydraulicNodeId ? Store.findHydraulicNode(selectedHydraulicNodeId) : null,
       roomGroupWallIds: selectedRoomWallIds,
       resizeWallId: resizeWallId,
       drawPreview: drawPreview,
@@ -1093,6 +1118,7 @@ import {
     if (selectedVarandaId && !Store.findVaranda(selectedVarandaId)) selectedVarandaId = null;
     if (selectedLajeId && !Store.findLaje(selectedLajeId)) selectedLajeId = null;
     if (selectedGlazingPanelId && !Store.findGlazingPanel(selectedGlazingPanelId)) selectedGlazingPanelId = null;
+    if (selectedHydraulicNodeId && !Store.findHydraulicNode(selectedHydraulicNodeId)) selectedHydraulicNodeId = null;
     if (resizeWallId && !Store.findWall(resizeWallId)) resizeWallId = null;
     if (selectedRoomWallIds) {
       selectedRoomWallIds = selectedRoomWallIds.filter(function (id: any) { return !!Store.findWall(id); });
@@ -1696,6 +1722,16 @@ import {
           // nunca o objeto atingido pelo raycast antes do render.
           furnitureDragObject = findFurnitureSceneObject(furnitureId);
           Store.commands.beginTransaction();
+        } else if (mesh.userData.hydraulicNodeId) {
+          var hydraulicId = mesh.userData.hydraulicNodeId;
+          var hydraulicEntity = Store.findHydraulicNode(hydraulicId);
+          if (!hydraulicEntity || !hydraulicEntity.fixtureType) return;
+          selectHydraulicNode(hydraulicId);
+          dragMode = 'hydraulicFixtureBody';
+          dragElementStart = { x: hydraulicEntity.x, y: hydraulicEntity.y, lastX: hydraulicEntity.x, lastY: hydraulicEntity.y };
+          dragGroundStart = getGroundModelPoint(e.clientX, e.clientY);
+          hydraulicFixtureDragObject = findHydraulicFixtureSceneObject(hydraulicId);
+          Store.commands.beginTransaction();
         } else if (mesh.userData.glazingPanelId) {
           var glazingPanelId = mesh.userData.glazingPanelId;
           var gpEnt = Store.findGlazingPanel(glazingPanelId)!;
@@ -2264,6 +2300,21 @@ import {
       }
       return;
     }
+    if (dragMode === 'hydraulicFixtureBody') {
+      var hydraulicGround = getGroundModelPoint(e.clientX, e.clientY);
+      var hydraulicNode = selectedHydraulicNodeId ? Store.findHydraulicNode(selectedHydraulicNodeId) : null;
+      if (hydraulicGround && dragGroundStart && hydraulicFixtureDragObject && hydraulicNode) {
+        var hydraulicDx = hydraulicGround.x - dragGroundStart.x, hydraulicDy = hydraulicGround.y - dragGroundStart.y;
+        var hydraulicWall = hydraulicNode.wallId ? Store.findWall(hydraulicNode.wallId) || undefined : undefined;
+        var hydraulicResolved = resolveHydraulicFixturePosition(hydraulicNode, dragElementStart.x + hydraulicDx, dragElementStart.y + hydraulicDy, hydraulicWall);
+        dragElementStart.lastX = hydraulicResolved.x;
+        dragElementStart.lastY = hydraulicResolved.y;
+        var hydraulicWorld = modelToWorld(hydraulicResolved.x, hydraulicResolved.y);
+        hydraulicFixtureDragObject.position.x = hydraulicWorld.x;
+        hydraulicFixtureDragObject.position.z = hydraulicWorld.z;
+      }
+      return;
+    }
     if (dragMode && dragMode.indexOf('glazingWidth') === 0) {
       var gpResizeW = Store.findGlazingPanel(selectedGlazingPanelId);
       var groundResizeW = getGroundModelPoint(e.clientX, e.clientY);
@@ -2608,6 +2659,14 @@ import {
         );
       }
       furnitureDragObject = null;
+      dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
+      return;
+    }
+    if (dragMode === 'hydraulicFixtureBody') {
+      if (selectedHydraulicNodeId && dragElementStart) {
+        Store.commands.updateHydraulicFixtureBodyLive(selectedHydraulicNodeId, dragElementStart.lastX, dragElementStart.lastY);
+      }
+      hydraulicFixtureDragObject = null;
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }
@@ -3592,6 +3651,7 @@ import {
   export function getSelectedLajeId() { return selectedLajeId; }
   export function getSelectedFurnitureId() { return selectedFurnitureId; }
   export function getSelectedGlazingPanelId() { return selectedGlazingPanelId; }
+  export function getSelectedHydraulicNodeId() { return selectedHydraulicNodeId; }
   export function getSelectedRoomWallIds() { return selectedRoomWallIds; }
   export function setNextRoofAtticMode(enabled: boolean) { pendingRoofAttic = enabled; }
 
@@ -3599,9 +3659,9 @@ import {
 // Scene3DRenderer.ts (chamadas ViewportController.xxx no código legado).
 export const ViewportController = {
   init, render, onModelChanged, deselect,
-  select, selectColumn, selectRoof, selectOpening, selectVaranda, selectFurniture, selectGlazingPanel,
+  select, selectColumn, selectRoof, selectOpening, selectVaranda, selectFurniture, selectGlazingPanel, selectHydraulicNode,
   getSelectedWallId, getSelectedColumnId, getSelectedRoofId,
-  getSelectedOpeningId, getSelectedVarandaId, getSelectedLajeId, getSelectedFurnitureId, getSelectedGlazingPanelId, getSelectedRoomWallIds,
+  getSelectedOpeningId, getSelectedVarandaId, getSelectedLajeId, getSelectedFurnitureId, getSelectedGlazingPanelId, getSelectedHydraulicNodeId, getSelectedRoomWallIds,
   setNextRoofAtticMode, toggleDimensions,
   toggleWallDiagnostics,
   resetCamera,

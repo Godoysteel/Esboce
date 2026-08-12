@@ -5,7 +5,7 @@
 // var/function trocados por const/arrow onde natural.
 
 import { Core } from './Core.js';
-import { buildColdWaterKitchenPrototype, createPositionedHydraulicFixture } from './Hydraulics.js';
+import { buildColdWaterKitchenPrototype, createPositionedHydraulicFixture, resolveHydraulicFixturePosition } from './Hydraulics.js';
 import type {
   Project, Floor, Wall, Column, Roof, Opening, OpeningKind, Varanda, Laje, Furniture, ColumnShape, RoofType,
   RidgeAxis, VarandaFrontSide, FoundationType, StoreEvent, StoreListener,
@@ -128,6 +128,9 @@ export function findFurniture(id: string): Furniture | null {
   for (let i = 0; i < list.length; i++) if (list[i]!.id === id) return list[i]!;
   return null;
 }
+export function findHydraulicNode(id: string) {
+  return project.hydraulics.nodes.find((node) => node.id === id) || null;
+}
 
 function applyEndpoint(w: Wall, which: 1 | 2, x: number, y: number): void {
   const sx = Core.snap(x), sy = Core.snap(y);
@@ -155,6 +158,26 @@ export const commands = {
     project.layers.instalacoes = true;
     emit({ type: 'HydraulicFixtureCreated', hydraulicNodeId: node.id });
     return node;
+  },
+
+  updateHydraulicFixtureBodyLive(nodeId: string, x: number, y: number) {
+    const node = findHydraulicNode(nodeId);
+    if (!node || node.kind !== 'fixture' || !node.fixtureType) return null;
+    const wall = node.wallId ? findWall(node.wallId) || undefined : undefined;
+    const resolved = resolveHydraulicFixturePosition(node, x, y, wall);
+    node.x = resolved.x;
+    node.y = resolved.y;
+    emit({ type: 'HydraulicFixtureMoved', hydraulicNodeId: node.id });
+    return node;
+  },
+
+  deleteHydraulicFixture(nodeId: string): void {
+    const node = findHydraulicNode(nodeId);
+    if (!node || node.kind !== 'fixture' || !node.fixtureType) return;
+    pushUndoSnapshot();
+    project.hydraulics.nodes = project.hydraulics.nodes.filter((item) => item.id !== nodeId);
+    project.hydraulics.segments = project.hydraulics.segments.filter((segment) => segment.startNodeId !== nodeId && segment.endNodeId !== nodeId);
+    emit({ type: 'HydraulicFixtureDeleted', hydraulicNodeId: nodeId });
   },
 
   toggleHydraulicLayer(): void {
@@ -1263,6 +1286,7 @@ export const Store = {
   findLaje,
   findGlazingPanel,
   findFurniture,
+  findHydraulicNode,
   currentTerreno,
   setTerreno,
   toggleTerrenoMuroSide,

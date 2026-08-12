@@ -1,5 +1,7 @@
 # Changelog
 
+> AtualizaÃ§Ã£o hidrÃ¡ulica: pontos posicionÃ¡veis agora podem ser selecionados, arrastados e excluÃ­dos. Pontos de parede permanecem na parede hospedeira, pontos de piso permanecem no grid e o projeto sÃ³ Ã© atualizado ao soltar.
+
 Todas as alterações relevantes do Esboce serão registradas neste arquivo.
 
 ---

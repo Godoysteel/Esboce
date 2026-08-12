@@ -55,6 +55,14 @@ function projectOnWall(x: number, y: number, wall: Wall) {
   return { x: wall.x1 + t * dx, y: wall.y1 + t * dy };
 }
 
+export function resolveHydraulicFixturePosition(node: HydraulicNode, x: number, y: number, wall?: Wall) {
+  if (node.placementSurface === 'wall') {
+    if (!wall || wall.id !== node.wallId) return { x: node.x, y: node.y };
+    return projectOnWall(x, y, wall);
+  }
+  return { x: Math.round(x / GRID) * GRID, y: Math.round(y / GRID) * GRID };
+}
+
 export interface EquipmentConnectorTemplate {
   key: string;
   label: string;

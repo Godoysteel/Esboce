@@ -186,6 +186,13 @@ export function init(): void {
     if (!btn) return;
     const action = btn.dataset.action;
 
+    const hydraulicNodeId = ViewportController.getSelectedHydraulicNodeId();
+    if (hydraulicNodeId) {
+      if (action === 'close') ViewportController.deselect();
+      if (action === 'delete') { Store.commands.deleteHydraulicFixture(hydraulicNodeId); ViewportController.deselect(); }
+      return;
+    }
+
     const glazingPanelId = ViewportController.getSelectedGlazingPanelId();
     if (glazingPanelId) { handleGlazingPanelAction(glazingPanelId, action); return; }
 
