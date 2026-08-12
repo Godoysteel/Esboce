@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createProject } from '../src/core/Core.ts';
 import { decodeProjectDocument, encodeProjectDocument } from '../src/core/ProjectPersistence.ts';
-import { buildColdWaterKitchenPrototype, buildColdWaterNetworkFromFixtures, createPositionedHydraulicFixture, findKitchenFixturePoint, hydraulicFixtureTemplate, resolveEquipmentConnector, resolveHydraulicFixturePosition, segmentIsOrthogonal3D } from '../src/core/Hydraulics.ts';
+import { buildColdWaterKitchenPrototype, buildColdWaterNetworkFromFixtures, createPositionedHydraulicFixture, findKitchenFixturePoint, hydraulicFixtureTemplate, hydraulicFixtureVisualPosition, resolveEquipmentConnector, resolveHydraulicFixturePosition, segmentIsOrthogonal3D } from '../src/core/Hydraulics.ts';
 
 test('projeto novo nasce com rede hidráulica vazia e camada visível', () => {
   const project = createProject();
@@ -91,6 +91,14 @@ test('wall fixture dragging stays constrained to its host wall', () => {
 test('floor fixture dragging remains snapped to the technical grid', () => {
   const point = createPositionedHydraulicFixture('floor_drain', 20, 20);
   assert.deepEqual(resolveHydraulicFixturePosition(point, 51, 69), { x: 60, y: 60 });
+});
+
+test('water outlet marker is rendered beyond the wall face while its technical point stays on axis', () => {
+  const wall = { id: 'wall-face', x1: 0, y1: 0, x2: 100, y2: 0 };
+  const point = createPositionedHydraulicFixture('kitchen_faucet', 50, 4, wall);
+  const visual = hydraulicFixtureVisualPosition(point, wall, [wall]);
+  assert.equal(point.y, 0);
+  assert.ok(Math.abs(visual.y) > 2.6);
 });
 
 test('cold-water generation places a tank above the last floor and routes every water point', () => {

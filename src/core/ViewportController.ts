@@ -20,7 +20,7 @@ import { Scene3DRenderer, DEBUG_COLOR_MODE } from './Scene3DRenderer.js';
 import { NavGizmo } from './NavGizmo.js';
 import { touchCameraAnchor, updateTouchCamera, type TouchCameraAnchor } from './TouchCamera.js';
 import { DEFAULT_GLAZING_GLASS_MATERIAL } from './Glazing.js';
-import { resolveHydraulicFixturePosition } from './Hydraulics.js';
+import { hydraulicFixtureVisualPosition, resolveHydraulicFixturePosition } from './Hydraulics.js';
 import {
   analyzeWallResize,
   cloneWallsForDiagnostics,
@@ -2309,7 +2309,9 @@ import {
         var hydraulicResolved = resolveHydraulicFixturePosition(hydraulicNode, dragElementStart.x + hydraulicDx, dragElementStart.y + hydraulicDy, hydraulicWall);
         dragElementStart.lastX = hydraulicResolved.x;
         dragElementStart.lastY = hydraulicResolved.y;
-        var hydraulicWorld = modelToWorld(hydraulicResolved.x, hydraulicResolved.y);
+        var previewNode = { ...hydraulicNode, x: hydraulicResolved.x, y: hydraulicResolved.y };
+        var hydraulicVisual = hydraulicFixtureVisualPosition(previewNode, hydraulicWall, Store.getProject().floors.flatMap(function (floor) { return floor.walls; }));
+        var hydraulicWorld = modelToWorld(hydraulicVisual.x, hydraulicVisual.y);
         hydraulicFixtureDragObjects.forEach(function (object: any) {
           object.position.x = hydraulicWorld.x;
           object.position.z = hydraulicWorld.z;

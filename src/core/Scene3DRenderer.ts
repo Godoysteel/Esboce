@@ -23,6 +23,7 @@ import { computeOpeningAssemblyLayout, wallBandSideParameters, wallTopTriangleVe
 import { computeGlazingLayout, netGlassSizeM, MULLION_VERTICAL_WIDTH_M, MULLION_HORIZONTAL_WIDTH_M, FRAME_WIDTH_M, PROFILE_DEPTH_M, DEFAULT_GLAZING_GLASS_MATERIAL } from './Glazing.js';
 import type { Project, Wall, Column, Roof, Varanda, Laje, Opening } from './types.js';
 import { floorWallHeight } from './Attic.js';
+import { hydraulicFixtureVisualPosition } from './Hydraulics.js';
 
 export interface ViewState {
   drawPreview?: any;
@@ -2348,7 +2349,10 @@ export function hashColorHex(key: string): number {
         new THREE.MeshStandardMaterial({ color: selected ? 0xf4a340 : baseColor, emissive: selected ? 0xf4a340 : baseColor, emissiveIntensity: selected ? 0.5 : 0.22, roughness: 0.32 })
       );
       var nodeFloorOffset = (node.floorIndex || 0) * FLOOR_STACK_HEIGHT;
-      marker.position.set((node.x - offsetX) * scale, nodeFloorOffset + node.elevationM, (node.y - offsetY) * scale);
+      var hostWall = node.wallId ? project.floors.flatMap(function (floor) { return floor.walls; }).find(function (wall) { return wall.id === node.wallId; }) : undefined;
+      var allProjectWalls = project.floors.flatMap(function (floor) { return floor.walls; });
+      var visualPoint = node.kind === 'fixture' ? hydraulicFixtureVisualPosition(node, hostWall, allProjectWalls) : { x: node.x, y: node.y };
+      marker.position.set((visualPoint.x - offsetX) * scale, nodeFloorOffset + node.elevationM, (visualPoint.y - offsetY) * scale);
       tagCategory(marker, 'instalacoes');
       marker.userData.hydraulicNodeId = node.id;
       marker.userData.floorIndex = node.floorIndex || 0;

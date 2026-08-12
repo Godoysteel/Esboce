@@ -64,6 +64,24 @@ export function resolveHydraulicFixturePosition(node: HydraulicNode, x: number, 
   return { x: Math.round(x / GRID) * GRID, y: Math.round(y / GRID) * GRID };
 }
 
+/** Mantém o nó técnico no eixo, mas põe seu marcador além da face visível da parede. */
+export function hydraulicFixtureVisualPosition(node: HydraulicNode, wall: Wall | undefined, allWalls: Wall[]) {
+  if (!wall || node.placementSurface !== 'wall') return { x: node.x, y: node.y };
+  const dx = wall.x2 - wall.x1, dy = wall.y2 - wall.y1;
+  const length = Math.hypot(dx, dy) || 1;
+  const nx = -dy / length, ny = dx / length;
+  const points = allWalls.flatMap((item) => [{ x: item.x1, y: item.y1 }, { x: item.x2, y: item.y2 }]);
+  const center = points.length ? {
+    x: points.reduce((sum, point) => sum + point.x, 0) / points.length,
+    y: points.reduce((sum, point) => sum + point.y, 0) / points.length,
+  } : { x: node.x, y: node.y };
+  const towardCenter = (center.x - node.x) * nx + (center.y - node.y) * ny >= 0 ? 1 : -1;
+  const side = node.fixtureType === 'external_faucet' ? -towardCenter : towardCenter;
+  // meia parede (1,2 unidade) + raio da esfera (1,4) + pequena folga (0,3)
+  const clearance = 2.9;
+  return { x: node.x + nx * side * clearance, y: node.y + ny * side * clearance };
+}
+
 export function buildColdWaterNetworkFromFixtures(floors: Floor[], existing: HydraulicSystem): HydraulicSystem {
   const fixtures = existing.nodes.filter((node) => node.kind === 'fixture' && !!node.fixtureType);
   const waterFixtures = fixtures.filter((node) => node.networkType === 'cold_water');
