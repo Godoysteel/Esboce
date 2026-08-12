@@ -213,6 +213,35 @@ export interface ProjectLayers {
   paredesSuperiores: boolean;
   aberturas: boolean;
   varanda: boolean;
+  instalacoes: boolean;
+}
+
+export type HydraulicNetworkType = 'cold_water' | 'sanitary_sewer' | 'kitchen_sewer' | 'sanitary_vent';
+export type HydraulicNodeKind = 'source' | 'fixture' | 'junction' | 'destination';
+
+export interface HydraulicNode {
+  id: string;
+  kind: HydraulicNodeKind;
+  networkType: HydraulicNetworkType;
+  label: string;
+  /** Coordenadas de planta na mesma grade das paredes (20 unidades = 1 m). */
+  x: number;
+  y: number;
+  /** Altura em metros a partir do piso do pavimento. */
+  elevationM: number;
+}
+
+export interface HydraulicSegment {
+  id: string;
+  networkType: HydraulicNetworkType;
+  startNodeId: string;
+  endNodeId: string;
+  diameterMm: number;
+}
+
+export interface HydraulicSystem {
+  nodes: HydraulicNode[];
+  segments: HydraulicSegment[];
 }
 
 export type FoundationType = 'radier' | 'baldrame';
@@ -224,6 +253,7 @@ export interface Project {
   layers: ProjectLayers;
   foundationType: FoundationType;
   constructionSystem: ConstructionSystem;
+  hydraulics: HydraulicSystem;
   // Opcional: ausente até o usuário definir o tamanho do terreno.
   terreno?: Terreno;
 }

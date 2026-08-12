@@ -2282,6 +2282,55 @@ export function hashColorHex(key: string): number {
     registry.furnitureMeshes = [];
   }
 
+  function hydraulicColor(networkType: string) {
+    if (networkType === 'cold_water') return 0x2f80ed;
+    if (networkType === 'sanitary_sewer') return 0x8b5e3c;
+    if (networkType === 'kitchen_sewer') return 0xd97706;
+    return 0x7c3aed;
+  }
+
+  function buildHydraulicSegment(start: any, end: any, segment: any, scale: number, offsetX: number, offsetY: number) {
+    var a = new THREE.Vector3((start.x - offsetX) * scale, start.elevationM, (start.y - offsetY) * scale);
+    var b = new THREE.Vector3((end.x - offsetX) * scale, end.elevationM, (end.y - offsetY) * scale);
+    var direction = new THREE.Vector3().subVectors(b, a);
+    var length = direction.length();
+    var radiusM = Math.max(0.012, segment.diameterMm / 2000);
+    var geometry = new THREE.CylinderGeometry(radiusM, radiusM, length, 14);
+    var material = new THREE.MeshStandardMaterial({ color: hydraulicColor(segment.networkType), roughness: 0.38, metalness: 0.08 });
+    var mesh = new THREE.Mesh(geometry, material);
+    mesh.position.copy(a).add(b).multiplyScalar(0.5);
+    mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction.normalize());
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return mesh;
+  }
+
+  function renderHydraulics(scene: THREE.Scene, project: Project, scale: number, offsetX: number, offsetY: number) {
+    if (!project.layers.instalacoes || !project.hydraulics) return;
+    var nodes = new Map((project.hydraulics.nodes || []).map(function (node) { return [node.id, node]; }));
+    (project.hydraulics.segments || []).forEach(function (segment) {
+      var start = nodes.get(segment.startNodeId), end = nodes.get(segment.endNodeId);
+      if (!start || !end) return;
+      var mesh = buildHydraulicSegment(start, end, segment, scale, offsetX, offsetY);
+      tagCategory(mesh, 'instalacoes');
+      mesh.userData.hydraulicSegmentId = segment.id;
+      scene.add(mesh);
+      registry.structureMeshes.push(mesh);
+    });
+    (project.hydraulics.nodes || []).forEach(function (node) {
+      var radius = node.kind === 'junction' ? 0.08 : 0.11;
+      var marker = new THREE.Mesh(
+        new THREE.SphereGeometry(radius, 16, 12),
+        new THREE.MeshStandardMaterial({ color: hydraulicColor(node.networkType), emissive: hydraulicColor(node.networkType), emissiveIntensity: 0.12 })
+      );
+      marker.position.set((node.x - offsetX) * scale, node.elevationM, (node.y - offsetY) * scale);
+      tagCategory(marker, 'instalacoes');
+      marker.userData.hydraulicNodeId = node.id;
+      scene.add(marker);
+      registry.structureMeshes.push(marker);
+    });
+  }
+
   // Retângulo/parede em andamento (arrastando o mouse) — feedback visual
   // imediato, nunca escreve no modelo.
   function renderDrawPreview(scene: any, viewState: any, scale: any, offsetX: any, offsetY: any) {
@@ -2589,6 +2638,8 @@ export function hashColorHex(key: string): number {
     var scale = 1 / Core.GRID, offsetX = 0, offsetY = 0;
     var layers = project.layers;
     var editingIdx = viewState.editingFloorIndex != null ? viewState.editingFloorIndex : project.currentFloorIndex;
+
+    renderHydraulics(scene, project, scale, offsetX, offsetY);
 
     project.floors.forEach(function (floorData, floorIdx) {
       // pavimentos ACIMA do que está sendo editado ficam escondidos, pra

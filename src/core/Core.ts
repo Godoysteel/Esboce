@@ -487,10 +487,12 @@ export function createProject(constructionSystem: Project['constructionSystem'] 
       laje: true,
       paredesSuperiores: true,
       aberturas: true,
-      varanda: true
+      varanda: true,
+      instalacoes: true
     },
     foundationType: 'baldrame',
-    constructionSystem
+    constructionSystem,
+    hydraulics: { nodes: [], segments: [] }
   };
 }
 

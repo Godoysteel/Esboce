@@ -1,11 +1,11 @@
 import type {
-  Column, Floor, Furniture, GlazingPanel, Laje, Opening, Project, ProjectLayers, Roof, Terreno, Varanda, Wall,
+  Column, Floor, Furniture, GlazingPanel, HydraulicNode, HydraulicSegment, Laje, Opening, Project, ProjectLayers, Roof, Terreno, Varanda, Wall,
 } from './types.js';
 
 // v6: adiciona `project.terreno` (opcional) — tamanho do lote e muros de
 // perímetro. Documentos v5 e anteriores não têm o campo; abrem
 // normalmente sem terreno definido (ver ADR-008).
-export const CURRENT_PROJECT_SCHEMA_VERSION = 6;
+export const CURRENT_PROJECT_SCHEMA_VERSION = 7;
 
 export interface StoredProjectDocument {
   schemaVersion: number;
@@ -36,7 +36,33 @@ const DEFAULT_LAYERS: ProjectLayers = {
   paredesSuperiores: true,
   aberturas: true,
   varanda: true,
+  instalacoes: true,
 };
+
+function parseHydraulicNode(value: unknown, path: string): HydraulicNode {
+  const v = record(value, path);
+  return {
+    id: string(v.id, `${path}.id`),
+    kind: enumValue(v.kind, ['source', 'fixture', 'junction', 'destination'], `${path}.kind`, 'junction'),
+    networkType: enumValue(v.networkType, ['cold_water', 'sanitary_sewer', 'kitchen_sewer', 'sanitary_vent'], `${path}.networkType`, 'cold_water'),
+    label: string(v.label, `${path}.label`, 'Ponto hidráulico'),
+    x: number(v.x, `${path}.x`), y: number(v.y, `${path}.y`),
+    elevationM: number(v.elevationM, `${path}.elevationM`, 0),
+  };
+}
+
+function parseHydraulicSegment(value: unknown, path: string): HydraulicSegment {
+  const v = record(value, path);
+  const diameterMm = number(v.diameterMm, `${path}.diameterMm`);
+  if (!(diameterMm > 0 && diameterMm <= 1000)) fail(`${path}.diameterMm`, 'diâmetro fora do intervalo suportado');
+  return {
+    id: string(v.id, `${path}.id`),
+    networkType: enumValue(v.networkType, ['cold_water', 'sanitary_sewer', 'kitchen_sewer', 'sanitary_vent'], `${path}.networkType`, 'cold_water'),
+    startNodeId: string(v.startNodeId, `${path}.startNodeId`),
+    endNodeId: string(v.endNodeId, `${path}.endNodeId`),
+    diameterMm,
+  };
+}
 
 function fail(path: string, message: string): never {
   throw new ProjectFormatError(`${path}: ${message}`);
@@ -310,7 +336,20 @@ function normalizeProject(value: unknown): Project {
       'project.constructionSystem',
       'ceramic_masonry',
     ),
+    hydraulics: { nodes: [], segments: [] },
   };
+  if (source.hydraulics != null) {
+    const hydraulics = record(source.hydraulics, 'project.hydraulics');
+    project.hydraulics = {
+      nodes: array(hydraulics.nodes, 'project.hydraulics.nodes', true).map((item, i) => parseHydraulicNode(item, `project.hydraulics.nodes[${i}]`)),
+      segments: array(hydraulics.segments, 'project.hydraulics.segments', true).map((item, i) => parseHydraulicSegment(item, `project.hydraulics.segments[${i}]`)),
+    };
+    const nodeIds = new Set(project.hydraulics.nodes.map((node) => node.id));
+    if (nodeIds.size !== project.hydraulics.nodes.length) fail('project.hydraulics.nodes', 'há identificadores duplicados');
+    project.hydraulics.segments.forEach((segment, index) => {
+      if (!nodeIds.has(segment.startNodeId) || !nodeIds.has(segment.endNodeId)) fail(`project.hydraulics.segments[${index}]`, 'segmento referencia ponto inexistente');
+    });
+  }
   if (source.terreno != null) project.terreno = parseTerreno(source.terreno, 'project.terreno');
   return project;
 }

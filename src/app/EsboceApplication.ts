@@ -314,6 +314,7 @@ export class EsboceApplication {
     const orbitBtn = this.requireElement("viewModeOrbitBtn");
     const view3DBtn = this.requireElement("viewMode3DBtn");
     const view2DBtn = this.requireElement("viewMode2DBtn");
+    const hydraulicsBtn = this.requireElement("hydraulicsBtn");
     const setViewMode = (mode: '2d' | '3d') => {
       this.viewMode = mode;
       view3DBtn.classList.toggle('active', mode === '3d');
@@ -325,6 +326,21 @@ export class EsboceApplication {
     };
     view3DBtn.addEventListener('click', () => setViewMode('3d'));
     view2DBtn.addEventListener('click', () => setViewMode('2d'));
+    const refreshHydraulicsButton = () => {
+      const project = Store.getProject();
+      const hasNetwork = project.hydraulics.nodes.length > 0;
+      hydraulicsBtn.classList.toggle('active', hasNetwork && project.layers.instalacoes);
+      hydraulicsBtn.title = hasNetwork
+        ? 'Mostrar ou ocultar instalações hidráulicas'
+        : 'Gerar protótipo de instalações hidráulicas';
+    };
+    hydraulicsBtn.addEventListener('click', () => {
+      const project = Store.getProject();
+      if (project.hydraulics.nodes.length === 0) Store.commands.createHydraulicPrototype();
+      else Store.commands.toggleHydraulicLayer();
+      refreshHydraulicsButton();
+    });
+    refreshHydraulicsButton();
     const touchFirst = window.matchMedia('(pointer: coarse)').matches;
     if (touchFirst) {
       orbitBtn.textContent = "CÃ¢mera";

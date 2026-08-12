@@ -117,8 +117,8 @@ test('setTerreno (lógica): redefinir tamanho preserva os lados que já tinham m
   );
 });
 
-test('persistência: schemaVersion atual é 6 e projeto v5 sem terreno migra sem quebrar', () => {
-  assert.equal(CURRENT_PROJECT_SCHEMA_VERSION, 6);
+test('persistência: schemaVersion atual é 7 e projeto v5 sem terreno migra sem quebrar', () => {
+  assert.equal(CURRENT_PROJECT_SCHEMA_VERSION, 7);
   const legacy = {
     schemaVersion: 5,
     project: {
@@ -132,6 +132,7 @@ test('persistência: schemaVersion atual é 6 e projeto v5 sem terreno migra sem
   const decoded = decodeProjectDocument(legacy);
   assert.equal(decoded.migrated, true);
   assert.equal(decoded.project.terreno, undefined);
+  assert.deepEqual(decoded.project.hydraulics, { nodes: [], segments: [] });
 });
 
 test('persistência: terreno com muro sobrevive a ida e volta (encode/decode)', () => {
