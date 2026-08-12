@@ -14,6 +14,8 @@ Validar dentro da viewport a arquitetura definida na SPEC-002 e no contrato H0, 
 - controle **Hid.** para gerar um circuito demonstrativo e mostrar/ocultar a camada;
 - primeiro circuito ortogonal funcional, da origem elevada até o ponto provisório da cozinha, com ramal superior, prumada e ramal baixo sem segmentos diagonais;
 - associação provisória do armário de cozinha como ponto de pia, até existir um equipamento de pia com conectores próprios;
+- gabarito técnico `kitchen_sink_generic`, independente do GLB, com conector de água fria que acompanha posição e rotação do móvel;
+- vínculo persistente do nó com `equipmentId` e `connectorKey`, permitindo trocar o modelo visual sem romper a rede;
 - migração segura de projetos antigos para `schemaVersion` 7;
 - validação contra pontos duplicados, diâmetros inválidos e segmentos órfãos.
 

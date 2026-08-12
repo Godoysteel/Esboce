@@ -229,6 +229,8 @@ export interface HydraulicNode {
   y: number;
   /** Altura em metros a partir do piso do pavimento. */
   elevationM: number;
+  equipmentId?: string;
+  connectorKey?: string;
 }
 
 export interface HydraulicSegment {

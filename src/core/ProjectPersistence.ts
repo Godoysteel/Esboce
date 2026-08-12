@@ -41,7 +41,7 @@ const DEFAULT_LAYERS: ProjectLayers = {
 
 function parseHydraulicNode(value: unknown, path: string): HydraulicNode {
   const v = record(value, path);
-  return {
+  const node: HydraulicNode = {
     id: string(v.id, `${path}.id`),
     kind: enumValue(v.kind, ['source', 'fixture', 'junction', 'destination'], `${path}.kind`, 'junction'),
     networkType: enumValue(v.networkType, ['cold_water', 'sanitary_sewer', 'kitchen_sewer', 'sanitary_vent'], `${path}.networkType`, 'cold_water'),
@@ -49,6 +49,11 @@ function parseHydraulicNode(value: unknown, path: string): HydraulicNode {
     x: number(v.x, `${path}.x`), y: number(v.y, `${path}.y`),
     elevationM: number(v.elevationM, `${path}.elevationM`, 0),
   };
+  const equipmentId = optionalString(v.equipmentId, `${path}.equipmentId`);
+  const connectorKey = optionalString(v.connectorKey, `${path}.connectorKey`);
+  if (equipmentId !== undefined) node.equipmentId = equipmentId;
+  if (connectorKey !== undefined) node.connectorKey = connectorKey;
+  return node;
 }
 
 function parseHydraulicSegment(value: unknown, path: string): HydraulicSegment {

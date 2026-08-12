@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createProject } from '../src/core/Core.ts';
 import { decodeProjectDocument, encodeProjectDocument } from '../src/core/ProjectPersistence.ts';
-import { buildColdWaterKitchenPrototype, findKitchenFixturePoint, segmentIsOrthogonal3D } from '../src/core/Hydraulics.ts';
+import { buildColdWaterKitchenPrototype, findKitchenFixturePoint, resolveEquipmentConnector, segmentIsOrthogonal3D } from '../src/core/Hydraulics.ts';
 
 test('projeto novo nasce com rede hidráulica vazia e camada visível', () => {
   const project = createProject();
@@ -30,7 +30,19 @@ test('segmento hidráulico órfão é recusado', () => {
 test('ponto provisório da cozinha acompanha o armário existente', () => {
   const project = createProject();
   project.floors[0].furniture.push({ id: 'armario', productId: 'vortice.movel.armario-cozinha', x: 52, y: 74, rotationDeg: 90, elevationM: 0 });
-  assert.deepEqual(findKitchenFixturePoint(project.floors[0]), { x: 52, y: 74 });
+  const point = findKitchenFixturePoint(project.floors[0]);
+  assert.equal(point.equipmentId, 'armario');
+  assert.equal(point.x, 58.4);
+  assert.equal(point.y, 74);
+  assert.equal(point.elevationM, 0.6);
+});
+
+test('gabarito da pia gira o conector junto com o modelo visual', () => {
+  const base = { id: 'pia', productId: 'vortice.movel.armario-cozinha', x: 100, y: 100, rotationDeg: 0, elevationM: 0 };
+  const north = resolveEquipmentConnector(base, 'cold_water_inlet');
+  const east = resolveEquipmentConnector({ ...base, rotationDeg: 90 }, 'cold_water_inlet');
+  assert.deepEqual({ x: north.x, y: north.y, z: north.elevationM }, { x: 100, y: 93.6, z: 0.6 });
+  assert.deepEqual({ x: east.x, y: east.y, z: east.elevationM }, { x: 106.4, y: 100, z: 0.6 });
 });
 
 test('primeiro circuito funcional não contém nenhum trecho diagonal', () => {
@@ -44,5 +56,6 @@ test('primeiro circuito funcional não contém nenhum trecho diagonal', () => {
   assert.equal(system.segments.length, 4);
   system.segments.forEach((segment) => assert.equal(segmentIsOrthogonal3D(system, segment.id), true));
   const endpoint = system.nodes.find((node) => node.kind === 'fixture');
-  assert.deepEqual({ x: endpoint.x, y: endpoint.y }, { x: 80, y: 60 });
+  assert.equal(endpoint.equipmentId, 'armario');
+  assert.equal(endpoint.connectorKey, 'cold_water_inlet');
 });

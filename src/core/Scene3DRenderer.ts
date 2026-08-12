@@ -2318,11 +2318,15 @@ export function hashColorHex(key: string): number {
       registry.structureMeshes.push(mesh);
     });
     (project.hydraulics.nodes || []).forEach(function (node) {
-      var radius = node.kind === 'junction' ? 0.08 : 0.11;
+      var radius = node.kind === 'junction' ? 0.035 : 0.055;
+      var geometry = node.kind === 'fixture'
+        ? new THREE.TorusGeometry(radius, Math.max(0.009, radius * 0.22), 10, 20)
+        : new THREE.SphereGeometry(radius, 14, 10);
       var marker = new THREE.Mesh(
-        new THREE.SphereGeometry(radius, 16, 12),
+        geometry,
         new THREE.MeshStandardMaterial({ color: hydraulicColor(node.networkType), emissive: hydraulicColor(node.networkType), emissiveIntensity: 0.12 })
       );
+      if (node.kind === 'fixture') marker.rotation.x = Math.PI / 2;
       marker.position.set((node.x - offsetX) * scale, node.elevationM, (node.y - offsetY) * scale);
       tagCategory(marker, 'instalacoes');
       marker.userData.hydraulicNodeId = node.id;
