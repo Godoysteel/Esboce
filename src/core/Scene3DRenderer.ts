@@ -2327,7 +2327,8 @@ export function hashColorHex(key: string): number {
         new THREE.MeshStandardMaterial({ color: hydraulicColor(node.networkType), emissive: hydraulicColor(node.networkType), emissiveIntensity: 0.12 })
       );
       if (node.kind === 'fixture') marker.rotation.x = Math.PI / 2;
-      marker.position.set((node.x - offsetX) * scale, node.elevationM, (node.y - offsetY) * scale);
+      var nodeFloorOffset = (node.floorIndex || 0) * FLOOR_STACK_HEIGHT;
+      marker.position.set((node.x - offsetX) * scale, nodeFloorOffset + node.elevationM, (node.y - offsetY) * scale);
       tagCategory(marker, 'instalacoes');
       marker.userData.hydraulicNodeId = node.id;
       scene.add(marker);

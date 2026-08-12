@@ -218,6 +218,7 @@ export interface ProjectLayers {
 
 export type HydraulicNetworkType = 'cold_water' | 'sanitary_sewer' | 'kitchen_sewer' | 'sanitary_vent';
 export type HydraulicNodeKind = 'source' | 'fixture' | 'junction' | 'destination';
+export type HydraulicPlacementSurface = 'wall' | 'floor';
 
 export interface HydraulicNode {
   id: string;
@@ -229,6 +230,10 @@ export interface HydraulicNode {
   y: number;
   /** Altura em metros a partir do piso do pavimento. */
   elevationM: number;
+  floorIndex?: number;
+  fixtureType?: string;
+  placementSurface?: HydraulicPlacementSurface;
+  wallId?: string;
   equipmentId?: string;
   connectorKey?: string;
 }

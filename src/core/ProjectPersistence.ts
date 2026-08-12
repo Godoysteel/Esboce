@@ -49,10 +49,22 @@ function parseHydraulicNode(value: unknown, path: string): HydraulicNode {
     x: number(v.x, `${path}.x`), y: number(v.y, `${path}.y`),
     elevationM: number(v.elevationM, `${path}.elevationM`, 0),
   };
+  if (v.floorIndex != null) {
+    const floorIndex = number(v.floorIndex, `${path}.floorIndex`, 0);
+    if (!Number.isInteger(floorIndex) || floorIndex < 0) fail(`${path}.floorIndex`, 'pavimento inválido');
+    node.floorIndex = floorIndex;
+  }
   const equipmentId = optionalString(v.equipmentId, `${path}.equipmentId`);
   const connectorKey = optionalString(v.connectorKey, `${path}.connectorKey`);
+  const fixtureType = optionalString(v.fixtureType, `${path}.fixtureType`);
+  const wallId = optionalString(v.wallId, `${path}.wallId`);
+  const placementSurface = v.placementSurface == null ? undefined
+    : enumValue(v.placementSurface, ['wall', 'floor'], `${path}.placementSurface`, 'wall');
   if (equipmentId !== undefined) node.equipmentId = equipmentId;
   if (connectorKey !== undefined) node.connectorKey = connectorKey;
+  if (fixtureType !== undefined) node.fixtureType = fixtureType;
+  if (wallId !== undefined) node.wallId = wallId;
+  if (placementSurface !== undefined) node.placementSurface = placementSurface;
   return node;
 }
 

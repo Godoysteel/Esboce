@@ -91,6 +91,11 @@ Criada a primeira baseline de engenharia do projeto.
 
 # Não lançado
 
+## Adicionado — pontos hidráulicos posicionáveis
+
+- Catálogo inicial de pontos de água e esgoto com snap técnico no eixo da parede ou no grid do piso.
+- Pontos independentes dos móveis preservam tipo, altura, rede, pavimento e parede hospedeira no projeto salvo.
+
 ## Adicionado — editor 2D (fase 1)
 
 - O botão **2D** abre uma planta técnica sincronizada com o mesmo projeto usado pela viewport 3D.

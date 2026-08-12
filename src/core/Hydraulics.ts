@@ -1,8 +1,59 @@
-import type { Floor, Furniture, HydraulicNetworkType, HydraulicSystem, Point } from './types.js';
+import type { Floor, Furniture, HydraulicNetworkType, HydraulicNode, HydraulicPlacementSurface, HydraulicSystem, Point, Wall } from './types.js';
 
 const GRID = 20;
 let hydraulicIdSequence = 0;
 function nextHydraulicId(prefix: string) { return `${prefix}_${Date.now().toString(36)}_${hydraulicIdSequence++}`; }
+
+export interface HydraulicFixtureTemplate {
+  key: string;
+  label: string;
+  shortLabel: string;
+  networkType: HydraulicNetworkType;
+  placementSurface: HydraulicPlacementSurface;
+  elevationM: number;
+  diameterMm: number;
+}
+
+export const HYDRAULIC_FIXTURE_TEMPLATES: HydraulicFixtureTemplate[] = [
+  { key: 'kitchen_faucet', label: 'Torneira da pia de cozinha', shortLabel: 'Pia cozinha', networkType: 'cold_water', placementSurface: 'wall', elevationM: 0.60, diameterMm: 20 },
+  { key: 'bathroom_faucet', label: 'Torneira de lavatório', shortLabel: 'Lavatório', networkType: 'cold_water', placementSurface: 'wall', elevationM: 0.60, diameterMm: 20 },
+  { key: 'toilet_supply', label: 'Alimentação do vaso sanitário', shortLabel: 'Água vaso', networkType: 'cold_water', placementSurface: 'wall', elevationM: 0.20, diameterMm: 20 },
+  { key: 'shower', label: 'Ponto de chuveiro', shortLabel: 'Chuveiro', networkType: 'cold_water', placementSurface: 'wall', elevationM: 2.10, diameterMm: 20 },
+  { key: 'external_faucet', label: 'Torneira externa', shortLabel: 'Torneira ext.', networkType: 'cold_water', placementSurface: 'wall', elevationM: 0.60, diameterMm: 20 },
+  { key: 'kitchen_sink_waste', label: 'Saída da pia de cozinha', shortLabel: 'Esgoto pia', networkType: 'kitchen_sewer', placementSurface: 'wall', elevationM: 0.45, diameterMm: 50 },
+  { key: 'bathroom_sink_waste', label: 'Saída do lavatório', shortLabel: 'Esg. lavatório', networkType: 'sanitary_sewer', placementSurface: 'wall', elevationM: 0.45, diameterMm: 40 },
+  { key: 'toilet_waste', label: 'Saída do vaso sanitário', shortLabel: 'Esgoto vaso', networkType: 'sanitary_sewer', placementSurface: 'floor', elevationM: 0.02, diameterMm: 100 },
+  { key: 'shower_drain', label: 'Ralo do chuveiro', shortLabel: 'Ralo chuveiro', networkType: 'sanitary_sewer', placementSurface: 'floor', elevationM: 0.02, diameterMm: 50 },
+  { key: 'floor_drain', label: 'Ralo comum', shortLabel: 'Ralo', networkType: 'sanitary_sewer', placementSurface: 'floor', elevationM: 0.02, diameterMm: 50 },
+];
+
+export function hydraulicFixtureTemplate(key: string): HydraulicFixtureTemplate | null {
+  return HYDRAULIC_FIXTURE_TEMPLATES.find((template) => template.key === key) || null;
+}
+
+export function createPositionedHydraulicFixture(templateKey: string, x: number, y: number, wall?: Wall): HydraulicNode | null {
+  const template = hydraulicFixtureTemplate(templateKey);
+  if (!template) return null;
+  if (template.placementSurface === 'wall' && !wall) return null;
+  const snapped = wall ? (() => {
+    const point = projectOnWall(x, y, wall);
+    return { x: point.x, y: point.y };
+  })() : { x: Math.round(x / GRID) * GRID, y: Math.round(y / GRID) * GRID };
+  return {
+    id: nextHydraulicId('hyd-node'), kind: 'fixture' as const,
+    networkType: template.networkType, label: template.label,
+    x: snapped.x, y: snapped.y, elevationM: template.elevationM,
+    fixtureType: template.key, placementSurface: template.placementSurface,
+    ...(wall ? { wallId: wall.id } : {}),
+  };
+}
+
+function projectOnWall(x: number, y: number, wall: Wall) {
+  const dx = wall.x2 - wall.x1, dy = wall.y2 - wall.y1;
+  const lengthSquared = dx * dx + dy * dy || 1;
+  const t = Math.max(0, Math.min(1, ((x - wall.x1) * dx + (y - wall.y1) * dy) / lengthSquared));
+  return { x: wall.x1 + t * dx, y: wall.y1 + t * dy };
+}
 
 export interface EquipmentConnectorTemplate {
   key: string;

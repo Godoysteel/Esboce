@@ -5,7 +5,7 @@
 // var/function trocados por const/arrow onde natural.
 
 import { Core } from './Core.js';
-import { buildColdWaterKitchenPrototype } from './Hydraulics.js';
+import { buildColdWaterKitchenPrototype, createPositionedHydraulicFixture } from './Hydraulics.js';
 import type {
   Project, Floor, Wall, Column, Roof, Opening, OpeningKind, Varanda, Laje, Furniture, ColumnShape, RoofType,
   RidgeAxis, VarandaFrontSide, FoundationType, StoreEvent, StoreListener,
@@ -143,6 +143,18 @@ export const commands = {
     project.hydraulics = buildColdWaterKitchenPrototype(currentFloor());
     project.layers.instalacoes = true;
     emit({ type: 'HydraulicPrototypeCreated' });
+  },
+
+  createHydraulicFixture(templateKey: string, x: number, y: number, wallId?: string) {
+    const wall = wallId ? findWall(wallId) : undefined;
+    const node = createPositionedHydraulicFixture(templateKey, x, y, wall || undefined);
+    if (!node) return null;
+    node.floorIndex = project.currentFloorIndex;
+    pushUndoSnapshot();
+    project.hydraulics.nodes.push(node);
+    project.layers.instalacoes = true;
+    emit({ type: 'HydraulicFixtureCreated', hydraulicNodeId: node.id });
+    return node;
   },
 
   toggleHydraulicLayer(): void {

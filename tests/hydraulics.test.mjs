@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createProject } from '../src/core/Core.ts';
 import { decodeProjectDocument, encodeProjectDocument } from '../src/core/ProjectPersistence.ts';
-import { buildColdWaterKitchenPrototype, findKitchenFixturePoint, resolveEquipmentConnector, segmentIsOrthogonal3D } from '../src/core/Hydraulics.ts';
+import { buildColdWaterKitchenPrototype, createPositionedHydraulicFixture, findKitchenFixturePoint, hydraulicFixtureTemplate, resolveEquipmentConnector, segmentIsOrthogonal3D } from '../src/core/Hydraulics.ts';
 
 test('projeto novo nasce com rede hidráulica vazia e camada visível', () => {
   const project = createProject();
@@ -58,4 +58,26 @@ test('primeiro circuito funcional não contém nenhum trecho diagonal', () => {
   const endpoint = system.nodes.find((node) => node.kind === 'fixture');
   assert.equal(endpoint.equipmentId, 'armario');
   assert.equal(endpoint.connectorKey, 'cold_water_inlet');
+});
+
+test('ponto de parede encaixa no eixo e preserva a altura técnica', () => {
+  const wall = { id: 'parede-pia', x1: 0, y1: 0, x2: 100, y2: 0 };
+  const point = createPositionedHydraulicFixture('kitchen_faucet', 46, 9, wall);
+  assert.equal(point.wallId, 'parede-pia');
+  assert.equal(point.placementSurface, 'wall');
+  assert.equal(point.networkType, 'cold_water');
+  assert.equal(point.elevationM, 0.6);
+  assert.deepEqual({ x: point.x, y: point.y }, { x: 46, y: 0 });
+});
+
+test('ralo encaixa no grid do piso e não aceita parede obrigatória', () => {
+  const template = hydraulicFixtureTemplate('shower_drain');
+  const point = createPositionedHydraulicFixture('shower_drain', 33, 47);
+  assert.equal(template.placementSurface, 'floor');
+  assert.equal(point.wallId, undefined);
+  assert.deepEqual({ x: point.x, y: point.y }, { x: 40, y: 40 });
+});
+
+test('ponto de parede não pode nascer solto no ambiente', () => {
+  assert.equal(createPositionedHydraulicFixture('shower', 20, 20), null);
 });

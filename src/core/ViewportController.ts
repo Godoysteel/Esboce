@@ -148,6 +148,10 @@ import {
     terreno: 'Clique num lado destacado do retângulo pra adicionar ou remover o muro daquele lado.'
   };
 
+  function hydraulicFixtureKeyFromTool(tool: any): string | null {
+    return typeof tool === 'string' && tool.indexOf('hydraulic:') === 0 ? tool.slice('hydraulic:'.length) : null;
+  }
+
   function modelToWorld(mx: any, my: any) { return { x: (mx - offsetX) * scale, z: (my - offsetY) * scale }; }
 
   function collectRoomGroupDragObjects(wallIds: string[], furnitureSnapshots: any[]) {
@@ -1105,7 +1109,9 @@ import {
     document.querySelectorAll('.tool-btn[data-tool]').forEach(function (btn: any) {
       btn.classList.toggle('active', btn.dataset.tool === tool);
     });
-    hintEl.textContent = TOOL_HINTS[tool] || '';
+    hintEl.textContent = hydraulicFixtureKeyFromTool(tool)
+      ? 'Clique na parede ou no piso indicado para posicionar o ponto hidráulico. O ponto fica independente do móvel.'
+      : TOOL_HINTS[tool] || '';
     container.classList.remove('tool-demolish', 'tool-paintBucket');
     if (tool === 'demolish' || tool === 'paintBucket') container.classList.add('tool-' + tool);
     refreshPaintPickerPanel();
@@ -1320,6 +1326,25 @@ import {
     // desenham nada; a decisão de "abrir menu" (só pro direito) ou só
     // girar acontece no pointerup/pointermove.
     if (downButton === 1 || downButton === 2) { e.preventDefault(); return; }
+
+    var hydraulicFixtureKey = hydraulicFixtureKeyFromTool(currentTool);
+    if (hydraulicFixtureKey) {
+      var hydraulicMesh = pickMesh(e.clientX, e.clientY);
+      var hydraulicGround = getGroundModelPoint(e.clientX, e.clientY);
+      if (!hydraulicGround) return;
+      var requiresFloor = hydraulicFixtureKey === 'toilet_waste' || hydraulicFixtureKey === 'shower_drain' || hydraulicFixtureKey === 'floor_drain';
+      var hydraulicWallId = hydraulicMesh && hydraulicMesh.userData.wallId ? hydraulicMesh.userData.wallId : undefined;
+      if (!requiresFloor && !hydraulicWallId) {
+        hintEl.textContent = 'Este ponto precisa ser colocado diretamente sobre uma parede.';
+        return;
+      }
+      var hydraulicNode = Store.commands.createHydraulicFixture(hydraulicFixtureKey, hydraulicGround.x, hydraulicGround.y, requiresFloor ? undefined : hydraulicWallId);
+      if (hydraulicNode) {
+        hintEl.textContent = requiresFloor ? 'Ponto de piso posicionado.' : 'Ponto encaixado no eixo da parede.';
+        render();
+      }
+      return;
+    }
 
     // Já estamos "colocando" (depois do primeiro clique): este é o
     // segundo clique, confirma o cômodo/parede aqui.
