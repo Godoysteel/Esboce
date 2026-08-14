@@ -503,6 +503,54 @@
     text-align: center;
   }
 
+  /* Prompt central e destacado — passo intermediário de fluxos guiados
+     (ex.: "selecione a parede relacionada" ao posicionar um ponto
+     hidráulico). Mais chamativo que .viewport-hint de propósito: pede uma
+     ação específica do usuário, não é só um lembrete de atalho. */
+  .hydraulic-wall-prompt {
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(27,28,30,0.86);
+    color: #F4F1EA;
+    font-size: 15px;
+    font-weight: 600;
+    padding: 12px 20px;
+    border-radius: 10px;
+    border: 1px solid rgba(244,241,234,0.25);
+    z-index: 6;
+    pointer-events: none;
+  }
+
+  /* Aba de elevação da parede — visualização 2D (distância × altura) de UMA
+     parede só, usada pra posicionar pontos hidráulicos com precisão. Fica
+     no meio da tela de propósito: é um passo guiado, não um painel
+     acessório como .object-panel/.materials-panel. */
+  .hydraulic-wall-elevation-panel {
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    display: none;
+    background: rgba(255,255,255,0.98);
+    border: 1px solid #D3D1C7;
+    border-radius: 10px;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.35);
+    padding: 12px 14px;
+    width: min(640px, 86vw);
+    z-index: 10;
+  }
+  .hydraulic-wall-elevation-panel.visible { display: block; }
+  .hydraulic-wall-elevation-hint { font-size: 12px; color: #77756E; margin: 0 0 8px; }
+  .hydraulic-wall-elevation-svg {
+    width: 100%;
+    height: min(280px, 40vh);
+    background: #F7F5EF;
+    border: 1px solid #EDEAE1;
+    border-radius: 6px;
+    cursor: crosshair;
+    display: block;
+  }
+
   /* Leitura rápida de metragem — agora uma pill dentro de .bottom-bar
      (não mais absoluta solta dentro de #viewport). */
   .viewport-stats {
@@ -609,6 +657,10 @@
     white-space: nowrap;
     pointer-events: none;
   }
+  /* Cota temporária durante o arraste de um ponto hidráulico — mesma
+     linguagem visual de .dim-cota, cor diferente pra não ser confundida
+     com as cotas persistentes de parede (que são vermelhas). */
+  .dim-cota.hydraulic-drag-cota { background: #5A49C7; }
 
   /* Barra inferior — mesmo padrão de .top-overlay (container
      transparente, filhos viram pills flutuantes). Ver comentário no
@@ -1407,6 +1459,14 @@
     </div>
     <div id="objectPanelBody"></div>
   </div>
+  <div id="hydraulicWallElevationPanel" class="hydraulic-wall-elevation-panel">
+    <div class="object-panel-header">
+      <strong id="hydraulicWallElevationTitle"></strong>
+      <button id="hydraulicWallElevationClose">✕</button>
+    </div>
+    <p class="hydraulic-wall-elevation-hint">Clique na parede, na altura desejada, para posicionar um ponto. Pode posicionar quantos precisar antes de fechar.</p>
+    <svg id="hydraulicWallElevationSvg" class="hydraulic-wall-elevation-svg"></svg>
+  </div>
   <div id="materialsPanel" class="materials-panel">
     <div class="object-panel-header">
       <strong>Lista de materiais</strong>
@@ -1419,6 +1479,7 @@
     <div id="materialsPanelBody"></div>
   </div>
   <div class="viewport-hint" id="viewportHint">Clique um ambiente na barra ao lado pra criá-lo. Clique direito + arraste pra girar a câmera. Shift + arraste desloca a câmera (igual Blender).</div>
+  <div class="hydraulic-wall-prompt" id="hydraulicWallPrompt" style="display:none;">Selecione a parede relacionada.</div>
   <div class="wall-diagnostics" id="wallDiagnosticsPanel" aria-live="polite">
     <pre id="wallDiagnosticsOutput">DIAGNÓSTICO DE PAREDES
 
@@ -1430,6 +1491,7 @@ Mova uma parede para registrar a operação.</pre>
   <div id="liveRoomDimensionLine" class="live-room-dimension-line"></div>
   <div id="liveRoomDimensionLineB" class="live-room-dimension-line"></div>
   <div id="dimCotaLayer" class="dim-cota-layer"></div>
+  <div id="hydraulicDragCotaLayer" class="dim-cota-layer"></div>
 </div>
 
 <!-- Barra inferior — mesmo princípio das ilhas do topo (fase 1): sem

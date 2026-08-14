@@ -238,6 +238,8 @@ export interface HydraulicNode {
   wallFaceSide?: 1 | -1;
   equipmentId?: string;
   connectorKey?: string;
+  /** Presente somente em pontos-guia (junctions) criados por um percurso manual (H2). Identifica a `fixture` dona do trecho, para permitir substituir só aquele percurso ao redesenhar. */
+  ownerFixtureId?: string;
 }
 
 export interface HydraulicSegment {
@@ -246,7 +248,11 @@ export interface HydraulicSegment {
   startNodeId: string;
   endNodeId: string;
   diameterMm: number;
+  /** Mesma finalidade de `HydraulicNode.ownerFixtureId`, aplicada ao trecho. */
+  ownerFixtureId?: string;
 }
+
+export type HydraulicJunctionKind = 'straight' | 'elbow45' | 'elbow90' | 'tee' | 'cross' | 'end';
 
 export interface HydraulicSystem {
   nodes: HydraulicNode[];

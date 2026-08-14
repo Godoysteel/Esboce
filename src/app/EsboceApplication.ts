@@ -320,13 +320,13 @@ export class EsboceApplication {
       const generateButton = document.createElement('button');
       generateButton.id = 'generateHydraulicNetworkBtn';
       generateButton.className = 'hydraulic-generate';
-      generateButton.textContent = 'Gerar tubulaÃ§Ã£o';
+      generateButton.textContent = 'Gerar tubulação';
       hydraulicToolsPanel.appendChild(generateButton);
       generateButton.addEventListener('click', () => {
         const generated = Store.commands.generateHydraulicNetwork();
         this.requireElement('viewportHint').textContent = generated
-          ? "TubulaÃ§Ã£o de Ã¡gua fria gerada desde a caixa d'Ã¡gua atÃ© os pontos posicionados."
-          : 'Posicione ao menos um ponto de Ã¡gua na parede antes de gerar a tubulaÃ§Ã£o.';
+          ? "Tubulação de água fria gerada desde a caixa d'água até os pontos posicionados."
+          : 'Posicione ao menos um ponto de água na parede antes de gerar a tubulação.';
       });
     }
     const setViewMode = (mode: '2d' | '3d') => {
@@ -362,8 +362,8 @@ export class EsboceApplication {
     refreshHydraulicsButton();
     const touchFirst = window.matchMedia('(pointer: coarse)').matches;
     if (touchFirst) {
-      orbitBtn.textContent = "CÃ¢mera";
-      orbitBtn.title = "Alternar entre construir e girar a cÃ¢mera com um dedo";
+      orbitBtn.textContent = "Câmera";
+      orbitBtn.title = "Alternar entre construir e girar a câmera com um dedo";
     }
     orbitBtn.addEventListener("click", () => {
       if (!touchFirst) {

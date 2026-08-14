@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createProject } from '../src/core/Core.ts';
 import { decodeProjectDocument, encodeProjectDocument } from '../src/core/ProjectPersistence.ts';
-import { buildColdWaterKitchenPrototype, buildColdWaterNetworkFromFixtures, createPositionedHydraulicFixture, findKitchenFixturePoint, hydraulicFixtureTemplate, hydraulicFixtureVisualPosition, resolveEquipmentConnector, resolveHydraulicFixturePosition, segmentIsOrthogonal3D } from '../src/core/Hydraulics.ts';
+import { buildColdWaterKitchenPrototype, buildColdWaterNetworkFromFixtures, buildGuidedColdWaterHeaderRoute, classifyHydraulicJunction, createPositionedHydraulicFixture, findKitchenFixturePoint, hydraulicFixtureTemplate, hydraulicFixtureVisualPosition, hydraulicNodeWallOffsetsMeters, hydraulicPositionFromWallOffset, removeGuidedRouteForFixture, resolveEquipmentConnector, resolveHydraulicFixturePosition, segmentIsOrthogonal3D } from '../src/core/Hydraulics.ts';
 
 test('projeto novo nasce com rede hidráulica vazia e camada visível', () => {
   const project = createProject();
@@ -137,4 +137,131 @@ test('cold-water generation places a tank above the last floor and routes every 
   assert.equal(tank.label, "Caixa d'água");
   assert.ok(system.segments.length >= 2);
   system.segments.forEach((segment) => assert.equal(segmentIsOrthogonal3D(system, segment.id), true));
+});
+
+test('guided cold-water route follows the waypoints and drops straight down to the fixture', () => {
+  const source = { id: 'src', x: 0, y: 0, elevationM: 3.2, floorIndex: 1 };
+  const fixture = { id: 'fix', kind: 'fixture', networkType: 'cold_water', label: 'Chuveiro', x: 100, y: 60, elevationM: 2.1, floorIndex: 0 };
+  const waypoints = [{ x: 100, y: 0 }];
+  const route = buildGuidedColdWaterHeaderRoute(source, fixture, waypoints, 'fix');
+  // 1 ponto-guia + 1 nó "acima do ponto" — a fixture em si não é recriada.
+  assert.equal(route.nodes.length, 2);
+  assert.ok(route.nodes.every((node) => node.ownerFixtureId === 'fix'));
+  assert.ok(route.segments.every((segment) => segment.ownerFixtureId === 'fix'));
+  const waypointNode = route.nodes.find((node) => node.x === 100 && node.y === 0);
+  assert.equal(waypointNode.elevationM, source.elevationM);
+  assert.equal(waypointNode.floorIndex, source.floorIndex);
+  // Cadeia: origem -> ponto-guia -> acima-do-ponto -> fixture (última queda vertical).
+  assert.equal(route.segments.length, 3);
+  const last = route.segments[route.segments.length - 1];
+  assert.equal(last.endNodeId, 'fix');
+});
+
+test('guided cold-water route with no waypoints still drops straight onto the fixture', () => {
+  const source = { id: 'src', x: 0, y: 0, elevationM: 3.2 };
+  const fixture = { id: 'fix', kind: 'fixture', networkType: 'cold_water', label: 'Torneira', x: 40, y: 0, elevationM: 0.6 };
+  const route = buildGuidedColdWaterHeaderRoute(source, fixture, [], 'fix');
+  assert.equal(route.nodes.length, 1); // só o "acima do ponto"
+  assert.equal(route.segments.length, 2);
+});
+
+test('removing a guided route only touches nodes/segments owned by that fixture', () => {
+  const kept = { id: 'kept', kind: 'junction', networkType: 'cold_water', label: 'Outro', x: 0, y: 0, elevationM: 3, ownerFixtureId: 'other' };
+  const owned = { id: 'owned', kind: 'junction', networkType: 'cold_water', label: 'Meu', x: 1, y: 1, elevationM: 3, ownerFixtureId: 'fix' };
+  const keptSegment = { id: 's-kept', networkType: 'cold_water', startNodeId: 'kept', endNodeId: 'kept', diameterMm: 20, ownerFixtureId: 'other' };
+  const ownedSegment = { id: 's-owned', networkType: 'cold_water', startNodeId: 'owned', endNodeId: 'owned', diameterMm: 20, ownerFixtureId: 'fix' };
+  const result = removeGuidedRouteForFixture({ nodes: [kept, owned], segments: [keptSegment, ownedSegment] }, 'fix');
+  assert.deepEqual(result.nodes, [kept]);
+  assert.deepEqual(result.segments, [keptSegment]);
+});
+
+test('junction classification: two collinear segments read as a straight run', () => {
+  const nodes = [
+    { id: 'a', kind: 'junction', networkType: 'cold_water', label: 'a', x: 0, y: 0, elevationM: 3 },
+    { id: 'mid', kind: 'junction', networkType: 'cold_water', label: 'mid', x: 40, y: 0, elevationM: 3 },
+    { id: 'b', kind: 'junction', networkType: 'cold_water', label: 'b', x: 80, y: 0, elevationM: 3 },
+  ];
+  const segments = [
+    { id: 's1', networkType: 'cold_water', startNodeId: 'a', endNodeId: 'mid', diameterMm: 20 },
+    { id: 's2', networkType: 'cold_water', startNodeId: 'mid', endNodeId: 'b', diameterMm: 20 },
+  ];
+  assert.equal(classifyHydraulicJunction({ nodes, segments }, 'mid'), 'straight');
+});
+
+test('junction classification: a 90-degree turn is read as elbow90', () => {
+  const nodes = [
+    { id: 'a', kind: 'junction', networkType: 'cold_water', label: 'a', x: 0, y: 0, elevationM: 3 },
+    { id: 'corner', kind: 'junction', networkType: 'cold_water', label: 'corner', x: 40, y: 0, elevationM: 3 },
+    { id: 'b', kind: 'junction', networkType: 'cold_water', label: 'b', x: 40, y: 40, elevationM: 3 },
+  ];
+  const segments = [
+    { id: 's1', networkType: 'cold_water', startNodeId: 'a', endNodeId: 'corner', diameterMm: 20 },
+    { id: 's2', networkType: 'cold_water', startNodeId: 'corner', endNodeId: 'b', diameterMm: 20 },
+  ];
+  assert.equal(classifyHydraulicJunction({ nodes, segments }, 'corner'), 'elbow90');
+});
+
+test('junction classification: a node with three segments reads as a tee', () => {
+  const nodes = [
+    { id: 'a', kind: 'junction', networkType: 'cold_water', label: 'a', x: 0, y: 0, elevationM: 3 },
+    { id: 'tee', kind: 'junction', networkType: 'cold_water', label: 'tee', x: 40, y: 0, elevationM: 3 },
+    { id: 'b', kind: 'junction', networkType: 'cold_water', label: 'b', x: 80, y: 0, elevationM: 3 },
+    { id: 'branch', kind: 'junction', networkType: 'cold_water', label: 'branch', x: 40, y: 40, elevationM: 3 },
+  ];
+  const segments = [
+    { id: 's1', networkType: 'cold_water', startNodeId: 'a', endNodeId: 'tee', diameterMm: 20 },
+    { id: 's2', networkType: 'cold_water', startNodeId: 'tee', endNodeId: 'b', diameterMm: 20 },
+    { id: 's3', networkType: 'cold_water', startNodeId: 'tee', endNodeId: 'branch', diameterMm: 20 },
+  ];
+  assert.equal(classifyHydraulicJunction({ nodes, segments }, 'tee'), 'tee');
+});
+
+test('junction classification: a node with a single segment is an open end', () => {
+  const nodes = [
+    { id: 'a', kind: 'junction', networkType: 'cold_water', label: 'a', x: 0, y: 0, elevationM: 3 },
+    { id: 'end', kind: 'junction', networkType: 'cold_water', label: 'end', x: 40, y: 0, elevationM: 3 },
+  ];
+  const segments = [{ id: 's1', networkType: 'cold_water', startNodeId: 'a', endNodeId: 'end', diameterMm: 20 }];
+  assert.equal(classifyHydraulicJunction({ nodes, segments }, 'end'), 'end');
+});
+
+test('reference height hints only cover fixtures with a direct match in the source; the rest stays unset', () => {
+  assert.equal(hydraulicFixtureTemplate('shower').referenceHeightM, 2.20);
+  assert.ok(hydraulicFixtureTemplate('shower').referenceHeightSource.includes('Tigre'));
+  assert.equal(hydraulicFixtureTemplate('bathroom_faucet').referenceHeightM, 0.60);
+  assert.equal(hydraulicFixtureTemplate('toilet_supply').referenceHeightM, undefined);
+  assert.equal(hydraulicFixtureTemplate('floor_drain').referenceHeightM, undefined);
+});
+
+test('wall offsets in meters read the distance to each end of the wall plus the height', () => {
+  const wall = { id: 'w', x1: 0, y1: 0, x2: 200, y2: 0 }; // 10m de parede (GRID=20)
+  const node = { id: 'n', kind: 'fixture', networkType: 'cold_water', label: 'Ponto', x: 60, y: 0, elevationM: 1.1, placementSurface: 'wall', wallId: 'w' };
+  const offsets = hydraulicNodeWallOffsetsMeters(node, wall);
+  assert.equal(offsets.fromStartM, 3);
+  assert.equal(offsets.fromEndM, 7);
+  assert.equal(offsets.heightM, 1.1);
+});
+
+test('wall offsets return null for a floor point (it does not belong to a wall)', () => {
+  const wall = { id: 'w', x1: 0, y1: 0, x2: 200, y2: 0 };
+  const node = { id: 'n', kind: 'fixture', networkType: 'sanitary_sewer', label: 'Ralo', x: 60, y: 0, elevationM: 0.02, placementSurface: 'floor' };
+  assert.equal(hydraulicNodeWallOffsetsMeters(node, wall), null);
+});
+
+test('wall offset and its inverse round-trip back to the same point', () => {
+  const wall = { id: 'w', x1: 0, y1: 0, x2: 0, y2: 300 }; // parede vertical de 15m
+  const resolved = hydraulicPositionFromWallOffset(wall, 4.5, 2.1);
+  assert.equal(resolved.x, 0);
+  assert.equal(resolved.y, 90); // 4,5 m × 20 unidades/m
+  assert.equal(resolved.elevationM, 2.1);
+  const node = { id: 'n', kind: 'fixture', networkType: 'cold_water', label: 'Ponto', x: resolved.x, y: resolved.y, elevationM: resolved.elevationM, placementSurface: 'wall', wallId: 'w' };
+  const offsets = hydraulicNodeWallOffsetsMeters(node, wall);
+  assert.equal(offsets.fromStartM, 4.5);
+  assert.equal(offsets.heightM, 2.1);
+});
+
+test('wall offset from a point beyond the wall clamps to the nearest end', () => {
+  const wall = { id: 'w', x1: 0, y1: 0, x2: 200, y2: 0 };
+  const resolved = hydraulicPositionFromWallOffset(wall, 999, 1);
+  assert.equal(resolved.x, 200); // trava na ponta, nunca passa da parede
 });

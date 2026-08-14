@@ -5,7 +5,11 @@ import type {
 // v6: adiciona `project.terreno` (opcional) — tamanho do lote e muros de
 // perímetro. Documentos v5 e anteriores não têm o campo; abrem
 // normalmente sem terreno definido (ver ADR-008).
-export const CURRENT_PROJECT_SCHEMA_VERSION = 7;
+// v8: adiciona `ownerFixtureId` opcional em HydraulicNode/HydraulicSegment,
+// usado pelo percurso guiado de água fria (H2) para saber quais nós/trechos
+// pertencem ao roteamento manual de qual ponto de consumo. Documentos v7 e
+// anteriores continuam abrindo normalmente, sem essa marcação (ver DEC-61).
+export const CURRENT_PROJECT_SCHEMA_VERSION = 8;
 
 export interface StoredProjectDocument {
   schemaVersion: number;
@@ -58,12 +62,14 @@ function parseHydraulicNode(value: unknown, path: string): HydraulicNode {
   const connectorKey = optionalString(v.connectorKey, `${path}.connectorKey`);
   const fixtureType = optionalString(v.fixtureType, `${path}.fixtureType`);
   const wallId = optionalString(v.wallId, `${path}.wallId`);
+  const ownerFixtureId = optionalString(v.ownerFixtureId, `${path}.ownerFixtureId`);
   const placementSurface = v.placementSurface == null ? undefined
     : enumValue(v.placementSurface, ['wall', 'floor'], `${path}.placementSurface`, 'wall');
   if (equipmentId !== undefined) node.equipmentId = equipmentId;
   if (connectorKey !== undefined) node.connectorKey = connectorKey;
   if (fixtureType !== undefined) node.fixtureType = fixtureType;
   if (wallId !== undefined) node.wallId = wallId;
+  if (ownerFixtureId !== undefined) node.ownerFixtureId = ownerFixtureId;
   if (placementSurface !== undefined) node.placementSurface = placementSurface;
   if (v.wallFaceSide != null) {
     const wallFaceSide = number(v.wallFaceSide, `${path}.wallFaceSide`);
@@ -77,13 +83,16 @@ function parseHydraulicSegment(value: unknown, path: string): HydraulicSegment {
   const v = record(value, path);
   const diameterMm = number(v.diameterMm, `${path}.diameterMm`);
   if (!(diameterMm > 0 && diameterMm <= 1000)) fail(`${path}.diameterMm`, 'diâmetro fora do intervalo suportado');
-  return {
+  const segment: HydraulicSegment = {
     id: string(v.id, `${path}.id`),
     networkType: enumValue(v.networkType, ['cold_water', 'sanitary_sewer', 'kitchen_sewer', 'sanitary_vent'], `${path}.networkType`, 'cold_water'),
     startNodeId: string(v.startNodeId, `${path}.startNodeId`),
     endNodeId: string(v.endNodeId, `${path}.endNodeId`),
     diameterMm,
   };
+  const ownerFixtureId = optionalString(v.ownerFixtureId, `${path}.ownerFixtureId`);
+  if (ownerFixtureId !== undefined) segment.ownerFixtureId = ownerFixtureId;
+  return segment;
 }
 
 function fail(path: string, message: string): never {
@@ -368,8 +377,13 @@ function normalizeProject(value: unknown): Project {
     };
     const nodeIds = new Set(project.hydraulics.nodes.map((node) => node.id));
     if (nodeIds.size !== project.hydraulics.nodes.length) fail('project.hydraulics.nodes', 'há identificadores duplicados');
+    const fixtureNodeIds = new Set(project.hydraulics.nodes.filter((node) => node.kind === 'fixture').map((node) => node.id));
+    project.hydraulics.nodes.forEach((node, index) => {
+      if (node.ownerFixtureId !== undefined && !fixtureNodeIds.has(node.ownerFixtureId)) fail(`project.hydraulics.nodes[${index}]`, 'ownerFixtureId referencia ponto de consumo inexistente');
+    });
     project.hydraulics.segments.forEach((segment, index) => {
       if (!nodeIds.has(segment.startNodeId) || !nodeIds.has(segment.endNodeId)) fail(`project.hydraulics.segments[${index}]`, 'segmento referencia ponto inexistente');
+      if (segment.ownerFixtureId !== undefined && !fixtureNodeIds.has(segment.ownerFixtureId)) fail(`project.hydraulics.segments[${index}]`, 'ownerFixtureId referencia ponto de consumo inexistente');
     });
   }
   if (source.terreno != null) project.terreno = parseTerreno(source.terreno, 'project.terreno');

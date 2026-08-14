@@ -1,4 +1,4 @@
-import type { Floor, Furniture, HydraulicNetworkType, HydraulicNode, HydraulicPlacementSurface, HydraulicSystem, Point, Wall } from './types.js';
+import type { Floor, Furniture, HydraulicJunctionKind, HydraulicNetworkType, HydraulicNode, HydraulicPlacementSurface, HydraulicSegment, HydraulicSystem, Point, Wall } from './types.js';
 
 const GRID = 20;
 const FLOOR_STACK_HEIGHT_M = 2.85;
@@ -13,14 +13,26 @@ export interface HydraulicFixtureTemplate {
   placementSurface: HydraulicPlacementSurface;
   elevationM: number;
   diameterMm: number;
+  /**
+   * Altura USUAL do aparelho (não do ponto em si — a válvula/torneira fica
+   * perto disso, mas não obrigatoriamente igual), como referência exibida
+   * ao usuário durante o posicionamento. Só preenchido quando existe
+   * correspondência direta no levantamento de fonte técnica; deixado de
+   * fora quando a fonte não dá pra aplicar sem ambiguidade (H0 §2 — regra de
+   * fabricante nunca é apresentada como obrigação).
+   */
+  referenceHeightM?: number;
+  referenceHeightSource?: string;
 }
 
+const TIGRE_HEIGHT_SOURCE = 'Manual Técnico Tigre, 7ª ed. (2025) — altura usual do aparelho, não do ponto de água';
+
 export const HYDRAULIC_FIXTURE_TEMPLATES: HydraulicFixtureTemplate[] = [
-  { key: 'kitchen_faucet', label: 'Torneira da pia de cozinha', shortLabel: 'Pia cozinha', networkType: 'cold_water', placementSurface: 'wall', elevationM: 0.60, diameterMm: 20 },
-  { key: 'bathroom_faucet', label: 'Torneira de lavatório', shortLabel: 'Lavatório', networkType: 'cold_water', placementSurface: 'wall', elevationM: 0.60, diameterMm: 20 },
+  { key: 'kitchen_faucet', label: 'Torneira da pia de cozinha', shortLabel: 'Pia cozinha', networkType: 'cold_water', placementSurface: 'wall', elevationM: 0.60, diameterMm: 20, referenceHeightM: 1.10, referenceHeightSource: TIGRE_HEIGHT_SOURCE },
+  { key: 'bathroom_faucet', label: 'Torneira de lavatório', shortLabel: 'Lavatório', networkType: 'cold_water', placementSurface: 'wall', elevationM: 0.60, diameterMm: 20, referenceHeightM: 0.60, referenceHeightSource: TIGRE_HEIGHT_SOURCE },
   { key: 'toilet_supply', label: 'Alimentação do vaso sanitário', shortLabel: 'Água vaso', networkType: 'cold_water', placementSurface: 'wall', elevationM: 0.20, diameterMm: 20 },
-  { key: 'shower', label: 'Ponto de chuveiro', shortLabel: 'Chuveiro', networkType: 'cold_water', placementSurface: 'wall', elevationM: 2.10, diameterMm: 20 },
-  { key: 'external_faucet', label: 'Torneira externa', shortLabel: 'Torneira ext.', networkType: 'cold_water', placementSurface: 'wall', elevationM: 0.60, diameterMm: 20 },
+  { key: 'shower', label: 'Ponto de chuveiro', shortLabel: 'Chuveiro', networkType: 'cold_water', placementSurface: 'wall', elevationM: 2.10, diameterMm: 20, referenceHeightM: 2.20, referenceHeightSource: TIGRE_HEIGHT_SOURCE },
+  { key: 'external_faucet', label: 'Torneira externa', shortLabel: 'Torneira ext.', networkType: 'cold_water', placementSurface: 'wall', elevationM: 0.60, diameterMm: 20, referenceHeightM: 0.60, referenceHeightSource: TIGRE_HEIGHT_SOURCE },
   { key: 'kitchen_sink_waste', label: 'Saída da pia de cozinha', shortLabel: 'Esgoto pia', networkType: 'kitchen_sewer', placementSurface: 'wall', elevationM: 0.45, diameterMm: 50 },
   { key: 'bathroom_sink_waste', label: 'Saída do lavatório', shortLabel: 'Esg. lavatório', networkType: 'sanitary_sewer', placementSurface: 'wall', elevationM: 0.45, diameterMm: 40 },
   { key: 'toilet_waste', label: 'Saída do vaso sanitário', shortLabel: 'Esgoto vaso', networkType: 'sanitary_sewer', placementSurface: 'floor', elevationM: 0.02, diameterMm: 100 },
@@ -62,6 +74,42 @@ export function resolveHydraulicFixturePosition(node: HydraulicNode, x: number, 
     return projectOnWall(x, y, wall);
   }
   return { x: Math.round(x / GRID) * GRID, y: Math.round(y / GRID) * GRID };
+}
+
+/**
+ * Cotas locais de um ponto de parede: distância (em metros) até cada uma
+ * das duas pontas da parede — que é onde ela normalmente encontra as
+ * paredes laterais/transversais — e a altura em relação ao piso. Usado
+ * tanto pelo painel de elevação da parede quanto pelas cotas exibidas
+ * durante o arraste. Não faz suposição sobre o que existe além da ponta da
+ * parede — só devolve a distância até o próprio eixo.
+ */
+export function hydraulicNodeWallOffsetsMeters(node: HydraulicNode, wall: Wall): { fromStartM: number; fromEndM: number; heightM: number } | null {
+  if (node.placementSurface !== 'wall') return null;
+  const dx = wall.x2 - wall.x1, dy = wall.y2 - wall.y1;
+  const lengthGrid = Math.hypot(dx, dy) || 1;
+  const t = ((node.x - wall.x1) * dx + (node.y - wall.y1) * dy) / (lengthGrid * lengthGrid);
+  const clampedT = Math.max(0, Math.min(1, t));
+  return {
+    fromStartM: (lengthGrid * clampedT) / GRID,
+    fromEndM: (lengthGrid * (1 - clampedT)) / GRID,
+    heightM: node.elevationM,
+  };
+}
+
+/**
+ * Inverso de `hydraulicNodeWallOffsetsMeters`: dado quanto o usuário
+ * arrastou ao longo da parede (em metros, a partir da ponta inicial) e a
+ * altura desejada, devolve a posição no eixo do modelo. Usado pelo painel
+ * de elevação da parede, onde o usuário arrasta num eixo 1D em vez de
+ * clicar no 3D.
+ */
+export function hydraulicPositionFromWallOffset(wall: Wall, fromStartM: number, heightM: number): { x: number; y: number; elevationM: number } {
+  const dx = wall.x2 - wall.x1, dy = wall.y2 - wall.y1;
+  const lengthGrid = Math.hypot(dx, dy) || 1;
+  const clampedFromStartGrid = Math.max(0, Math.min(lengthGrid, fromStartM * GRID));
+  const t = clampedFromStartGrid / lengthGrid;
+  return { x: wall.x1 + t * dx, y: wall.y1 + t * dy, elevationM: heightM };
 }
 
 /** Mantém o nó técnico no eixo, mas põe seu marcador além da face visível da parede. */
@@ -212,6 +260,114 @@ export function buildColdWaterKitchenPrototype(floor: Floor): HydraulicSystem {
       { id: nextHydraulicId('hyd-segment'), networkType: 'cold_water', startNodeId: branchId, endNodeId: fixtureId, diameterMm: 20 },
     ],
   };
+}
+
+/**
+ * H2 — percurso guiado de água fria (SPEC-002 §5: "o usuário definirá pontos
+ * intermediários e o Esboce completará os trechos e conexões").
+ *
+ * Constrói a rede de um único ponto de água fria a partir de uma lista de
+ * pontos-guia desenhados pelo usuário no plano horizontal (mesma cota da
+ * origem). A queda vertical até o ponto de consumo continua automática,
+ * como já era no traçado ingênuo — só o trajeto horizontal passa a ser
+ * manual. Função pura: não lê nem grava em nenhum estado global.
+ */
+export function buildGuidedColdWaterHeaderRoute(
+  source: { id: string; x: number; y: number; elevationM: number; floorIndex?: number },
+  fixture: HydraulicNode,
+  waypoints: Point[],
+  ownerFixtureId: string,
+): HydraulicSystem {
+  const planPoints: Point[] = [{ x: source.x, y: source.y }, ...waypoints, { x: fixture.x, y: fixture.y }];
+  const nodes: HydraulicNode[] = [];
+  const segments: HydraulicSegment[] = [];
+  const planNodeIds: string[] = [];
+  planPoints.forEach((point, index) => {
+    if (index === 0 || index === planPoints.length - 1) return; // origem e "acima do ponto" tratados à parte
+    const node: HydraulicNode = {
+      id: nextHydraulicId('hyd-waypoint'), kind: 'junction', networkType: 'cold_water',
+      label: 'Ponto-guia', x: point.x, y: point.y, elevationM: source.elevationM,
+      ownerFixtureId, ...(source.floorIndex != null ? { floorIndex: source.floorIndex } : {}),
+    };
+    nodes.push(node);
+    planNodeIds.push(node.id);
+  });
+  const aboveFixture: HydraulicNode = {
+    id: nextHydraulicId('hyd-waypoint'), kind: 'junction', networkType: 'cold_water',
+    label: 'Descida do ponto', x: fixture.x, y: fixture.y, elevationM: source.elevationM,
+    ownerFixtureId, ...(source.floorIndex != null ? { floorIndex: source.floorIndex } : {}),
+  };
+  nodes.push(aboveFixture);
+  type ChainPoint = { id: string; x: number; y: number; floorIndex?: number; elevationM: number };
+  const chain: ChainPoint[] = [
+    { id: source.id, x: source.x, y: source.y, elevationM: source.elevationM, ...(source.floorIndex != null ? { floorIndex: source.floorIndex } : {}) },
+    ...planNodeIds.map((id, i): ChainPoint => {
+      const waypoint = waypoints[i]!;
+      return { id, x: waypoint.x, y: waypoint.y, elevationM: source.elevationM, ...(source.floorIndex != null ? { floorIndex: source.floorIndex } : {}) };
+    }),
+    { id: aboveFixture.id, x: fixture.x, y: fixture.y, elevationM: source.elevationM, ...(source.floorIndex != null ? { floorIndex: source.floorIndex } : {}) },
+    { id: fixture.id, x: fixture.x, y: fixture.y, elevationM: fixture.elevationM, ...(fixture.floorIndex != null ? { floorIndex: fixture.floorIndex } : {}) },
+  ];
+  for (let i = 0; i < chain.length - 1; i++) {
+    const a = chain[i]!, b = chain[i + 1]!;
+    const aGlobal = (a.floorIndex || 0) * FLOOR_STACK_HEIGHT_M + a.elevationM;
+    const bGlobal = (b.floorIndex || 0) * FLOOR_STACK_HEIGHT_M + b.elevationM;
+    if (a.x === b.x && a.y === b.y && aGlobal === bGlobal) continue; // sem trecho de comprimento zero
+    segments.push({ id: nextHydraulicId('hyd-segment'), networkType: 'cold_water', startNodeId: a.id, endNodeId: b.id, diameterMm: 20, ownerFixtureId });
+  }
+  return { nodes, segments };
+}
+
+/**
+ * Remove de `system` todo nó/segmento pertencente ao percurso guiado de uma
+ * `fixture` específica (identificados por `ownerFixtureId`), preservando o
+ * restante da rede intacto — inclusive a própria `fixture` e a origem
+ * compartilhada. Usado para redesenhar o percurso de um ponto sem afetar os
+ * demais pontos já roteados.
+ */
+export function removeGuidedRouteForFixture(system: HydraulicSystem, fixtureId: string): HydraulicSystem {
+  return {
+    nodes: system.nodes.filter((node) => node.ownerFixtureId !== fixtureId),
+    segments: system.segments.filter((segment) => segment.ownerFixtureId !== fixtureId),
+  };
+}
+
+/**
+ * Classifica o tipo de conexão que um nó exige, olhando só a geometria dos
+ * trechos que se encontram nele — sem depender de nenhuma tabela normativa
+ * (a própria SPEC-002 §3 descreve cotovelos e tês como "representações do
+ * modelo lógico", derivadas da rede, não dado próprio). Serve de base para o
+ * quantitativo (H6) e para a renderização futura de conexões distintas por
+ * tipo; hoje o Scene3DRenderer ainda desenha todo nó como o mesmo marcador
+ * genérico, o que é intencional nesta fase (modelo representativo, não
+ * catálogo de peça real).
+ */
+export function classifyHydraulicJunction(system: HydraulicSystem, nodeId: string): HydraulicJunctionKind {
+  const touching = system.segments.filter((segment) => segment.startNodeId === nodeId || segment.endNodeId === nodeId);
+  if (touching.length === 0) return 'end';
+  if (touching.length >= 4) return 'cross';
+  if (touching.length === 3) return 'tee';
+  if (touching.length === 1) return 'end';
+  const nodesById = new Map(system.nodes.map((node) => [node.id, node]));
+  const self = nodesById.get(nodeId);
+  if (!self) return 'end';
+  const directions = touching.map((segment) => {
+    const otherId = segment.startNodeId === nodeId ? segment.endNodeId : segment.startNodeId;
+    const other = nodesById.get(otherId);
+    if (!other) return { x: 0, y: 0, z: 0 };
+    const dx = other.x - self.x, dy = other.y - self.y;
+    const dz = ((other.floorIndex || 0) - (self.floorIndex || 0)) * 1000 + (other.elevationM - self.elevationM);
+    const length = Math.hypot(dx, dy, dz) || 1;
+    return { x: dx / length, y: dy / length, z: dz / length };
+  });
+  const d1 = directions[0]!, d2 = directions[1]!;
+  const dot = Math.max(-1, Math.min(1, d1.x * d2.x + d1.y * d2.y + d1.z * d2.z));
+  const angleDeg = Math.acos(dot) * 180 / Math.PI;
+  // O ângulo entre os vetores "saindo do nó" é o suplementar do ângulo de curva do cano:
+  // trecho reto → vetores opostos (180°); cotovelo de 90° → vetores a 90°; de 45° → vetores a 135°.
+  if (angleDeg > 170) return 'straight';
+  if (angleDeg > 100) return 'elbow45';
+  return 'elbow90';
 }
 
 export function segmentIsOrthogonal3D(system: HydraulicSystem, segmentId: string): boolean {
