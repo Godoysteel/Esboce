@@ -1,5 +1,7 @@
 # Changelog
 
+> Corrigido: vidro de porta/janela agora tem transparência de verdade (dá pra enxergar através), mantendo o reflexo. Corrigido também: uma "tampinha" fecha o requadro entre o caixilho do modelo e a espessura da parede — antes sobrava uma folga crua, sem acabamento, visível de ângulos mais abertos.
+
 > Corrigido: vidro dos modelos de porta/janela aparecia preto/opaco em vez de transparente (o arquivo original não tinha dado de transparência real gravado). Agora usa o mesmo material de vidro (reflexo espelhado) já usado no envidraçamento da casa.
 
 > Adicionado: painel de seleção de esquadria — clique em "Janela" ou "Porta" agora abre um painel com abas por material do caixilho (Vidro, Alumínio, PVC, Madeira) e a lista de modelos 3D disponíveis dentro de cada aba, cada um com miniatura de imagem real. Escolher um modelo antes de clicar na parede já cria a porta/janela com aquele modelo aplicado e do tamanho certo — sem precisar mais do console do navegador. Todas as 17 esquadrias de vidro já têm miniatura; as abas Alumínio, PVC e Madeira aparecem como "em breve" até chegar modelo de cada uma. Ver DEC-77.

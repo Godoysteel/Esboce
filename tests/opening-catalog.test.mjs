@@ -64,8 +64,20 @@ test('todas as 17 esquadrias já têm thumbnail — última imagem (Basculante) 
   assert.equal(basculante.assets.thumbnailUrl, 'images/esquadrias/janela-basculante-700x500.png');
 });
 
-test('vidro dos modelos de esquadria usa o mesmo material de vidro do envidraçamento (glTF original não tem transparência real gravada)', () => {
+test('vidro dos modelos de esquadria usa o mesmo material de vidro do envidraçamento, mas com transparência real (não o padrão 100% opaco da fachada)', () => {
   const source = readFileSync(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
   assert.match(source, /glass\|vidro/i);
-  assert.match(source, /buildGlazingGlassMaterial\(DEFAULT_GLAZING_GLASS_MATERIAL\)/);
+  assert.match(source, /buildGlazingGlassMaterial\(\{ \.\.\.DEFAULT_GLAZING_GLASS_MATERIAL, opacity: 0\.35 \}\)/);
+});
+
+test('modelo de esquadria ganha 4 tiras de requadro fechando a folga entre o caixilho e a espessura da parede', () => {
+  const source = readFileSync(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
+  assert.match(source, /function addRevealStrip/);
+  assert.match(source, /addRevealStrip\(op\.width \+ revealTrim, revealTrim, 0, op\.height\)/); // topo
+  assert.match(source, /addRevealStrip\(op\.width \+ revealTrim, revealTrim, 0, 0\)/); // base
+  assert.match(source, /addRevealStrip\(revealTrim, op\.height, -op\.width \/ 2, op\.height \/ 2\)/); // esquerda
+  assert.match(source, /addRevealStrip\(revealTrim, op\.height, op\.width \/ 2, op\.height \/ 2\)/); // direita
+  // A tira atravessa a espessura TODA da parede — funciona pra qualquer
+  // profundidade de caixilho, sem precisar conhecer a do modelo específico.
+  assert.match(source, /new THREE\.BoxGeometry\(sizeX, sizeY, Core\.WALL_THICK\)/);
 });

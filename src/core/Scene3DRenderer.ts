@@ -1027,30 +1027,54 @@ export function hashColorHex(key: string): number {
     // alphaMode, sem opacity — confirmado inspecionando o JSON do
     // glTF) — resultado: vidro opaco e escuro na cena (metálico,
     // rugosidade 1, sem reflexo de ambiente). Troca pelo MESMO material
-    // de vidro já usado no envidraçamento da casa (buildGlazingGlassMaterial
-    // — reflexo espelhado via ambiente, não transparência clássica, que
-    // ficaria quase invisível no ambiente claro do Esboce), pra ficar
-    // visualmente consistente com o resto da casa em vez de inventar um
-    // segundo estilo de vidro.
+    // de vidro já usado no envidraçamento da casa (buildGlazingGlassMaterial),
+    // mas com OPACIDADE BAIXA (transparência real, não só reflexo) —
+    // diferente do padrão do envidraçamento (DEFAULT_GLAZING_GLASS_MATERIAL,
+    // opacity=1 sempre) que faz sentido pra fachada de vidro grande, mas
+    // não pro vidro pequeno de uma folha de porta/janela: aqui a pessoa
+    // espera enxergar através, não só o reflexo espelhado.
     var glassMaterial: any = null;
     instance.traverse(function (child: any) {
       if (child.isMesh && child.material && /glass|vidro/i.test(child.material.name || '')) {
-        if (!glassMaterial) glassMaterial = buildGlazingGlassMaterial(DEFAULT_GLAZING_GLASS_MATERIAL);
+        if (!glassMaterial) glassMaterial = buildGlazingGlassMaterial({ ...DEFAULT_GLAZING_GLASS_MATERIAL, opacity: 0.35 });
         child.material = glassMaterial;
       }
     });
     var scaleX = template.footprintW > 1e-6 ? op.width / template.footprintW : 1;
     var scaleY = template.heightM > 1e-6 ? op.height / template.heightM : 1;
     instance.scale.set(scaleX, scaleY, 1);
+    // Depois da normalização de pivô (getFurnitureModel) + escala acima,
+    // o modelo ocupa exatamente X:[-op.width/2, op.width/2], Y:[0,
+    // op.height], Z centrado em 0 — mas a PROFUNDIDADE (Z) do caixilho
+    // do arquivo (ex.: ~5cm de janela, ~8cm de porta) quase sempre é
+    // menor que a espessura da parede (Core.WALL_THICK, 12cm) — sobra
+    // uma folga sem acabamento nenhum dos dois lados (o "buraco" cru do
+    // vão, sem tampinha fechando). 4 tiras finas (tampa/requadro),
+    // exatamente no contorno do vão, atravessando a espessura TODA da
+    // parede — fecham essa folga em qualquer profundidade de caixilho,
+    // sem precisar conhecer a profundidade real de cada modelo.
+    var revealMat = new THREE.MeshStandardMaterial({ color: OPENING_FRAME_COLOR, flatShading: true });
+    var revealTrim = 0.015; // 1,5cm de tira — só o bastante pra cobrir a quina, sem duplicar visualmente o caixilho do modelo
+    function addRevealStrip(sizeX: number, sizeY: number, localX: number, localY: number) {
+      var mesh = new THREE.Mesh(new THREE.BoxGeometry(sizeX, sizeY, Core.WALL_THICK), revealMat);
+      mesh.position.set(localX, localY, 0);
+      return mesh;
+    }
+    var group = new THREE.Group();
+    group.add(instance);
+    group.add(addRevealStrip(op.width + revealTrim, revealTrim, 0, op.height)); // topo
+    group.add(addRevealStrip(op.width + revealTrim, revealTrim, 0, 0)); // base/peitoril
+    group.add(addRevealStrip(revealTrim, op.height, -op.width / 2, op.height / 2)); // lateral esquerda
+    group.add(addRevealStrip(revealTrim, op.height, op.width / 2, op.height / 2)); // lateral direita
 
     var dx = w.x2 - w.x1, dy = w.y2 - w.y1;
     var lenModel = Math.hypot(dx, dy) || 1e-6;
     var ux = dx / lenModel, uy = dy / lenModel;
     var offsetModel = op.offset * Core.GRID;
     var cxModel = w.x1 + ux * offsetModel, cyModel = w.y1 + uy * offsetModel;
-    instance.position.set((cxModel - offsetX) * scale, yOffset + op.sillHeight, (cyModel - offsetY) * scale);
-    instance.rotation.y = -Math.atan2(uy, ux);
-    return instance;
+    group.position.set((cxModel - offsetX) * scale, yOffset + op.sillHeight, (cyModel - offsetY) * scale);
+    group.rotation.y = -Math.atan2(uy, ux);
+    return group;
   }
 
   // Telhado de duas águas: a cumeeira corre ao longo do lado mais comprido
