@@ -1021,6 +1021,24 @@ export function hashColorHex(key: string): number {
     var template = getFurnitureModel(resolvedUrl);
     if (!template) return null;
     var instance = template.group.clone(true);
+    // Os arquivos glTF da família de esquadria nomeiam um material
+    // "Translucent_Glass_Gray" (ou similar, com "vidro"/"glass" no
+    // nome), mas SEM nenhum dado real de transparência gravado (sem
+    // alphaMode, sem opacity — confirmado inspecionando o JSON do
+    // glTF) — resultado: vidro opaco e escuro na cena (metálico,
+    // rugosidade 1, sem reflexo de ambiente). Troca pelo MESMO material
+    // de vidro já usado no envidraçamento da casa (buildGlazingGlassMaterial
+    // — reflexo espelhado via ambiente, não transparência clássica, que
+    // ficaria quase invisível no ambiente claro do Esboce), pra ficar
+    // visualmente consistente com o resto da casa em vez de inventar um
+    // segundo estilo de vidro.
+    var glassMaterial: any = null;
+    instance.traverse(function (child: any) {
+      if (child.isMesh && child.material && /glass|vidro/i.test(child.material.name || '')) {
+        if (!glassMaterial) glassMaterial = buildGlazingGlassMaterial(DEFAULT_GLAZING_GLASS_MATERIAL);
+        child.material = glassMaterial;
+      }
+    });
     var scaleX = template.footprintW > 1e-6 ? op.width / template.footprintW : 1;
     var scaleY = template.heightM > 1e-6 ? op.height / template.heightM : 1;
     instance.scale.set(scaleX, scaleY, 1);

@@ -63,3 +63,9 @@ test('todas as 17 esquadrias já têm thumbnail — última imagem (Basculante) 
   assert.equal(basculante.name, 'Basculante 700x500');
   assert.equal(basculante.assets.thumbnailUrl, 'images/esquadrias/janela-basculante-700x500.png');
 });
+
+test('vidro dos modelos de esquadria usa o mesmo material de vidro do envidraçamento (glTF original não tem transparência real gravada)', () => {
+  const source = readFileSync(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
+  assert.match(source, /glass\|vidro/i);
+  assert.match(source, /buildGlazingGlassMaterial\(DEFAULT_GLAZING_GLASS_MATERIAL\)/);
+});
