@@ -61,6 +61,30 @@ export function snap(v: number): number {
   return Math.round(v / SNAP_UNIT) * SNAP_UNIT;
 }
 
+// Ímã de eixo: ao arrastar a borda de um telhado (ex.: parapeito da
+// platibanda) perto o bastante do EIXO de uma parede já existente,
+// gruda exatamente naquela coordenada — em vez de só cair no ponto de
+// grid genérico mais próximo (Core.snap sozinho), que pode ficar a até
+// meio SNAP_UNIT de distância do eixo real da parede. Sem isso, o
+// parapeito nunca "casa" de verdade com a parede debaixo dele, mesmo
+// os dois estando tecnicamente "no grid" — precisam estar no MESMO
+// ponto do grid, não só em pontos de grid quaisquer. Cai pro snap
+// comum quando não há parede perto o bastante (arrasto longe de
+// qualquer parede continua livre, preso só ao grid geral).
+export function snapCoordinateToWalls(
+  value: number, walls: Wall[], axis: 'x' | 'y', toleranceUnits: number
+): number {
+  let best = snap(value), bestDist = toleranceUnits;
+  (walls || []).forEach((w) => {
+    const candidates = axis === 'x' ? [w.x1, w.x2] : [w.y1, w.y2];
+    candidates.forEach((coord) => {
+      const dist = Math.abs(coord - value);
+      if (dist <= bestDist) { bestDist = dist; best = coord; }
+    });
+  });
+  return best;
+}
+
 let _idSeq = 0;
 export function nextId(prefix: string): string {
   return prefix + '_' + (_idSeq++);
@@ -324,14 +348,19 @@ export function roofPitchForRidgeHeight(roof: Roof, targetHeightM: number): numb
 }
 
 // Dois telhados podem se FUNDIR só quando são literalmente a MESMA água
-// continuando (mesmo tipo, mesma inclinação, mesmo eixo de cumeeira, e a
-// extensão perpendicular ao eixo da cumeeira batendo quase exata).
+// continuando (mesmo tipo, mesmo eixo de cumeeira, e a extensão
+// perpendicular ao eixo da cumeeira batendo quase exata) — duasAguas e
+// quatroAguas também exigem a MESMA inclinação, pra não deixar um degrau
+// visível na junção. Platibanda funde do mesmo jeito (mesmo comportamento
+// de cômodo: dois retângulos encostando viram um só), mas SEM comparar
+// pitchDeg — esse campo não é usado na laje plana da platibanda (o
+// caimento sutil de escoamento é fixo, só o ridgeAxis define a direção).
 export function roofsCanFuse(a: Roof, b: Roof, toleranceUnits: number): boolean {
   if (!a || !b || a.id === b.id) return false;
   if (a.type !== b.type) return false;
-  if (a.type !== 'duasAguas' && a.type !== 'quatroAguas') return false;
+  if (a.type !== 'duasAguas' && a.type !== 'quatroAguas' && a.type !== 'platibanda') return false;
   if (a.ridgeAxis !== b.ridgeAxis) return false;
-  if (Math.abs(a.pitchDeg - b.pitchDeg) > 0.5) return false;
+  if (a.type !== 'platibanda' && Math.abs(a.pitchDeg - b.pitchDeg) > 0.5) return false;
   if (a.ridgeAxis === 'x') {
     if (Math.abs(a.y1 - b.y1) > toleranceUnits || Math.abs(a.y2 - b.y2) > toleranceUnits) return false;
     const overlapX = Math.min(a.x2, b.x2) - Math.max(a.x1, b.x1);
@@ -1496,7 +1525,7 @@ export const Core = {
   ARCO_DEFAULT_WIDTH, ARCO_DEFAULT_HEIGHT, ARCO_DEFAULT_SILL,
   WALL_HEIGHT, OPENING_MIN_WIDTH, OPENING_MIN_HEIGHT,
   OPENING_MARGIN, OPENING_GAP, OPENING_WALL_CLEARANCE,
-  snap, nextId,
+  snap, nextId, snapCoordinateToWalls,
   createOpeningEntity, wallLengthMeters, polygonAreaModelUnits, wallOffsetAtPoint, findValidOpeningOffset,
   resolveOpeningEdgeResize, resolveOpeningHeightResize,
   findRoomsAdjacentToOpening,

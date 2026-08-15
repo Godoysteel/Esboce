@@ -110,6 +110,11 @@ import {
   // altura, feedback visual.
   var ROOF_PITCH_SNAP_DEG = 3.5;
   var ROOF_NEARBY_TOLERANCE = Core.SNAP_UNIT * 2; // ~1m de folga pra contar como "encostado"
+  // Ímã de eixo entre borda de telhado e parede (ver Core.snapCoordinateToWalls):
+  // mesma folga do snap comum (meio SNAP_UNIT), pra grudar exatamente no eixo
+  // da parede assim que o arraste chega perto o bastante dela — sem competir
+  // com o snap genérico quando a intenção é ficar longe de qualquer parede.
+  var WALL_MAGNET_TOLERANCE = Core.SNAP_UNIT / 2;
 
   var camAngle = Math.PI / 4, camElev = 0.6, camDist = 13;
   var camTarget = { x: 0, y: 0, z: 0 }; // pra onde a câmera olha e orbita — Shift+scroll desloca isso
@@ -2898,7 +2903,9 @@ import {
     if (dragMode && dragMode.indexOf('roofEdge') === 0) {
       var gpE = getGroundModelPoint(e.clientX, e.clientY);
       if (gpE && dragElementStart) {
-        var snappedX = Core.snap(gpE.x), snappedY = Core.snap(gpE.y);
+        var wallsForMagnet = Store.currentWalls();
+        var snappedX = Core.snapCoordinateToWalls(gpE.x, wallsForMagnet, 'x', WALL_MAGNET_TOLERANCE);
+        var snappedY = Core.snapCoordinateToWalls(gpE.y, wallsForMagnet, 'y', WALL_MAGNET_TOLERANCE);
         var region = dragElementStart.region;
         if (region) {
           snappedX = Math.max(region.minX, Math.min(region.maxX, snappedX));

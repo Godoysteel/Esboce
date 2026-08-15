@@ -1,5 +1,9 @@
 # Changelog
 
+> Corrigido: parapeito da platibanda não "casava" com a parede debaixo dele mesmo os dois estando no grid — agora, ao arrastar a borda de um telhado perto o bastante de uma parede, ela gruda exatamente no eixo daquela parede (não só no ponto de grid genérico mais próximo). Removida a textura de reboco de toda a casa (paredes, parapeito da platibanda, laje, empena/oitão e reveal de arco) — acabamento cerâmico já escolhido continua normal, só o material padrão sem acabamento voltou a ser cor lisa. Ver DEC-73.
+
+> Corrigido: telhado tipo platibanda agora se funde ao encostar em outro (arrastar até tocar), igual já acontecia com duasAguas/quatroAguas — antes ficavam como peças separadas para sempre, mesmo lado a lado. As bordas continuam podendo ser arrastadas individualmente depois de fundido, mesmo comportamento já existente de cômodo/laje. Ver DEC-72.
+
 > Corrigido: os pontos hidráulicos criados nos painéis 2D (parede e piso) podiam aparecer longe de onde o clique realmente foi — os painéis tinham uma caixa com proporção fixa, e quando o formato real da parede/cômodo não batia com ela, sobrava uma margem vazia (mesma cor de fundo, sem indicação visual) que também "contava" como clicável. Painéis agora se ajustam à proporção real do conteúdo, sem sobra. De quebra, o painel do piso ganhou a mesma silhueta de móveis que o painel de parede já tinha. Ver DEC-71.
 
 > Corrigido: silhueta de móveis no painel de elevação (DEC-69) não aparecia pros móveis padrão de um cômodo "Cozinha" (mesa e armário ficavam bem em cima do limite antigo de 1 m). Raio de detecção subiu pra 2 m. Ver DEC-70.

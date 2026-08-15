@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createProject, createRoofEntity } from '../src/core/Core.ts';
+import { createProject, createRoofEntity, createWallEntity, roofsCanFuse, snapCoordinateToWalls } from '../src/core/Core.ts';
 import {
   computeFoundationQuantity,
   gableAreaMeters,
@@ -85,4 +85,57 @@ test('coberturas paralelas não recebem corte de água-furtada', () => {
   const areas = roofNetAreas([roofA, roofB], roofConfig);
   assert.equal(areas[roofA.id], roofAreaMeters(roofA, roofConfig));
   assert.equal(areas[roofB.id], roofAreaMeters(roofB, roofConfig));
+});
+
+test('duas platibandas encostando no mesmo eixo se fundem, como cômodo', () => {
+  // roofA vai de x=0..80, roofB começa exatamente onde A termina (x=80..160),
+  // mesma faixa em y — encostadas lado a lado, mesmo eixo de cumeeira 'x'.
+  const roofA = createRoofEntity(0, 0, 80, 60, 'platibanda', 28, 'x', 'roof-a');
+  const roofB = createRoofEntity(80, 0, 160, 60, 'platibanda', 28, 'x', 'roof-b');
+  assert.equal(roofsCanFuse(roofA, roofB, 4), true);
+});
+
+test('platibandas com eixo de cumeeira diferente não se fundem', () => {
+  const roofA = createRoofEntity(0, 0, 80, 60, 'platibanda', 28, 'x', 'roof-a');
+  const roofB = createRoofEntity(80, 0, 160, 60, 'platibanda', 28, 'y', 'roof-b');
+  assert.equal(roofsCanFuse(roofA, roofB, 4), false);
+});
+
+test('platibandas com pitchDeg diferente ainda se fundem (campo não usado na laje plana)', () => {
+  const roofA = createRoofEntity(0, 0, 80, 60, 'platibanda', 28, 'x', 'roof-a');
+  const roofB = createRoofEntity(80, 0, 160, 60, 'platibanda', 45, 'x', 'roof-b');
+  assert.equal(roofsCanFuse(roofA, roofB, 4), true);
+});
+
+test('platibanda longe demais da outra não se funde', () => {
+  const roofA = createRoofEntity(0, 0, 80, 60, 'platibanda', 28, 'x', 'roof-a');
+  const roofB = createRoofEntity(200, 0, 280, 60, 'platibanda', 28, 'x', 'roof-b');
+  assert.equal(roofsCanFuse(roofA, roofB, 4), false);
+});
+
+test('platibanda não funde com telhado de outro tipo', () => {
+  const roofA = createRoofEntity(0, 0, 80, 60, 'platibanda', 28, 'x', 'roof-a');
+  const roofB = createRoofEntity(80, 0, 160, 60, 'duasAguas', 28, 'x', 'roof-b');
+  assert.equal(roofsCanFuse(roofA, roofB, 4), false);
+});
+
+test('snapCoordinateToWalls: gruda exatamente no eixo de uma parede próxima, mesmo fora do grid redondo', () => {
+  // Parede com coordenada "torta" (não múltipla de SNAP_UNIT) — simula
+  // imprecisão de ponto flutuante acumulada por uma fusão antiga.
+  const walls = [createWallEntity(0, 0, 79.6, 0)];
+  // Arrastando perto da ponta torta (79.6): deve grudar EXATAMENTE nela,
+  // não só arredondar pro múltiplo de SNAP_UNIT mais próximo (80).
+  assert.equal(snapCoordinateToWalls(79.5, walls, 'x', 5), 79.6);
+});
+
+test('snapCoordinateToWalls: longe de qualquer parede, cai no snap comum do grid', () => {
+  const walls = [createWallEntity(0, 0, 200, 0)];
+  assert.equal(snapCoordinateToWalls(45, walls, 'x', 5), 50); // Core.snap(45) = 50, nenhuma parede por perto
+});
+
+test('snapCoordinateToWalls: ignora paredes fora da tolerância', () => {
+  const walls = [createWallEntity(0, 0, 200, 0)];
+  // 200 está a 20 unidades de 180 — maior que a tolerância de 5, então
+  // não deve grudar em 200, só cair no snap comum.
+  assert.equal(snapCoordinateToWalls(178, walls, 'x', 5), 180);
 });

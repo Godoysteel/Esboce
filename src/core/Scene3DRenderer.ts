@@ -88,28 +88,7 @@ export function hashColorHex(key: string): number {
   var WALL_EDGE_COLOR = 0x6F879C;
   var OPENING_FRAME_COLOR = 0xF4F1E8;
   var WALL_PLASTER_TILE_METERS = 1.25;
-  var wallPlasterMaps: { map: THREE.Texture; normalMap: THREE.Texture; roughnessMap: THREE.Texture } | null = null;
   var soleiraMarbleMaps: { map: THREE.Texture; normalMap: THREE.Texture; roughnessMap: THREE.Texture } | null = null;
-
-  function getWallPlasterMaps() {
-    if (wallPlasterMaps) return wallPlasterMaps;
-    var loader = new THREE.TextureLoader();
-    function load(path: string, isColor: boolean) {
-      var texture = loader.load(path);
-      texture.wrapS = THREE.RepeatWrapping;
-      texture.wrapT = THREE.RepeatWrapping;
-      texture.anisotropy = 4;
-      if (isColor) texture.colorSpace = THREE.SRGBColorSpace;
-      return texture;
-    }
-      var base = import.meta.env.BASE_URL;
-    wallPlasterMaps = {
-      map: load(base + 'textures/reboco/albedo.png', true),
-      normalMap: load(base + 'textures/reboco/normal.png', false),
-      roughnessMap: load(base + 'textures/reboco/roughness.png', false)
-    };
-    return wallPlasterMaps;
-  }
 
   // Mármore da soleira externa — textura PBR fornecida pelo usuário
   // (Marble016), reduzida de 1K/16-bit pra 512x512/8-bit em JPG antes de
@@ -958,23 +937,19 @@ export function hashColorHex(key: string): number {
       flatShading: true
     });
     // Reveal do arco usa o MESMO acabamento real da parede (lado A,
-    // Catálogo/Materiais) — cor E textura, não só a cor. Sem isso ficava
-    // uma cor lisa/neutra enquanto a parede ao redor tem o relevo do
-    // reboco (ou a cerâmica, se for o caso) — mesma lógica de resolução
-    // de material usada na face de verdade da parede, reaproveitada aqui.
+    // Catálogo/Materiais) — cor, e cerâmica quando for o caso — mesma
+    // lógica de resolução de material usada na face de verdade da
+    // parede, reaproveitada aqui. Reboco (textura PBR) foi removido de
+    // toda a casa — ver Sessão 27; só sobra cor lisa fora da cerâmica.
     var arcoWallProduct = w.finishA ? Catalog.getProduct(w.finishA) : null;
     var arcoIsCeramic = arcoWallProduct && arcoWallProduct.category === 'floor_tile';
     var arcoCeramicMap = arcoIsCeramic ? buildCeramicTexture(arcoWallProduct!.assets.colorHex, 1, 0) : null;
     var arcoWallColorHex = arcoWallProduct ? parseInt(arcoWallProduct.assets.colorHex.slice(1), 16) : GABLE_COLOR;
     if (arcoIsCeramic) arcoWallColorHex = 0xFFFFFF;
-    var arcoPlasterMaps = getWallPlasterMaps();
     var arcoRevealMat = new THREE.MeshStandardMaterial({
       color: isSelected ? SELECTED_ACCENT : arcoWallColorHex,
-      map: arcoCeramicMap || arcoPlasterMaps.map,
-      normalMap: arcoIsCeramic ? null : arcoPlasterMaps.normalMap,
-      roughnessMap: arcoIsCeramic ? null : arcoPlasterMaps.roughnessMap,
+      map: arcoCeramicMap,
       roughness: 0.92,
-      normalScale: new THREE.Vector2(0.28, 0.28),
       flatShading: true
     });
 
@@ -1199,27 +1174,15 @@ export function hashColorHex(key: string): number {
   }
 
   // Quatro paredes baixas formando um quadro ao redor do perímetro — o
-  // parapeito da platibanda. Usa a MESMA textura de reboco (PBR) das
-  // paredes de verdade (getWallPlasterMaps) em vez de um material liso
-  // sem mapa nenhum — cada segmento clona os mapas e ajusta o repeat
-  // pro próprio comprimento/altura, pra não esticar a textura.
+  // parapeito da platibanda (e, via este mesmo helper, a laje — ver
+  // chamada em buildRoofLaje). Material liso, sem textura de reboco
+  // (removida de toda a casa — ver Sessão 27); os parâmetros
+  // thickness/length continuam recebidos só por compatibilidade de
+  // assinatura com o chamador, sem uso aqui agora.
   function buildParapetSegmentMaterial(color: any, thickness: any, height: any, length: any) {
-    var maps = getWallPlasterMaps();
-    function tiledClone(tex: THREE.Texture, repU: number, repV: number) {
-      var clone = tex.clone();
-      clone.needsUpdate = true;
-      clone.repeat.set(repU, repV);
-      return clone;
-    }
-    var repU = Math.max(length, thickness) / WALL_PLASTER_TILE_METERS;
-    var repV = height / WALL_PLASTER_TILE_METERS;
     return new THREE.MeshStandardMaterial({
       color: color,
-      map: tiledClone(maps.map, repU, repV),
-      normalMap: tiledClone(maps.normalMap, repU, repV),
-      roughnessMap: tiledClone(maps.roughnessMap, repU, repV),
       roughness: 0.92,
-      normalScale: new THREE.Vector2(0.28, 0.28),
       flatShading: true
     });
   }
@@ -1435,15 +1398,10 @@ export function hashColorHex(key: string): number {
         side: THREE.DoubleSide
       });
     }
-    var maps = getWallPlasterMaps();
     var color = product ? parseInt(product.assets.colorHex.slice(1), 16) : GABLE_COLOR;
     return new THREE.MeshStandardMaterial({
       color: pickColor(color, 'paredesTerreo', viewState),
-      map: maps.map,
-      normalMap: maps.normalMap,
-      roughnessMap: maps.roughnessMap,
       roughness: 0.92,
-      normalScale: new THREE.Vector2(0.28, 0.28),
       side: THREE.DoubleSide
     });
   }
@@ -1534,9 +1492,10 @@ export function hashColorHex(key: string): number {
     });
   }
 
-  // Laje colocável de verdade (ver DEC-35) — uma caixa achatada com a
-  // MESMA textura de reboco das paredes (reaproveita
-  // buildParapetSegmentMaterial, já usado no parapeito da platibanda),
+  // Laje colocável de verdade (ver DEC-35) — uma caixa achatada com o
+  // MESMO material liso das paredes/parapeito (reaproveita
+  // buildParapetSegmentMaterial, já usado no parapeito da platibanda —
+  // textura de reboco removida de toda a casa, ver Sessão 27),
   // sem nenhuma relação obrigatória com o contorno de parede: pode ser
   // menor (vão aberto) ou maior (balanço/sacada) que ele — x1..y2 vêm
   // direto do objeto Laje, arrastados livremente pela pessoa.
@@ -1545,7 +1504,7 @@ export function hashColorHex(key: string): number {
   // fundir duas peças que não formam um retângulo perfeito, o
   // contorno pode ter mais de 4 pontos (um "L", por exemplo). Mesma
   // técnica de makeSlabMesh (Shape + ExtrudeGeometry, shape.x/y = 
-  // mundo x/z), com a MESMA textura de reboco das paredes
+  // mundo x/z), com o MESMO material liso das paredes/parapeito
   // (buildParapetSegmentMaterial, já usado no parapeito da
   // platibanda) em vez do material liso genérico de makeSlabMesh.
   // Placeholder do painel de Envidraçamento (DEC-56, Etapa 2a) — caixa
@@ -2878,8 +2837,9 @@ export function hashColorHex(key: string): number {
           // acabamento do Catálogo — mesmo contorno fp de cima, então
           // se encontram exatas com a face da parede vizinha no canto,
           // sem sobrepor (a mesma correção que já vale pra caixa toda).
+          // Reboco (textura PBR) removido de toda a casa — ver Sessão
+          // 27: sem acabamento cerâmico, a face fica em cor lisa.
           var wallDefaultColor = GABLE_COLOR;
-          var plasterMaps = getWallPlasterMaps();
           (['a', 'b'] as const).forEach(function (side) {
             var productId = side === 'a' ? w.finishA : w.finishB;
             var product = productId ? Catalog.getProduct(productId) : null;
@@ -2890,11 +2850,8 @@ export function hashColorHex(key: string): number {
             var faceColor = highlighted ? SELECTED_ACCENT : (DEBUG_COLOR_MODE ? hashColorHex(w.id + '-' + side) : faceColorHex);
             var faceMat = new THREE.MeshStandardMaterial({
               color: (floorIdx === editingIdx && !DEBUG_COLOR_MODE) ? pickColor(faceColor, wallCategory, viewState) : faceColor,
-              map: DEBUG_COLOR_MODE ? null : (ceramicMap || plasterMaps.map),
-              normalMap: DEBUG_COLOR_MODE || isCeramic ? null : plasterMaps.normalMap,
-              roughnessMap: DEBUG_COLOR_MODE || isCeramic ? null : plasterMaps.roughnessMap,
+              map: DEBUG_COLOR_MODE ? null : ceramicMap,
               roughness: 0.92,
-              normalScale: new THREE.Vector2(0.28, 0.28),
               flatShading: true,
               side: THREE.DoubleSide,
               polygonOffset: true,
