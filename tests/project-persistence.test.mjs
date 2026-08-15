@@ -103,3 +103,23 @@ test('backup JSON faz ida e volta sem perder o projeto', () => {
 test('backup que não é JSON apresenta erro compreensível', () => {
   assert.throws(() => importProjectBackup('{quebrado'), /não contém JSON válido/);
 });
+
+test('Opening.productId (modelo glTF da esquadria) faz ida e volta sem perder o valor', () => {
+  const project = createProject();
+  project.floors[0].walls.push(createWallEntity(0, 0, 200, 0, 'wall-1'));
+  const opening = createOpeningEntity('wall-1', 'door', 1, 'opening-1');
+  opening.productId = 'vortice.porta.vidro-1000x2100';
+  project.floors[0].openings.push(opening);
+  const json = exportProjectBackup(project);
+  const restored = importProjectBackup(json);
+  assert.equal(restored.project.floors[0].openings[0].productId, 'vortice.porta.vidro-1000x2100');
+});
+
+test('Opening sem productId continua sem o campo depois da ida e volta (nunca vira undefined explícito)', () => {
+  const project = createProject();
+  project.floors[0].walls.push(createWallEntity(0, 0, 200, 0, 'wall-1'));
+  project.floors[0].openings.push(createOpeningEntity('wall-1', 'door', 1, 'opening-1'));
+  const json = exportProjectBackup(project);
+  const restored = importProjectBackup(json);
+  assert.equal('productId' in restored.project.floors[0].openings[0], false);
+});

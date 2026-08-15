@@ -807,6 +807,19 @@ export const commands = {
     emit({ type: 'OpeningDeleted', openingId });
   },
 
+  // Escolhe (ou remove, com productId undefined) o modelo glTF do
+  // Catálogo que representa fisicamente esta porta/janela — ver
+  // Opening.productId. Não mexe em width/height/sillHeight: a pessoa
+  // continua controlando o TAMANHO do vão normalmente; o modelo (se
+  // houver) é escalado pra caber nesse vão na hora de renderizar
+  // (Scene3DRenderer.buildOpeningModelPiece), não o contrário.
+  setOpeningProduct(openingId: string, productId: string | undefined): void {
+    const op = findOpening(openingId); if (!op) return;
+    pushUndoSnapshot();
+    if (productId) op.productId = productId; else delete op.productId;
+    emit({ type: 'OpeningProductChanged', openingId, productId });
+  },
+
   createColumn(x: number, y: number, shape?: ColumnShape): Column {
     pushUndoSnapshot();
     const col = Core.createColumnEntity(Core.snap(x), Core.snap(y), shape);

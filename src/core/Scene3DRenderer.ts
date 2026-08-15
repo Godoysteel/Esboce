@@ -124,9 +124,10 @@ export function hashColorHex(key: string): number {
     previewMeshes: THREE.Object3D[];
     handleMeshes: THREE.Object3D[];
     furnitureMeshes: THREE.Object3D[];
+    openingModelMeshes: THREE.Object3D[];
     [key: string]: THREE.Object3D[];
   }
-  var registry: Registry = { wallMeshes: [], roomMeshes: [], structureMeshes: [], previewMeshes: [], handleMeshes: [], furnitureMeshes: [] };
+  var registry: Registry = { wallMeshes: [], roomMeshes: [], structureMeshes: [], previewMeshes: [], handleMeshes: [], furnitureMeshes: [], openingModelMeshes: [] };
 
   // --- Móveis (glTF) ---------------------------------------------------
   // Cada .glb é carregado uma única vez e cacheado; peças repetidas na
@@ -138,7 +139,7 @@ export function hashColorHex(key: string): number {
   // disparar um novo render e a peça aparecer sem precisar de ação do
   // usuário.
   var gltfLoader = new GLTFLoader();
-  interface FurnitureModelEntry { group: THREE.Group; footprintW: number; footprintD: number; }
+  interface FurnitureModelEntry { group: THREE.Group; footprintW: number; footprintD: number; heightM: number; }
   var furnitureModelCache: { [url: string]: FurnitureModelEntry | 'loading' } = {};
   var onFurnitureAssetLoaded: (() => void) | null = null;
   export function setOnFurnitureAssetLoaded(cb: () => void) { onFurnitureAssetLoaded = cb; }
@@ -148,6 +149,11 @@ export function hashColorHex(key: string): number {
   // genérico só testa Mesh direto em scene.children; móvel é um Group
   // com filhos aninhados, ver pickMesh).
   export function getFurnitureMeshes(): THREE.Object3D[] { return registry.furnitureMeshes; }
+
+  // Mesma ideia, pra portas/janelas com modelo glTF (Opening.productId,
+  // ver buildOpeningModelPiece) — também um Group com filhos aninhados,
+  // também precisa do raycast recursivo à parte em pickMesh.
+  export function getOpeningModelMeshes(): THREE.Object3D[] { return registry.openingModelMeshes; }
 
   // Tamanho real (em metros, no plano do chão) do footprint de um
   // móvel já carregado — null se ainda não carregou. Usado pra travar
@@ -176,7 +182,7 @@ export function hashColorHex(key: string): number {
       gltf.scene.position.set(-center.x, -box.min.y, -center.z);
       var anchored = new THREE.Group();
       anchored.add(gltf.scene);
-      furnitureModelCache[url] = { group: anchored, footprintW: size.x, footprintD: size.z };
+      furnitureModelCache[url] = { group: anchored, footprintW: size.x, footprintD: size.z, heightM: size.y };
       if (onFurnitureAssetLoaded) onFurnitureAssetLoaded();
     }, undefined, function (err) {
       console.error('Falha ao carregar móvel ' + url, err);
@@ -993,6 +999,40 @@ export function hashColorHex(key: string): number {
       addPiece(new THREE.Mesh(new THREE.BoxGeometry(leafWidth, 0.03, thick * 0.55), mullMat), midY);
     }
     return pieces;
+  }
+
+  // Substitui a geometria procedural de buildOpeningPieces por um
+  // modelo glTF de verdade, quando a Opening tem um productId (ver
+  // types.ts, Store.commands.setOpeningProduct). Reaproveita a MESMA
+  // infra de móveis (getFurnitureModel: cache + normalização de pivô —
+  // centraliza X/Z, base em Y=0 — funciona pra QUALQUER glTF, não só
+  // móvel, então não precisou duplicar nada). Escala X (largura) e Y
+  // (altura) pra caber exatamente no vão configurado na Opening; a
+  // profundidade (Z, espessura do caixilho) fica como veio do arquivo
+  // — esticar a espessura junto distorceria o perfil do caixilho pra
+  // vãos muito diferentes do tamanho nominal do modelo. Retorna null
+  // enquanto o modelo ainda não carregou (mesmo comportamento de
+  // móvel — reaparece sozinho quando o loader termina, ver
+  // onFurnitureAssetLoaded) ou se o produto não tiver modelUrl.
+  function buildOpeningModelPiece(op: any, product: any, w: any, scale: any, offsetX: any, offsetY: any, yOffset: any) {
+    var modelUrl = product && product.assets && product.assets.modelUrl;
+    if (!modelUrl) return null;
+    var resolvedUrl = (import.meta as any).env.BASE_URL + modelUrl;
+    var template = getFurnitureModel(resolvedUrl);
+    if (!template) return null;
+    var instance = template.group.clone(true);
+    var scaleX = template.footprintW > 1e-6 ? op.width / template.footprintW : 1;
+    var scaleY = template.heightM > 1e-6 ? op.height / template.heightM : 1;
+    instance.scale.set(scaleX, scaleY, 1);
+
+    var dx = w.x2 - w.x1, dy = w.y2 - w.y1;
+    var lenModel = Math.hypot(dx, dy) || 1e-6;
+    var ux = dx / lenModel, uy = dy / lenModel;
+    var offsetModel = op.offset * Core.GRID;
+    var cxModel = w.x1 + ux * offsetModel, cyModel = w.y1 + uy * offsetModel;
+    instance.position.set((cxModel - offsetX) * scale, yOffset + op.sillHeight, (cyModel - offsetY) * scale);
+    instance.rotation.y = -Math.atan2(uy, ux);
+    return instance;
   }
 
   // Telhado de duas águas: a cumeeira corre ao longo do lado mais comprido
@@ -2240,6 +2280,11 @@ export function hashColorHex(key: string): number {
       disposeObject3DTree(m);
     });
     registry.furnitureMeshes = [];
+    registry.openingModelMeshes.forEach(function (m) {
+      m.parent && m.parent.remove(m);
+      disposeObject3DTree(m);
+    });
+    registry.openingModelMeshes = [];
   }
 
   function hydraulicColor(networkType: string) {
@@ -2905,6 +2950,22 @@ export function hashColorHex(key: string): number {
           var w = floorData.walls.filter(function (x) { return x.id === op.wallId; })[0];
           if (!w) return;
           var isSelected = viewState.selectedOpening && viewState.selectedOpening.id === op.id;
+          // Com productId (ver Opening.productId): tenta o modelo glTF
+          // real no lugar do batente/folha/vidro gerados na hora. Sem
+          // produto — ou enquanto o modelo ainda não terminou de
+          // carregar (buildOpeningModelPiece devolve null nesse caso,
+          // igual móvel) — cai pro caminho procedural de sempre, sem
+          // deixar o vão vazio.
+          var product = op.productId ? Catalog.getProduct(op.productId) : null;
+          var modelPiece = product ? buildOpeningModelPiece(op, product, w, scale, offsetX, offsetY, yOffset) : null;
+          if (modelPiece) {
+            tagCategory(modelPiece, 'aberturas');
+            modelPiece.userData.openingId = op.id;
+            modelPiece.userData.floorIndex = floorIdx;
+            scene.add(modelPiece);
+            registry.openingModelMeshes.push(modelPiece);
+            return;
+          }
           var pieces = buildOpeningPieces(op, w, scale, offsetX, offsetY, yOffset, isSelected);
           pieces.forEach(function (m) {
             // Folha/vidro e todos os novos marcos sólidos pertencem à
@@ -3186,6 +3247,7 @@ export const Scene3DRenderer = {
   createRoofResizePreviewMeshes,
   setOnFurnitureAssetLoaded,
   getFurnitureMeshes,
+  getOpeningModelMeshes,
   getFurnitureFootprint,
   FLOOR_STACK_HEIGHT_GETTER,
   WALL_HEIGHT_GETTER,

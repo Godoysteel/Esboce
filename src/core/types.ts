@@ -132,6 +132,11 @@ export interface Opening {
   width: number;
   height: number;
   sillHeight: number;
+  /** Produto do Catálogo (categoria 'door'/'window') com modelo glTF —
+   *  quando presente, o modelo substitui a geometria procedural padrão
+   *  (batente/folha/vidro gerados na hora). Ausente = comportamento de
+   *  sempre, sem mudança nenhuma. */
+  productId?: string;
 }
 
 export type FloorKind = 'standard' | 'attic';
@@ -317,7 +322,7 @@ export interface Manufacturer {
   name: string;
 }
 
-export type ProductCategory = 'paint' | 'floor_tile' | 'roof_tile' | 'trim' | 'furniture';
+export type ProductCategory = 'paint' | 'floor_tile' | 'roof_tile' | 'trim' | 'furniture' | 'door' | 'window';
 
 export interface ProductCommercial {
   sku: string;

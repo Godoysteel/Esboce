@@ -193,12 +193,14 @@ function parseRoof(value: unknown, path: string): Roof {
 
 function parseOpening(value: unknown, path: string): Opening {
   const v = record(value, path);
+  const productId = optionalString(v.productId, `${path}.productId`);
   return {
     id: string(v.id, `${path}.id`),
     kind: enumValue(v.kind, ['door', 'window', 'arco'], `${path}.kind`),
     wallId: string(v.wallId, `${path}.wallId`),
     offset: number(v.offset, `${path}.offset`), width: number(v.width, `${path}.width`),
     height: number(v.height, `${path}.height`), sillHeight: number(v.sillHeight, `${path}.sillHeight`),
+    ...(productId !== undefined ? { productId } : {}),
   };
 }
 

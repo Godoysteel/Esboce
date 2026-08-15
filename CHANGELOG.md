@@ -1,5 +1,7 @@
 # Changelog
 
+> Adicionado: primeiro modelo real (glTF) de esquadria — "Porta de Vidro 1000x2100" — no lugar da geometria gerada na hora. Portas/janelas podem agora referenciar um modelo 3D do Catálogo (`Opening.productId`); sem escolher nenhum, continua tudo como sempre. Mais modelos da mesma família (janelas de correr/giro, portas de correr/giro em vários tamanhos) entram conforme forem chegando. Ver DEC-74.
+
 > Corrigido: parapeito da platibanda não "casava" com a parede debaixo dele mesmo os dois estando no grid — agora, ao arrastar a borda de um telhado perto o bastante de uma parede, ela gruda exatamente no eixo daquela parede (não só no ponto de grid genérico mais próximo). Removida a textura de reboco de toda a casa (paredes, parapeito da platibanda, laje, empena/oitão e reveal de arco) — acabamento cerâmico já escolhido continua normal, só o material padrão sem acabamento voltou a ser cor lisa. Ver DEC-73.
 
 > Corrigido: telhado tipo platibanda agora se funde ao encostar em outro (arrastar até tocar), igual já acontecia com duasAguas/quatroAguas — antes ficavam como peças separadas para sempre, mesmo lado a lado. As bordas continuam podendo ser arrastadas individualmente depois de fundido, mesmo comportamento já existente de cômodo/laje. Ver DEC-72.

@@ -73,6 +73,16 @@ export const products: Product[] = [
     { id: 'vortice.movel.tv', name: 'TV com Painel', manufacturer: 'vortice', category: 'furniture',
       commercial: { sku: 'VOR-MOV-003', price: 0, unit: 'peca' },
       assets: { colorHex: '#2C2C2A', textureUrl: null, modelUrl: 'models/tv.glb' } },
+    // --- Esquadrias (portas/janelas) modeladas — família enviada pelo
+    // usuário (glTF exportado do Blender a partir de um catálogo de
+    // esquadrias de vidro), substituem a geometria procedural padrão
+    // quando escolhidas numa Opening (ver Opening.productId,
+    // Scene3DRenderer.buildOpeningModelPiece). Primeiro modelo da
+    // família — os demais (JANELA_CORRER/GIRO, PORTA_CORRER/GIRO em
+    // vários tamanhos) entram conforme forem chegando, mesmo padrão.
+    { id: 'vortice.porta.vidro-1000x2100', name: 'Porta de Vidro 1000x2100', manufacturer: 'vortice', category: 'door',
+      commercial: { sku: 'VOR-ESQ-001', price: 0, unit: 'peca' },
+      assets: { colorHex: '#DCE6EA', textureUrl: null, modelUrl: 'models/porta-vidro-1000x2100.glb' } },
     { id: 'vortice.movel.cama', name: 'Cama de Casal', manufacturer: 'vortice', category: 'furniture',
       commercial: { sku: 'VOR-MOV-004', price: 0, unit: 'peca' },
       assets: { colorHex: '#D9D5C7', textureUrl: null, modelUrl: 'models/cama.glb' } },

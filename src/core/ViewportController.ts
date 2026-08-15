@@ -498,6 +498,15 @@ import {
       while (node && !node.userData.furnitureId) node = node.parent;
       if (node) return node;
     }
+    // Mesma ideia pra porta/janela com modelo glTF (Opening.productId,
+    // ver Scene3DRenderer.buildOpeningModelPiece) — também um grupo
+    // aninhado, fora do caminho não-recursivo de 'targets' acima.
+    var openingModelHits = raycaster.intersectObjects(Scene3DRenderer.getOpeningModelMeshes(), true);
+    if (openingModelHits.length && (!best || openingModelHits[0]!.distance < best.distance) && (!furnitureHits.length || openingModelHits[0]!.distance < furnitureHits[0]!.distance)) {
+      var openingNode: any = openingModelHits[0]!.object;
+      while (openingNode && !openingNode.userData.openingId) openingNode = openingNode.parent;
+      if (openingNode) return openingNode;
+    }
     return best ? best.object : null;
   }
 
