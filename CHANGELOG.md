@@ -1,5 +1,7 @@
 # Changelog
 
+> Corrigido: os pontos hidráulicos criados nos painéis 2D (parede e piso) podiam aparecer longe de onde o clique realmente foi — os painéis tinham uma caixa com proporção fixa, e quando o formato real da parede/cômodo não batia com ela, sobrava uma margem vazia (mesma cor de fundo, sem indicação visual) que também "contava" como clicável. Painéis agora se ajustam à proporção real do conteúdo, sem sobra. De quebra, o painel do piso ganhou a mesma silhueta de móveis que o painel de parede já tinha. Ver DEC-71.
+
 > Corrigido: silhueta de móveis no painel de elevação (DEC-69) não aparecia pros móveis padrão de um cômodo "Cozinha" (mesa e armário ficavam bem em cima do limite antigo de 1 m). Raio de detecção subiu pra 2 m. Ver DEC-70.
 
 > Painel de elevação da parede (posicionamento de ponto hidráulico) agora desenha a silhueta dos móveis já instalados perto daquela parede — referência visual pra não posicionar um ponto atrás de um armário, por exemplo. Usa a caixa delimitadora real do móvel já carregado na cena 3D (não tem dimensão fixa em catálogo), só mostra o que está a até 1 m da parede. Ver DEC-69.

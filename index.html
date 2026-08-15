@@ -541,9 +541,15 @@
   }
   .hydraulic-wall-elevation-panel.visible { display: block; }
   .hydraulic-wall-elevation-hint { font-size: 12px; color: #77756E; margin: 0 0 8px; }
+  /* height:auto + aspect-ratio (setado via JS em renderHydraulicWallElevationPanel,
+     igual ao viewBox) em vez de height fixo — um height fixo independente
+     do width faz o SVG entrar em "letterbox" (preserveAspectRatio) sempre
+     que a proporção real da parede não bater com a da caixa, e a margem
+     vazia do letterbox não é clicável no lugar certo (ver DEC-71). */
   .hydraulic-wall-elevation-svg {
     width: 100%;
-    height: min(280px, 40vh);
+    height: auto;
+    max-height: min(280px, 40vh);
     background: #F7F5EF;
     border: 1px solid #EDEAE1;
     border-radius: 6px;
@@ -557,7 +563,8 @@
   .hydraulic-floor-panel { width: min(720px, 92vw); }
   .hydraulic-floor-svg {
     width: 100%;
-    height: min(520px, 62vh);
+    height: auto;
+    max-height: min(520px, 62vh);
     background: #F7F5EF;
     border: 1px solid #EDEAE1;
     border-radius: 6px;

@@ -1197,6 +1197,33 @@ import {
     render();
   }
 
+  // Encaixa o SVG (width até 100% do painel, height até o max-height do
+  // CSS) preservando a proporção do viewBox nos dois eixos — equivalente
+  // a um "object-fit: contain" manual. Sem isso, width:100% e um
+  // max-height fixos e independentes um do outro deixam sobrar margem
+  // vazia (letterbox do preserveAspectRatio padrão do SVG) sempre que a
+  // proporção do conteúdo não bater com a da caixa — e um clique nessa
+  // margem vazia projeta pra bem longe do ponto real na régua (DEC-71).
+  // CSS aspect-ratio sozinho não resolve: junto com um max-height que
+  // realmente entra em ação, ele encolhe a altura mas NÃO encolhe de
+  // volta o width (que continua fixo em 100%), então a proporção
+  // continua errada — daqui vem a necessidade de calcular os dois
+  // valores em pixel na mão.
+  function fitSvgToAspectRatio(svg: any, vbWidth: number, vbHeight: number) {
+    svg.style.width = '100%';
+    svg.style.height = 'auto';
+    var naturalWidth = svg.getBoundingClientRect().width;
+    if (!naturalWidth) return;
+    var maxHeight = parseFloat(getComputedStyle(svg).maxHeight) || Infinity;
+    var idealHeight = naturalWidth * (vbHeight / vbWidth);
+    if (idealHeight <= maxHeight) {
+      svg.style.height = idealHeight + 'px';
+    } else {
+      svg.style.height = maxHeight + 'px';
+      svg.style.width = (maxHeight * (vbWidth / vbHeight)) + 'px';
+    }
+  }
+
   // ---- aba de elevação da parede (H2 — fluxo guiado de posicionamento) ----
   var HYDRAULIC_ELEVATION_MAX_HEIGHT_M = 2.6; // mesmo teto já usado no clamp de Store.commands
   // Margem ao redor do desenho da parede, em cm (mesma unidade do viewBox),
@@ -1286,7 +1313,9 @@ import {
     var ox = margin.left, oy = margin.top;
     var svgNS = 'http://www.w3.org/2000/svg';
     var svg = hydraulicWallElevationSvgEl;
-    svg.setAttribute('viewBox', '0 0 ' + (lengthCm + margin.left + margin.right) + ' ' + (maxHeightCm + margin.top + margin.bottom));
+    var vbWidth = lengthCm + margin.left + margin.right, vbHeight = maxHeightCm + margin.top + margin.bottom;
+    svg.setAttribute('viewBox', '0 0 ' + vbWidth + ' ' + vbHeight);
+    fitSvgToAspectRatio(svg, vbWidth, vbHeight);
     while (svg.firstChild) svg.removeChild(svg.firstChild);
 
     function addLine(x1: number, y1: number, x2: number, y2: number, opts?: any) {
@@ -1567,12 +1596,33 @@ import {
       minY: Math.min.apply(null, walls.flatMap(function (w: any) { return [w.y1, w.y2]; })),
       maxY: Math.max.apply(null, walls.flatMap(function (w: any) { return [w.y1, w.y2]; })),
     } : { minX: -200, maxX: 200, minY: -200, maxY: 200 };
-    hydraulicFloorSvgEl.setAttribute('viewBox',
-      (bounds.minX - pad) + ' ' + (bounds.minY - pad) + ' ' + (bounds.maxX - bounds.minX + pad * 2) + ' ' + (bounds.maxY - bounds.minY + pad * 2));
+    var vbWidth = bounds.maxX - bounds.minX + pad * 2, vbHeight = bounds.maxY - bounds.minY + pad * 2;
+    hydraulicFloorSvgEl.setAttribute('viewBox', (bounds.minX - pad) + ' ' + (bounds.minY - pad) + ' ' + vbWidth + ' ' + vbHeight);
+    fitSvgToAspectRatio(hydraulicFloorSvgEl, vbWidth, vbHeight);
     hydraulicFloorSceneRenderer.render();
+    var svgNS = 'http://www.w3.org/2000/svg';
+    // silhuetas (vista de cima) dos móveis do pavimento — mesmo espírito
+    // da DEC-69/70 no painel de parede, mas sem filtro de distância aqui:
+    // o painel de piso já é a planta inteira, então mostra todo mundo.
+    // Desenhado ANTES dos pontos hidráulicos, pra ficar atrás deles.
+    Store.currentFurniture().forEach(function (item: any) {
+      var object = findFurnitureSceneObject(item.id);
+      if (!object) return;
+      var box = new THREE.Box3().setFromObject(object);
+      var c1 = worldToModel(box.min.x, box.min.z), c2 = worldToModel(box.max.x, box.max.z);
+      var rect: any = document.createElementNS(svgNS, 'rect');
+      rect.setAttribute('x', String(Math.min(c1.x, c2.x)));
+      rect.setAttribute('y', String(Math.min(c1.y, c2.y)));
+      rect.setAttribute('width', String(Math.abs(c2.x - c1.x)));
+      rect.setAttribute('height', String(Math.abs(c2.y - c1.y)));
+      rect.setAttribute('fill', 'rgba(90,73,199,0.12)');
+      rect.setAttribute('stroke', '#9C9A92');
+      rect.setAttribute('stroke-width', String(Core.GRID * 0.02));
+      rect.setAttribute('stroke-dasharray', (Core.GRID * 0.08) + ' ' + (Core.GRID * 0.06));
+      hydraulicFloorSvgEl.appendChild(rect);
+    });
     // pontos de piso já existentes, de qualquer tipo — dá contexto do que já foi posicionado
     var project = Store.getProject();
-    var svgNS = 'http://www.w3.org/2000/svg';
     var overlay = document.createElementNS(svgNS, 'g');
     (project.hydraulics.nodes || []).forEach(function (node: any) {
       if (node.placementSurface !== 'floor') return;
