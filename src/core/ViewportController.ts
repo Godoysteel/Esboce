@@ -1205,9 +1205,12 @@ import {
   // Distância perpendicular máxima (metros) até o eixo da parede pra um
   // móvel ainda ser considerado "relevante" o bastante pra desenhar no
   // painel — mostrar o cômodo inteiro só poluiria a régua sem ajudar a
-  // decidir onde por o ponto. Valor arbitrário (DEC-69); ajustar se
-  // parecer curto/longo demais na prática.
-  var HYDRAULIC_ELEVATION_FURNITURE_MAX_DISTANCE_M = 1;
+  // decidir onde por o ponto. Começou em 1 m (DEC-69) mas subiu pra 2 m
+  // (DEC-70): nos móveis padrão de um cômodo "Cozinha" (3×3 m), só a
+  // geladeira ficava com folga confortável (0,47 m) — mesa (0,96 m) e
+  // armário (~1,00 m) caíam bem em cima do limite antigo e sumiam do
+  // painel na prática, mesmo "perto o bastante" aos olhos do usuário.
+  var HYDRAULIC_ELEVATION_FURNITURE_MAX_DISTANCE_M = 2;
 
   // Silhuetas dos móveis já instalados perto da parede sendo editada
   // (DEC-69) — referência visual pro usuário não posicionar um ponto
