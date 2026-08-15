@@ -110,6 +110,31 @@ export const products: Product[] = [
     { id: 'vortice.porta.correr-3000x2100', name: 'Porta de Correr 3000x2100', manufacturer: 'vortice', category: 'door',
       commercial: { sku: 'VOR-ESQ-010', price: 0, unit: 'peca' },
       assets: { colorHex: '#DCE6EA', textureUrl: null, modelUrl: 'models/porta-correr-3000x2100.glb' } },
+    // --- Janelas — mesmo lote/família das portas (DEC-74/75), agora
+    // categoria 'window'. Janela_de_correr_1200x500 e Maximo_ar_700x500
+    // são as duas menores/mais baixas da leva — parecem pensadas pra
+    // banheiro (mesma faixa de altura do Box_banheiro logo abaixo).
+    { id: 'vortice.janela.correr-1200x500', name: 'Janela de Correr 1200x500', manufacturer: 'vortice', category: 'window',
+      commercial: { sku: 'VOR-ESQ-011', price: 0, unit: 'peca' },
+      assets: { colorHex: '#DCE6EA', textureUrl: null, modelUrl: 'models/janela-correr-1200x500.glb' } },
+    { id: 'vortice.janela.correr-1200x1200', name: 'Janela de Correr 1200x1200', manufacturer: 'vortice', category: 'window',
+      commercial: { sku: 'VOR-ESQ-012', price: 0, unit: 'peca' },
+      assets: { colorHex: '#DCE6EA', textureUrl: null, modelUrl: 'models/janela-correr-1200x1200.glb' } },
+    { id: 'vortice.janela.correr-1500x1200', name: 'Janela de Correr 1500x1200', manufacturer: 'vortice', category: 'window',
+      commercial: { sku: 'VOR-ESQ-013', price: 0, unit: 'peca' },
+      assets: { colorHex: '#DCE6EA', textureUrl: null, modelUrl: 'models/janela-correr-1500x1200.glb' } },
+    { id: 'vortice.janela.correr-2000x1200', name: 'Janela de Correr 2000x1200', manufacturer: 'vortice', category: 'window',
+      commercial: { sku: 'VOR-ESQ-014', price: 0, unit: 'peca' },
+      assets: { colorHex: '#DCE6EA', textureUrl: null, modelUrl: 'models/janela-correr-2000x1200.glb' } },
+    { id: 'vortice.janela.correr-2500x1200', name: 'Janela de Correr 2500x1200', manufacturer: 'vortice', category: 'window',
+      commercial: { sku: 'VOR-ESQ-015', price: 0, unit: 'peca' },
+      assets: { colorHex: '#DCE6EA', textureUrl: null, modelUrl: 'models/janela-correr-2500x1200.glb' } },
+    { id: 'vortice.janela.correr-3000x1200', name: 'Janela de Correr 3000x1200', manufacturer: 'vortice', category: 'window',
+      commercial: { sku: 'VOR-ESQ-016', price: 0, unit: 'peca' },
+      assets: { colorHex: '#DCE6EA', textureUrl: null, modelUrl: 'models/janela-correr-3000x1200.glb' } },
+    { id: 'vortice.janela.maximo-ar-700x500', name: 'Máximo-Ar 700x500', manufacturer: 'vortice', category: 'window',
+      commercial: { sku: 'VOR-ESQ-017', price: 0, unit: 'peca' },
+      assets: { colorHex: '#DCE6EA', textureUrl: null, modelUrl: 'models/janela-maximo-ar-700x500.glb' } },
     { id: 'vortice.movel.cama', name: 'Cama de Casal', manufacturer: 'vortice', category: 'furniture',
       commercial: { sku: 'VOR-MOV-004', price: 0, unit: 'peca' },
       assets: { colorHex: '#D9D5C7', textureUrl: null, modelUrl: 'models/cama.glb' } },
@@ -122,9 +147,21 @@ export const products: Product[] = [
     { id: 'vortice.movel.lavatorio', name: 'Lavatório', manufacturer: 'vortice', category: 'furniture',
       commercial: { sku: 'VOR-MOV-007', price: 0, unit: 'peca' },
       assets: { colorHex: '#F4F1E8', textureUrl: null, modelUrl: 'models/pia-banheiro.glb' } },
-    { id: 'vortice.movel.box-chuveiro', name: 'Box de Chuveiro', manufacturer: 'vortice', category: 'furniture',
+    // Box de banheiro — DOIS modelos distintos, não um substituindo o
+    // outro (correção pós-lançamento: a primeira versão desta entrada,
+    // na DEC-76, trocou o modelUrl achando que o novo arquivo substituía
+    // o antigo — errado, são formatos DIFERENTES pra layouts diferentes
+    // de banheiro). O antigo (box-banheiro.glb) é de CANTO; o novo
+    // (box-banheiro-1500x2000.glb) é RETO. Os dois continuam como peça
+    // de móvel comum (tamanho fixo, arrasto livre) — a mudança pra se
+    // redimensionar sozinho conforme a largura do banheiro (com teto de
+    // ~2m) fica pra depois, ver DEC-76.
+    { id: 'vortice.movel.box-chuveiro', name: 'Box de Chuveiro de Canto', manufacturer: 'vortice', category: 'furniture',
       commercial: { sku: 'VOR-MOV-008', price: 0, unit: 'peca' },
       assets: { colorHex: '#D9E8EC', textureUrl: null, modelUrl: 'models/box-banheiro.glb' } },
+    { id: 'vortice.movel.box-chuveiro-reto-1500x2000', name: 'Box de Chuveiro Reto 1500x2000', manufacturer: 'vortice', category: 'furniture',
+      commercial: { sku: 'VOR-MOV-014', price: 0, unit: 'peca' },
+      assets: { colorHex: '#D9E8EC', textureUrl: null, modelUrl: 'models/box-banheiro-1500x2000.glb' } },
     { id: 'vortice.movel.chuveiro', name: 'Chuveiro', manufacturer: 'vortice', category: 'furniture',
       commercial: { sku: 'VOR-MOV-009', price: 0, unit: 'peca' },
       assets: { colorHex: '#C7C7C7', textureUrl: null, modelUrl: 'models/chuveiro.glb' } },

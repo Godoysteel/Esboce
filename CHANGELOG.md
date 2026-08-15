@@ -1,5 +1,9 @@
 # Changelog
 
+> Corrigido: box de chuveiro de canto (já existente) e box de chuveiro reto (novo, 1500x2000mm) são dois produtos separados no Catálogo agora — a entrada anterior deste changelog tratava errado o box reto como substituto do de canto.
+
+> Adicionado: 6 janelas de correr (500 a 3000mm) e 1 Máximo-Ar com modelo 3D real no Catálogo. Ver DEC-76.
+
 > Adicionado: mais 9 modelos reais (glTF) de porta ao Catálogo — 5 portas de vidro (600 a 1000mm de largura), 3 de giro (1200 a 2000mm) e 2 de correr (2500 e 3000mm). Junto com a porta de teste anterior, já são 10 opções de porta com modelo 3D real disponíveis. Ver DEC-75.
 
 > Adicionado: primeiro modelo real (glTF) de esquadria — "Porta de Vidro 1000x2100" — no lugar da geometria gerada na hora. Portas/janelas podem agora referenciar um modelo 3D do Catálogo (`Opening.productId`); sem escolher nenhum, continua tudo como sempre. Mais modelos da mesma família (janelas de correr/giro, portas de correr/giro em vários tamanhos) entram conforme forem chegando. Ver DEC-74.
