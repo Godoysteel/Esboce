@@ -191,6 +191,7 @@ export function init(): void {
       if (action === 'close') ViewportController.deselect();
       if (action === 'delete') { Store.commands.deleteHydraulicFixture(hydraulicNodeId); ViewportController.deselect(); }
       if (action === 'flipHydraulicFace') Store.commands.flipHydraulicFixtureFace(hydraulicNodeId);
+      if (action === 'routeHydraulicToSource') ViewportController.beginHydraulicRouteDraw(hydraulicNodeId);
       return;
     }
 

@@ -71,12 +71,12 @@ test('ponto de parede encaixa no eixo e preserva a altura técnica', () => {
   assert.deepEqual({ x: point.x, y: point.y }, { x: 46, y: 0 });
 });
 
-test('ralo encaixa no grid do piso e não aceita parede obrigatória', () => {
+test('ralo nasce exatamente onde foi clicado no piso — livre, sem grid — e não aceita parede obrigatória', () => {
   const template = hydraulicFixtureTemplate('shower_drain');
   const point = createPositionedHydraulicFixture('shower_drain', 33, 47);
   assert.equal(template.placementSurface, 'floor');
   assert.equal(point.wallId, undefined);
-  assert.deepEqual({ x: point.x, y: point.y }, { x: 40, y: 40 });
+  assert.deepEqual({ x: point.x, y: point.y }, { x: 33, y: 47 });
 });
 
 test('ponto de parede não pode nascer solto no ambiente', () => {
@@ -89,9 +89,9 @@ test('wall fixture dragging stays constrained to its host wall', () => {
   assert.deepEqual(resolveHydraulicFixturePosition(point, 74, 55, wall), { x: 74, y: 10 });
 });
 
-test('floor fixture dragging remains snapped to the technical grid', () => {
+test('floor fixture dragging is free — no snap to the technical grid', () => {
   const point = createPositionedHydraulicFixture('floor_drain', 20, 20);
-  assert.deepEqual(resolveHydraulicFixturePosition(point, 51, 69), { x: 60, y: 60 });
+  assert.deepEqual(resolveHydraulicFixturePosition(point, 51, 69), { x: 51, y: 69 });
 });
 
 test('water outlet marker is rendered beyond the wall face while its technical point stays on axis', () => {
@@ -137,6 +137,29 @@ test('cold-water generation places a tank above the last floor and routes every 
   assert.equal(tank.label, "Caixa d'água");
   assert.ok(system.segments.length >= 2);
   system.segments.forEach((segment) => assert.equal(segmentIsOrthogonal3D(system, segment.id), true));
+});
+
+test('cold-water generation preserves a manually guided route instead of overwriting it', () => {
+  const project = createProject();
+  const guidedPoint = createPositionedHydraulicFixture('shower', 40, 0, { id: 'w', x1: 0, y1: 0, x2: 100, y2: 0 });
+  const autoPoint = createPositionedHydraulicFixture('kitchen_faucet', 80, 0, { id: 'w', x1: 0, y1: 0, x2: 100, y2: 0 });
+  const source = { id: 'existing-tank', x: 50, y: 50, elevationM: 3.35, floorIndex: 0 };
+  const guidedRoute = buildGuidedColdWaterHeaderRoute(source, guidedPoint, [{ x: 40, y: 20 }], guidedPoint.id);
+  const existing = {
+    nodes: [guidedPoint, autoPoint, { ...source, kind: 'source', networkType: 'cold_water', label: "Caixa d'água" }, ...guidedRoute.nodes],
+    segments: [...guidedRoute.segments],
+  };
+  const system = buildColdWaterNetworkFromFixtures([{ ...project.floors[0], walls: [] }], existing);
+  // A origem continua sendo a MESMA instância (mesmo id) — nenhum trecho guiado fica órfão.
+  const tank = system.nodes.find((node) => node.kind === 'source');
+  assert.equal(tank.id, 'existing-tank');
+  // O percurso do ponto guiado não foi regenerado: os mesmos nós/segmentos (mesmos ids) continuam lá.
+  const guidedNodeIds = guidedRoute.nodes.map((node) => node.id).sort();
+  const survivingGuidedNodeIds = system.nodes.filter((node) => node.ownerFixtureId === guidedPoint.id).map((node) => node.id).sort();
+  assert.deepEqual(survivingGuidedNodeIds, guidedNodeIds);
+  // O ponto SEM percurso guiado recebeu o traçado automático normalmente.
+  const autoNodes = system.nodes.filter((node) => node.ownerFixtureId === autoPoint.id);
+  assert.ok(autoNodes.length >= 2);
 });
 
 test('guided cold-water route follows the waypoints and drops straight down to the fixture', () => {

@@ -2357,7 +2357,7 @@ export function hashColorHex(key: string): number {
       tagCategory(marker, 'instalacoes');
       marker.userData.hydraulicNodeId = node.id;
       marker.userData.floorIndex = node.floorIndex || 0;
-      marker.userData.hydraulicEditable = node.kind === 'fixture' && !!node.fixtureType;
+      marker.userData.hydraulicEditable = (node.kind === 'fixture' && !!node.fixtureType) || (node.kind === 'junction' && !!node.ownerFixtureId);
       scene.add(marker);
       registry.structureMeshes.push(marker);
       if (node.kind === 'fixture' && node.fixtureType && selected) {

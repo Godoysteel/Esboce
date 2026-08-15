@@ -5,7 +5,7 @@
 // var/function trocados por const/arrow onde natural.
 
 import { Core } from './Core.js';
-import { buildColdWaterKitchenPrototype, buildColdWaterNetworkFromFixtures, createPositionedHydraulicFixture, hydraulicFixtureVisualPosition, resolveHydraulicFixturePosition } from './Hydraulics.js';
+import { buildColdWaterKitchenPrototype, buildColdWaterNetworkFromFixtures, buildGuidedColdWaterHeaderRoute, createPositionedHydraulicFixture, hydraulicFixtureVisualPosition, nextHydraulicId, removeGuidedRouteForFixture, resolveHydraulicFixturePosition } from './Hydraulics.js';
 import type {
   Project, Floor, Wall, Column, Roof, Opening, OpeningKind, Varanda, Laje, Furniture, ColumnShape, RoofType,
   RidgeAxis, VarandaFrontSide, FoundationType, StoreEvent, StoreListener,
@@ -209,6 +209,57 @@ export const commands = {
     project.hydraulics = buildColdWaterNetworkFromFixtures(project.floors, project.hydraulics);
     project.layers.instalacoes = true;
     emit({ type: 'HydraulicNetworkGenerated' });
+    return true;
+  },
+
+  // H2 — percurso guiado de água fria: o usuário desenha o trecho
+  // horizontal (pontos-guia); a descida final até o ponto continua
+  // automática (ver Hydraulics.buildGuidedColdWaterHeaderRoute). Chamar de
+  // novo pro MESMO ponto substitui só o percurso dele (ownerFixtureId),
+  // sem afetar os demais pontos já roteados — inclusive os gerados pela
+  // rota ingênua de generateHydraulicNetwork, que preserva rotas guiadas.
+  setGuidedHydraulicColdWaterRoute(fixtureId: string, waypoints: { x: number; y: number }[]): boolean {
+    const fixture = findHydraulicNode(fixtureId);
+    if (!fixture || fixture.kind !== 'fixture' || fixture.networkType !== 'cold_water') return false;
+    pushUndoSnapshot();
+    let source = project.hydraulics.nodes.find((node) => node.kind === 'source' && node.networkType === 'cold_water');
+    if (!source) {
+      // Mesma lógica de posicionamento da origem usada por
+      // buildColdWaterNetworkFromFixtures — duplicada aqui de propósito
+      // (é só o ponto de partida quando ainda não existe NENHUMA origem;
+      // uma vez criada, sempre é reaproveitada, nunca regenerada).
+      const topFloorIndex = Math.max(0, project.floors.length - 1);
+      const allWalls = project.floors.flatMap((floor) => floor.walls);
+      const bounds = allWalls.length ? {
+        minX: Math.min(...allWalls.flatMap((wall) => [wall.x1, wall.x2])), maxX: Math.max(...allWalls.flatMap((wall) => [wall.x1, wall.x2])),
+        minY: Math.min(...allWalls.flatMap((wall) => [wall.y1, wall.y2])), maxY: Math.max(...allWalls.flatMap((wall) => [wall.y1, wall.y2])),
+      } : { minX: -40, maxX: 40, minY: -40, maxY: 40 };
+      source = {
+        id: nextHydraulicId('hyd-tank'), kind: 'source', networkType: 'cold_water', label: "Caixa d'água",
+        x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2,
+        elevationM: 3.35, floorIndex: topFloorIndex,
+      };
+      project.hydraulics.nodes.push(source);
+    }
+    const cleared = removeGuidedRouteForFixture(project.hydraulics, fixtureId);
+    const route = buildGuidedColdWaterHeaderRoute(source, fixture, waypoints, fixtureId);
+    project.hydraulics = { nodes: [...cleared.nodes, ...route.nodes], segments: [...cleared.segments, ...route.segments] };
+    project.layers.instalacoes = true;
+    emit({ type: 'HydraulicGuidedRouteSet', hydraulicNodeId: fixtureId });
+    return true;
+  },
+
+  // Reposiciona um ponto-guia (junction) já existente — usado pelo arraste
+  // com prévia fantasma: a posição só é gravada aqui, no soltar do
+  // ponteiro; durante o arraste em si, o viewport move só o objeto 3D,
+  // sem tocar no Store (mesmo padrão da DEC-57).
+  moveHydraulicJunction(nodeId: string, x: number, y: number): boolean {
+    const node = findHydraulicNode(nodeId);
+    if (!node || node.kind !== 'junction') return false;
+    pushUndoSnapshot();
+    node.x = x;
+    node.y = y;
+    emit({ type: 'HydraulicJunctionMoved', hydraulicNodeId: nodeId });
     return true;
   },
 

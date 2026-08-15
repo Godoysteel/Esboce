@@ -551,6 +551,41 @@
     display: block;
   }
 
+  /* Painel do piso reaproveita o mesmo container do painel de elevação
+     (.hydraulic-wall-elevation-panel), só maior — planta é 2D nos dois
+     eixos, precisa de mais espaço vertical que a tira estreita da parede. */
+  .hydraulic-floor-panel { width: min(720px, 92vw); }
+  .hydraulic-floor-svg {
+    width: 100%;
+    height: min(520px, 62vh);
+    background: #F7F5EF;
+    border: 1px solid #EDEAE1;
+    border-radius: 6px;
+    cursor: crosshair;
+    display: block;
+  }
+
+  /* Barra de conclusão do desenho de percurso guiado (H2) — aparece
+     enquanto o usuário está clicando os pontos-guia, mesmo espírito de
+     .hydraulic-wall-prompt mas com ações (botões), não só aviso. */
+  .hydraulic-route-draw-bar {
+    position: absolute;
+    left: 50%; bottom: 46px;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(27,28,30,0.86);
+    color: #F4F1EA;
+    font-size: 12px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    z-index: 7;
+  }
+  .hydraulic-route-draw-bar button { margin: 0; padding: 4px 10px; font-size: 12px; border-radius: 6px; border: none; cursor: pointer; }
+  #hydraulicRouteDrawFinish { background: #5A49C7; color: #fff; }
+  #hydraulicRouteDrawCancel { background: rgba(244,241,234,0.15); color: #F4F1EA; }
+
   /* Leitura rápida de metragem — agora uma pill dentro de .bottom-bar
      (não mais absoluta solta dentro de #viewport). */
   .viewport-stats {
@@ -1434,6 +1469,7 @@
   </div>
   <div id="roomGizmo" class="gizmo opening-gizmo">
     <button class="gz" data-action="flipHydraulicFace" title="Trocar lado da parede">⇄</button>
+    <button class="gz" data-action="routeHydraulicToSource" title="Desenhar percurso até a caixa d'água">〰️</button>
     <button class="gz danger" data-action="delete" title="Excluir cômodo">🗑</button>
     <button class="gz" data-action="close" title="Fechar">✕</button>
   </div>
@@ -1464,8 +1500,16 @@
       <strong id="hydraulicWallElevationTitle"></strong>
       <button id="hydraulicWallElevationClose">✕</button>
     </div>
-    <p class="hydraulic-wall-elevation-hint">Clique na parede, na altura desejada, para posicionar um ponto. Pode posicionar quantos precisar antes de fechar.</p>
+    <p class="hydraulic-wall-elevation-hint">Clique na parede, na altura desejada, para posicionar o ponto. Pra adicionar outro, ative a ferramenta de novo na barra lateral.</p>
     <svg id="hydraulicWallElevationSvg" class="hydraulic-wall-elevation-svg"></svg>
+  </div>
+  <div id="hydraulicFloorPanel" class="hydraulic-wall-elevation-panel hydraulic-floor-panel">
+    <div class="object-panel-header">
+      <strong>Posicionar no piso</strong>
+      <button id="hydraulicFloorPanelClose">✕</button>
+    </div>
+    <p class="hydraulic-wall-elevation-hint">Clique em qualquer ponto do piso para posicionar. Posição livre — não trava no grid. Pra adicionar outro, ative a ferramenta de novo na barra lateral.</p>
+    <svg id="hydraulicFloorSvg" class="hydraulic-floor-svg"></svg>
   </div>
   <div id="materialsPanel" class="materials-panel">
     <div class="object-panel-header">
@@ -1480,6 +1524,11 @@
   </div>
   <div class="viewport-hint" id="viewportHint">Clique um ambiente na barra ao lado pra criá-lo. Clique direito + arraste pra girar a câmera. Shift + arraste desloca a câmera (igual Blender).</div>
   <div class="hydraulic-wall-prompt" id="hydraulicWallPrompt" style="display:none;">Selecione a parede relacionada.</div>
+  <div id="hydraulicRouteDrawBar" class="hydraulic-route-draw-bar" style="display:none;">
+    <span id="hydraulicRouteDrawCount">0 pontos</span>
+    <button id="hydraulicRouteDrawFinish">Concluir</button>
+    <button id="hydraulicRouteDrawCancel">Cancelar</button>
+  </div>
   <div class="wall-diagnostics" id="wallDiagnosticsPanel" aria-live="polite">
     <pre id="wallDiagnosticsOutput">DIAGNÓSTICO DE PAREDES
 

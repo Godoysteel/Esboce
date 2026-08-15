@@ -16,6 +16,7 @@ import * as THREE from 'three';
 import { Core } from './Core.js';
 import { Catalog } from './Catalog.js';
 import { Store } from './Store.js';
+import { Scene2DRenderer } from './Scene2DRenderer.js';
 import { Scene3DRenderer, DEBUG_COLOR_MODE } from './Scene3DRenderer.js';
 import { NavGizmo } from './NavGizmo.js';
 import { touchCameraAnchor, updateTouchCamera, type TouchCameraAnchor } from './TouchCamera.js';
@@ -115,7 +116,18 @@ import {
   var MIN_DIST = 3, MAX_DIST = 35;
   var touchCameraMode = false;
 
-  var gizmoEl: any, gzSwapBtnEl: any, openingGizmoEl: any, roomGizmoEl: any, columnShapePanelEl: any, roofTypePanelEl: any, finishPanelEl: any, paintPickerPanelEl: any, objectPanelEl: any, objectPanelTitleEl: any, objectPanelBodyEl: any, hintEl: any, layersContextMenuEl: any, hydraulicWallPromptEl: any, hydraulicWallElevationPanelEl: any, hydraulicWallElevationTitleEl: any, hydraulicWallElevationSvgEl: any;
+  var gizmoEl: any, gzSwapBtnEl: any, openingGizmoEl: any, roomGizmoEl: any, columnShapePanelEl: any, roofTypePanelEl: any, finishPanelEl: any, paintPickerPanelEl: any, objectPanelEl: any, objectPanelTitleEl: any, objectPanelBodyEl: any, hintEl: any, layersContextMenuEl: any, hydraulicWallPromptEl: any, hydraulicWallElevationPanelEl: any, hydraulicWallElevationTitleEl: any, hydraulicWallElevationSvgEl: any, hydraulicRouteDrawBarEl: any, hydraulicRouteDrawCountEl: any;
+  // Estado do desenho de percurso guiado (H2): fixtureId sendo roteada e os
+  // pontos-guia já clicados (só plano — a queda vertical final é
+  // automática, ver Hydraulics.buildGuidedColdWaterHeaderRoute). null =
+  // fora do modo de desenho.
+  var hydraulicRouteDrawState: { fixtureId: string; points: { x: number; y: number }[] } | null = null;
+  var hydraulicRouteDrawMarkers: any[] = [];
+  // Painel de piso 2D (ralos / pontos de piso) — reaproveita o
+  // Scene2DRenderer inteiro, só desenhando os marcadores hidráulicos por
+  // cima. fixtureKey = qual tipo de ponto está sendo posicionado.
+  var hydraulicFloorPanelState: { fixtureKey: string } | null = null;
+  var hydraulicFloorPanelEl: any, hydraulicFloorSvgEl: any, hydraulicFloorSceneRenderer: any;
   // Estado da aba de elevação da parede (H2 — fluxo guiado de posicionamento):
   // qual parede e qual tipo de ponto está sendo posicionado. null = painel fechado.
   var hydraulicWallElevationState: { wallId: string; fixtureKey: string } | null = null;
@@ -465,6 +477,12 @@ import {
     });
     var hits = raycaster.intersectObjects(targets, false);
     var best = hits.length ? hits[0] : null;
+    // Com uma ferramenta hidráulica armada, o móvel vira só referência
+    // visual — não pode "roubar" o clique da parede/piso atrás dele (ex.:
+    // clicar na parede atrás de um vaso ou de um box de banheiro pra
+    // posicionar o ponto de água/esgoto). Continua desenhado normalmente,
+    // só sai da lista de coisas que o raycast enxerga.
+    if (hydraulicFixtureKeyFromTool(currentTool)) return best ? best.object : null;
     // Móvel é um grupo glTF (várias malhas aninhadas, não um único
     // Mesh direto em scene.children) — precisa de um raycast recursivo
     // à parte, resolvido pro grupo-pai que carrega o furnitureId (ver
@@ -869,6 +887,8 @@ import {
       var hydraulicNode = Store.findHydraulicNode(selectedHydraulicNodeId);
       var hydraulicFlipButton = roomGizmoEl.querySelector('[data-action="flipHydraulicFace"]');
       if (hydraulicFlipButton) hydraulicFlipButton.style.display = hydraulicNode && hydraulicNode.placementSurface === 'wall' ? '' : 'none';
+      var hydraulicRouteButton = roomGizmoEl.querySelector('[data-action="routeHydraulicToSource"]');
+      if (hydraulicRouteButton) hydraulicRouteButton.style.display = hydraulicNode && hydraulicNode.kind === 'fixture' && hydraulicNode.networkType === 'cold_water' ? '' : 'none';
       if (!hydraulicNode) {
         selectedHydraulicNodeId = null;
         roomGizmoEl.classList.remove('visible');
@@ -883,6 +903,8 @@ import {
     }
     var inactiveHydraulicFlipButton = roomGizmoEl.querySelector('[data-action="flipHydraulicFace"]');
     if (inactiveHydraulicFlipButton) inactiveHydraulicFlipButton.style.display = 'none';
+    var inactiveHydraulicRouteButton = roomGizmoEl.querySelector('[data-action="routeHydraulicToSource"]');
+    if (inactiveHydraulicRouteButton) inactiveHydraulicRouteButton.style.display = 'none';
     // Esquadria selecionada: gizmo próprio, sempre visível (não depende
     // de gizmoMenuOpen — ver selectOpening). Posicionado um pouco acima
     // do topo do vão, pra não tampar a folha/vidro.
@@ -1177,6 +1199,9 @@ import {
 
   // ---- aba de elevação da parede (H2 — fluxo guiado de posicionamento) ----
   var HYDRAULIC_ELEVATION_MAX_HEIGHT_M = 2.6; // mesmo teto já usado no clamp de Store.commands
+  // Margem ao redor do desenho da parede, em cm (mesma unidade do viewBox),
+  // reservada pra régua de altura (esquerda) e régua de distância (baixo).
+  var HYDRAULIC_ELEVATION_MARGIN = { left: 46, right: 12, top: 22, bottom: 34 };
 
   function closeHydraulicWallElevationPanel() {
     hydraulicWallElevationState = null;
@@ -1199,9 +1224,11 @@ import {
     var lengthM = Core.wallLengthMeters(wall);
     var lengthCm = Math.max(1, Math.round(lengthM * 100));
     var maxHeightCm = HYDRAULIC_ELEVATION_MAX_HEIGHT_M * 100;
+    var margin = HYDRAULIC_ELEVATION_MARGIN;
+    var ox = margin.left, oy = margin.top;
     var svgNS = 'http://www.w3.org/2000/svg';
     var svg = hydraulicWallElevationSvgEl;
-    svg.setAttribute('viewBox', '0 0 ' + lengthCm + ' ' + maxHeightCm);
+    svg.setAttribute('viewBox', '0 0 ' + (lengthCm + margin.left + margin.right) + ' ' + (maxHeightCm + margin.top + margin.bottom));
     while (svg.firstChild) svg.removeChild(svg.firstChild);
 
     function addLine(x1: number, y1: number, x2: number, y2: number, opts?: any) {
@@ -1223,16 +1250,40 @@ import {
       svg.appendChild(el);
     }
 
-    // contorno da parede (referência visual — comprimento real × altura máxima permitida)
-    addLine(0, maxHeightCm, lengthCm, maxHeightCm, { stroke: '#B9B6AB', width: 3 }); // piso
-    addLine(0, 0, lengthCm, 0, { stroke: '#EDEAE1', width: 1 }); // topo do intervalo permitido (2,60 m)
+    // contorno da parede — retângulo visível (comprimento real × altura
+    // máxima permitida), fundo branco pra se destacar da margem das réguas
+    var wallRect = document.createElementNS(svgNS, 'rect');
+    wallRect.setAttribute('x', String(ox)); wallRect.setAttribute('y', String(oy));
+    wallRect.setAttribute('width', String(lengthCm)); wallRect.setAttribute('height', String(maxHeightCm));
+    wallRect.setAttribute('fill', '#FFFFFF');
+    wallRect.setAttribute('stroke', '#B9B6AB');
+    wallRect.setAttribute('stroke-width', '2');
+    svg.appendChild(wallRect);
+
+    // régua de altura (esquerda) — marca a cada 0,5 m, com linha-guia bem
+    // clara cruzando a parede inteira pra ajudar a mirar a altura ao clicar
+    for (var h = 0; h <= HYDRAULIC_ELEVATION_MAX_HEIGHT_M + 0.001; h += 0.5) {
+      var hy = oy + maxHeightCm - h * 100;
+      addLine(ox, hy, ox + lengthCm, hy, { stroke: '#EDEAE1', width: 1 });
+      addLine(ox - 6, hy, ox, hy, { stroke: '#9C9A92', width: 1.5 });
+      addText(ox - 10, hy + 4, h.toFixed(1).replace('.', ',') + ' m', { anchor: 'end', size: 10, fill: '#77756E' });
+    }
+
+    // régua de distância (baixo) — marca a cada 0,5 m (ou 1 m se a parede
+    // for comprida, pra não empilhar número em cima de número)
+    var distanceStep = lengthM > 6 ? 1 : 0.5;
+    for (var d = 0; d <= lengthM + 0.001; d += distanceStep) {
+      var dx = ox + d * 100;
+      addLine(dx, oy + maxHeightCm, dx, oy + maxHeightCm + 6, { stroke: '#9C9A92', width: 1.5 });
+      addText(dx, oy + maxHeightCm + 18, d.toFixed(distanceStep < 1 ? 1 : 0).replace('.', ',') + ' m', { anchor: 'middle', size: 10, fill: '#77756E' });
+    }
 
     // linha-guia tracejada com a altura de referência do TIPO de ponto sendo posicionado agora
     var activeTemplate = hydraulicFixtureTemplate(hydraulicWallElevationState.fixtureKey);
     if (activeTemplate && activeTemplate.referenceHeightM != null) {
-      var refY = maxHeightCm - activeTemplate.referenceHeightM * 100;
-      addLine(0, refY, lengthCm, refY, { stroke: '#5A49C7', dashed: true, width: 1.5 });
-      addText(8, refY - 6, 'altura usual: ' + activeTemplate.referenceHeightM.toFixed(2).replace('.', ',') + ' m', { fill: '#5A49C7', size: 11 });
+      var refY = oy + maxHeightCm - activeTemplate.referenceHeightM * 100;
+      addLine(ox, refY, ox + lengthCm, refY, { stroke: '#5A49C7', dashed: true, width: 1.5 });
+      addText(ox + 8, refY - 6, 'altura usual: ' + activeTemplate.referenceHeightM.toFixed(2).replace('.', ',') + ' m', { fill: '#5A49C7', size: 11 });
     }
 
     // pontos já existentes nessa parede (de qualquer tipo — dá contexto de onde já tem coisa)
@@ -1241,24 +1292,87 @@ import {
       if (node.wallId !== wall!.id) return;
       var offsets = hydraulicNodeWallOffsetsMeters(node, wall!);
       if (!offsets) return;
-      var cx = offsets.fromStartM * 100;
-      var cy = maxHeightCm - offsets.heightM * 100;
-      var circle = document.createElementNS(svgNS, 'circle');
+      var cx = ox + offsets.fromStartM * 100;
+      var cy = oy + maxHeightCm - offsets.heightM * 100;
+      var circle: any = document.createElementNS(svgNS, 'circle');
       circle.setAttribute('cx', String(cx)); circle.setAttribute('cy', String(cy));
       circle.setAttribute('r', '9');
       circle.setAttribute('fill', node.kind === 'fixture' ? '#5A49C7' : '#8B8878');
       circle.setAttribute('stroke', '#fff'); circle.setAttribute('stroke-width', '2');
+      if (node.kind === 'fixture') {
+        circle.style.cursor = 'grab';
+        circle.addEventListener('pointerdown', function (dragEvent: any) { beginHydraulicWallElevationDrag(dragEvent, node.id, wall!); });
+      }
       svg.appendChild(circle);
       var nodeTemplate = node.fixtureType ? hydraulicFixtureTemplate(node.fixtureType) : null;
       var labelParts = [nodeTemplate ? nodeTemplate.shortLabel : node.label, offsets.heightM.toFixed(2).replace('.', ',') + ' m'];
       addText(cx, cy - 14, labelParts.join(' · '), { anchor: 'middle', size: 11 });
     });
 
-    addText(lengthCm / 2, maxHeightCm + 26 > maxHeightCm ? maxHeightCm - 8 : maxHeightCm - 8, lengthM.toFixed(2).replace('.', ',') + ' m de parede', { anchor: 'middle', size: 11, fill: '#9C9A92' });
+    addText(ox + lengthCm / 2, oy - 4, lengthM.toFixed(2).replace('.', ',') + ' m de parede', { anchor: 'middle', size: 11, fill: '#9C9A92' });
+  }
+
+  // Botão de ferramenta hidráulica é "pulso": gerou um ponto, desativa
+  // sozinho — se o usuário quiser outro, precisa clicar no botão de novo.
+  // Só desliga a ferramenta (currentTool + destaque do botão); os painéis
+  // (parede/piso) continuam abertos, prontos pro próximo clique no botão.
+  function deactivateHydraulicToolButton() {
+    currentTool = null;
+    document.querySelectorAll('.tool-btn[data-tool]').forEach(function (btn: any) { btn.classList.remove('active'); });
+    if (hydraulicWallPromptEl) hydraulicWallPromptEl.style.display = 'none';
+  }
+
+  // Arraste fluido de um ponto já existente dentro do painel de elevação:
+  // só mexe no círculo em si a cada pointermove (nada de Store, nada de
+  // re-render pesado no meio do gesto — mesmo princípio de prévia fantasma
+  // já usado no 3D), e grava a posição final de uma vez só no soltar.
+  function beginHydraulicWallElevationDrag(e: any, nodeId: string, wall: any) {
+    e.stopPropagation();
+    if (!hydraulicWallElevationSvgEl) return;
+    var svg = hydraulicWallElevationSvgEl;
+    var circle = e.target;
+    var margin = HYDRAULIC_ELEVATION_MARGIN;
+    var lengthCm = Math.max(1, Math.round(Core.wallLengthMeters(wall) * 100));
+    var maxHeightCm = HYDRAULIC_ELEVATION_MAX_HEIGHT_M * 100;
+    function toLocal(clientX: number, clientY: number) {
+      var point = svg.createSVGPoint();
+      point.x = clientX; point.y = clientY;
+      var ctm = svg.getScreenCTM();
+      if (!ctm) return null;
+      var local = point.matrixTransform(ctm.inverse());
+      return { x: Math.max(0, Math.min(lengthCm, local.x - margin.left)), y: Math.max(0, Math.min(maxHeightCm, local.y - margin.top)) };
+    }
+    var lastLocal = toLocal(e.clientX, e.clientY);
+    function onMove(moveEvent: any) {
+      var local = toLocal(moveEvent.clientX, moveEvent.clientY);
+      if (!local) return;
+      lastLocal = local;
+      circle.setAttribute('cx', String(margin.left + local.x));
+      circle.setAttribute('cy', String(margin.top + local.y));
+    }
+    function onUp() {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      if (lastLocal) {
+        var offsetM = lastLocal.x / 100;
+        var heightM = (maxHeightCm - lastLocal.y) / 100;
+        var resolved = hydraulicPositionFromWallOffset(wall, offsetM, Math.max(0.05, Math.min(HYDRAULIC_ELEVATION_MAX_HEIGHT_M, heightM)));
+        Store.commands.updateHydraulicFixtureBodyLive(nodeId, resolved.x, resolved.y, resolved.elevationM);
+      }
+      renderHydraulicWallElevationPanel();
+      render();
+    }
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
   }
 
   function onHydraulicWallElevationSvgPointerDown(e: any) {
     if (!hydraulicWallElevationState || !hydraulicWallElevationSvgEl) return;
+    // Botão "pulso": só cria ponto novo enquanto a ferramenta está
+    // realmente armada (currentTool). Um clique aqui com a ferramenta já
+    // desativada não faz nada — evita criar ponto sem o usuário ter
+    // clicado no botão de novo, como pedido.
+    if (currentTool !== 'hydraulic:' + hydraulicWallElevationState.fixtureKey) return;
     var wall = Store.findWall(hydraulicWallElevationState.wallId);
     if (!wall) return;
     var svg = hydraulicWallElevationSvgEl;
@@ -1267,14 +1381,184 @@ import {
     var ctm = svg.getScreenCTM();
     if (!ctm) return;
     var local = point.matrixTransform(ctm.inverse());
+    var margin = HYDRAULIC_ELEVATION_MARGIN;
+    var lengthCm = Math.max(1, Math.round(Core.wallLengthMeters(wall) * 100));
     var maxHeightCm = HYDRAULIC_ELEVATION_MAX_HEIGHT_M * 100;
-    var offsetM = local.x / 100;
-    var heightM = (maxHeightCm - local.y) / 100;
+    var localX = local.x - margin.left, localY = local.y - margin.top;
+    // Clique fora do retângulo da parede (caiu na régua) não faz nada.
+    if (localX < 0 || localX > lengthCm || localY < 0 || localY > maxHeightCm) return;
+    var offsetM = localX / 100;
+    var heightM = (maxHeightCm - localY) / 100;
     var resolved = hydraulicPositionFromWallOffset(wall, offsetM, Math.max(0.05, Math.min(HYDRAULIC_ELEVATION_MAX_HEIGHT_M, heightM)));
     var node = Store.commands.createHydraulicFixture(hydraulicWallElevationState.fixtureKey, resolved.x, resolved.y, wall.id);
     if (node) {
-      hintEl.textContent = 'Ponto posicionado. Pode adicionar outro ou fechar a aba.';
+      hintEl.textContent = 'Ponto posicionado.';
+      deactivateHydraulicToolButton();
       renderHydraulicWallElevationPanel();
+      render();
+    }
+  }
+
+
+  // ---- desenho de percurso guiado (H2) — clique-clique de pontos-guia ----
+  function clearHydraulicRouteDrawMarkers() {
+    hydraulicRouteDrawMarkers.forEach(function (marker: any) { scene.remove(marker); });
+    hydraulicRouteDrawMarkers = [];
+  }
+
+  function updateHydraulicRouteDrawBar() {
+    if (!hydraulicRouteDrawBarEl) return;
+    if (!hydraulicRouteDrawState) { hydraulicRouteDrawBarEl.style.display = 'none'; return; }
+    hydraulicRouteDrawBarEl.style.display = 'flex';
+    if (hydraulicRouteDrawCountEl) {
+      var count = hydraulicRouteDrawState.points.length;
+      hydraulicRouteDrawCountEl.textContent = count + (count === 1 ? ' ponto' : ' pontos');
+    }
+  }
+
+  function beginHydraulicRouteDraw(fixtureId: string) {
+    var fixture = Store.findHydraulicNode(fixtureId);
+    if (!fixture || fixture.kind !== 'fixture' || fixture.networkType !== 'cold_water') return;
+    hydraulicRouteDrawState = { fixtureId: fixtureId, points: [] };
+    clearHydraulicRouteDrawMarkers();
+    roomGizmoEl.classList.remove('visible');
+    hintEl.textContent = 'Clique no chão pra marcar cada ponto do percurso. Toque em "Concluir" quando terminar.';
+    updateHydraulicRouteDrawBar();
+    render();
+  }
+
+  function finishHydraulicRouteDraw() {
+    if (!hydraulicRouteDrawState) return;
+    var ok = Store.commands.setGuidedHydraulicColdWaterRoute(hydraulicRouteDrawState.fixtureId, hydraulicRouteDrawState.points);
+    hydraulicRouteDrawState = null;
+    clearHydraulicRouteDrawMarkers();
+    updateHydraulicRouteDrawBar();
+    hintEl.textContent = ok ? 'Percurso salvo.' : 'Não foi possível salvar o percurso.';
+    onModelChanged();
+    render();
+  }
+
+  function cancelHydraulicRouteDraw() {
+    hydraulicRouteDrawState = null;
+    clearHydraulicRouteDrawMarkers();
+    updateHydraulicRouteDrawBar();
+    hintEl.textContent = '';
+    render();
+  }
+
+  function addHydraulicRouteDrawPoint(x: number, y: number) {
+    if (!hydraulicRouteDrawState) return;
+    hydraulicRouteDrawState.points.push({ x: x, y: y });
+    var world = modelToWorld(x, y);
+    var marker = new THREE.Mesh(
+      new THREE.SphereGeometry(0.05, 14, 10),
+      new THREE.MeshStandardMaterial({ color: 0x5A49C7, emissive: 0x5A49C7, emissiveIntensity: 0.4 })
+    );
+    marker.position.set(world.x, currentFloorYOffset() + 0.05, world.z);
+    scene.add(marker);
+    hydraulicRouteDrawMarkers.push(marker);
+    updateHydraulicRouteDrawBar();
+    render();
+  }
+
+  // ---- painel de piso 2D (ralos e outros pontos de piso) ----
+  function closeHydraulicFloorPanel() {
+    hydraulicFloorPanelState = null;
+    if (hydraulicFloorPanelEl) hydraulicFloorPanelEl.classList.remove('visible');
+  }
+
+  function openHydraulicFloorPanel(fixtureKey: string) {
+    if (!hydraulicFloorPanelEl) return;
+    hydraulicFloorPanelState = { fixtureKey: fixtureKey };
+    hydraulicFloorPanelEl.classList.add('visible');
+    if (hydraulicWallPromptEl) hydraulicWallPromptEl.style.display = 'none';
+    renderHydraulicFloorPanel();
+  }
+
+  function renderHydraulicFloorPanel() {
+    if (!hydraulicFloorPanelState || !hydraulicFloorSvgEl || !hydraulicFloorSceneRenderer) return;
+    var walls = Store.currentWalls();
+    var pad = Core.GRID * 1.5; // meio metro e meio de folga ao redor da planta
+    var bounds = walls.length ? {
+      minX: Math.min.apply(null, walls.flatMap(function (w: any) { return [w.x1, w.x2]; })),
+      maxX: Math.max.apply(null, walls.flatMap(function (w: any) { return [w.x1, w.x2]; })),
+      minY: Math.min.apply(null, walls.flatMap(function (w: any) { return [w.y1, w.y2]; })),
+      maxY: Math.max.apply(null, walls.flatMap(function (w: any) { return [w.y1, w.y2]; })),
+    } : { minX: -200, maxX: 200, minY: -200, maxY: 200 };
+    hydraulicFloorSvgEl.setAttribute('viewBox',
+      (bounds.minX - pad) + ' ' + (bounds.minY - pad) + ' ' + (bounds.maxX - bounds.minX + pad * 2) + ' ' + (bounds.maxY - bounds.minY + pad * 2));
+    hydraulicFloorSceneRenderer.render();
+    // pontos de piso já existentes, de qualquer tipo — dá contexto do que já foi posicionado
+    var project = Store.getProject();
+    var svgNS = 'http://www.w3.org/2000/svg';
+    var overlay = document.createElementNS(svgNS, 'g');
+    (project.hydraulics.nodes || []).forEach(function (node: any) {
+      if (node.placementSurface !== 'floor') return;
+      var circle: any = document.createElementNS(svgNS, 'circle');
+      circle.setAttribute('cx', String(node.x));
+      circle.setAttribute('cy', String(node.y));
+      circle.setAttribute('r', String(Core.GRID * 0.12));
+      circle.setAttribute('fill', '#5A49C7');
+      circle.setAttribute('stroke', '#fff');
+      circle.setAttribute('stroke-width', '1.5');
+      circle.style.cursor = 'grab';
+      circle.addEventListener('pointerdown', function (dragEvent: any) { beginHydraulicFloorDrag(dragEvent, node.id); });
+      overlay.appendChild(circle);
+    });
+    hydraulicFloorSvgEl.appendChild(overlay);
+  }
+
+  // Mesmo princípio do arraste no painel de parede: só mexe no círculo
+  // durante o gesto, grava no Store de uma vez só no soltar.
+  function beginHydraulicFloorDrag(e: any, nodeId: string) {
+    e.stopPropagation();
+    if (!hydraulicFloorSvgEl) return;
+    var svg = hydraulicFloorSvgEl;
+    var circle = e.target;
+    var lastLocal: { x: number; y: number } | null = null;
+    function toLocal(clientX: number, clientY: number) {
+      var point = svg.createSVGPoint();
+      point.x = clientX; point.y = clientY;
+      var ctm = svg.getScreenCTM();
+      if (!ctm) return null;
+      var local = point.matrixTransform(ctm.inverse());
+      return { x: local.x, y: local.y };
+    }
+    function onMove(moveEvent: any) {
+      var local = toLocal(moveEvent.clientX, moveEvent.clientY);
+      if (!local) return;
+      lastLocal = local;
+      circle.setAttribute('cx', String(local.x));
+      circle.setAttribute('cy', String(local.y));
+    }
+    function onUp() {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      // Posição livre — sem arredondar pro grid (mesma decisão da DEC-65).
+      if (lastLocal) Store.commands.updateHydraulicFixtureBodyLive(nodeId, lastLocal.x, lastLocal.y);
+      renderHydraulicFloorPanel();
+      render();
+    }
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }
+
+  function onHydraulicFloorSvgPointerDown(e: any) {
+    if (!hydraulicFloorPanelState || !hydraulicFloorSvgEl) return;
+    // Mesma trava do painel de parede: só cria ponto com a ferramenta armada.
+    if (currentTool !== 'hydraulic:' + hydraulicFloorPanelState.fixtureKey) return;
+    var point = hydraulicFloorSvgEl.createSVGPoint();
+    point.x = e.clientX; point.y = e.clientY;
+    var ctm = hydraulicFloorSvgEl.getScreenCTM();
+    if (!ctm) return;
+    var local = point.matrixTransform(ctm.inverse());
+    // Posição livre — sem arredondar pro grid, por decisão explícita do
+    // Product Owner (pontos de piso não travam em unidade nenhuma).
+    var node = Store.commands.createHydraulicFixture(hydraulicFloorPanelState.fixtureKey, local.x, local.y, undefined);
+    if (node) {
+      hintEl.textContent = 'Ponto posicionado.';
+      deactivateHydraulicToolButton();
+      renderHydraulicFloorPanel();
       render();
     }
   }
@@ -1291,10 +1575,15 @@ import {
     hintEl.textContent = toolHydraulicTemplate
       ? (toolHydraulicTemplate.placementSurface === 'wall'
           ? 'Escolha a parede relacionada ao ponto.'
-          : 'Clique no piso indicado para posicionar o ponto hidráulico.')
+          : 'Posicione o ponto na aba do piso que abriu.')
       : TOOL_HINTS[tool] || '';
     if (hydraulicWallPromptEl) hydraulicWallPromptEl.style.display = toolHydraulicTemplate && toolHydraulicTemplate.placementSurface === 'wall' ? '' : 'none';
     closeHydraulicWallElevationPanel();
+    if (toolHydraulicTemplate && toolHydraulicTemplate.placementSurface === 'floor' && toolHydraulicKey) {
+      openHydraulicFloorPanel(toolHydraulicKey);
+    } else {
+      closeHydraulicFloorPanel();
+    }
     container.classList.remove('tool-demolish', 'tool-paintBucket');
     if (tool === 'demolish' || tool === 'paintBucket') container.classList.add('tool-' + tool);
     refreshPaintPickerPanel();
@@ -1510,6 +1799,18 @@ import {
     // girar acontece no pointerup/pointermove.
     if (downButton === 1 || downButton === 2) { e.preventDefault(); return; }
 
+    if (hydraulicRouteDrawState) {
+      // Modo de desenho de percurso (H2): todo clique esquerdo em área
+      // livre vira um ponto-guia novo; clicar num objeto existente não faz
+      // nada aqui (evita criar ponto em cima de móvel/parede sem querer).
+      var routeDrawMesh = pickMesh(e.clientX, e.clientY);
+      if (!routeDrawMesh) {
+        var routeDrawGround = getGroundModelPoint(e.clientX, e.clientY);
+        if (routeDrawGround) addHydraulicRouteDrawPoint(routeDrawGround.x, routeDrawGround.y);
+      }
+      return;
+    }
+
     var hydraulicFixtureKey = hydraulicFixtureKeyFromTool(currentTool);
     if (hydraulicFixtureKey) {
       var hydraulicMesh = pickMesh(e.clientX, e.clientY);
@@ -1530,11 +1831,9 @@ import {
           openHydraulicWallElevationPanel(hydraulicWallId, hydraulicFixtureKey);
           return;
         }
-        var hydraulicNode = Store.commands.createHydraulicFixture(hydraulicFixtureKey, hydraulicGround.x, hydraulicGround.y, undefined);
-        if (hydraulicNode) {
-          hintEl.textContent = 'Ponto de piso posicionado.';
-          render();
-        }
+        // Pontos de piso também não nascem mais no clique direto — abrem a
+        // aba do piso, onde a posição é livre (sem grid).
+        openHydraulicFloorPanel(hydraulicFixtureKey);
         return;
       }
     }
@@ -1892,7 +2191,23 @@ import {
         } else if (mesh.userData.hydraulicNodeId) {
           var hydraulicId = mesh.userData.hydraulicNodeId;
           var hydraulicEntity = Store.findHydraulicNode(hydraulicId);
-          if (!hydraulicEntity || !hydraulicEntity.fixtureType) return;
+          if (!hydraulicEntity) return;
+          if (hydraulicEntity.kind === 'junction' && hydraulicEntity.ownerFixtureId) {
+            // Ponto-guia de um percurso desenhado manualmente (H2): arraste
+            // livre no plano, sem trocar de parede/piso e sem ajuste de
+            // altura — a cota vertical do trecho horizontal é fixa (mesmo
+            // recorte de escopo da DEC-61: só o traçado horizontal é
+            // manual). Prévia fantasma no viewport; grava no Store só ao
+            // soltar (mesmo padrão de hydraulicFixtureBody).
+            selectHydraulicNode(hydraulicId);
+            dragMode = 'hydraulicJunctionBody';
+            dragElementStart = { lastX: hydraulicEntity.x, lastY: hydraulicEntity.y };
+            dragGroundStart = getGroundModelPoint(e.clientX, e.clientY);
+            hydraulicFixtureDragObjects = findHydraulicFixtureSceneObjects(hydraulicId);
+            Store.commands.beginTransaction();
+            return;
+          }
+          if (!hydraulicEntity.fixtureType) return;
           selectHydraulicNode(hydraulicId);
           dragMode = 'hydraulicFixtureBody';
           dragElementStart = { x: hydraulicEntity.x, y: hydraulicEntity.y, elevationM: hydraulicEntity.elevationM, lastX: hydraulicEntity.x, lastY: hydraulicEntity.y, lastElevationM: hydraulicEntity.elevationM, startScreenX: e.clientX, startScreenY: e.clientY };
@@ -2498,6 +2813,27 @@ import {
       }
       return;
     }
+    if (dragMode === 'hydraulicJunctionBody') {
+      var junctionGround = getGroundModelPoint(e.clientX, e.clientY);
+      var junctionNode = selectedHydraulicNodeId ? Store.findHydraulicNode(selectedHydraulicNodeId) : null;
+      if (junctionGround && dragGroundStart && hydraulicFixtureDragObjects.length && junctionNode) {
+        var junctionDx = junctionGround.x - dragGroundStart.x, junctionDy = junctionGround.y - dragGroundStart.y;
+        var junctionNextX = dragElementStart.x + junctionDx, junctionNextY = dragElementStart.y + junctionDy;
+        dragElementStart.lastX = junctionNextX;
+        dragElementStart.lastY = junctionNextY;
+        var junctionWorld = modelToWorld(junctionNextX, junctionNextY);
+        var junctionFloorIndex = junctionNode.floorIndex || 0;
+        hydraulicFixtureDragObjects.forEach(function (object: any) {
+          object.position.x = junctionWorld.x;
+          object.position.z = junctionWorld.z;
+        });
+        var junctionPreviewNode = { ...junctionNode, x: junctionNextX, y: junctionNextY, placementSurface: 'wall' };
+        var ownerFixture = junctionNode.ownerFixtureId ? Store.findHydraulicNode(junctionNode.ownerFixtureId) : null;
+        var ownerWall = ownerFixture && ownerFixture.wallId ? Store.findWall(ownerFixture.wallId) : null;
+        if (ownerWall) showHydraulicDragCotas(junctionPreviewNode, ownerWall);
+      }
+      return;
+    }
     if (dragMode && dragMode.indexOf('glazingWidth') === 0) {
       var gpResizeW = Store.findGlazingPanel(selectedGlazingPanelId);
       var groundResizeW = getGroundModelPoint(e.clientX, e.clientY);
@@ -2852,6 +3188,16 @@ import {
       clearHydraulicDragCotas();
       hydraulicFixtureDragObjects = [];
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
+      return;
+    }
+    if (dragMode === 'hydraulicJunctionBody') {
+      if (selectedHydraulicNodeId && dragElementStart) {
+        Store.commands.moveHydraulicJunction(selectedHydraulicNodeId, dragElementStart.lastX, dragElementStart.lastY);
+      }
+      clearHydraulicDragCotas();
+      hydraulicFixtureDragObjects = [];
+      dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
+      render();
       return;
     }
     if (dragMode === 'columnBody') {
@@ -3669,6 +4015,18 @@ import {
     var hydraulicWallElevationCloseBtn = document.getElementById('hydraulicWallElevationClose');
     if (hydraulicWallElevationCloseBtn) hydraulicWallElevationCloseBtn.addEventListener('click', closeHydraulicWallElevationPanel);
     if (hydraulicWallElevationSvgEl) hydraulicWallElevationSvgEl.addEventListener('pointerdown', onHydraulicWallElevationSvgPointerDown);
+    hydraulicRouteDrawBarEl = document.getElementById('hydraulicRouteDrawBar');
+    hydraulicRouteDrawCountEl = document.getElementById('hydraulicRouteDrawCount');
+    var hydraulicRouteDrawFinishBtn = document.getElementById('hydraulicRouteDrawFinish');
+    var hydraulicRouteDrawCancelBtn = document.getElementById('hydraulicRouteDrawCancel');
+    if (hydraulicRouteDrawFinishBtn) hydraulicRouteDrawFinishBtn.addEventListener('click', finishHydraulicRouteDraw);
+    if (hydraulicRouteDrawCancelBtn) hydraulicRouteDrawCancelBtn.addEventListener('click', cancelHydraulicRouteDraw);
+    hydraulicFloorPanelEl = document.getElementById('hydraulicFloorPanel');
+    hydraulicFloorSvgEl = document.getElementById('hydraulicFloorSvg');
+    if (hydraulicFloorSvgEl) hydraulicFloorSceneRenderer = new Scene2DRenderer(hydraulicFloorSvgEl);
+    var hydraulicFloorPanelCloseBtn = document.getElementById('hydraulicFloorPanelClose');
+    if (hydraulicFloorPanelCloseBtn) hydraulicFloorPanelCloseBtn.addEventListener('click', closeHydraulicFloorPanel);
+    if (hydraulicFloorSvgEl) hydraulicFloorSvgEl.addEventListener('pointerdown', onHydraulicFloorSvgPointerDown);
     if (window.matchMedia('(pointer: coarse)').matches) {
       hintEl.textContent = 'Toque para construir. Use dois dedos para girar a câmera e dar zoom.';
     }
@@ -3816,6 +4174,8 @@ import {
     container.addEventListener('contextmenu', function (e: any) { e.preventDefault(); });
     window.addEventListener('keydown', function (e: any) {
       if (e.key === 'Escape' && placingDraw) cancelPlacing();
+      if (e.key === 'Escape' && hydraulicRouteDrawState) cancelHydraulicRouteDraw();
+      if (e.key === 'Enter' && hydraulicRouteDrawState) finishHydraulicRouteDraw();
       if (e.key === 'Escape') hideLayersMenu();
     });
     container.addEventListener('pointerdown', onPointerDown);
@@ -3851,7 +4211,7 @@ import {
 // Scene3DRenderer.ts (chamadas ViewportController.xxx no código legado).
 export const ViewportController = {
   init, render, onModelChanged, deselect,
-  select, selectColumn, selectRoof, selectOpening, selectVaranda, selectFurniture, selectGlazingPanel, selectHydraulicNode,
+  select, selectColumn, selectRoof, selectOpening, selectVaranda, selectFurniture, selectGlazingPanel, selectHydraulicNode, beginHydraulicRouteDraw,
   getSelectedWallId, getSelectedColumnId, getSelectedRoofId,
   getSelectedOpeningId, getSelectedVarandaId, getSelectedLajeId, getSelectedFurnitureId, getSelectedGlazingPanelId, getSelectedHydraulicNodeId, getSelectedRoomWallIds,
   setNextRoofAtticMode, toggleDimensions,

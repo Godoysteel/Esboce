@@ -3,7 +3,7 @@ import type { Floor, Furniture, HydraulicJunctionKind, HydraulicNetworkType, Hyd
 const GRID = 20;
 const FLOOR_STACK_HEIGHT_M = 2.85;
 let hydraulicIdSequence = 0;
-function nextHydraulicId(prefix: string) { return `${prefix}_${Date.now().toString(36)}_${hydraulicIdSequence++}`; }
+export function nextHydraulicId(prefix: string) { return `${prefix}_${Date.now().toString(36)}_${hydraulicIdSequence++}`; }
 
 export interface HydraulicFixtureTemplate {
   key: string;
@@ -51,7 +51,7 @@ export function createPositionedHydraulicFixture(templateKey: string, x: number,
   const snapped = wall ? (() => {
     const point = projectOnWall(x, y, wall);
     return { x: point.x, y: point.y };
-  })() : { x: Math.round(x / GRID) * GRID, y: Math.round(y / GRID) * GRID };
+  })() : { x, y }; // pontos de piso são livres — sem grid, por decisão explícita do Product Owner
   return {
     id: nextHydraulicId('hyd-node'), kind: 'fixture' as const,
     networkType: template.networkType, label: template.label,
@@ -73,7 +73,7 @@ export function resolveHydraulicFixturePosition(node: HydraulicNode, x: number, 
     if (!wall || wall.id !== node.wallId) return { x: node.x, y: node.y };
     return projectOnWall(x, y, wall);
   }
-  return { x: Math.round(x / GRID) * GRID, y: Math.round(y / GRID) * GRID };
+  return { x, y }; // pontos de piso são livres — sem grid, por decisão explícita do Product Owner
 }
 
 /**
@@ -141,7 +141,11 @@ export function buildColdWaterNetworkFromFixtures(floors: Floor[], existing: Hyd
     minX: Math.min(...allWalls.flatMap((wall) => [wall.x1, wall.x2])), maxX: Math.max(...allWalls.flatMap((wall) => [wall.x1, wall.x2])),
     minY: Math.min(...allWalls.flatMap((wall) => [wall.y1, wall.y2])), maxY: Math.max(...allWalls.flatMap((wall) => [wall.y1, wall.y2])),
   } : { minX: -40, maxX: 40, minY: -40, maxY: 40 };
-  const source: HydraulicNode = {
+  // A origem é reaproveitada quando já existe (mesmo id, mesma posição) —
+  // sem isso, todo trecho guiado manualmente (H2) que aponte pra ela ficaria
+  // órfão a cada vez que essa geração automática rodasse de novo.
+  const existingSource = existing.nodes.find((node) => node.kind === 'source' && node.networkType === 'cold_water');
+  const source: HydraulicNode = existingSource || {
     id: nextHydraulicId('hyd-tank'), kind: 'source', networkType: 'cold_water', label: "Caixa d'água",
     x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2,
     elevationM: 3.35, floorIndex: topFloorIndex,
@@ -149,25 +153,36 @@ export function buildColdWaterNetworkFromFixtures(floors: Floor[], existing: Hyd
   const nodes: HydraulicNode[] = [...fixtures, source];
   const segments: HydraulicSystem['segments'] = [];
   waterFixtures.forEach((fixture) => {
+    // Um percurso guiado manualmente (H2, ownerFixtureId) nunca é
+    // sobrescrito pela geração automática — só os pontos ainda sem
+    // percurso próprio recebem o traçado ingênuo abaixo.
+    const guidedNodes = existing.nodes.filter((node) => node.ownerFixtureId === fixture.id);
+    const guidedSegments = existing.segments.filter((segment) => segment.ownerFixtureId === fixture.id);
+    if (guidedNodes.length || guidedSegments.length) {
+      nodes.push(...guidedNodes);
+      segments.push(...guidedSegments);
+      return;
+    }
     const fixtureFloor = fixture.floorIndex || 0;
+    const ownerFixtureId = fixture.id;
     const horizontalA: HydraulicNode = {
       id: nextHydraulicId('hyd-junction'), kind: 'junction', networkType: 'cold_water', label: 'Distribuição superior',
-      x: fixture.x, y: source.y, elevationM: source.elevationM, floorIndex: topFloorIndex,
+      x: fixture.x, y: source.y, elevationM: source.elevationM, floorIndex: topFloorIndex, ownerFixtureId,
     };
     const horizontalB: HydraulicNode = {
       id: nextHydraulicId('hyd-junction'), kind: 'junction', networkType: 'cold_water', label: 'Descida do ponto',
-      x: fixture.x, y: fixture.y, elevationM: source.elevationM, floorIndex: topFloorIndex,
+      x: fixture.x, y: fixture.y, elevationM: source.elevationM, floorIndex: topFloorIndex, ownerFixtureId,
     };
     const verticalBase: HydraulicNode = {
       id: nextHydraulicId('hyd-junction'), kind: 'junction', networkType: 'cold_water', label: 'Base da descida',
-      x: fixture.x, y: fixture.y, elevationM: fixture.elevationM, floorIndex: fixtureFloor,
+      x: fixture.x, y: fixture.y, elevationM: fixture.elevationM, floorIndex: fixtureFloor, ownerFixtureId,
     };
     nodes.push(horizontalA, horizontalB, verticalBase);
     [[source, horizontalA], [horizontalA, horizontalB], [horizontalB, verticalBase], [verticalBase, fixture]].forEach(([start, end]) => {
       var startGlobal = (start!.floorIndex || 0) * FLOOR_STACK_HEIGHT_M + start!.elevationM;
       var endGlobal = (end!.floorIndex || 0) * FLOOR_STACK_HEIGHT_M + end!.elevationM;
       if (start!.x !== end!.x || start!.y !== end!.y || startGlobal !== endGlobal) {
-        segments.push({ id: nextHydraulicId('hyd-segment'), networkType: 'cold_water', startNodeId: start!.id, endNodeId: end!.id, diameterMm: 20 });
+        segments.push({ id: nextHydraulicId('hyd-segment'), networkType: 'cold_water', startNodeId: start!.id, endNodeId: end!.id, diameterMm: 20, ownerFixtureId });
       }
     });
   });

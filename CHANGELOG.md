@@ -1,5 +1,21 @@
 # Changelog
 
+> Móvel (vaso, pia, box de banheiro etc.) vira referência visual durante o posicionamento de um ponto hidráulico — continua aparecendo normalmente na cena 3D, mas para de "roubar" o clique da parede/piso atrás dele, então dá pra selecionar a parede mesmo com o móvel na frente. Ver DEC-66.
+
+> Aba 2D do piso para ralos e outros pontos de piso, reaproveitando o mesmo `Scene2DRenderer` da planta 2D real do projeto — abre direto ao ativar a ferramenta, sem etapa extra. Posicionamento de pontos de piso deixou de travar no grid técnico: agora é livre, exatamente onde o usuário clicar (pontos de parede continuam presos ao eixo da parede, como sempre). Ver DEC-65.
+
+> H2 completa: percurso guiado de água fria, de ponta a ponta. Botão novo no ponto selecionado ("Desenhar percurso até a caixa d'água") entra num modo de clique-clique — cada clique vira um ponto-guia, com barra de "Concluir/Cancelar" (Enter/Esc também funcionam). Um ponto-guia já posicionado pode ser arrastado depois, com prévia fantasma e cotas de altura/distância ao vivo (reaproveita a DEC-63). O botão "Gerar tubulação" (rota automática) e o novo percurso manual passaram a conviver: a rota automática nunca sobrescreve mais um percurso desenhado à mão, e a origem (caixa d'água) passou a ser reaproveitada entre os dois em vez de recriada, evitando trechos órfãos. Ver DEC-64 (fecha a DEC-61).
+
+> Fluxo guiado de posicionamento de ponto hidráulico, completo: ao ativar um ponto de parede (pia, lavatório, chuveiro, torneira externa, água vaso), um prompt central pede pra escolher a parede; escolhida a parede, abre um painel com a elevação dela (distância × altura) onde os pontos são posicionados com precisão, mostrando a altura usual do aparelho (quando existe referência de fonte técnica) e os pontos já existentes ali. Arrastar um ponto já posicionado mostra cotas de altura e distância às duas pontas da parede em tempo real. Pontos de piso continuam sendo criados direto no clique, sem painel. Ver DEC-63 (interação) e DEC-62 (dados de referência e cotas locais).
+
+> Corrigido mais um lote de encoding quebrado (5 ocorrências da palavra "câmera", em `EsboceApplication.ts` e `ViewportController.ts` — botão mobile, comentário e duas mensagens de modo câmera no toque) que não tinha sido pego na varredura anterior.
+
+> Base de domínio para o fluxo guiado de posicionamento de ponto hidráulico: altura de referência (fonte Tigre, quando existe correspondência sem ambiguidade) exposta no catálogo de aparelhos, e funções que calculam a distância de um ponto às duas pontas da parede em metros (e o inverso) — preparação para o painel de elevação da parede e as cotas ao vivo durante o arraste, ainda não implementados. Ver DEC-62.
+
+> Corrigido encoding quebrado em quatro strings herdadas do merge da hidráulica (mensagens do botão "Gerar tubulação", do toast de rede gerada, do modo construção mobile e um comentário) — apareciam como "Ã§Ã£", "Ã¡" etc. na tela em vez de acentuação normal.
+
+> Base de domínio para o percurso guiado de água fria (H2, primeira etapa): novas funções puras que constroem o trecho horizontal entre a caixa d'água e um ponto de consumo a partir de pontos-guia informados, e que classificam cada nó da rede (trecho reto, cotovelo de 45°/90°, tê) só pela geometria dos trechos que se encontram ali, sem depender de regra normativa. Nós e trechos de um percurso guiado ficam marcados com o ponto de consumo a que pertencem, para permitir redesenhar um sem afetar os demais já roteados. Documento versionado sobe para `schemaVersion` 8. Ainda não há interação no editor para desenhar o percurso — só a camada de domínio, testada isoladamente. Ver DEC-61.
+
 > Pontos hidráulicos instalados em paredes compartilhadas agora permitem alternar explicitamente entre as duas faces pelo comando **Trocar lado** (`⇄`). A escolha fica salva no projeto, sem alterar a posição técnica no eixo da parede, a altura do ponto ou o percurso da tubulação.
 
 > Pontos hidráulicos passam a aceitar reposicionamento em duas direções: arraste lateral desliza pela parede e arraste vertical altera a altura entre 5 cm e 2,60 m. A legenda é ocultada durante o gesto e os marcadores de saída permanecem visíveis mesmo quando a face da parede estaria à frente deles.
