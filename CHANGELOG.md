@@ -1,5 +1,7 @@
 # Changelog
 
+> Adicionado: mais 9 modelos reais (glTF) de porta ao Catálogo — 5 portas de vidro (600 a 1000mm de largura), 3 de giro (1200 a 2000mm) e 2 de correr (2500 e 3000mm). Junto com a porta de teste anterior, já são 10 opções de porta com modelo 3D real disponíveis. Ver DEC-75.
+
 > Adicionado: primeiro modelo real (glTF) de esquadria — "Porta de Vidro 1000x2100" — no lugar da geometria gerada na hora. Portas/janelas podem agora referenciar um modelo 3D do Catálogo (`Opening.productId`); sem escolher nenhum, continua tudo como sempre. Mais modelos da mesma família (janelas de correr/giro, portas de correr/giro em vários tamanhos) entram conforme forem chegando. Ver DEC-74.
 
 > Corrigido: parapeito da platibanda não "casava" com a parede debaixo dele mesmo os dois estando no grid — agora, ao arrastar a borda de um telhado perto o bastante de uma parede, ela gruda exatamente no eixo daquela parede (não só no ponto de grid genérico mais próximo). Removida a textura de reboco de toda a casa (paredes, parapeito da platibanda, laje, empena/oitão e reveal de arco) — acabamento cerâmico já escolhido continua normal, só o material padrão sem acabamento voltou a ser cor lisa. Ver DEC-73.

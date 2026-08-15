@@ -77,12 +77,39 @@ export const products: Product[] = [
     // usuário (glTF exportado do Blender a partir de um catálogo de
     // esquadrias de vidro), substituem a geometria procedural padrão
     // quando escolhidas numa Opening (ver Opening.productId,
-    // Scene3DRenderer.buildOpeningModelPiece). Primeiro modelo da
-    // família — os demais (JANELA_CORRER/GIRO, PORTA_CORRER/GIRO em
-    // vários tamanhos) entram conforme forem chegando, mesmo padrão.
+    // Scene3DRenderer.buildOpeningModelPiece). Primeiro lote de portas
+    // (vidro de correr/giro em vários tamanhos) — janelas e box entram
+    // em lotes seguintes, mesmo padrão.
     { id: 'vortice.porta.vidro-1000x2100', name: 'Porta de Vidro 1000x2100', manufacturer: 'vortice', category: 'door',
       commercial: { sku: 'VOR-ESQ-001', price: 0, unit: 'peca' },
       assets: { colorHex: '#DCE6EA', textureUrl: null, modelUrl: 'models/porta-vidro-1000x2100.glb' } },
+    { id: 'vortice.porta.vidro-600x2100', name: 'Porta de Vidro 600x2100', manufacturer: 'vortice', category: 'door',
+      commercial: { sku: 'VOR-ESQ-002', price: 0, unit: 'peca' },
+      assets: { colorHex: '#DCE6EA', textureUrl: null, modelUrl: 'models/porta-vidro-600x2100.glb' } },
+    { id: 'vortice.porta.vidro-700x2100', name: 'Porta de Vidro 700x2100', manufacturer: 'vortice', category: 'door',
+      commercial: { sku: 'VOR-ESQ-003', price: 0, unit: 'peca' },
+      assets: { colorHex: '#DCE6EA', textureUrl: null, modelUrl: 'models/porta-vidro-700x2100.glb' } },
+    { id: 'vortice.porta.vidro-800x2100', name: 'Porta de Vidro 800x2100', manufacturer: 'vortice', category: 'door',
+      commercial: { sku: 'VOR-ESQ-004', price: 0, unit: 'peca' },
+      assets: { colorHex: '#DCE6EA', textureUrl: null, modelUrl: 'models/porta-vidro-800x2100.glb' } },
+    { id: 'vortice.porta.vidro-900x2100', name: 'Porta de Vidro 900x2100', manufacturer: 'vortice', category: 'door',
+      commercial: { sku: 'VOR-ESQ-005', price: 0, unit: 'peca' },
+      assets: { colorHex: '#DCE6EA', textureUrl: null, modelUrl: 'models/porta-vidro-900x2100.glb' } },
+    { id: 'vortice.porta.giro-1200x2100', name: 'Porta de Giro 1200x2100', manufacturer: 'vortice', category: 'door',
+      commercial: { sku: 'VOR-ESQ-006', price: 0, unit: 'peca' },
+      assets: { colorHex: '#DCE6EA', textureUrl: null, modelUrl: 'models/porta-giro-1200x2100.glb' } },
+    { id: 'vortice.porta.giro-1500x2100', name: 'Porta de Giro 1500x2100', manufacturer: 'vortice', category: 'door',
+      commercial: { sku: 'VOR-ESQ-007', price: 0, unit: 'peca' },
+      assets: { colorHex: '#DCE6EA', textureUrl: null, modelUrl: 'models/porta-giro-1500x2100.glb' } },
+    { id: 'vortice.porta.giro-2000x2100', name: 'Porta de Giro 2000x2100', manufacturer: 'vortice', category: 'door',
+      commercial: { sku: 'VOR-ESQ-008', price: 0, unit: 'peca' },
+      assets: { colorHex: '#DCE6EA', textureUrl: null, modelUrl: 'models/porta-giro-2000x2100.glb' } },
+    { id: 'vortice.porta.correr-2500x2100', name: 'Porta de Correr 2500x2100', manufacturer: 'vortice', category: 'door',
+      commercial: { sku: 'VOR-ESQ-009', price: 0, unit: 'peca' },
+      assets: { colorHex: '#DCE6EA', textureUrl: null, modelUrl: 'models/porta-correr-2500x2100.glb' } },
+    { id: 'vortice.porta.correr-3000x2100', name: 'Porta de Correr 3000x2100', manufacturer: 'vortice', category: 'door',
+      commercial: { sku: 'VOR-ESQ-010', price: 0, unit: 'peca' },
+      assets: { colorHex: '#DCE6EA', textureUrl: null, modelUrl: 'models/porta-correr-3000x2100.glb' } },
     { id: 'vortice.movel.cama', name: 'Cama de Casal', manufacturer: 'vortice', category: 'furniture',
       commercial: { sku: 'VOR-MOV-004', price: 0, unit: 'peca' },
       assets: { colorHex: '#D9D5C7', textureUrl: null, modelUrl: 'models/cama.glb' } },
