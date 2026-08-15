@@ -346,6 +346,17 @@ export interface ProductAssets {
   // pronto — usado por produtos da categoria 'furniture'. Nunca um caminho
   // absoluto fixo: o carregador sempre prefixa com import.meta.env.BASE_URL.
   modelUrl?: string;
+  // Tamanho real medido do modelo (door/window) — usado pra criar a
+  // Opening já do tamanho certo na hora do clique, sem precisar esperar
+  // o glTF carregar de forma assíncrona (o carregamento em si continua
+  // assíncrono só pra aparecer visualmente; a largura/altura salva na
+  // Opening não depende disso).
+  nominalWidthM?: number;
+  nominalHeightM?: number;
+  // Caminho de uma imagem de referência (relativo a public/, sem barra
+  // inicial) pra mostrar como miniatura no seletor — opcional; sem ela,
+  // o seletor mostra só o nome/tamanho em texto.
+  thumbnailUrl?: string | null;
 }
 
 export interface Product {
@@ -355,6 +366,10 @@ export interface Product {
   category: ProductCategory;
   commercial: ProductCommercial;
   assets: ProductAssets;
+  // Só relevante pra 'door'/'window' — agrupa o seletor por tipo de
+  // material do caixilho, espelhando a taxonomia real de catálogo de
+  // esquadria (vidro, alumínio, PVC, madeira).
+  frameMaterial?: 'vidro' | 'aluminio' | 'pvc' | 'madeira';
 }
 
 // ---- Store (estado/comandos/undo) ----

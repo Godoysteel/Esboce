@@ -100,6 +100,12 @@ import {
   var pendingGenerateRoofId: any = null;
   var generateAtticBtnEl: any = null;
   var pendingRoofType = 'duasAguas'; // tipo do próximo telhado a ser colocado
+  // Seletor de esquadria (Janela/Porta) — mesma ideia de pendingRoofType:
+  // a pessoa escolhe o MODELO antes de clicar na parede. null = "Padrão"
+  // (geometria gerada na hora, do jeito que já era antes desta função
+  // existir — continua funcionando igual, sem produto nenhum escolhido).
+  var pendingOpeningProductId: string | null = null;
+  var openingPickerMaterial: 'vidro' | 'aluminio' | 'pvc' | 'madeira' = 'vidro';
   var ROOF_DEFAULT_SIZE = 3 * Core.GRID; // 3m — tamanho inicial ao clicar pra colocar
   var VARANDA_DEFAULT_W_M = 3, VARANDA_DEFAULT_D_M = 2; // 3m x 2m — mesma escala de um cômodo comum
   var LAJE_DEFAULT_SIZE_M = 4; // usado só quando o pavimento está vazio (sem parede nenhuma pra "copiar" o contorno)
@@ -121,7 +127,7 @@ import {
   var MIN_DIST = 3, MAX_DIST = 35;
   var touchCameraMode = false;
 
-  var gizmoEl: any, gzSwapBtnEl: any, openingGizmoEl: any, roomGizmoEl: any, columnShapePanelEl: any, roofTypePanelEl: any, finishPanelEl: any, paintPickerPanelEl: any, objectPanelEl: any, objectPanelTitleEl: any, objectPanelBodyEl: any, hintEl: any, layersContextMenuEl: any, hydraulicWallPromptEl: any, hydraulicWallElevationPanelEl: any, hydraulicWallElevationTitleEl: any, hydraulicWallElevationSvgEl: any, hydraulicRouteDrawBarEl: any, hydraulicRouteDrawCountEl: any;
+  var gizmoEl: any, gzSwapBtnEl: any, openingGizmoEl: any, roomGizmoEl: any, columnShapePanelEl: any, roofTypePanelEl: any, finishPanelEl: any, paintPickerPanelEl: any, openingPickerPanelEl: any, objectPanelEl: any, objectPanelTitleEl: any, objectPanelBodyEl: any, hintEl: any, layersContextMenuEl: any, hydraulicWallPromptEl: any, hydraulicWallElevationPanelEl: any, hydraulicWallElevationTitleEl: any, hydraulicWallElevationSvgEl: any, hydraulicRouteDrawBarEl: any, hydraulicRouteDrawCountEl: any;
   // Estado do desenho de percurso guiado (H2): fixtureId sendo roteada e os
   // pontos-guia já clicados (só plano — a queda vertical final é
   // automática, ver Hydraulics.buildGuidedColdWaterHeaderRoute). null =
@@ -1733,6 +1739,7 @@ import {
     container.classList.remove('tool-demolish', 'tool-paintBucket');
     if (tool === 'demolish' || tool === 'paintBucket') container.classList.add('tool-' + tool);
     refreshPaintPickerPanel();
+    refreshOpeningPickerPanel();
     cancelPlacing();
     deselect();
     updateWallGridOverlay();
@@ -1820,6 +1827,7 @@ import {
     hintEl.textContent = '';
     container.classList.remove('tool-demolish', 'tool-paintBucket');
     refreshPaintPickerPanel();
+    refreshOpeningPickerPanel();
     drawPreview = null; // a prévia fantasma (telhado seguindo o cursor) não pode ficar congelada na tela
     updateWallGridOverlay();
     render();
@@ -1892,6 +1900,75 @@ import {
       paintPickerPanelEl.appendChild(unavailable);
     }
     paintPickerPanelEl.classList.add('visible');
+  }
+
+  // Seletor de esquadria — mesma ideia do balde de tinta acima: só
+  // aparece com a ferramenta Janela/Porta ativa, fixo no topo (não
+  // depende de nenhuma seleção). Abas por MATERIAL do caixilho
+  // (vidro/alumínio/PVC/madeira), dentro de cada aba a lista de
+  // modelos daquele tipo+material do Catálogo — com miniatura de
+  // imagem (Product.assets.thumbnailUrl) quando disponível, senão só
+  // nome+tamanho em texto. Escolher um modelo só guarda a escolha
+  // (pendingOpeningProductId) — a Opening em si só nasce no clique
+  // sobre a parede, igual sempre foi. "Padrão" continua disponível pra
+  // quem só quer um vão genérico, editável depois.
+  var OPENING_MATERIALS: ['vidro' | 'aluminio' | 'pvc' | 'madeira', string][] = [
+    ['vidro', 'Vidro'], ['aluminio', 'Alumínio'], ['pvc', 'PVC'], ['madeira', 'Madeira']
+  ];
+  function refreshOpeningPickerPanel() {
+    if (currentTool !== 'window' && currentTool !== 'door') {
+      openingPickerPanelEl.classList.remove('visible');
+      return;
+    }
+    openingPickerPanelEl.innerHTML = '';
+    var nav = document.createElement('div');
+    nav.className = 'paint-surface-nav';
+    OPENING_MATERIALS.forEach(function (item) {
+      var materialBtn = document.createElement('button');
+      materialBtn.className = 'paint-surface' + (openingPickerMaterial === item[0] ? ' active' : '');
+      materialBtn.dataset.openingMaterial = item[0];
+      materialBtn.textContent = item[1];
+      nav.appendChild(materialBtn);
+    });
+    openingPickerPanelEl.appendChild(nav);
+
+    var products = Catalog.getProductsByCategory(currentTool as any).filter(function (p: any) { return p.frameMaterial === openingPickerMaterial; });
+    var list = document.createElement('div');
+    list.className = 'paint-surface-nav';
+    var defaultBtn = document.createElement('button');
+    defaultBtn.className = 'paint-surface' + (pendingOpeningProductId ? '' : ' active');
+    defaultBtn.dataset.openingProduct = '';
+    defaultBtn.textContent = 'Padrão (editável depois)';
+    list.appendChild(defaultBtn);
+    if (!products.length) {
+      var soon = document.createElement('div');
+      soon.className = 'paint-help';
+      soon.textContent = 'Nenhum modelo de ' + (OPENING_MATERIALS.filter(function (m) { return m[0] === openingPickerMaterial; })[0]![1]).toLowerCase() + ' ainda — em breve.';
+      list.appendChild(soon);
+    } else {
+      products.forEach(function (p: any) {
+        var btn = document.createElement('button');
+        btn.className = 'paint-surface opening-model-btn' + (pendingOpeningProductId === p.id ? ' active' : '');
+        btn.dataset.openingProduct = p.id;
+        var w = p.assets.nominalWidthM, h = p.assets.nominalHeightM;
+        var label = p.name + (w && h ? ' (' + w.toFixed(2).replace('.', ',') + '×' + h.toFixed(2).replace('.', ',') + 'm)' : '');
+        if (p.assets.thumbnailUrl) {
+          var img = document.createElement('img');
+          img.src = (import.meta as any).env.BASE_URL + p.assets.thumbnailUrl;
+          img.alt = '';
+          img.className = 'opening-model-thumb';
+          btn.appendChild(img);
+          var span = document.createElement('span');
+          span.textContent = label;
+          btn.appendChild(span);
+        } else {
+          btn.textContent = label;
+        }
+        list.appendChild(btn);
+      });
+    }
+    openingPickerPanelEl.appendChild(list);
+    openingPickerPanelEl.classList.add('visible');
   }
 
   function cancelPlacing() {
@@ -2180,7 +2257,14 @@ import {
     if ((currentTool === 'door' || currentTool === 'window' || currentTool === 'arco') && mesh && mesh.userData.wallId) {
       var gpIns = getGroundModelPoint(e.clientX, e.clientY);
       if (gpIns) {
-        var newOpening = Store.commands.insertOpening(mesh.userData.wallId, currentTool, gpIns.x, gpIns.y);
+        // 'arco' não tem produto de catálogo (nunca passou pelo seletor
+        // de esquadria — ferramenta separada, sem aba própria), então
+        // productOverride só se aplica pra door/window.
+        var pendingProduct = pendingOpeningProductId && currentTool !== 'arco' ? Catalog.getProduct(pendingOpeningProductId) : null;
+        var productOverride = pendingProduct && pendingProduct.assets.nominalWidthM && pendingProduct.assets.nominalHeightM
+          ? { productId: pendingProduct.id, widthM: pendingProduct.assets.nominalWidthM, heightM: pendingProduct.assets.nominalHeightM }
+          : undefined;
+        var newOpening = Store.commands.insertOpening(mesh.userData.wallId, currentTool, gpIns.x, gpIns.y, productOverride);
         if (newOpening) selectOpening(newOpening.id);
         else {
           var openingLabel = currentTool === 'door' ? 'porta' : currentTool === 'window' ? 'janela' : 'arco';
@@ -4152,6 +4236,7 @@ import {
     generateAtticBtnEl = document.getElementById('generateAtticBtn');
     finishPanelEl = document.getElementById('finishPanel');
     paintPickerPanelEl = document.getElementById('paintPickerPanel');
+    openingPickerPanelEl = document.getElementById('openingPickerPanel');
     objectPanelEl = document.getElementById('objectPanel');
     objectPanelTitleEl = document.getElementById('objectPanelTitle');
     objectPanelBodyEl = document.getElementById('objectPanelBody');
@@ -4290,6 +4375,17 @@ import {
         floorFinishRotation = Number(e.target.value);
         refreshPaintPickerPanel();
       }
+    });
+    openingPickerPanelEl.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
+    openingPickerPanelEl.addEventListener('click', function (e: any) {
+      var btn = e.target.closest('button.paint-surface');
+      if (!btn) return;
+      if (btn.dataset.openingMaterial) {
+        openingPickerMaterial = btn.dataset.openingMaterial;
+      } else {
+        pendingOpeningProductId = btn.dataset.openingProduct || null;
+      }
+      refreshOpeningPickerPanel();
     });
     gizmoEl.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
     openingGizmoEl.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });

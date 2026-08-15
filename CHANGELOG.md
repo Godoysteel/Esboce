@@ -1,5 +1,9 @@
 # Changelog
 
+> Adicionado: painel de seleção de esquadria — clique em "Janela" ou "Porta" agora abre um painel com abas por material do caixilho (Vidro, Alumínio, PVC, Madeira) e a lista de modelos 3D disponíveis dentro de cada aba, cada um com miniatura de imagem real. Escolher um modelo antes de clicar na parede já cria a porta/janela com aquele modelo aplicado e do tamanho certo — sem precisar mais do console do navegador. Todas as 17 esquadrias de vidro já têm miniatura; as abas Alumínio, PVC e Madeira aparecem como "em breve" até chegar modelo de cada uma. Ver DEC-77.
+
+> Corrigido: a janela antes chamada "Máximo-Ar 700x500" tem o nome certo corrigido pra "Basculante 700x500".
+
 > Corrigido: box de chuveiro de canto (já existente) e box de chuveiro reto (novo, 1500x2000mm) são dois produtos separados no Catálogo agora — a entrada anterior deste changelog tratava errado o box reto como substituto do de canto.
 
 > Adicionado: 6 janelas de correr (500 a 3000mm) e 1 Máximo-Ar com modelo 3D real no Catálogo. Ver DEC-76.

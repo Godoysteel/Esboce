@@ -735,13 +735,19 @@ export const commands = {
   },
 
   // Insere uma porta/janela genérica na parede clicada.
-  insertOpening(wallId: string, kind: OpeningKind, px: number, py: number): Opening | null {
+  // productOverride vem do seletor de esquadria (material → modelo
+  // escolhido ANTES de clicar na parede, ver ViewportController
+  // refreshOpeningPickerPanel): a Opening já nasce do tamanho real do
+  // modelo (Product.assets.nominalWidthM/nominalHeightM) e já com
+  // productId, em vez do tamanho padrão genérico + productId vazio.
+  insertOpening(wallId: string, kind: OpeningKind, px: number, py: number, productOverride?: { productId: string; widthM: number; heightM: number }): Opening | null {
     const w = findWall(wallId); if (!w) return null;
-    const width = kind === 'door' ? Core.DOOR_DEFAULT_WIDTH : kind === 'arco' ? Core.ARCO_DEFAULT_WIDTH : Core.WINDOW_DEFAULT_WIDTH;
+    const width = productOverride ? productOverride.widthM : (kind === 'door' ? Core.DOOR_DEFAULT_WIDTH : kind === 'arco' ? Core.ARCO_DEFAULT_WIDTH : Core.WINDOW_DEFAULT_WIDTH);
     const desired = Core.wallOffsetAtPoint(w, px, py);
     const offset = Core.findValidOpeningOffset(w, currentOpenings(), width, desired);
     if (offset == null) return null; // parede curta demais / sem espaço livre
     const op = Core.createOpeningEntity(wallId, kind, offset);
+    if (productOverride) { op.width = productOverride.widthM; op.height = productOverride.heightM; op.productId = productOverride.productId; }
     if (!openingFitsCurrentRoof(w, op)) return null;
     pushUndoSnapshot();
     currentOpenings().push(op);

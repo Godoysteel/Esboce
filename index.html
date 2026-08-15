@@ -336,6 +336,8 @@
   .paint-apply { width: 100%; padding: 8px 10px; border-radius: 7px; background: #534AB7; color: #FFFFFF; border-color: #534AB7; }
   .paint-apply:disabled { opacity: .45; cursor: not-allowed; }
   .paint-help { text-align: left; font-size: 11px; line-height: 1.35; color: #6B6963; }
+  .opening-model-btn { display: flex; align-items: center; gap: 8px; }
+  .opening-model-thumb { width: 34px; height: 34px; object-fit: contain; border-radius: 5px; background: #FFFFFF; flex: none; }
   @media (max-width: 700px) {
     .finish-panel.tool-picker { right: 8px; top: calc(var(--top-overlay-h) + 10px); width: min(230px, calc(100% - 130px)); max-height: calc(100% - var(--top-overlay-h) - 20px); }
   }
@@ -1495,6 +1497,7 @@
   <button id="generateAtticBtn" style="display:none; position:absolute; right:112px; bottom:82px; z-index:40; padding:13px 20px; border:0; border-radius:14px; background:#5A49C7; color:#fff; font-weight:700; box-shadow:0 8px 28px rgba(40,32,105,.3);">Gerar ático</button>
   <style>#generateAtticBtn.visible{display:block !important}</style>
   <div id="paintPickerPanel" class="shape-panel finish-panel tool-picker"></div>
+  <div id="openingPickerPanel" class="shape-panel finish-panel tool-picker"></div>
   <div id="objectPanel" class="object-panel">
     <div class="object-panel-header">
       <strong id="objectPanelTitle"></strong>
