@@ -1,5 +1,7 @@
 # Changelog
 
+> Adicionado: novo botão de cômodo "Área de Circulação" (1x1m) na barra lateral, junto dos demais (Banheiro, Quarto, Sala, Garagem, Lavanderia, Escritório) — clique cria as 4 paredes já no tamanho, igual os outros. Ver DEC-80.
+
 > Corrigido: vidro de porta/janela agora tem transparência de verdade (dá pra enxergar através), mantendo o reflexo. Corrigido também: uma "tampinha" fecha o requadro entre o caixilho do modelo e a espessura da parede — antes sobrava uma folga crua, sem acabamento, visível de ângulos mais abertos.
 
 > Corrigido: vidro dos modelos de porta/janela aparecia preto/opaco em vez de transparente (o arquivo original não tinha dado de transparência real gravado). Agora usa o mesmo material de vidro (reflexo espelhado) já usado no envidraçamento da casa.

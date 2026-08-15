@@ -3977,7 +3977,8 @@ import {
     sala: { label: 'Sala', widthM: 4.0, depthM: 4.0 },
     garagem: { label: 'Garagem', widthM: 3.0, depthM: 5.5 },
     lavanderia: { label: 'Lavanderia', widthM: 2.0, depthM: 2.0 },
-    escritorio: { label: 'Escritório', widthM: 2.8, depthM: 3.0 }
+    escritorio: { label: 'Escritório', widthM: 2.8, depthM: 3.0 },
+    circulacao: { label: 'Área de Circulação', widthM: 1.0, depthM: 1.0 }
   };
   var ROOM_PLACEMENT_GAP_M = 1; // vão entre um cômodo novo e o que já existe, pra não nascerem grudados/sobrepostos
 
