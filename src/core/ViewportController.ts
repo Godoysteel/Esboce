@@ -1202,6 +1202,61 @@ import {
   // Margem ao redor do desenho da parede, em cm (mesma unidade do viewBox),
   // reservada pra régua de altura (esquerda) e régua de distância (baixo).
   var HYDRAULIC_ELEVATION_MARGIN = { left: 46, right: 12, top: 22, bottom: 34 };
+  // Distância perpendicular máxima (metros) até o eixo da parede pra um
+  // móvel ainda ser considerado "relevante" o bastante pra desenhar no
+  // painel — mostrar o cômodo inteiro só poluiria a régua sem ajudar a
+  // decidir onde por o ponto. Valor arbitrário (DEC-69); ajustar se
+  // parecer curto/longo demais na prática.
+  var HYDRAULIC_ELEVATION_FURNITURE_MAX_DISTANCE_M = 1;
+
+  // Silhuetas dos móveis já instalados perto da parede sendo editada
+  // (DEC-69) — referência visual pro usuário não posicionar um ponto
+  // hidráulico atrás de um armário, por exemplo. A dimensão real de um
+  // móvel só existe depois que o glTF carrega (não tem largura/altura em
+  // catálogo — ver Furniture em types.ts), então lê a caixa delimitadora
+  // do objeto já carregado na cena 3D viva; se ainda não carregou
+  // (findFurnitureSceneObject devolve null), pula esse móvel sem travar
+  // o painel — o carregamento é assíncrono e o painel não reage em tempo
+  // real a isso.
+  function furnitureSilhouettesForWall(wall: any) {
+    var dx = wall.x2 - wall.x1, dy = wall.y2 - wall.y1;
+    var lengthGrid = Math.hypot(dx, dy) || 1;
+    var nx = -dy / lengthGrid, ny = dx / lengthGrid; // versor perpendicular à parede
+    var yOffset = currentFloorYOffset();
+    var results: { fromStartM: number; toStartM: number; minHeightM: number; maxHeightM: number; label: string }[] = [];
+    Store.currentFurniture().forEach(function (item: any) {
+      var object = findFurnitureSceneObject(item.id);
+      if (!object) return;
+      var box = new THREE.Box3().setFromObject(object);
+      // 4 cantos da base da caixa (mundo -> modelo), em unidade de grade —
+      // caixa alinhada aos eixos do MUNDO, então se o móvel estiver
+      // rotacionado fora dos eixos a silhueta pode ficar levemente maior
+      // que o footprint real. Aproximação visual deliberada (DEC-69),
+      // mesmo espírito de simplificação já usado na vista de topo do
+      // terreno (DEC-59/60) — não é CAD preciso.
+      var cornerMinMin = worldToModel(box.min.x, box.min.z);
+      var cornerMinMax = worldToModel(box.min.x, box.max.z);
+      var cornerMaxMin = worldToModel(box.max.x, box.min.z);
+      var cornerMaxMax = worldToModel(box.max.x, box.max.z);
+      var corners = [cornerMinMin, cornerMinMax, cornerMaxMin, cornerMaxMax];
+      var centerX = (cornerMinMin.x + cornerMaxMax.x) / 2, centerY = (cornerMinMin.y + cornerMaxMax.y) / 2;
+      var distM = Math.abs((centerX - wall.x1) * nx + (centerY - wall.y1) * ny) / Core.GRID;
+      if (distM > HYDRAULIC_ELEVATION_FURNITURE_MAX_DISTANCE_M) return;
+      var ts = corners.map(function (c) { return ((c.x - wall.x1) * dx + (c.y - wall.y1) * dy) / (lengthGrid * lengthGrid); });
+      var minT = Math.max(0, Math.min.apply(null, ts));
+      var maxT = Math.min(1, Math.max.apply(null, ts));
+      if (maxT <= minT) return; // projeção caiu inteira fora do trecho da parede
+      var product = Catalog.getProduct(item.productId);
+      results.push({
+        fromStartM: (lengthGrid * minT) / Core.GRID,
+        toStartM: (lengthGrid * maxT) / Core.GRID,
+        minHeightM: box.min.y - yOffset,
+        maxHeightM: box.max.y - yOffset,
+        label: product ? product.name : '',
+      });
+    });
+    return results;
+  }
 
   function closeHydraulicWallElevationPanel() {
     hydraulicWallElevationState = null;
@@ -1285,6 +1340,30 @@ import {
       addLine(ox, refY, ox + lengthCm, refY, { stroke: '#5A49C7', dashed: true, width: 1.5 });
       addText(ox + 8, refY - 6, 'altura usual: ' + activeTemplate.referenceHeightM.toFixed(2).replace('.', ',') + ' m', { fill: '#5A49C7', size: 11 });
     }
+
+    // silhuetas dos móveis próximos (DEC-69) — desenhadas ANTES dos pontos
+    // hidráulicos pra ficarem atrás, sem competir visualmente com o
+    // círculo/rótulo de cada ponto já posicionado
+    furnitureSilhouettesForWall(wall).forEach(function (item) {
+      var clampedMinH = Math.max(0, item.minHeightM);
+      var clampedMaxH = Math.min(HYDRAULIC_ELEVATION_MAX_HEIGHT_M, item.maxHeightM);
+      if (clampedMaxH <= clampedMinH) return; // móvel fora da faixa de altura desenhada
+      var rx = ox + item.fromStartM * 100;
+      var rw = Math.max(1, (item.toStartM - item.fromStartM) * 100);
+      var ry = oy + maxHeightCm - clampedMaxH * 100;
+      var rh = (clampedMaxH - clampedMinH) * 100;
+      var rect: any = document.createElementNS(svgNS, 'rect');
+      rect.setAttribute('x', String(rx)); rect.setAttribute('y', String(ry));
+      rect.setAttribute('width', String(rw)); rect.setAttribute('height', String(rh));
+      rect.setAttribute('fill', 'rgba(90,73,199,0.12)');
+      rect.setAttribute('stroke', '#9C9A92');
+      rect.setAttribute('stroke-width', '1');
+      rect.setAttribute('stroke-dasharray', '4 3');
+      svg.appendChild(rect);
+      if (item.label && rw > 40 && rh > 16) {
+        addText(rx + rw / 2, ry + 14, item.label, { anchor: 'middle', size: 10, fill: '#77756E' });
+      }
+    });
 
     // pontos já existentes nessa parede (de qualquer tipo — dá contexto de onde já tem coisa)
     var project = Store.getProject();

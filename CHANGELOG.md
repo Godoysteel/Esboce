@@ -1,5 +1,7 @@
 # Changelog
 
+> Painel de elevação da parede (posicionamento de ponto hidráulico) agora desenha a silhueta dos móveis já instalados perto daquela parede — referência visual pra não posicionar um ponto atrás de um armário, por exemplo. Usa a caixa delimitadora real do móvel já carregado na cena 3D (não tem dimensão fixa em catálogo), só mostra o que está a até 1 m da parede. Ver DEC-69.
+
 > Móvel (vaso, pia, box de banheiro etc.) vira referência visual durante o posicionamento de um ponto hidráulico — continua aparecendo normalmente na cena 3D, mas para de "roubar" o clique da parede/piso atrás dele, então dá pra selecionar a parede mesmo com o móvel na frente. Ver DEC-66.
 
 > Aba 2D do piso para ralos e outros pontos de piso, reaproveitando o mesmo `Scene2DRenderer` da planta 2D real do projeto — abre direto ao ativar a ferramenta, sem etapa extra. Posicionamento de pontos de piso deixou de travar no grid técnico: agora é livre, exatamente onde o usuário clicar (pontos de parede continuam presos ao eixo da parede, como sempre). Ver DEC-65.
