@@ -1,5 +1,7 @@
 # Changelog
 
+> Corrigido: Planta Baixa importada — o menu de mover/girar/escalar só aparecia um instante depois de importar e sumia pra sempre no primeiro clique em outro lugar (o uso normal, desenhar parede em cima). Agora o botão "Importar planta" vira "Editar planta" e reabre o menu a qualquer momento. Corrigido também um `types.ts` que tinha ficado de fora do commit anterior e quebrava o build de Produção.
+
 > Adicionado: importar planta baixa (imagem ou PDF) como referência visual no chão do pavimento na vista 3D — clique em "Importar planta", solte a imagem/PDF, e ela aparece deitada no chão, pronta pra desenhar as paredes por cima. Mover/girar/escalar (mantendo a proporção) pelo menu que aparece depois de importar. Ver DEC-82.
 
 > Corrigido: Volumetria — o encosto na parede tinha tolerância apertada (1m) e nenhum aviso de sucesso/falha, o que fazia parecer que não funcionava; aumentada pra 1,5m e agora avisa no rodapé se encostou ou não. Também corrigido um bug que zerava a seleção do volume a cada mudança no modelo.

@@ -89,6 +89,22 @@ test('EsboceApplication centra a planta importada na caixa das paredes já exist
   assert.match(appSource, /ViewportController\.selectPlanUnderlay\(\)/);
 });
 
+test('o botão de importar reabre o menu (não reimporta) quando já existe planta no pavimento — senão a seleção não teria como voltar, já que o plano não é clicável', () => {
+  const block = appSource.slice(
+    appSource.indexOf("importPlanUnderlayBtn.addEventListener('click'"),
+    appSource.indexOf("planUnderlayFileInput.addEventListener('change'"),
+  );
+  assert.match(block, /if \(Store\.currentPlanUnderlay\(\)\)/);
+  assert.match(block, /ViewportController\.selectPlanUnderlay\(\)/);
+  assert.match(block, /planUnderlayFileInput\.click\(\)/);
+});
+
+test('o rótulo do botão muda pra "Editar planta" quando já existe uma, e é atualizado a cada mudança de modelo (inclusive troca de pavimento)', () => {
+  assert.match(appSource, /private refreshPlanUnderlayButton\(\): void/);
+  assert.match(appSource, /hasUnderlay \? 'Editar planta' : 'Importar planta'/);
+  assert.match(appSource, /this\.refreshPlanUnderlayButton\(\);\s*\n\s*\}\);\s*\n\s*\}/);
+});
+
 test('PlanImport só usa pdfjs-dist sob demanda (import tardio), não no carregamento inicial', () => {
   assert.match(planImportSource, /await import\('pdfjs-dist'\)/);
   assert.match(planImportSource, /await import\('pdfjs-dist\/build\/pdf\.worker\.min\.mjs\?url'\)/);

@@ -338,10 +338,28 @@ export class EsboceApplication {
     // das paredes já existentes no pavimento atual (ou na origem, se o
     // pavimento ainda estiver vazio) — mesmo espírito de "gap perto do
     // que já existe" usado pelos presets de cômodo/Fachada.
+    //
+    // Esse MESMO botão também é a única forma de RESELECIONAR uma planta
+    // já importada (o plano no chão de propósito não é clicável — ver
+    // DEC-82, pra nunca roubar o clique de quem desenha parede em cima).
+    // Sem esse desvio, depois do primeiro clique em qualquer outro lugar
+    // (ou de desenhar uma parede) a seleção sumia e não tinha como abrir
+    // o menu de novo pra ajustar a escala — só reimportando, o que
+    // perderia o ajuste já feito. Por isso o clique verifica se JÁ existe
+    // planta no pavimento atual: se sim, só reabre o menu dela; só pede
+    // um arquivo novo se ainda não tem nenhuma.
     const importPlanUnderlayBtn = document.getElementById('importPlanUnderlayBtn');
     const planUnderlayFileInput = document.getElementById('planUnderlayFileInput') as HTMLInputElement | null;
     if (importPlanUnderlayBtn && planUnderlayFileInput) {
-      importPlanUnderlayBtn.addEventListener('click', () => planUnderlayFileInput.click());
+      importPlanUnderlayBtn.addEventListener('click', () => {
+        if (Store.currentPlanUnderlay()) {
+          ViewportController.selectPlanUnderlay();
+          this.requireElement('viewportHint').textContent =
+            'Menu da planta reaberto — use os botões pra mover, girar e escalar.';
+          return;
+        }
+        planUnderlayFileInput.click();
+      });
       planUnderlayFileInput.addEventListener('change', async () => {
         const file = planUnderlayFileInput.files?.[0];
         planUnderlayFileInput.value = ''; // permite reimportar o mesmo arquivo depois
@@ -363,13 +381,15 @@ export class EsboceApplication {
           }
           Store.commands.setPlanUnderlay(dataUrl, aspect, x, y);
           ViewportController.selectPlanUnderlay();
+          this.refreshPlanUnderlayButton();
           this.requireElement('viewportHint').textContent =
-            'Planta importada — use os botões do menu dela pra mover, girar e escalar até bater com o tamanho real (compare com uma parede já desenhada ou uma medida conhecida).';
+            'Planta importada — use os botões do menu dela pra mover, girar e escalar até bater com o tamanho real (compare com uma parede já desenhada ou uma medida conhecida). Clique em "Editar planta" a qualquer momento pra reabrir esse menu.';
         } catch (err) {
           this.requireElement('viewportHint').textContent =
             err instanceof Error ? err.message : 'Não foi possível importar essa planta.';
         }
       });
+      this.refreshPlanUnderlayButton();
     }
     const hydraulicsBtn = this.requireElement("hydraulicsBtn");
     const hydraulicToolsPanel = document.getElementById('hydraulicToolsPanel');
@@ -531,6 +551,7 @@ export class EsboceApplication {
       MaterialsSheet.refresh();
       ViewportStats.refresh();
       this.refreshConstructionSystemIndicator();
+      this.refreshPlanUnderlayButton();
     });
   }
 
@@ -539,6 +560,23 @@ export class EsboceApplication {
     const indicator = this.requireElement("constructionSystemIndicator");
     this.requireElement("constructionSystemIndicatorLabel").textContent = definition.label;
     indicator.title = `Sistema construtivo: ${definition.label} — ${definition.description}`;
+  }
+
+  // Rótulo do botão de Planta Baixa muda conforme o pavimento ATUAL já
+  // tem ou não uma planta importada — "Importar planta" (nenhuma ainda)
+  // vira "Editar planta" (já existe uma, o clique só reabre o menu dela
+  // em vez de pedir arquivo novo — ver wiring do botão acima). Chamado
+  // a cada mudança de modelo E a cada troca de pavimento (cada um tem a
+  // sua própria planta, ou nenhuma).
+  private refreshPlanUnderlayButton(): void {
+    const btn = document.getElementById('importPlanUnderlayBtn');
+    if (!btn) return;
+    const span = btn.querySelector('span');
+    const hasUnderlay = !!Store.currentPlanUnderlay();
+    if (span) span.textContent = hasUnderlay ? 'Editar planta' : 'Importar planta';
+    btn.title = hasUnderlay
+      ? 'Reabrir o menu da planta baixa deste pavimento — mover, girar e escalar'
+      : 'Importar planta baixa (imagem ou PDF) como referência no chão do pavimento atual, pra desenhar as paredes por cima';
   }
 
   // Atualiza a URL da barra de endereço com o id do projeto salvo, sem
