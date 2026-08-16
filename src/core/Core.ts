@@ -1252,13 +1252,24 @@ export function computeWallFootprints(wallList: Wall[]): Record<string, WallFoot
           // só. Ângulo raso que NÃO é exatamente reto (uma dobra bem
           // fechada, mas não uma reta) continua caindo no free/extended
           // de baixo — só a reta perfeita ganha esse desvio.
+          //
+          // extended TEM que ser false aqui (não true) — bug encontrado
+          // testando esta mesma correção: buildWallFootprintEdgeLines E
+          // buildWallEndCapMesh desenham a linha/tampa quando
+          // `p1Free !== false || p1Extended` — só zerar `free` não
+          // bastava, `extended: true` sozinho já disparava a condição
+          // de novo (uma das duas linhas continuava aparecendo). O
+          // resultado certo é o MESMO que a junção em T disfarçada já
+          // usa pro caso equivalente com 2 vizinhos ("iAmPartOfThrough"
+          // — esta parede é o trecho reto de um "through", não a que
+          // sobrou sozinha): `free: false, extended: false`.
           const dot = leave1x * leave2x + leave1y * leave2y;
           const isStraightThrough = joinAngleSin < 0.02 && dot < 0;
           if (isStraightThrough) {
             return {
               a: { x: px + nx * halfThick, y: py + ny * halfThick },
               b: { x: px - nx * halfThick, y: py - ny * halfThick },
-              free: false, extended: true
+              free: false, extended: false
             };
           }
           const exShallow = halfThick;

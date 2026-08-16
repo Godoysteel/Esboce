@@ -180,7 +180,16 @@ test('BUG DE CORE (não específico de Quebrar Parede, mas exposto por ele): dua
   const fp = Core.computeWallFootprints([a, b]);
   assert.equal(fp[a.id].p2Free, false, 'duas paredes exatamente retas uma com a outra não podem ganhar ponta livre');
   assert.equal(fp[b.id].p1Free, false, 'idem, do lado da outra parede');
-  assert.equal(fp[a.id].p2Extended, true, 'ainda assim precisa "extended" pra não sobrar frincha no ponto de encontro');
+  assert.equal(fp[a.id].p2Extended, false, 'extended TEM que ser false — só zerar free não bastava (bug achado testando esta mesma correção: extended:true sozinho já disparava a linha de novo)');
+  assert.equal(fp[b.id].p1Extended, false, 'idem, do lado da outra parede');
+  // A condição de VERDADE que o renderer usa pra decidir se desenha a
+  // linha/tampa é `p1Free !== false || p1Extended` (ver
+  // buildWallFootprintEdgeLines/buildWallEndCapMesh) — testa a
+  // expressão inteira, não só os campos separados, porque foi
+  // exatamente aí que a correção quebrou na primeira tentativa (free
+  // certo, extended errado, condição ainda dava true).
+  assert.equal(fp[a.id].p2Free !== false || fp[a.id].p2Extended, false, 'a condição real de desenho da linha/tampa tem que dar false pros dois lados');
+  assert.equal(fp[b.id].p1Free !== false || fp[b.id].p1Extended, false, 'idem, do lado da outra parede');
 
   // Trava contra regressão: uma dobra RASA DE VERDADE (não reta, só um
   // ângulo bem fechado) precisa CONTINUAR ganhando ponta livre — é
