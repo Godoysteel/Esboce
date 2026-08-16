@@ -25,6 +25,7 @@ import {
   resolveWallGroupGridDelta,
   resolveWallResizeOffset,
   roomHeightM,
+  roomOwnHeightM,
   roomsContainingWall,
   wallOBB,
   wallsCanFuse,
@@ -56,6 +57,10 @@ const scene3DRendererSource = await readFile(
 );
 const indexHtmlSource = await readFile(
   new URL('../index.html', import.meta.url),
+  'utf8',
+);
+const storeSource = await readFile(
+  new URL('../src/core/Store.ts', import.meta.url),
   'utf8',
 );
 
@@ -118,11 +123,12 @@ test('laje nasce automática por cômodo, dentro do mesmo loop que já gera o pi
   const roomsStart = scene3DRendererSource.indexOf('rooms.forEach(function (room) {');
   const roomsEnd = scene3DRendererSource.indexOf('\n      });', roomsStart);
   const roomsFlow = scene3DRendererSource.slice(roomsStart, roomsEnd);
-  // A partir da DEC-88 (altura de cômodo individual), a laje acompanha a
-  // altura EFETIVA do próprio cômodo (Core.roomHeightM sobre as paredes
-  // do contorno), não mais currentWallHeight (altura fixa do pavimento
-  // inteiro) direto.
-  assert.match(roomsFlow, /roomHeight = Core\.roomHeightM\(floorData\.walls, insetWallIds/);
+  // A partir da DEC-88/89 (altura de cômodo individual), a laje acompanha
+  // a altura PRÓPRIA do cômodo (Core.roomOwnHeightM — só paredes
+  // exclusivas, sem se deixar inflar por uma parede compartilhada que só
+  // está alta pra acompanhar um vizinho), não mais currentWallHeight
+  // (altura fixa do pavimento inteiro) direto.
+  assert.match(roomsFlow, /roomHeight = Core\.roomOwnHeightM\(floorData\.walls, insetWallIds/);
   assert.match(roomsFlow, /buildAutoLajePiece\(shape, lajeSizeX, lajeSizeZ, yOffset \+ roomHeight/);
   // A ferramenta/entidade manual antiga não existe mais: nenhum lugar do
   // renderer lê mais floorData.lajes (a prop pode continuar existindo no
@@ -1029,4 +1035,63 @@ test('resolveRoomHeightUpdate: parede compartilhada nunca fica mais baixa que o 
   assert.equal(byIdLowered.a3, 2.0);
   assert.equal(byIdLowered.a4, 2.0);
   assert.equal(byIdLowered.shared, 3.0);
+});
+
+// DEC-89 — correção pós-lançamento: a laje de um cômodo baixo estava
+// "subindo sozinha" só porque a parede que ele divide com um vizinho
+// mais alto precisou acompanhar o vizinho (regra da DEC-88). roomOwnHeightM
+// ignora parede compartilhada e olha só as EXCLUSIVAS do próprio cômodo.
+test('roomOwnHeightM: ignora a inflação de uma parede compartilhada que só está alta pra acompanhar o vizinho', () => {
+  const walls = twoRoomsSharingWall();
+  const roomAIds = ['a1', 'shared', 'a3', 'a4'];
+  const roomBIds = ['b1', 'shared', 'b2', 'b3'];
+  // Cômodo B foi levantado pra 5,0 m — a parede compartilhada acompanha.
+  walls.find((w) => w.id === 'b1').heightM = 5.0;
+  walls.find((w) => w.id === 'b2').heightM = 5.0;
+  walls.find((w) => w.id === 'b3').heightM = 5.0;
+  walls.find((w) => w.id === 'shared').heightM = 5.0; // resolveRoomHeightUpdate já teria feito isso
+
+  // roomHeightM (a função ANTIGA, ainda usada pra decidir a altura de
+  // CADA PAREDE) continua "contaminada" de propósito — é o comportamento
+  // certo pra ela.
+  assert.equal(roomHeightM(walls, roomAIds, 2.7), 5.0);
+  // roomOwnHeightM (usada pela LAJE) não deixa a parede compartilhada
+  // inflar a altura do cômodo que não pediu por ela.
+  assert.equal(roomOwnHeightM(walls, roomAIds, 2.7), 2.7);
+  // Do lado do dono de verdade (B), continua refletindo a altura certa.
+  assert.equal(roomOwnHeightM(walls, roomBIds, 2.7), 5.0);
+});
+
+test('roomOwnHeightM: cômodo cercado só por paredes compartilhadas cai no comportamento de roomHeightM (sem parede própria pra isolar)', () => {
+  const walls = twoRoomsSharingWall();
+  // Nenhuma parede de A é exclusiva nesta simulação (finge que TODAS
+  // fazem fronteira com outro cômodo) — sem escapatória, usa o máximo
+  // de todas mesmo, igual roomHeightM.
+  const roomAIds = ['shared'];
+  walls.find((w) => w.id === 'shared').heightM = 4.2;
+  assert.equal(roomOwnHeightM(walls, roomAIds, 2.7), roomHeightM(walls, roomAIds, 2.7));
+});
+
+// DEC-89 — correção pós-lançamento: dividir/fundir uma parede com altura
+// customizada (DEC-88) criava um pedaço novo SEM copiar Wall.heightM,
+// que nascia na altura padrão do pavimento — visualmente um "buraco" no
+// meio de uma parede que devia estar inteira na altura do cômodo.
+test('junção em T e fusão de paredes propagam Wall.heightM pro pedaço novo criado (DEC-89)', () => {
+  // splitWallsAtTJunctions: o pedaço extra nasce com createWallEntity —
+  // precisa herdar a altura da parede ORIGINAL, não só finishA/finishB.
+  const splitBlock = storeSource.slice(
+    storeSource.indexOf('splitWallsAtTJunctions(): string[] {'),
+    storeSource.indexOf('splitWallsAtTJunctions(): string[] {') + 2200,
+  );
+  assert.match(splitBlock, /if \(original\.heightM !== undefined\) piece\.heightM = original\.heightM;/);
+
+  // fuseOverlappingWalls: o pedaço extra (sobra que não é nem A nem B)
+  // também precisa herdar de quem realmente originou aquele trecho
+  // (seg.from), não nascer sem altura nenhuma.
+  const fuseBlock = storeSource.slice(
+    storeSource.indexOf('fuseOverlappingWalls(wallAId: string, wallBId: string): void {'),
+    storeSource.indexOf('fuseOverlappingWalls(wallAId: string, wallBId: string): void {') + 3600,
+  );
+  assert.match(fuseBlock, /const source = seg\.from === 'b' \? b : a;/);
+  assert.match(fuseBlock, /if \(source\.heightM !== undefined\) piece\.heightM = source\.heightM;/);
 });

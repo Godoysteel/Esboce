@@ -3666,7 +3666,11 @@ import {
     if (!owningRooms.length) return;
     var roomWallIds = Core.findRoomWallIds(Store.currentWalls(), owningRooms[0]!);
     if (!roomWallIds.length) return;
-    var startHeight = Core.roomHeightM(Store.currentWalls(), roomWallIds, Scene3DRenderer.WALL_HEIGHT_GETTER());
+    // roomOwnHeightM (não roomHeightM) — parte da altura PRÓPRIA do
+    // cômodo, ignorando uma parede compartilhada que só esteja alta
+    // porque acompanha um vizinho (DEC-89); senão o próximo arraste
+    // "herdaria" sem querer a altura do vizinho como ponto de partida.
+    var startHeight = Core.roomOwnHeightM(Store.currentWalls(), roomWallIds, Scene3DRenderer.WALL_HEIGHT_GETTER());
     dragElementStart = { roomWallIds: roomWallIds, startHeight: startHeight, startScreenY: clientY };
     dragMode = 'roomHeight';
     Store.commands.beginTransaction();

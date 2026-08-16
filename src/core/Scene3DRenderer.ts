@@ -2749,7 +2749,10 @@ export function hashColorHex(key: string): number {
       var owningRoomsForHeight = Core.roomsContainingWall(walls, w.id);
       if (owningRoomsForHeight.length) {
         var roomWallIdsForHeight = Core.findRoomWallIds(walls, owningRoomsForHeight[0]!);
-        var roomHeightNow = Core.roomHeightM(walls, roomWallIdsForHeight, wallHeight);
+        // roomOwnHeightM (não roomHeightM, DEC-89) — a alça reflete o
+        // que ESTE cômodo pediu, não uma altura inflada por acompanhar
+        // um vizinho mais alto na parede compartilhada.
+        var roomHeightNow = Core.roomOwnHeightM(walls, roomWallIdsForHeight, wallHeight);
         var heightHandleY = yOffset + roomHeightNow;
         var hx = (midX - offsetX) * scale, hz = (midY - offsetY) * scale;
         var geoH = new THREE.SphereGeometry(0.1, 12, 12);
@@ -3487,13 +3490,16 @@ export function hashColorHex(key: string): number {
           lajeSizeZ = Math.max(lajeSizeZ, Math.abs(p.y - p2.y) * scale);
         });
         var lajeWallColor = computeWallMatchColor(floorData.walls);
-        // Acompanha a altura EFETIVA deste cômodo (maior Wall.heightM do
-        // próprio contorno, ou o padrão do pavimento quando nenhuma
-        // parede tem override — ver DEC-88), não mais uma altura única
-        // fixa pro pavimento inteiro. Um cômodo mais alto empurra a
-        // própria laje pra cima; os vizinhos não-alterados continuam na
-        // altura padrão.
-        var roomHeight = Core.roomHeightM(floorData.walls, insetWallIds.filter(function (id: any) { return !!id; }), currentWallHeight);
+        // Acompanha a altura PRÓPRIA deste cômodo (Core.roomOwnHeightM —
+        // só paredes EXCLUSIVAS, não as compartilhadas com um vizinho;
+        // ver DEC-89), não mais uma altura única fixa pro pavimento
+        // inteiro (DEC-86) nem a altura "de qualquer parede do contorno"
+        // (DEC-88 original, que fazia a laje de um cômodo baixo subir
+        // sozinha só porque a parede compartilhada tinha que acompanhar
+        // um vizinho mais alto — bug corrigido na DEC-89). Um cômodo mais
+        // alto empurra a própria laje pra cima; os vizinhos não-alterados
+        // continuam na altura padrão.
+        var roomHeight = Core.roomOwnHeightM(floorData.walls, insetWallIds.filter(function (id: any) { return !!id; }), currentWallHeight);
         var lajePieces = buildAutoLajePiece(shape, lajeSizeX, lajeSizeZ, yOffset + roomHeight, lajeWallColor, viewState);
         lajePieces.forEach(function (m: any) {
           tagCategory(m, 'laje');

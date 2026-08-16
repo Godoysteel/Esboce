@@ -940,6 +940,34 @@ export function roomHeightM(wallList: Wall[], roomWallIds: string[], floorDefaul
   return height;
 }
 
+// Altura PRÓPRIA de um cômodo pra fins de teto/laje (DEC-89) — diferente
+// de roomHeightM acima. roomHeightM olha TODAS as paredes do contorno,
+// inclusive as compartilhadas — o que é certo pra decidir a altura de
+// CADA PAREDE (a compartilhada pode ter sido elevada só pra acompanhar
+// um vizinho mais alto, regra da DEC-88), mas errado pra decidir a
+// altura do TETO deste cômodo: sem essa distinção, a laje de um cômodo
+// baixo "subia sozinha" só porque a parede que ele divide com um vizinho
+// mais alto teve que acompanhar o vizinho (bug relatado pelo Product
+// Owner). Aqui só entram as paredes EXCLUSIVAS (não compartilhadas com
+// outro cômodo); só cai no comportamento de roomHeightM (todas as
+// paredes) se o cômodo não tiver NENHUMA parede própria — cercado só por
+// divisórias compartilhadas, sem jeito de isolar uma altura só dele.
+export function roomOwnHeightM(wallList: Wall[], roomWallIds: string[], floorDefaultHeightM: number): number {
+  const roomSet = new Set(roomWallIds);
+  const roomsById = detectRooms(wallList).map((room) => ({ room, ids: findRoomWallIds(wallList, room) }));
+  let height = floorDefaultHeightM;
+  let hasExclusive = false;
+  roomWallIds.forEach((id) => {
+    const owning = roomsById.filter((entry) => entry.ids.indexOf(id) !== -1);
+    const isShared = owning.some((entry) => entry.ids.some((otherId) => !roomSet.has(otherId)));
+    if (isShared) return;
+    hasExclusive = true;
+    const w = wallList.find((ww) => ww.id === id);
+    if (w && w.heightM != null && w.heightM > height) height = w.heightM;
+  });
+  return hasExclusive ? height : roomHeightM(wallList, roomWallIds, floorDefaultHeightM);
+}
+
 // Resolve o novo Wall.heightM de cada parede do cômodo arrastado, quando
 // o usuário pede uma altura nova pro cômodo inteiro. Regra combinada com
 // o Product Owner: uma parede exclusiva desse cômodo recebe a altura nova
@@ -1668,7 +1696,7 @@ export const Core = {
   roofRidgeHeightMeters, roofPitchForRidgeHeight, roofsCanFuse, fusedRoofBounds,
   rectPoints, lajeBounds,
   rectsNearby, pointInPolygon, roomModelBounds, findRoomWallIds, findIsolatedRoomWallIds, wallResizeTopology, resolveWallResizeOffset, computeWallFootprints,
-  roomsContainingWall, roomHeightM, resolveRoomHeightUpdate,
+  roomsContainingWall, roomHeightM, roomOwnHeightM, resolveRoomHeightUpdate,
   wallResizeEndpointNeedsBridge,
   distPointToLine, wallOBB, furnitureOBB, openingOBB, obbOverlapMTV, wallOverlapsForeignOpening, resolveWallOffsetAgainstOpenings, wallsCanFuse, wallsMeetAtEndpoint, resolveWallGroupGridDelta,
   findWallTJunctionSplits,

@@ -509,6 +509,14 @@ export const commands = {
         resultingWalls.push(w);
       } else {
         const piece = Core.createWallEntity(p1.x, p1.y, p2.x, p2.y);
+        // Mesmo motivo do split em junção T logo abaixo (ver comentário
+        // lá, DEC-89): pedaço novo herda a altura da parede de origem
+        // (a ou b, conforme seg.from) em vez de nascer sempre na altura
+        // padrão do pavimento.
+        const source = seg.from === 'b' ? b : a;
+        if (source.heightM !== undefined) piece.heightM = source.heightM;
+        if (source.finishA !== undefined) piece.finishA = source.finishA;
+        if (source.finishB !== undefined) piece.finishB = source.finishB;
         walls.push(piece);
         resultingWalls.push(piece);
       }
@@ -565,6 +573,14 @@ export const commands = {
           piece = Core.createWallEntity(p1.x, p1.y, p2.x, p2.y);
           if (original.finishA !== undefined) piece.finishA = original.finishA;
           if (original.finishB !== undefined) piece.finishB = original.finishB;
+          // Sem isso, o pedaço novo nascia com a altura PADRÃO do
+          // pavimento mesmo quando a parede original tinha altura de
+          // cômodo customizada (DEC-88) — a junção em T é disparada o
+          // tempo todo por qualquer arraste de parede perpendicular, então
+          // o pedaço "caído" pra altura padrão aparecia como um buraco no
+          // meio de uma parede que devia estar inteira na altura do
+          // cômodo (ver DEC-89, bug relatado pelo Product Owner).
+          if (original.heightM !== undefined) piece.heightM = original.heightM;
           walls.push(piece);
         }
         pieces.push({ wall: piece, startT: p1.t, endT: p2.t });
