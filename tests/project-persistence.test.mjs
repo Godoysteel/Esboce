@@ -123,3 +123,32 @@ test('Opening sem productId continua sem o campo depois da ida e volta (nunca vi
   const restored = importProjectBackup(json);
   assert.equal('productId' in restored.project.floors[0].openings[0], false);
 });
+
+// DEC-90 — botão "Gerar Laje": Floor.roomLajeGenerated marca por roomKey
+// quais cômodos já tiveram a laje gerada; precisa sobreviver ao
+// salvar/carregar como qualquer outro dado do projeto.
+test('Floor.roomLajeGenerated faz ida e volta sem perder o valor', () => {
+  const project = createProject();
+  project.floors[0].roomLajeGenerated = { 'wall-1,wall-2,wall-3,wall-4': true };
+  const json = exportProjectBackup(project);
+  const restored = importProjectBackup(json);
+  assert.deepEqual(restored.project.floors[0].roomLajeGenerated, { 'wall-1,wall-2,wall-3,wall-4': true });
+});
+
+test('Floor sem roomLajeGenerated continua sem o campo depois da ida e volta (nunca vira objeto vazio explícito)', () => {
+  const project = createProject();
+  const json = exportProjectBackup(project);
+  const restored = importProjectBackup(json);
+  assert.equal('roomLajeGenerated' in restored.project.floors[0], false);
+});
+
+test('projeto legado sem roomLajeGenerated carrega normalmente (cômodo antigo nasce sem laje pendente, não quebrado)', () => {
+  const legacy = {
+    floors: [{ id: 'floor-1', name: 'Térreo', walls: [], columns: [], roofs: [], openings: [], varandas: [], roomFinishes: {} }],
+    currentFloorIndex: 0,
+    layers: { telhado: false },
+    foundationType: 'radier',
+  };
+  const decoded = decodeProjectDocument(legacy);
+  assert.equal('roomLajeGenerated' in decoded.project.floors[0], false);
+});

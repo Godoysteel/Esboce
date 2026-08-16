@@ -290,6 +290,13 @@ export class EsboceApplication {
       ViewportController.setNextRoofAtticMode(false);
       this.requireElement("atticModeOverlay").style.display = "flex";
     });
+    this.requireElement("generateLajeBtn").addEventListener("click", () => {
+      const roomCount = Core.detectRooms(Store.currentWalls()).length;
+      Store.commands.generateLajeForCurrentFloor();
+      this.requireElement('viewportHint').textContent = roomCount
+        ? 'Laje gerada — ' + roomCount + (roomCount === 1 ? ' cômodo coberto.' : ' cômodos cobertos.')
+        : 'Nenhum cômodo fechado neste pavimento ainda — feche as paredes antes de gerar a laje.';
+    });
     this.requireElement("atticModeClose").addEventListener("click", () => {
       this.requireElement("atticModeOverlay").style.display = "none";
     });

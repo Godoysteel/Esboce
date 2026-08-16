@@ -63,6 +63,14 @@ const storeSource = await readFile(
   new URL('../src/core/Store.ts', import.meta.url),
   'utf8',
 );
+const materialsPanelSource = await readFile(
+  new URL('../src/core/MaterialsPanel.ts', import.meta.url),
+  'utf8',
+);
+const esboceApplicationSource = await readFile(
+  new URL('../src/app/EsboceApplication.ts', import.meta.url),
+  'utf8',
+);
 
 test('clique distingue comodo isolado de parede incorporada', () => {
   const wallClickFlow = viewportControllerSource.slice(
@@ -119,7 +127,8 @@ test('laje nasce automática por cômodo, dentro do mesmo loop que já gera o pi
   assert.match(scene3DRendererSource, /function buildAutoLajePiece\(shape/);
   assert.match(scene3DRendererSource, /depth: LAJE_THICKNESS/);
   // Nasce dentro do MESMO rooms.forEach do piso — prova de que reaproveita
-  // o contorno já calculado (shape/insetPoints), não um objeto à parte.
+  // o contorno já calculado (room.points/insetWallIds), não um objeto à
+  // parte.
   const roomsStart = scene3DRendererSource.indexOf('rooms.forEach(function (room) {');
   const roomsEnd = scene3DRendererSource.indexOf('\n      });', roomsStart);
   const roomsFlow = scene3DRendererSource.slice(roomsStart, roomsEnd);
@@ -129,7 +138,15 @@ test('laje nasce automática por cômodo, dentro do mesmo loop que já gera o pi
   // está alta pra acompanhar um vizinho), não mais currentWallHeight
   // (altura fixa do pavimento inteiro) direto.
   assert.match(roomsFlow, /roomHeight = Core\.roomOwnHeightM\(floorData\.walls, insetWallIds/);
-  assert.match(roomsFlow, /buildAutoLajePiece\(shape, lajeSizeX, lajeSizeZ, yOffset \+ roomHeight/);
+  // DEC-90: a laje usa um contorno PRÓPRIO (lajeShape, de outsetPoints —
+  // face externa da parede), diferente do `shape` do piso (insetPoints,
+  // face interna) — cobre o cômodo inteiro rente à parede, não só até a
+  // face de dentro.
+  assert.match(roomsFlow, /var outsetPoints = room\.points\.map/);
+  assert.match(roomsFlow, /buildAutoLajePiece\(lajeShape, lajeSizeX, lajeSizeZ, yOffset \+ roomHeight/);
+  // DEC-90: só desenha depois que o botão "Gerar Laje" marcou o roomKey —
+  // cômodo nasce sem laje nenhuma, visível ou contabilizada.
+  assert.match(roomsFlow, /if \(\(floorData\.roomLajeGenerated \|\| \{\}\)\[roomKey\]\) \{/);
   // A ferramenta/entidade manual antiga não existe mais: nenhum lugar do
   // renderer lê mais floorData.lajes (a prop pode continuar existindo no
   // modelo salvo, por compatibilidade com projeto antigo — só não é mais
@@ -1094,4 +1111,32 @@ test('junção em T e fusão de paredes propagam Wall.heightM pro pedaço novo c
   );
   assert.match(fuseBlock, /const source = seg\.from === 'b' \? b : a;/);
   assert.match(fuseBlock, /if \(source\.heightM !== undefined\) piece\.heightM = source\.heightM;/);
+});
+
+// DEC-90 — botão "Gerar Laje": cômodo nasce sem laje visível/contabilizada;
+// um clique marca TODOS os cômodos fechados do pavimento atual de uma vez
+// (cada um com seu próprio roomKey, não uma peça única fundida).
+test('Store.commands.generateLajeForCurrentFloor existe, marca todo cômodo fechado do pavimento de uma vez, e cada um com seu próprio roomKey', () => {
+  const cmdStart = storeSource.indexOf('generateLajeForCurrentFloor(): void {');
+  assert.notEqual(cmdStart, -1);
+  const cmdBlock = storeSource.slice(cmdStart, cmdStart + 800);
+  assert.match(cmdBlock, /const rooms = Core\.detectRooms\(f\.walls\);/);
+  assert.match(cmdBlock, /rooms\.forEach\(\(room\) => \{/);
+  assert.match(cmdBlock, /const roomKey = Core\.findRoomWallIds\(f\.walls, room\)\.slice\(\)\.sort\(\)\.join\(','\);/);
+  assert.match(cmdBlock, /f\.roomLajeGenerated!\[roomKey\] = true;/);
+});
+
+test('quantitativo de materiais só soma a laje de cômodo com roomLajeGenerated marcado', () => {
+  assert.match(
+    materialsPanelSource,
+    /const roomKey = Core\.findRoomWallIds\(floor\.walls, room\)\.slice\(\)\.sort\(\)\.join\(','\);\s*\n\s*if \(!\(floor\.roomLajeGenerated \|\| \{\}\)\[roomKey\]\) return;/,
+  );
+});
+
+test('botão "Gerar Laje" existe no HTML e está ligado ao comando do Store', () => {
+  assert.match(indexHtmlSource, /id="generateLajeBtn"/);
+  assert.match(
+    esboceApplicationSource,
+    /requireElement\("generateLajeBtn"\)\.addEventListener\("click", \(\) => \{[\s\S]{0,300}Store\.commands\.generateLajeForCurrentFloor\(\);/,
+  );
 });

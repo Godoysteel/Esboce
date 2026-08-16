@@ -423,8 +423,13 @@ export function compute(): ComputeResult {
     // pilarete em parede já dá pro vão grande. Varanda/balanço/sacada
     // ficam de fora da conta (não são cômodo fechado por parede) — a
     // laje automática por cômodo não cobre esses casos, ver decisão
-    // registrada.
+    // registrada. A partir da DEC-90: cômodo nasce SEM laje contabilizada
+    // — só entra depois que o botão "Gerar Laje" marcou o roomKey dele
+    // (mesma assinatura de parede usada pelo acabamento de piso acima),
+    // igual o 3D só desenha a malha nessa mesma condição.
     rooms.forEach(function (room) {
+      const roomKey = Core.findRoomWallIds(floor.walls, room).slice().sort().join(',');
+      if (!(floor.roomLajeGenerated || {})[roomKey]) return;
       totals.lajeCount++;
       totals.lajeAreaM2 += room.area / (Core.GRID * Core.GRID);
     });

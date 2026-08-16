@@ -273,6 +273,14 @@ export interface Floor {
   planUnderlay?: PlanUnderlay | null;
   roomFinishes: Record<string, string>;
   roomFinishSettings?: Record<string, { scale: number; rotation: number }>;
+  // Cômodo nasce SEM laje visível/contabilizada (DEC-90) — só passa a
+  // existir depois que o botão "Gerar Laje" é clicado. Chave = mesmo
+  // roomKey (ids de parede do contorno, ordenados e unidos) já usado por
+  // roomFinishes/roomFinishSettings; presença com valor `true` = gerada.
+  // Se as paredes do cômodo mudarem o bastante pra trocar o roomKey, a
+  // laje volta a ficar pendente até gerar de novo — mesmo comportamento
+  // (aceito) que roomFinishes já tem hoje.
+  roomLajeGenerated?: Record<string, boolean>;
 }
 
 export interface ProjectLayers {

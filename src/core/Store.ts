@@ -695,6 +695,28 @@ export const commands = {
     emit({ type: 'RoomFinishSet', roomKey, productId, scale, rotation });
   },
 
+  // Botão "Gerar Laje" (DEC-90) — marca TODOS os cômodos fechados do
+  // pavimento atual de uma vez (não um por um); cada laje continua uma
+  // peça individual amarrada ao roomKey de origem (Scene3DRenderer só
+  // desenha malha própria por cômodo, sem fundir em uma peça só). Um
+  // cômodo criado DEPOIS deste clique nasce sem laje de novo — precisa
+  // clicar o botão outra vez pra cobrir ele também.
+  generateLajeForCurrentFloor(): void {
+    const f = currentFloor();
+    const rooms = Core.detectRooms(f.walls);
+    if (!rooms.length) return;
+    pushUndoSnapshot();
+    f.roomLajeGenerated = f.roomLajeGenerated || {};
+    const roomKeys: string[] = [];
+    rooms.forEach((room) => {
+      const roomKey = Core.findRoomWallIds(f.walls, room).slice().sort().join(',');
+      if (!roomKey) return;
+      f.roomLajeGenerated![roomKey] = true;
+      roomKeys.push(roomKey);
+    });
+    emit({ type: 'LajeGenerated', roomKeys });
+  },
+
   duplicateWall(wallId: string): Wall | null {
     const w = findWall(wallId); if (!w) return null;
     pushUndoSnapshot();

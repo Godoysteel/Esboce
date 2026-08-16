@@ -3427,6 +3427,24 @@ export function hashColorHex(key: string): number {
           if (i === 0) shape.moveTo(wx, wz); else shape.lineTo(wx, wz);
         });
         shape.closePath();
+        // Contorno EXTERNO (DEC-90) — mesmo raciocínio de insetPoints
+        // acima (mesma parede real por trecho, `insetWallIds[i]`), só que
+        // pega a face mais LONGE do centro em vez da mais perto. Usado só
+        // pela laje (que deve cobrir o cômodo inteiro rente à parede,
+        // como uma laje de verdade apoiada em cima dela) — piso, rodapé e
+        // contorno do piso continuam na face interna (insetPoints).
+        var outsetPoints = room.points.map(function (p1: any, i: any) {
+          var outWallId = insetWallIds[i];
+          var outWall = outWallId && floorData.walls.find(function (w: any) { return w.id === outWallId; });
+          var outFp = outWall && wallFootprints[outWall.id];
+          if (!outWall || !outFp) return p1;
+          var od1 = Math.hypot(outWall.x1 - p1.x, outWall.y1 - p1.y);
+          var od2 = Math.hypot(outWall.x2 - p1.x, outWall.y2 - p1.y);
+          var outFace = (od1 <= od2) ? { a: outFp.p1a, b: outFp.p1b } : { a: outFp.p2a, b: outFp.p2b };
+          var outDistA = Math.hypot(outFace.a.x - cx, outFace.a.y - cy);
+          var outDistB = Math.hypot(outFace.b.x - cx, outFace.b.y - cy);
+          return outDistA >= outDistB ? outFace.a : outFace.b;
+        });
         // Espessura fina (3cm) e base sempre no mesmo nível da base da
         // parede (yOffset — o mesmo y0 usado em buildWallMeshFromFootprint),
         // em vez de depender do térreo ou empilhar sobre a laje.
@@ -3476,37 +3494,48 @@ export function hashColorHex(key: string): number {
         scene.add(baseboardMesh);
         registry.roomMeshes.push(baseboardMesh);
 
-        // Laje — mesma técnica do piso (mesmo shape/insetPoints,
-        // já na face real da parede), só que no TOPO da parede em vez
-        // da base, e com a espessura real de laje. Sempre acompanha a
-        // parede automaticamente (não guarda nada — recalculada a
-        // cada render, exatamente como o piso), incluindo quando a
-        // parede é arrastada: não existe "sincronizar" porque nunca
-        // existiu um estado separado pra ficar dessincronizado.
-        var lajeSizeX = 0, lajeSizeZ = 0;
-        insetPoints.forEach(function (p: any, i: any) {
-          var p2 = insetPoints[(i + 1) % insetPoints.length];
-          lajeSizeX = Math.max(lajeSizeX, Math.abs(p.x - p2.x) * scale);
-          lajeSizeZ = Math.max(lajeSizeZ, Math.abs(p.y - p2.y) * scale);
-        });
-        var lajeWallColor = computeWallMatchColor(floorData.walls);
-        // Acompanha a altura PRÓPRIA deste cômodo (Core.roomOwnHeightM —
-        // só paredes EXCLUSIVAS, não as compartilhadas com um vizinho;
-        // ver DEC-89), não mais uma altura única fixa pro pavimento
-        // inteiro (DEC-86) nem a altura "de qualquer parede do contorno"
-        // (DEC-88 original, que fazia a laje de um cômodo baixo subir
-        // sozinha só porque a parede compartilhada tinha que acompanhar
-        // um vizinho mais alto — bug corrigido na DEC-89). Um cômodo mais
-        // alto empurra a própria laje pra cima; os vizinhos não-alterados
-        // continuam na altura padrão.
-        var roomHeight = Core.roomOwnHeightM(floorData.walls, insetWallIds.filter(function (id: any) { return !!id; }), currentWallHeight);
-        var lajePieces = buildAutoLajePiece(shape, lajeSizeX, lajeSizeZ, yOffset + roomHeight, lajeWallColor, viewState);
-        lajePieces.forEach(function (m: any) {
-          tagCategory(m, 'laje');
-          m.userData.roomKey = roomKey; m.userData.floorIndex = floorIdx;
-          scene.add(m);
-          registry.roomMeshes.push(m);
-        });
+        // Laje — SÓ desenha depois que o botão "Gerar Laje" marcou este
+        // roomKey (DEC-90); cômodo nasce sem laje nenhuma, visível ou
+        // contabilizada (ver MaterialsPanel.ts, que também só soma
+        // cômodo marcado). Continua sem guardar geometria própria —
+        // recalculada a cada render a partir do contorno atual, mesmo
+        // espírito de sempre (DEC-86) —, só a CONDIÇÃO de desenhar ou não
+        // é nova. Contorno EXTERNO (outsetPoints, não insetPoints como o
+        // piso) — cobre o cômodo inteiro rente à face de fora da parede,
+        // como uma laje de verdade apoiada em cima dela, não parando na
+        // face interna como o piso.
+        if ((floorData.roomLajeGenerated || {})[roomKey]) {
+          var lajeShape = new THREE.Shape();
+          outsetPoints.forEach(function (p, i) {
+            var wx = (p.x - offsetX) * scale, wz = (p.y - offsetY) * scale;
+            if (i === 0) lajeShape.moveTo(wx, wz); else lajeShape.lineTo(wx, wz);
+          });
+          lajeShape.closePath();
+          var lajeSizeX = 0, lajeSizeZ = 0;
+          outsetPoints.forEach(function (p: any, i: any) {
+            var p2 = outsetPoints[(i + 1) % outsetPoints.length];
+            lajeSizeX = Math.max(lajeSizeX, Math.abs(p.x - p2.x) * scale);
+            lajeSizeZ = Math.max(lajeSizeZ, Math.abs(p.y - p2.y) * scale);
+          });
+          var lajeWallColor = computeWallMatchColor(floorData.walls);
+          // Acompanha a altura PRÓPRIA deste cômodo (Core.roomOwnHeightM —
+          // só paredes EXCLUSIVAS, não as compartilhadas com um vizinho;
+          // ver DEC-89), não mais uma altura única fixa pro pavimento
+          // inteiro (DEC-86) nem a altura "de qualquer parede do contorno"
+          // (DEC-88 original, que fazia a laje de um cômodo baixo subir
+          // sozinha só porque a parede compartilhada tinha que acompanhar
+          // um vizinho mais alto — bug corrigido na DEC-89). Um cômodo
+          // mais alto empurra a própria laje pra cima; os vizinhos
+          // não-alterados continuam na altura padrão.
+          var roomHeight = Core.roomOwnHeightM(floorData.walls, insetWallIds.filter(function (id: any) { return !!id; }), currentWallHeight);
+          var lajePieces = buildAutoLajePiece(lajeShape, lajeSizeX, lajeSizeZ, yOffset + roomHeight, lajeWallColor, viewState);
+          lajePieces.forEach(function (m: any) {
+            tagCategory(m, 'laje');
+            m.userData.roomKey = roomKey; m.userData.floorIndex = floorIdx;
+            scene.add(m);
+            registry.roomMeshes.push(m);
+          });
+        }
       });
 
       // Soleira — depois de gerar o piso de TODOS os cômodos do

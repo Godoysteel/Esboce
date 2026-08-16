@@ -331,6 +331,16 @@ function stringMap(value: unknown, path: string): Record<string, string> {
   return result;
 }
 
+function booleanMap(value: unknown, path: string): Record<string, boolean> {
+  if (value == null) return {};
+  const source = record(value, path);
+  const result: Record<string, boolean> = {};
+  for (const [key, item] of Object.entries(source)) {
+    if (typeof item === 'boolean') result[key] = item;
+  }
+  return result;
+}
+
 function settingsMap(value: unknown, path: string): Record<string, { scale: number; rotation: number }> {
   if (value == null) return {};
   const source = record(value, path);
@@ -370,6 +380,7 @@ function parseFloor(value: unknown, path: string): Floor {
   // o projeto serializado com um molde fixo).
   if (v.planUnderlay) floor.planUnderlay = parsePlanUnderlay(v.planUnderlay, `${path}.planUnderlay`);
   if (floor.kind === 'attic') floor.wallHeightM = number(v.wallHeightM, `${path}.wallHeightM`, 1.2);
+  if (v.roomLajeGenerated) floor.roomLajeGenerated = booleanMap(v.roomLajeGenerated, `${path}.roomLajeGenerated`);
   const wallIds = new Set(floor.walls.map((wall) => wall.id));
   floor.openings.forEach((opening, index) => {
     if (!wallIds.has(opening.wallId)) fail(`${path}.openings[${index}].wallId`, 'parede hospedeira não existe');
