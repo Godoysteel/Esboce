@@ -1,5 +1,7 @@
 # Changelog
 
+> Corrigido: bug de fundo em `Core.computeWallFootprints` — uma parede reta dividida em dois pedaços (por causa de uma junção em T) ganhava linhas de aresta/tampa no meio dela, sem canto nenhum ali, sempre que sobrava só 1 vizinho colinear (ex.: depois de demolir a parede perpendicular que fazia a junção). Corrigido sem afetar o caso de dobra rasa de verdade, que continua se comportando igual. Ver DEC-83 (correção pós-lançamento nº5).
+
 > Corrigido: "Quebrar parede" — sobrava um buraco no piso do tamanho da espessura da parede quebrada (a mesma "fresta" que a soleira do arco já resolvia, mas nunca era acionada pra uma parede inteira demolida). Agora ganha soleira igual arco/porta — interna (entre dois cômodos) ou externa (parede de fora), cobrindo o comprimento todo. Ver DEC-83 (correção pós-lançamento nº4).
 
 > Corrigido: "Quebrar parede" — a ponta livre da parede vizinha (esquina, inclusive externa) tinha o canto certo mas nenhuma superfície fechando de verdade (dava pra ver através dela). Agora tem uma tampa visível de material igual ao resto da parede. Ver DEC-83 (correção pós-lançamento nº3).

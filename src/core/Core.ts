@@ -1231,6 +1231,36 @@ export function computeWallFootprints(wallList: Wall[]): Record<string, WallFoot
             return { a: rightIsA ? c1 : c2, b: rightIsA ? c2 : c1, free: false, extended: false };
           }
         } else {
+          // Caso especial DENTRO do "ângulo raso": as duas paredes são
+          // uma CONTINUAÇÃO RETA uma da outra (mesmo eixo, sentidos
+          // opostos ao se afastar do ponto — exatamente 0°/180°, não só
+          // "raso"). Isso acontece sempre que uma parede longa nasceu
+          // dividida em dois pedaços colineares por causa de uma
+          // junção em T (uma terceira parede encostando no meio dela —
+          // ver "T disfarçada" logo abaixo, caso touchers.length===2) e
+          // depois essa terceira parede é removida (Quebrar Parede,
+          // DEC-83): o que era uma junção em T bem resolvida (3 vias,
+          // reconhece a colinearidade, junta sem emenda) vira "só 1
+          // vizinho" — e caía direto no tratamento de ângulo raso
+          // genérico, que assume "ponta livre" pra evitar espinho.
+          // Errado pra esse caso específico: duas paredes EXATAMENTE
+          // retas uma com a outra nunca deveriam ganhar ponta livre
+          // (linhas de aresta + tampa aparecendo no meio de uma parede
+          // que deveria continuar lisa) — mesmo teste de colinearidade
+          // (cross quase zero) + sentidos opostos (dot negativo) já
+          // usado na junção em T disfarçada, só que aqui pra 1 vizinho
+          // só. Ângulo raso que NÃO é exatamente reto (uma dobra bem
+          // fechada, mas não uma reta) continua caindo no free/extended
+          // de baixo — só a reta perfeita ganha esse desvio.
+          const dot = leave1x * leave2x + leave1y * leave2y;
+          const isStraightThrough = joinAngleSin < 0.02 && dot < 0;
+          if (isStraightThrough) {
+            return {
+              a: { x: px + nx * halfThick, y: py + ny * halfThick },
+              b: { x: px - nx * halfThick, y: py - ny * halfThick },
+              free: false, extended: true
+            };
+          }
           const exShallow = halfThick;
           const dOutXShallow = end === 1 ? -ux : ux, dOutYShallow = end === 1 ? -uy : uy;
           const bxShallow = px + dOutXShallow * exShallow, byShallow = py + dOutYShallow * exShallow;

@@ -166,3 +166,29 @@ test('parede demolida ganha o mesmo tratamento de "buraco no piso" que arco/port
   // pro arco/porta pra fora, sem duplicar lógica de geometria.
   assert.match(demolishedSlabBlock, /buildExteriorSoleira\(w, fullSpanOpening, yOffset, offsetX, offsetY, scale\)/);
 });
+
+test('BUG DE CORE (não específico de Quebrar Parede, mas exposto por ele): duas paredes COLINEARES (uma continuação reta da outra) ligadas por 1 único ponto de contato ganhavam "ponta livre" por engano — riscos/tampa aparecendo no meio de uma parede que devia continuar lisa. Corrigido sem quebrar o caso original que essa lógica protegia (dobra rasa de verdade, não reta)', () => {
+  // Cenário clássico do bug: uma parede longa nascida dividida em 2
+  // pedaços colineares por causa de uma junção em T (3ª parede
+  // encostando no meio) — a junção em T é bem resolvida (reconhece a
+  // colinearidade, junta sem emenda) ENQUANTO a 3ª parede existe. Uma
+  // vez que ela é demolida (DEC-83), sobra só 1 vizinho pros dois
+  // pedaços — e caía no tratamento genérico de "ângulo raso", que
+  // assume ponta livre pra evitar espinho.
+  const a = createWallEntity(0, 0, 400, 0);
+  const b = createWallEntity(400, 0, 800, 0); // colinear, continuação reta
+  const fp = Core.computeWallFootprints([a, b]);
+  assert.equal(fp[a.id].p2Free, false, 'duas paredes exatamente retas uma com a outra não podem ganhar ponta livre');
+  assert.equal(fp[b.id].p1Free, false, 'idem, do lado da outra parede');
+  assert.equal(fp[a.id].p2Extended, true, 'ainda assim precisa "extended" pra não sobrar frincha no ponto de encontro');
+
+  // Trava contra regressão: uma dobra RASA DE VERDADE (não reta, só um
+  // ângulo bem fechado) precisa CONTINUAR ganhando ponta livre — é
+  // exatamente o caso que essa lógica sempre existiu pra proteger
+  // (evitar um "espinho" longe no canto). Só a reta perfeita (0,02 de
+  // seno, ~1°) ganha o desvio novo.
+  const c = createWallEntity(0, 0, 400, 0);
+  const d = createWallEntity(400, 0, 760, 60); // quase colinear, mas não reto
+  const fp2 = Core.computeWallFootprints([c, d]);
+  assert.equal(fp2[c.id].p2Free, true, 'dobra rasa de verdade (não reta) continua ganhando ponta livre, sem regressão');
+});
