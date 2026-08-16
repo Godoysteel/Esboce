@@ -1,5 +1,7 @@
 # Changelog
 
+> Corrigido: "Quebrar parede" — a parede vizinha ficava com um entalhe/fresta aberta na esquina em vez de uma ponta reta fechada. Ver DEC-83 (correção pós-lançamento).
+
 > Adicionado: camada "Paredes transparentes" no menu de Camadas visíveis — deixa as paredes vazadas (só a opacidade, continuam clicáveis) pra comparar melhor com uma Planta Baixa importada no chão. Ver DEC-84.
 
 > Corrigido: "Quebrar parede" — antes apagava a parede de verdade, o que desfazia o fechamento do cômodo e sumia o piso inteiro daquele ambiente. Agora só marca a parede como demolida: ela some da vista 2D/3D e para de contar no quantitativo de materiais/orçamento, mas continua "por baixo" fechando o cômodo — o piso não desaparece mais. Ver DEC-83.

@@ -2878,7 +2878,21 @@ export function hashColorHex(key: string): number {
       var wallCategory: keyof typeof layers = isGroundFloor ? 'paredesTerreo' : 'paredesSuperiores';
       var wallsVisible = layers[wallCategory];
       var rooms = Core.detectRooms(floorData.walls);
-      var wallFootprints = Core.computeWallFootprints(floorData.walls);
+      // computeWallFootprints é só GEOMETRIA VISUAL (junta cantos/mitre
+      // entre paredes vizinhas pra desenhar) — bem diferente de
+      // detectRooms acima, que precisa da lista INTEIRA (com parede
+      // demolida incluída) pra manter o cômodo fechado. Aqui é o
+      // oposto: se a parede demolida entrasse nessa lista, a parede
+      // VIZINHA a ela (a que sobrou, ainda desenhada) calcularia o
+      // canto dela esperando uma parceira que não existe mais
+      // visualmente — e a ponta ficava com um entalhe/fresta em vez de
+      // uma tampa reta (bug reportado pelo Product Owner: parede
+      // "se partiu" na esquina, sem tampinha). Excluir parede demolida
+      // SÓ daqui faz essa ponta virar uma extremidade livre de verdade
+      // (mesmo tratamento que já existe pra qualquer ponta solta), sem
+      // tirar a parede demolida da lista que fecha o cômodo.
+      var activeWallsForFootprint = floorData.walls.filter(function (w) { return !w.demolished; });
+      var wallFootprints = Core.computeWallFootprints(activeWallsForFootprint);
 
       if (layers.laje) {
         var lajeWallColor = computeWallMatchColor(floorData.walls);

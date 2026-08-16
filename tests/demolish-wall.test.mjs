@@ -43,14 +43,38 @@ test('a ferramenta Quebrar Parede chama demolishWall, não deleteWall/pruneDegen
   assert.doesNotMatch(toolBlock, /pruneDegenerateWalls/);
 });
 
-test('Scene3DRenderer pula a parede demolida ao desenhar (paredes e as aberturas dela), mas ela continua entrando em computeWallFootprints/detectRooms', () => {
+test('Scene3DRenderer pula a parede demolida ao desenhar (paredes e as aberturas dela); ela continua em detectRooms (fecha o cômodo) mas NÃO entra mais em computeWallFootprints (senão a parede vizinha ficava com um entalhe/fresta esperando uma parceira que não existe mais — bug reportado pelo Product Owner, corrigido)', () => {
   assert.match(renderer3DSource, /if \(w\.demolished\) return;/);
   assert.match(renderer3DSource, /if \(!w \|\| w\.demolished\) return;/);
-  // O cálculo de contorno/cômodo roda em cima de floorData.walls
-  // completo, sem nenhum .filter tirando parede demolida — é isso que
-  // mantém o piso fechado.
-  assert.match(renderer3DSource, /Core\.computeWallFootprints\(floorData\.walls\)/);
+  // detectRooms precisa da lista INTEIRA (com parede demolida incluída)
+  // — é isso que mantém o cômodo/piso fechado.
   assert.match(renderer3DSource, /Core\.detectRooms\(floorData\.walls\)/);
+  // computeWallFootprints, ao contrário, precisa de uma lista SEM
+  // parede demolida — é só geometria visual de canto/mitre entre
+  // paredes vizinhas; incluir a demolida fazia a parede que sobrou (a
+  // que ainda é desenhada) calcular o canto dela esperando uma
+  // parceira invisível, deixando a ponta com um entalhe em vez de uma
+  // tampa reta.
+  assert.doesNotMatch(renderer3DSource, /Core\.computeWallFootprints\(floorData\.walls\)/);
+  assert.match(renderer3DSource, /var activeWallsForFootprint = floorData\.walls\.filter\(function \(w\) \{ return !w\.demolished; \}\);/);
+  assert.match(renderer3DSource, /Core\.computeWallFootprints\(activeWallsForFootprint\)/);
+});
+
+test('a matemática de canto de verdade: excluir a parede demolida da lista passada a computeWallFootprints faz a parede vizinha ganhar uma ponta LIVRE (tampa reta), em vez de um canto em L esperando uma parceira que não existe mais', () => {
+  // Duas paredes formando um "L" — uma vertical de (0,0) a (0,400), uma
+  // horizontal encostada na ponta dela, de (0,400) a (400,400). Sem
+  // filtro nenhum, a vertical calcularia um canto em L na ponta comum.
+  const vertical = createWallEntity(0, 0, 0, 400);
+  const horizontal = createWallEntity(0, 400, 400, 400);
+
+  const withBoth = Core.computeWallFootprints([vertical, horizontal]);
+  assert.equal(withBoth[vertical.id].p2Free, false, 'com as duas paredes, a ponta é um canto (não livre)');
+
+  // Simula o que o renderer faz agora: a horizontal foi "demolida" —
+  // sai da lista passada a computeWallFootprints (mas continuaria
+  // entrando em detectRooms, separadamente, sem filtro nenhum).
+  const onlyVertical = Core.computeWallFootprints([vertical]);
+  assert.equal(onlyVertical[vertical.id].p2Free, true, 'sem a parede demolida na lista, a ponta vira livre — ganha a tampa reta de uma extremidade solta');
 });
 
 test('Scene2DRenderer também pula parede demolida (linha e símbolo de abertura)', () => {
