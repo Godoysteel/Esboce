@@ -693,6 +693,25 @@ export const commands = {
     emit({ type: 'WallDeleted', wallId });
   },
 
+  // "Quebrar parede" (ferramenta demolish) — NÃO usa deleteWall acima.
+  // Excluir a parede de verdade quebrava o fechamento do cômodo (rooms
+  // são derivados do CONTORNO FECHADO de paredes — ver Modelo de
+  // Domínio — sem essa parede o polígono não fecha mais e o piso some
+  // junto). demolishWall só marca `demolished: true`: a parede continua
+  // entrando em computeWallFootprints/detectRooms normalmente (o
+  // cômodo/piso não quebra), só para de ser desenhada
+  // (Scene3DRenderer/Scene2DRenderer pulam paredes demolidas) e de
+  // contar em qualquer quantitativo/orçamento (MaterialsPanel.compute).
+  // Portas/janelas que estavam nela continuam no modelo mas também
+  // param de ser desenhadas e de contar — sem precisar apagar nada.
+  demolishWall(wallId: string): void {
+    const w = findWall(wallId);
+    if (!w || w.demolished) return;
+    pushUndoSnapshot();
+    w.demolished = true;
+    emit({ type: 'WallDemolished', wallId });
+  },
+
   // Exclui um cômodo inteiro — todas as paredes que fecham ele, numa
   // tacada só (um clique, um passo de undo). Só é chamado enquanto o
   // cômodo ainda está ISOLADO (ver findIsolatedRoomWallIds/selectRoomGroup

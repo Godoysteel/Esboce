@@ -2944,6 +2944,13 @@ export function hashColorHex(key: string): number {
 
       if (wallsVisible) {
         floorData.walls.forEach(function (w) {
+          // "Quebrar parede" (DEC — Wall.demolished) não some do MODELO
+          // — continua entrando em computeWallFootprints/detectRooms
+          // (senão o cômodo perderia o fechamento e o piso sumiria) —
+          // só para de ser CONSTRUÍDA visualmente. Segue existindo pra
+          // topologia, só não desenha nada aqui (nem malha, nem
+          // hitMesh de clique — pickMesh não vê mais essa parede).
+          if (w.demolished) return;
           var generatedAtticRoof = (floorData.roofs || []).find(function (roof) {
             return roof.atticMode === 'generated' && (roof.atticWallIds || []).indexOf(w.id) !== -1;
           });
@@ -3137,7 +3144,7 @@ export function hashColorHex(key: string): number {
       if (layers.aberturas && floorData.openings && floorData.openings.length) {
         floorData.openings.forEach(function (op) {
           var w = floorData.walls.filter(function (x) { return x.id === op.wallId; })[0];
-          if (!w) return;
+          if (!w || w.demolished) return;
           var isSelected = viewState.selectedOpening && viewState.selectedOpening.id === op.id;
           // Com productId (ver Opening.productId): tenta o modelo glTF
           // real no lugar do batente/folha/vidro gerados na hora. Sem

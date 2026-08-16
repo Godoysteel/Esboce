@@ -87,11 +87,15 @@ export class Scene2DRenderer {
       x: Math.min(roof.x1, roof.x2), y: Math.min(roof.y1, roof.y2),
       width: Math.abs(roof.x2 - roof.x1), height: Math.abs(roof.y2 - roof.y1), class: 'scene2d-roof',
     })));
-    floor.walls.forEach((wall) => wallLine(scene, wall, 'scene2d-wall', selectedWallIds.has(wall.id)));
+    // "Quebrar parede" (Wall.demolished) — mesmo raciocínio do 3D: some
+    // do DESENHO, mas continua no modelo (senão o cômodo se abriria e o
+    // piso sumiria). No 2D isso é simplesmente pular a linha e o símbolo
+    // de abertura correspondente.
+    floor.walls.forEach((wall) => { if (!wall.demolished) wallLine(scene, wall, 'scene2d-wall', selectedWallIds.has(wall.id)); });
     floor.openings.forEach((opening) => {
       const wall = floor.walls.find((candidate) => candidate.id === opening.wallId)
         ?? project.terreno?.muros.find((candidate) => candidate.id === opening.wallId);
-      if (wall) openingSymbol(scene, opening, wall);
+      if (wall && !wall.demolished) openingSymbol(scene, opening, wall);
     });
     if (dragPreview) {
       const previewGroup = svgElement('g', { class: 'scene2d-drag-preview' });

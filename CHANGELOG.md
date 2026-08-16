@@ -1,5 +1,7 @@
 # Changelog
 
+> Corrigido: "Quebrar parede" — antes apagava a parede de verdade, o que desfazia o fechamento do cômodo e sumia o piso inteiro daquele ambiente. Agora só marca a parede como demolida: ela some da vista 2D/3D e para de contar no quantitativo de materiais/orçamento, mas continua "por baixo" fechando o cômodo — o piso não desaparece mais. Ver DEC-83.
+
 > Corrigido: Planta Baixa importada — o menu de mover/girar/escalar só aparecia um instante depois de importar e sumia pra sempre no primeiro clique em outro lugar (o uso normal, desenhar parede em cima). Agora o botão "Importar planta" vira "Editar planta" e reabre o menu a qualquer momento. Corrigido também um `types.ts` que tinha ficado de fora do commit anterior e quebrava o build de Produção.
 
 > Adicionado: importar planta baixa (imagem ou PDF) como referência visual no chão do pavimento na vista 3D — clique em "Importar planta", solte a imagem/PDF, e ela aparece deitada no chão, pronta pra desenhar as paredes por cima. Mover/girar/escalar (mantendo a proporção) pelo menu que aparece depois de importar. Ver DEC-82.

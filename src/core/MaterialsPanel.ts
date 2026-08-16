@@ -262,7 +262,11 @@ function computeFoundation(project: Project): Foundation {
   if (!groundFloor) return null;
 
   let groundWallLength = 0, groundPerimeter = 0, groundAreaM2 = 0;
-  groundFloor.walls.forEach(function (w) { groundWallLength += Core.wallLengthMeters(w); });
+  // Parede quebrada continua fechando o cômodo (entra em detectRooms
+  // abaixo, sem filtro nenhum), mas não pesa mais no comprimento pra
+  // fundação — não faz sentido calcular baldrame/radier pra uma parede
+  // que não vai mais ser construída.
+  groundFloor.walls.forEach(function (w) { if (!w.demolished) groundWallLength += Core.wallLengthMeters(w); });
   const groundRooms = Core.detectRooms(groundFloor.walls);
   groundRooms.forEach(function (room) {
     groundAreaM2 += room.area / (Core.GRID * Core.GRID);
@@ -305,8 +309,13 @@ export function compute(): ComputeResult {
     const currentWallHeight = floorWallHeight(floor, standardWallHeight);
     // Paredes: comprimento total + área a pintar (por face, descontando
     // a área das aberturas que atravessam a parede) + área líquida (uma
-    // vez só, não por face — é a base do cálculo de alvenaria).
+    // vez só, não por face — é a base do cálculo de alvenaria). Parede
+    // quebrada (Wall.demolished) NÃO entra aqui — deixou de ser
+    // construída, não faz sentido cobrar material/pintura dela — mas
+    // continua entrando em detectRooms (mais abaixo) sem filtro nenhum,
+    // pra o cômodo/piso não quebrar junto.
     floor.walls.forEach(function (w) {
+      if (w.demolished) return;
       const lenM = Core.wallLengthMeters(w);
       totals.wallLength += lenM;
       const atticRoof = (floor.roofs || []).find((roof) => roof.atticMode === 'generated' && (roof.atticWallIds || []).includes(w.id));
@@ -325,8 +334,12 @@ export function compute(): ComputeResult {
     // Portas, janelas e arcos — e a verga (reforço acima do vão), que
     // se aplica a QUALQUER abertura em alvenaria, tenha porta/janela
     // instalada ou não (arco também precisa, é vão estrutural puro —
-    // ver comentário em VERGA_BEARING_M).
+    // ver comentário em VERGA_BEARING_M). Abertura numa parede quebrada
+    // (Wall.demolished) não conta mais — a parede que sustentaria
+    // batente/verga não existe de verdade.
     floor.openings.forEach(function (op) {
+      const hostWall = floor.walls.filter(function (w) { return w.id === op.wallId; })[0];
+      if (hostWall && hostWall.demolished) return;
       if (op.kind === 'door') totals.doors++;
       else if (op.kind === 'arco') totals.arcos++;
       else totals.windows++;
@@ -346,7 +359,7 @@ export function compute(): ComputeResult {
     floor.openings.forEach(function (op) {
       if (op.sillHeight > 0.02) return;
       const wall = floor.walls.filter(function (w) { return w.id === op.wallId; })[0];
-      if (!wall) return;
+      if (!wall || wall.demolished) return;
       const adj = Core.findRoomsAdjacentToOpening(wall, op, rooms);
       if ((adj.roomA && !adj.roomB) || (!adj.roomA && adj.roomB)) {
         totals.soleiraCount++;
@@ -412,10 +425,13 @@ export function compute(): ComputeResult {
 
     // Pilaretes ESTIMADOS embutidos na alvenaria (ver comentário em
     // COLUMN_MAX_SPAN_M) — um em cada encontro de parede detectado, mais
-    // um a cada vão reto que passe de 3m sem encontro nenhum.
-    const junctions = countWallJunctions(floor.walls);
+    // um a cada vão reto que passe de 3m sem encontro nenhum. Parede
+    // quebrada não entra (não vai ser construída, não precisa de
+    // pilarete embutido nela).
+    const activeWalls = floor.walls.filter(function (w) { return !w.demolished; });
+    const junctions = countWallJunctions(activeWalls);
     let extraSpanColumns = 0;
-    floor.walls.forEach(function (w) {
+    activeWalls.forEach(function (w) {
       const lenM = Core.wallLengthMeters(w);
       extraSpanColumns += Math.floor(lenM / COLUMN_MAX_SPAN_M);
     });
@@ -666,6 +682,7 @@ export function buildDetailRows(): (string | number)[][] {
   project.floors.forEach(function (floor, floorIdx) {
     const label = floor.name || ('Pavimento ' + (floorIdx + 1));
     floor.walls.forEach(function (w, i) {
+      if (w.demolished) return;
       rows.push([label, 'Parede ' + (i + 1) + ' — id ' + w.id, Core.wallLengthMeters(w).toFixed(2), 'm']);
     });
     const rooms = Core.detectRooms(floor.walls);

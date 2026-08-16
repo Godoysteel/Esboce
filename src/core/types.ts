@@ -19,6 +19,14 @@ export interface Wall {
   // (Terreno.muros). Paredes da casa (Floor.walls) ignoram este campo e
   // continuam com a altura fixa Core.WALL_HEIGHT.
   heightM?: number;
+  // "Quebrar parede" (ferramenta demolish) NÃO remove a parede do
+  // modelo — só marca ela como demolida. Continua entrando em
+  // computeWallFootprints/detectRooms (senão o cômodo perderia o
+  // fechamento e o piso desapareceria — era exatamente esse o problema
+  // do comportamento antigo, que chamava deleteWall de verdade), mas
+  // para de ser desenhada (Scene3DRenderer/Scene2DRenderer pulam ela) e
+  // para de contar em qualquer quantitativo/orçamento (MaterialsPanel).
+  demolished?: boolean;
 }
 
 export type ColumnShape = 'quadrada' | 'redonda';

@@ -180,7 +180,7 @@ import {
     window: 'Clique sobre uma parede pra inserir uma janela ali. Selecione uma janela colocada pra deslizar ou excluir.',
     arco: 'Clique sobre uma parede pra abrir um vão ali — sacada, garagem, conceito aberto. Selecione um arco colocado pra arrastar os lados ou o topo.',
     varanda: 'Clique no chão pra colocar uma varanda. Selecione uma já colocada, clique direito nela pra girar qual lado é a frente ou excluir.',
-    demolish: 'Clique numa parede pra quebrar ela. Os cantos vizinhos se fecham sozinhos, sem deixar vão.',
+    demolish: 'Clique numa parede pra quebrar ela — some da vista e do orçamento, mas o cômodo continua fechado (o piso não desaparece).',
     paintBucket: 'Escolha a superfície no menu acima e siga o fluxo indicado para aplicar o acabamento.',
     terreno: 'Clique num lado destacado do retângulo pra adicionar ou remover o muro daquele lado.'
   };
@@ -2361,24 +2361,15 @@ import {
 
     // Ferramenta Quebrar parede ativa + clicou numa parede: demole na
     // hora, sem passar por seleção/gizmo — igual Porta/Janela, um clique
-    // já basta. A parede some do modelo (Store.commands.deleteWall) e o
-    // recálculo de geometria (computeWallFootprints, DEC-21/DEC-22) roda
-    // do zero a partir das paredes que sobraram: qualquer ponta que
-    // ficou sem vizinha ali automaticamente ganha uma tampa reta —
-    // "quina perfeita" sem nenhum passo extra, de graça pela forma como
-    // o resto do sistema já é montado. A ferramenta continua armada
-    // depois, pra quebrar várias paredes em sequência.
+    // já basta. A parede NÃO é removida do modelo (Store.commands.
+    // demolishWall só marca `demolished: true`) — continua existindo
+    // pra fechar o cômodo (senão o piso desaparecia junto, era
+    // exatamente esse o bug do comportamento antigo com deleteWall).
+    // Só some da tela e do quantitativo/orçamento. A ferramenta continua
+    // armada depois, pra quebrar várias paredes em sequência.
     if (currentTool === 'demolish' && mesh && mesh.userData.wallId) {
-      Store.commands.deleteWall(mesh.userData.wallId);
-      // Rede de segurança: se essa parede estava fundida/sobreposta com
-      // uma vizinha (DEC-12), a vizinha pode ter ficado com um pedacinho
-      // de comprimento quase zero pendurado no mesmo ponto — sujeira
-      // invisível que confundiria o cálculo de canto (Core.
-      // computeWallFootprints acha um "toucher" que não devia existir
-      // mais ali, e a ponta não fecha reta). pruneDegenerateWalls já
-      // existia pra isso, só não era chamado automaticamente aqui.
-      Store.commands.pruneDegenerateWalls();
-      hintEl.textContent = 'Parede quebrada. Clique em outra pra continuar, ou escolha outra ferramenta.';
+      Store.commands.demolishWall(mesh.userData.wallId);
+      hintEl.textContent = 'Parede quebrada — some da vista e do orçamento, mas o cômodo continua fechado. Clique em outra pra continuar, ou escolha outra ferramenta.';
       return;
     }
 
