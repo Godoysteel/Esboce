@@ -2045,6 +2045,14 @@ export function hashColorHex(key: string): number {
     var wall: any = null;
     for (var i = 0; i < wallsList.length; i++) if (wallsList[i].id === wallId) { wall = wallsList[i]; break; }
     if (!wall) return [];
+    // Parede quebrada (Wall.demolished) — o trecho inteiro vira vão
+    // aberto, mesmo raciocínio de uma porta/arco que chega ao chão
+    // (abaixo), só que cobrindo 100% do comprimento em vez de um
+    // intervalo. Sem essa checagem, o rodapé (e o contorno preto do
+    // piso, que reaproveita os MESMOS intervalos — ver comentário da
+    // função) continuavam desenhando ao longo de uma parede que nem
+    // aparece mais.
+    if (wall.demolished) return [[0, 1]];
     var offset1 = Core.wallOffsetAtPoint(wall, p1.x, p1.y);
     var offset2 = Core.wallOffsetAtPoint(wall, p2.x, p2.y);
     var span = offset2 - offset1;

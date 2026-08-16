@@ -77,6 +77,32 @@ test('a matemática de canto de verdade: excluir a parede demolida da lista pass
   assert.equal(onlyVertical[vertical.id].p2Free, true, 'sem a parede demolida na lista, a ponta vira livre — ganha a tampa reta de uma extremidade solta');
 });
 
+test('a mesma correção de canto vale pra PAREDE EXTERNA — um retângulo fechado (4 paredes de perímetro), demolindo uma delas, as DUAS vizinhas (nas duas pontas) ganham tampa reta nos dois cantos', () => {
+  // Retângulo 4x4m: norte, leste, sul, oeste — cada uma toca as outras
+  // duas nas pontas, formando os 4 cantos do perímetro externo.
+  const norte = createWallEntity(0, 0, 400, 0);
+  const leste = createWallEntity(400, 0, 400, 400);
+  const sul = createWallEntity(400, 400, 0, 400);
+  const oeste = createWallEntity(0, 400, 0, 0);
+  const todas = [norte, leste, sul, oeste];
+
+  const comTodas = Core.computeWallFootprints(todas);
+  assert.equal(comTodas[leste.id].p1Free, false, 'antes de demolir, o canto nordeste (norte↔leste) é um canto de verdade');
+  assert.equal(comTodas[oeste.id].p2Free, false, 'antes de demolir, o canto noroeste (oeste↔norte) é um canto de verdade');
+
+  // "Norte" foi demolida — some da lista passada a computeWallFootprints
+  // (mas continuaria em detectRooms, sem filtro, pra não abrir o
+  // retângulo pro cálculo de cômodo/piso).
+  const semNorte = Core.computeWallFootprints(todas.filter((w) => w.id !== norte.id));
+  assert.equal(semNorte[leste.id].p1Free, true, 'nordeste: Leste ganha ponta livre (tampa reta) depois de Norte demolida');
+  assert.equal(semNorte[oeste.id].p2Free, true, 'noroeste: Oeste ganha ponta livre (tampa reta) depois de Norte demolida');
+  // As duas pontas que NÃO tocavam a parede demolida (sudeste/sudoeste)
+  // continuam intactas — a correção não pode "vazar" pro resto do
+  // retângulo.
+  assert.equal(semNorte[leste.id].p2Free, false, 'sudeste continua um canto de verdade (não foi tocado)');
+  assert.equal(semNorte[oeste.id].p1Free, false, 'sudoeste continua um canto de verdade (não foi tocado)');
+});
+
 test('Scene2DRenderer também pula parede demolida (linha e símbolo de abertura)', () => {
   assert.match(renderer2DSource, /if \(!wall\.demolished\) wallLine/);
   assert.match(renderer2DSource, /if \(wall && !wall\.demolished\) openingSymbol/);
@@ -89,4 +115,19 @@ test('MaterialsPanel não conta parede demolida em nenhum quantitativo (comprime
   assert.match(materialsSource, /if \(!wall \|\| wall\.demolished\) return;/);
   assert.match(materialsSource, /const activeWalls = floor\.walls\.filter\(function \(w\) \{ return !w\.demolished; \}\);/);
   assert.match(materialsSource, /floor\.walls\.forEach\(function \(w, i\) \{\s*\n\s*if \(w\.demolished\) return;/);
+});
+
+test('rodapé (e o contorno preto do piso, que reaproveita o mesmo cálculo) somem por inteiro no trecho de uma parede demolida — mesmo tratamento de "vão aberto" que porta/arco já tinham, só cobrindo 100% do comprimento', () => {
+  assert.match(renderer3DSource, /if \(wall\.demolished\) return \[\[0, 1\]\];/);
+  // Essa checagem precisa vir ANTES de tentar achar interseção de
+  // aberturas — senão calcularia offset/span à toa pra uma parede que
+  // nem existe mais visualmente.
+  const fnBlock = renderer3DSource.slice(
+    renderer3DSource.indexOf('function computeBaseboardSkipIntervals'),
+    renderer3DSource.indexOf('function computeBaseboardSkipIntervals') + 900,
+  );
+  const demolishedCheckIdx = fnBlock.indexOf('if (wall.demolished) return [[0, 1]];');
+  const offsetCheckIdx = fnBlock.indexOf('wallOffsetAtPoint');
+  assert.ok(demolishedCheckIdx > -1 && offsetCheckIdx > -1);
+  assert.ok(demolishedCheckIdx < offsetCheckIdx, 'a checagem de demolida precisa vir antes do cálculo de offset/span');
 });

@@ -1,5 +1,7 @@
 # Changelog
 
+> Corrigido: "Quebrar parede" — o rodapé (e o contorno preto do piso) continuava desenhado ao longo de uma parede já quebrada, dos dois lados. Confirmado também que a esquina fecha certo em paredes externas, não só internas. Ver DEC-83 (correção pós-lançamento nº2).
+
 > Corrigido: "Quebrar parede" — a parede vizinha ficava com um entalhe/fresta aberta na esquina em vez de uma ponta reta fechada. Ver DEC-83 (correção pós-lançamento).
 
 > Adicionado: camada "Paredes transparentes" no menu de Camadas visíveis — deixa as paredes vazadas (só a opacidade, continuam clicáveis) pra comparar melhor com uma Planta Baixa importada no chão. Ver DEC-84.
