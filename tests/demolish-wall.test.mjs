@@ -55,7 +55,12 @@ test('Scene3DRenderer pula a parede demolida ao desenhar (paredes e as aberturas
   // que ainda é desenhada) calcular o canto dela esperando uma
   // parceira invisível, deixando a ponta com um entalhe em vez de uma
   // tampa reta.
-  assert.doesNotMatch(renderer3DSource, /Core\.computeWallFootprints\(floorData\.walls\)/);
+  // A checagem é ESPECÍFICA pra variável `wallFootprints` (a que
+  // desenha a parede em si) — `wallFootprintsFull` (variável
+  // DIFERENTE, só pra soleira de parede demolida, ver mais abaixo)
+  // legitimamente usa a lista sem filtro, por um motivo oposto: a
+  // soleira precisa do contorno ORIGINAL da própria parede demolida.
+  assert.doesNotMatch(renderer3DSource, /var wallFootprints = Core\.computeWallFootprints\(floorData\.walls\)/);
   assert.match(renderer3DSource, /var activeWallsForFootprint = floorData\.walls\.filter\(function \(w\) \{ return !w\.demolished; \}\);/);
   assert.match(renderer3DSource, /Core\.computeWallFootprints\(activeWallsForFootprint\)/);
 });
@@ -138,4 +143,26 @@ test('a tampa VISÍVEL de ponta livre existe de verdade — antes só a caixa de
   // pra decidir se desenha a tampa — reaproveitada aqui pro material visível.
   assert.match(renderer3DSource, /if \(fp\.p1Free !== false \|\| fp\.p1Extended\) \{\s*\n\s*var endCap1 = tagCategory\(buildWallEndCapMesh\(fp, renderedWallHeight, yOffset, topMat, 1\), wallCategory\);/);
   assert.match(renderer3DSource, /if \(fp\.p2Free !== false \|\| fp\.p2Extended\) \{\s*\n\s*var endCap2 = tagCategory\(buildWallEndCapMesh\(fp, renderedWallHeight, yOffset, topMat, 2\), wallCategory\);/);
+});
+
+test('parede demolida ganha o mesmo tratamento de "buraco no piso" que arco/porta já tinham — soleira interna (entre dois cômodos) ou externa (um lado só), cobrindo o comprimento INTEIRO da parede como um vão sintético', () => {
+  // wallFootprintsFull (sem filtro) precisa existir separado de
+  // wallFootprints (filtrado) — a soleira de uma parede demolida
+  // precisa do contorno ORIGINAL dela (como se os vizinhos ainda
+  // estivessem lá), não da ponta livre que ela mesma ganharia se ainda
+  // fosse desenhada.
+  assert.match(renderer3DSource, /var wallFootprintsFull = Core\.computeWallFootprints\(floorData\.walls\);/);
+
+  const demolishedSlabBlock = renderer3DSource.slice(
+    renderer3DSource.indexOf('floorData.walls.forEach(function (w) {\n          if (!w.demolished) return;\n          var wallLenM'),
+  );
+  assert.ok(demolishedSlabBlock.length > 0, 'bloco de soleira pra parede demolida não encontrado');
+  // Vão sintético cobrindo o comprimento INTEIRO (não um trecho) —
+  // offset no meio, largura = comprimento todo da parede.
+  assert.match(demolishedSlabBlock, /offset: wallLenM \/ 2, width: wallLenM/);
+  // Soleira interna (dois cômodos) usa o mapa SEM FILTRO
+  assert.match(demolishedSlabBlock, /buildThresholdSlab\(w, wallFootprintsFull, yOffset, offsetX, offsetY, scale\)/);
+  // Soleira externa (um lado só) reaproveita a MESMA função já usada
+  // pro arco/porta pra fora, sem duplicar lógica de geometria.
+  assert.match(demolishedSlabBlock, /buildExteriorSoleira\(w, fullSpanOpening, yOffset, offsetX, offsetY, scale\)/);
 });

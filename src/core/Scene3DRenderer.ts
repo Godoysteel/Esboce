@@ -2929,6 +2929,14 @@ export function hashColorHex(key: string): number {
       // tirar a parede demolida da lista que fecha o cômodo.
       var activeWallsForFootprint = floorData.walls.filter(function (w) { return !w.demolished; });
       var wallFootprints = Core.computeWallFootprints(activeWallsForFootprint);
+      // Versão SEM filtro, só pra soleira de parede demolida (ver bloco
+      // "Soleira" mais abaixo) — quando a parede some inteira, a soleira
+      // que fecha o buraco do piso precisa do contorno ORIGINAL dela
+      // (como se ela ainda tivesse os vizinhos), não do contorno já
+      // reduzido a ponta livre (esse é o certo pra desenhar a PAREDE em
+      // si — wallFootprints acima — mas erraria a soleira, que deve
+      // cobrir exatamente onde a espessura da parede estava).
+      var wallFootprintsFull = Core.computeWallFootprints(floorData.walls);
 
       if (layers.laje) {
         var lajeWallColor = computeWallMatchColor(floorData.walls);
@@ -3480,6 +3488,41 @@ export function hashColorHex(key: string): number {
           tagCategory(slab, 'laje');
           scene.add(slab);
           registry.roomMeshes.push(slab);
+        });
+
+        // Parede QUEBRADA (Wall.demolished, DEC-83) — mesmo raciocínio
+        // do arco/porta acima ("fecha o buraco que sobra no piso quando
+        // uma abertura no nível do chão corta uma parede"), só que a
+        // "abertura" é a parede INTEIRA, não um trecho dela. Sem
+        // Opening nenhum pra disparar o loop acima, essa parede nunca
+        // entrava nele — o piso de cada lado sempre parava exatamente
+        // na própria face (nunca invadia a espessura da parede, porque
+        // normalmente é a PAREDE que cobre essa faixa), e sem a parede
+        // (demolida = não desenhada) sobrava uma fresta do tamanho da
+        // espessura dela à mostra: o buraco reportado pelo Product
+        // Owner. Um vão sintético cobrindo o comprimento INTEIRO da
+        // parede (offset = meio, width = comprimento todo) resolve com
+        // a MESMA função já usada pro arco — só usa wallFootprintsFull
+        // (sem filtro) em vez de wallFootprints (que exclui parede
+        // demolida — ver comentário lá em cima): a soleira precisa do
+        // contorno ORIGINAL da parede (como se os vizinhos ainda
+        // estivessem lá), não da ponta livre que a PRÓPRIA parede
+        // demolida ganharia se ela ainda fosse desenhada.
+        floorData.walls.forEach(function (w) {
+          if (!w.demolished) return;
+          var wallLenM = Core.wallLengthMeters(w);
+          if (wallLenM < 1e-6) return;
+          var fullSpanOpening: any = { id: 'demolida-' + w.id, wallId: w.id, kind: 'arco', offset: wallLenM / 2, width: wallLenM, sillHeight: 0 };
+          var adjD = Core.findRoomsAdjacentToOpening(w, fullSpanOpening, rooms);
+          if (adjD.roomA && adjD.roomB) {
+            var slabD = buildThresholdSlab(w, wallFootprintsFull, yOffset, offsetX, offsetY, scale);
+            if (slabD) { tagCategory(slabD, 'laje'); scene.add(slabD); registry.roomMeshes.push(slabD); }
+          } else if (adjD.roomA || adjD.roomB) {
+            var soleiraD = tagCategory(buildExteriorSoleira(w, fullSpanOpening, yOffset, offsetX, offsetY, scale), 'laje');
+            soleiraD.userData.wallId = w.id;
+            scene.add(soleiraD);
+            registry.roomMeshes.push(soleiraD);
+          }
         });
       }
     });
