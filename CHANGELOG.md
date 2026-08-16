@@ -1,5 +1,7 @@
 # Changelog
 
+> Corrigido: "Quebrar parede" — a ponta livre da parede vizinha (esquina, inclusive externa) tinha o canto certo mas nenhuma superfície fechando de verdade (dava pra ver através dela). Agora tem uma tampa visível de material igual ao resto da parede. Ver DEC-83 (correção pós-lançamento nº3).
+
 > Corrigido: "Quebrar parede" — o rodapé (e o contorno preto do piso) continuava desenhado ao longo de uma parede já quebrada, dos dois lados. Confirmado também que a esquina fecha certo em paredes externas, não só internas. Ver DEC-83 (correção pós-lançamento nº2).
 
 > Corrigido: "Quebrar parede" — a parede vizinha ficava com um entalhe/fresta aberta na esquina em vez de uma ponta reta fechada. Ver DEC-83 (correção pós-lançamento).

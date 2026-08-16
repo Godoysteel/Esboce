@@ -772,6 +772,34 @@ export function hashColorHex(key: string): number {
     return new THREE.Mesh(geo, mat);
   }
 
+  // Tampa VISÍVEL de ponta livre — mesma geometria (quad reto fechando
+  // o volume no fim da parede) que a caixa de REFERÊNCIA já calculava
+  // (ver buildWallMeshFromFootprint, comentário "Tampa de cada ponta"),
+  // só que numa malha própria com material de verdade. A caixa de
+  // referência é sempre opacity 0 fora de seleção — então a tampa dela
+  // nunca aparecia pra ninguém; era só matemática de clique. Sem essa
+  // função, uma ponta livre de verdade (extremidade solta desde sempre,
+  // OU nova depois de Quebrar Parede — ver DEC-83) tinha o CANTO certo
+  // (sem entalhe, depois da correção anterior) mas nenhuma superfície
+  // fechando o buraco: dava pra ver através da parede por ali.
+  function buildWallEndCapMesh(fp: any, height: any, yOffset: any, mat: any, end: 1 | 2) {
+    var y0 = yOffset, y1 = yOffset + height;
+    function pt(p: any, y: any) { return [p.x, y, p.z]; }
+    var verts: any[] = [];
+    function quad(a: any, b: any, c: any, d: any) { [a, b, c, a, c, d].forEach(function (v) { verts.push(v[0], v[1], v[2]); }); }
+    // MESMA ordem de vértices que buildWallMeshFromFootprint usa pras
+    // tampas da caixa de referência — cada ponta tem uma ordem PRÓPRIA
+    // (não é só trocar p1↔p2), copiada exata daqui, senão a normal
+    // calculada por computeVertexNormals aponta pro lado errado (a
+    // tampa fica de costas, invisível — cull da face de trás).
+    if (end === 2) quad(pt(fp.p2a, y0), pt(fp.p2b, y0), pt(fp.p2b, y1), pt(fp.p2a, y1));
+    else quad(pt(fp.p1b, y0), pt(fp.p1a, y0), pt(fp.p1a, y1), pt(fp.p1b, y1));
+    var geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+    geo.computeVertexNormals();
+    return new THREE.Mesh(geo, mat);
+  }
+
   // Contorno arquitetônico discreto: somente bordas superiores e quinas
   // verticais. A geometria é explícita para nunca expor a base nem as
   // diagonais internas usadas para triangular as faces da parede.
@@ -3085,6 +3113,30 @@ export function hashColorHex(key: string): number {
           if (!generatedAtticRoof) {
             scene.add(topCapMesh);
             registry.wallMeshes.push(topCapMesh);
+          }
+
+          // Tampa(s) VISÍVEL de ponta livre — mesma condição que a caixa
+          // de referência já usava só pra clique (ver
+          // buildWallMeshFromFootprint). Reaproveita o topMat (mesmo
+          // acabamento/transparência da tampa de topo) — é a mesma
+          // "carne" da parede à mostra num corte, faz sentido a mesma
+          // cor. Sem isso, uma ponta livre (sempre existiu pra parede
+          // solta desde o início; ficou mais comum depois de Quebrar
+          // Parede — DEC-83) tinha o canto certo mas nenhuma superfície
+          // fechando o vão — dava pra ver através da parede ali.
+          if (fp.p1Free !== false || fp.p1Extended) {
+            var endCap1 = tagCategory(buildWallEndCapMesh(fp, renderedWallHeight, yOffset, topMat, 1), wallCategory);
+            endCap1.userData.wallId = w.id;
+            endCap1.userData.floorIndex = floorIdx;
+            scene.add(endCap1);
+            registry.wallMeshes.push(endCap1);
+          }
+          if (fp.p2Free !== false || fp.p2Extended) {
+            var endCap2 = tagCategory(buildWallEndCapMesh(fp, renderedWallHeight, yOffset, topMat, 2), wallCategory);
+            endCap2.userData.wallId = w.id;
+            endCap2.userData.floorIndex = floorIdx;
+            scene.add(endCap2);
+            registry.wallMeshes.push(endCap2);
           }
 
           if (generatedAtticRoof) {

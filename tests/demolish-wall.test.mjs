@@ -131,3 +131,11 @@ test('rodapé (e o contorno preto do piso, que reaproveita o mesmo cálculo) som
   assert.ok(demolishedCheckIdx > -1 && offsetCheckIdx > -1);
   assert.ok(demolishedCheckIdx < offsetCheckIdx, 'a checagem de demolida precisa vir antes do cálculo de offset/span');
 });
+
+test('a tampa VISÍVEL de ponta livre existe de verdade — antes só a caixa de referência (invisível, opacity 0) fechava a ponta; sem uma malha própria com material visível, a ponta ficava "vazada" mesmo com o canto matematicamente certo', () => {
+  assert.match(renderer3DSource, /function buildWallEndCapMesh/);
+  // Mesma condição já usada na caixa de referência (buildWallMeshFromFootprint)
+  // pra decidir se desenha a tampa — reaproveitada aqui pro material visível.
+  assert.match(renderer3DSource, /if \(fp\.p1Free !== false \|\| fp\.p1Extended\) \{\s*\n\s*var endCap1 = tagCategory\(buildWallEndCapMesh\(fp, renderedWallHeight, yOffset, topMat, 1\), wallCategory\);/);
+  assert.match(renderer3DSource, /if \(fp\.p2Free !== false \|\| fp\.p2Extended\) \{\s*\n\s*var endCap2 = tagCategory\(buildWallEndCapMesh\(fp, renderedWallHeight, yOffset, topMat, 2\), wallCategory\);/);
+});
