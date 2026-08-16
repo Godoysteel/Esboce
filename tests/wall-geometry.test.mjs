@@ -47,6 +47,14 @@ const viewportControllerSource = await readFile(
   new URL('../src/core/ViewportController.ts', import.meta.url),
   'utf8',
 );
+const scene3DRendererSource = await readFile(
+  new URL('../src/core/Scene3DRenderer.ts', import.meta.url),
+  'utf8',
+);
+const indexHtmlSource = await readFile(
+  new URL('../index.html', import.meta.url),
+  'utf8',
+);
 
 test('clique distingue comodo isolado de parede incorporada', () => {
   const wallClickFlow = viewportControllerSource.slice(
@@ -88,21 +96,50 @@ test('arraste incremental da fachada recaptura o mesh depois da selecao reconstr
   assert.doesNotMatch(viewportControllerSource, /glazingPanelDragMesh = mesh/);
 });
 
-test('arraste de laje move somente a previa 3D e confirma os pontos ao soltar', () => {
-  assert.match(viewportControllerSource, /function collectLajeDragObjects\(id: string\)/);
-  assert.match(viewportControllerSource, /selectLaje\(lajeId\);[\s\S]{0,700}collectLajeDragObjects\(lajeId\)/);
+// Laje deixou de ser objeto colocável/arrastável (ver DEC-35 revista —
+// correção pós-lançamento nesta sessão, "laje de entrepiso"): nasce
+// automática, uma por cômodo fechado, exatamente como o piso — mesmo
+// Core.detectRooms, mesmo contorno inset (insetPoints/shape) já
+// calculado pro piso, só a altura/espessura mudam. Sem estado próprio
+// pra "sincronizar" com a parede: como é recalculada a cada render
+// (igual o piso), arrastar uma parede move a laje pelo mesmo motivo
+// que move o piso — não tem lógica de arraste específica de laje pra
+// testar mais.
+test('laje nasce automática por cômodo, dentro do mesmo loop que já gera o piso — sem objeto/ferramenta própria', () => {
+  // A função que desenha a laje automática existe e usa a MESMA
+  // constante de espessura real de laje (não a espessura fina do piso).
+  assert.match(scene3DRendererSource, /function buildAutoLajePiece\(shape/);
+  assert.match(scene3DRendererSource, /depth: LAJE_THICKNESS/);
+  // Nasce dentro do MESMO rooms.forEach do piso — prova de que reaproveita
+  // o contorno já calculado (shape/insetPoints), não um objeto à parte.
+  const roomsStart = scene3DRendererSource.indexOf('rooms.forEach(function (room) {');
+  const roomsEnd = scene3DRendererSource.indexOf('\n      });', roomsStart);
+  const roomsFlow = scene3DRendererSource.slice(roomsStart, roomsEnd);
+  assert.match(roomsFlow, /buildAutoLajePiece\(shape, lajeSizeX, lajeSizeZ, yOffset \+ currentWallHeight/);
+  // A ferramenta/entidade manual antiga não existe mais: nenhum lugar do
+  // renderer lê mais floorData.lajes (a prop pode continuar existindo no
+  // modelo salvo, por compatibilidade com projeto antigo — só não é mais
+  // lida/desenhada).
+  assert.doesNotMatch(scene3DRendererSource, /floorData\.lajes/);
+  assert.doesNotMatch(scene3DRendererSource, /buildLajePiece\(laje/);
+});
 
-  const moveStart = viewportControllerSource.indexOf("if (dragMode === 'lajeBody') {");
-  const moveEnd = viewportControllerSource.indexOf("if (dragMode === 'openingEdgeLeft'", moveStart);
-  const pointerMoveFlow = viewportControllerSource.slice(moveStart, moveEnd);
-  assert.match(pointerMoveFlow, /previewLajeDelta\(snapped\.dx, snapped\.dy\)/);
-  assert.doesNotMatch(pointerMoveFlow, /updateLajePointsLive/);
+test('ferramenta manual "Laje" (botão da barra lateral) foi removida — sem criação avulsa', () => {
+  assert.doesNotMatch(viewportControllerSource, /if \(key === 'laje'\) \{/);
+  assert.doesNotMatch(viewportControllerSource, /function selectLaje\(/);
+  assert.doesNotMatch(viewportControllerSource, /function collectLajeDragObjects\(/);
+  assert.doesNotMatch(viewportControllerSource, /function snapLajeBodyDelta\(/);
+  assert.doesNotMatch(viewportControllerSource, /dragMode === 'lajeBody'/);
+  assert.doesNotMatch(viewportControllerSource, /handle\.indexOf\('lajeEdge'\)/);
+  assert.doesNotMatch(indexHtmlSource, /data-room-preset="laje"/);
+});
 
-  const upStart = viewportControllerSource.indexOf("if (dragMode === 'lajeBody') {", moveEnd);
-  const upEnd = viewportControllerSource.indexOf("if \(dragMode === 'openingSlide'", upStart);
-  const pointerUpFlow = viewportControllerSource.slice(upStart, upEnd);
-  assert.match(pointerUpFlow, /updateLajePointsLive/);
-  assert.match(pointerUpFlow, /lajeDragObjects = \[\]/);
+test('trava de construir no pavimento de cima passa a exigir cômodo fechado embaixo, não mais uma entidade Laje', () => {
+  const start = viewportControllerSource.indexOf('function floorBelowMissingLaje() {');
+  const end = viewportControllerSource.indexOf('\n  }', start);
+  const body = viewportControllerSource.slice(start, end);
+  assert.match(body, /Core\.detectRooms\(belowFloor\.walls\)\.length === 0/);
+  assert.doesNotMatch(body, /belowFloor\.lajes/);
 });
 
 test('arraste de telhado move o conjunto 3D e confirma o Store somente ao soltar', () => {
@@ -168,7 +205,7 @@ test('arraste de coluna move volume e contorno sem atualizar o Store a cada quad
   assert.doesNotMatch(pointerMoveFlow, /updateColumnBodyLive/);
 
   const upStart = viewportControllerSource.indexOf("if (dragMode === 'columnBody') {", moveEnd);
-  const upEnd = viewportControllerSource.indexOf("if (dragMode === 'lajeBody'", upStart);
+  const upEnd = viewportControllerSource.indexOf("if (dragMode === 'openingSlide'", upStart);
   const pointerUpFlow = viewportControllerSource.slice(upStart, upEnd);
   assert.match(pointerUpFlow, /updateColumnBodyLive/);
   assert.match(pointerUpFlow, /columnDragObjects = \[\]/);

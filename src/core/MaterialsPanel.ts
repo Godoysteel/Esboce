@@ -407,20 +407,26 @@ export function compute(): ComputeResult {
       totals.columnVolume += columnVolumeM3(col, currentWallHeight);
     });
 
-    // Laje (elemento independente, arrastável) — volume = área do
-    // polígono × espessura real (mesma constante que o 3D usa pra
+    // Laje: passou a nascer automática por cômodo fechado, exatamente
+    // como o piso (mesmo Core.detectRooms, mesmo polígono de área) — não
+    // é mais um objeto independente arrastável (ver DEC-35 revista,
+    // correção pós-lançamento nesta sessão). Volume = área de cada
+    // cômodo × espessura real (mesma constante que o 3D usa pra
     // desenhar, ver LAJE_THICKNESS_GETTER). Trata como concreto armado
     // na taxa própria de laje (STEEL_RATE_LAJE_KG_M3) — SEM somar uma
-    // viga própria pra cada Laje: a viga de cinta/amarração já
-    // calculada mais abaixo roda por cima de toda parede do projeto, e
-    // é ela quem estruturalmente já cumpre o papel de apoio da laje —
-    // uma viga adicional aqui duplicaria essa mesma peça. Vão de laje
-    // sem apoio intermediário (sem parede no meio de um polígono
-    // grande) fica fora do escopo — é decisão de projeto estrutural,
-    // mesmo tratamento que pilarete em parede já dá pro vão grande.
-    (floor.lajes || []).forEach(function (laje) {
+    // viga própria por cômodo: a viga de cinta/amarração já calculada
+    // mais abaixo roda por cima de toda parede do projeto, e é ela quem
+    // estruturalmente já cumpre o papel de apoio da laje — uma viga
+    // adicional aqui duplicaria essa mesma peça. Vão de laje sem apoio
+    // intermediário (sem parede no meio de um cômodo grande) fica fora
+    // do escopo — é decisão de projeto estrutural, mesmo tratamento que
+    // pilarete em parede já dá pro vão grande. Varanda/balanço/sacada
+    // ficam de fora da conta (não são cômodo fechado por parede) — a
+    // laje automática por cômodo não cobre esses casos, ver decisão
+    // registrada.
+    rooms.forEach(function (room) {
       totals.lajeCount++;
-      totals.lajeAreaM2 += lajeAreaMeters(laje);
+      totals.lajeAreaM2 += room.area / (Core.GRID * Core.GRID);
     });
 
     // Pilaretes ESTIMADOS embutidos na alvenaria (ver comentário em
@@ -591,8 +597,8 @@ export function render(): void {
     }
   }
   if (q.laje.count > 0) {
-    html += '<div class="object-panel-section-label">Laje (ref. taxa de aço 90 kg/m³ — sem viga própria, apoiada na cinta já contada em Estrutura)</div>';
-    html += '<div class="materials-line"><span>Lajes (posicionadas)</span><span>' + q.laje.count + ' un.</span></div>';
+    html += '<div class="object-panel-section-label">Laje (automática por cômodo fechado — ref. taxa de aço 90 kg/m³, sem viga própria, apoiada na cinta já contada em Estrutura)</div>';
+    html += '<div class="materials-line"><span>Cômodos com laje</span><span>' + q.laje.count + ' un.</span></div>';
     html += '<div class="materials-line"><span>Área</span><span>' + fmtM2(q.laje.areaM2) + '</span></div>';
     html += '<div class="materials-line"><span>Concreto</span><span>' + q.laje.volumeM3.toFixed(3).replace('.', ',') + ' m³</span></div>';
     html += '<div class="materials-line"><span>Aço (estimado)</span><span>' + q.laje.steelKg.toFixed(1).replace('.', ',') + ' kg</span></div>';

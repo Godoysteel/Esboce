@@ -59,17 +59,10 @@ function handleVarandaAction(varandaId: string, action: string): void {
   }
 }
 
-// Laje: só close/delete — sem girar (não tem frente) nem duplicar (o
-// tamanho e a posição de cada laje são específicos demais pra fazer
-// sentido duplicar; nasce uma nova pelo botão da barra lateral). Os
-// botões de mover/girar/duplicar do gizmo compartilhado continuam
-// visíveis (mesmo padrão de varanda), só não fazem nada aqui.
-function handleLajeAction(lajeId: string, action: string): void {
-  const l = Store.findLaje(lajeId);
-  if (!l) return;
-  if (action === 'close') { ViewportController.deselect(); return; }
-  if (action === 'delete') { Store.commands.deleteLaje(lajeId); ViewportController.deselect(); return; }
-}
+// Laje deixou de ser objeto selecionável/deletável — nasce automática
+// por cômodo fechado, junto com o piso (ver Scene3DRenderer,
+// buildAutoLajePiece). handleLajeAction/getSelectedLajeId ficaram sem
+// função nenhuma pra chamar; removidos.
 
 // Painel de Envidraçamento (DEC-56) — só close/delete, mesmo espírito
 // de Laje: sem girar (a orientação vem da parede quando anexado, ou é
@@ -151,9 +144,6 @@ export function init(): void {
 
     const varandaId = ViewportController.getSelectedVarandaId();
     if (varandaId) { handleVarandaAction(varandaId, action); return; }
-
-    const lajeId = ViewportController.getSelectedLajeId();
-    if (lajeId) { handleLajeAction(lajeId, action); return; }
 
     const furnitureId = ViewportController.getSelectedFurnitureId();
     if (furnitureId) { handleFurnitureAction(furnitureId, action); return; }

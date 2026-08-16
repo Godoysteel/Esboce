@@ -99,7 +99,6 @@ import {
   var furnitureDragObject: any = null;
   var hydraulicFixtureDragObjects: any[] = [];
   var columnDragObjects: { object: any; startX: number; startZ: number }[] = [];
-  var lajeDragObjects: { object: any; startX: number; startZ: number }[] = [];
   var roofGroupDragObjects: { object: any; startX: number; startZ: number }[] = [];
   var roofResizePreviewMeshes: THREE.Object3D[] = [];
   var roofResizeHiddenObjects: THREE.Object3D[] = [];
@@ -287,23 +286,6 @@ import {
       return object.userData && object.userData.columnId === id;
     }).map(function (object: any) {
       return { object: object, startX: object.position.x, startZ: object.position.z };
-    });
-  }
-
-  function collectLajeDragObjects(id: string) {
-    lajeDragObjects = scene.children.filter(function (object: any) {
-      var data = object.userData || {};
-      return data.lajeId === id || (typeof data.handle === 'string' && data.handle.indexOf('lajeEdge') === 0);
-    }).map(function (object: any) {
-      return { object: object, startX: object.position.x, startZ: object.position.z };
-    });
-  }
-
-  function previewLajeDelta(dx: number, dy: number) {
-    var worldDx = dx * scale, worldDz = dy * scale;
-    lajeDragObjects.forEach(function (entry) {
-      entry.object.position.x = entry.startX + worldDx;
-      entry.object.position.z = entry.startZ + worldDz;
     });
   }
 
@@ -643,7 +625,6 @@ import {
   function selectVaranda(varandaId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedVolumeBoxId = null; selectedPlanUnderlay = false; selectedVarandaId = varandaId; gizmoMenuOpen = false; render(); }
   // Laje: mesmo padrão da varanda — clique seleciona, arraste livre nas
   // bordas (nunca trava em contorno de parede — ver DEC-35).
-  function selectLaje(lajeId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedVolumeBoxId = null; selectedPlanUnderlay = false; selectedLajeId = lajeId; gizmoMenuOpen = false; render(); }
 
   function selectGlazingPanel(glazingPanelId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedVolumeBoxId = null; selectedPlanUnderlay = false; selectedGlazingPanelId = glazingPanelId; gizmoMenuOpen = false; openObjectPanel('glazingMaterial'); render(); }
   function selectVolumeBox(volumeBoxId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedPlanUnderlay = false; selectedVolumeBoxId = volumeBoxId; gizmoMenuOpen = false; render(); }
@@ -2302,17 +2283,6 @@ import {
         // nenhuma aqui, só o retângulo de partida.
         var vrE = Store.findVaranda(selectedVarandaId);
         if (vrE) dragElementStart = { x1: vrE.x1, y1: vrE.y1, x2: vrE.x2, y2: vrE.y2 };
-      } else if (handle.indexOf('lajeEdge') === 0) {
-        // Laje também não trava em região nenhuma — igual varanda, de
-        // propósito, pra dar pra arrastar além da parede (balanço) ou
-        // encolher além dela (vão aberto) — ver DEC-35. edgeIndex vem
-        // do próprio nome da alça ('lajeEdge3' -> aresta entre
-        // points[3] e points[4]) — guarda uma cópia dos pontos de
-        // ANTES do arraste, pro mousemove sempre calcular a partir do
-        // estado original (não acumular erro frame a frame).
-        var lrE = Store.findLaje(selectedLajeId);
-        var edgeIndexL = parseInt(handle.slice('lajeEdge'.length), 10);
-        if (lrE) dragElementStart = { points: lrE.points.map(function (p: any) { return { x: p.x, y: p.y }; }), edgeIndex: edgeIndexL };
       } else if (handle === 'openingEdgeTop') {
         // Redimensionar altura arrasta na vertical — mesma técnica de
         // roofRidge (delta de tela, não raycast contra plano vertical).
@@ -2472,17 +2442,6 @@ import {
           Store.commands.beginTransaction();
         } else if (mesh.userData.varandaId) {
           selectVaranda(mesh.userData.varandaId);
-        } else if (mesh.userData.lajeId) {
-          var lajeId = mesh.userData.lajeId;
-          selectLaje(lajeId);
-          dragMode = 'lajeBody';
-          var lEnt = Store.findLaje(lajeId)!;
-          dragElementStart = { points: lEnt.points.map(function (p: any) { return { x: p.x, y: p.y }; }), lastDx: 0, lastDy: 0 };
-          dragGroundStart = getGroundModelPoint(e.clientX, e.clientY);
-          // selectLaje reconstrói a cena; captura o volume e as alças
-          // recém-criados, nunca o mesh antigo atingido pelo raycast.
-          collectLajeDragObjects(lajeId);
-          Store.commands.beginTransaction();
         } else if (mesh.userData.furnitureId) {
           var furnitureId = mesh.userData.furnitureId;
           selectFurniture(furnitureId);
@@ -2727,70 +2686,6 @@ import {
       if (dist < bestDist) { bestDist = dist; bestId = w.id; }
     });
     return bestId;
-  }
-
-  function nearestWallFaceCoord(axis: 'x' | 'y', rawValue: any, skipLajeId?: any) {
-    var walls = Store.currentWalls();
-    var halfThick = (Core.WALL_THICK / 2) * Core.GRID;
-    var best: number | null = null, bestDist = Core.SNAP_UNIT;
-    walls.forEach(function (w: any) {
-      var isVertical = Math.abs(w.x1 - w.x2) < 1e-6;
-      var isHorizontal = Math.abs(w.y1 - w.y2) < 1e-6;
-      if (axis === 'x' && isVertical) {
-        [w.x1 - halfThick, w.x1 + halfThick].forEach(function (faceX) {
-          var d = Math.abs(faceX - rawValue);
-          if (d < bestDist) { bestDist = d; best = faceX; }
-        });
-      } else if (axis === 'y' && isHorizontal) {
-        [w.y1 - halfThick, w.y1 + halfThick].forEach(function (faceY) {
-          var d = Math.abs(faceY - rawValue);
-          if (d < bestDist) { bestDist = d; best = faceY; }
-        });
-      }
-    });
-    Store.currentLajes().forEach(function (other: any) {
-      if (other.id === skipLajeId) return;
-      var b = Core.lajeBounds(other);
-      var candidates = axis === 'x' ? [b.minX, b.maxX] : [b.minY, b.maxY];
-      candidates.forEach(function (c: any) {
-        var d = Math.abs(c - rawValue);
-        if (d < bestDist) { bestDist = d; best = c; }
-      });
-    });
-    return best;
-  }
-
-  // Arrastar o CORPO inteiro da laje (mover sem mudar o formato) —
-  // gruda (ímã) numa laje vizinha quando fica perto o bastante, pra
-  // ficar colada sem sobrepor, SEM virar um objeto só (decisão revista
-  // — ver DEC-37, Sessão 6: nada de fusão automática, só esse snap).
-  // Testa os dois jeitos de encostar em cada eixo (minha borda direita
-  // na esquerda da vizinha, ou minha esquerda na direita dela — e o
-  // mesmo em Y), só quando as faixas do OUTRO eixo realmente se
-  // sobrepõem (senão "encostar" não faz sentido geométrico).
-  function snapLajeBodyDelta(lajeId: any, rawDx: any, rawDy: any, origBounds: any) {
-    var candMinX = origBounds.minX + rawDx, candMaxX = origBounds.maxX + rawDx;
-    var candMinY = origBounds.minY + rawDy, candMaxY = origBounds.maxY + rawDy;
-    var tol = Core.SNAP_UNIT;
-    var bestDx = rawDx, bestDxDist = tol;
-    var bestDy = rawDy, bestDyDist = tol;
-    Store.currentLajes().forEach(function (other: any) {
-      if (other.id === lajeId) return;
-      var ob = Core.lajeBounds(other);
-      var overlapY = Math.min(candMaxY, ob.maxY) - Math.max(candMinY, ob.minY);
-      if (overlapY > -tol) {
-        [ob.minX - candMaxX, ob.maxX - candMinX].forEach(function (d: any) {
-          if (Math.abs(d) < bestDxDist) { bestDxDist = Math.abs(d); bestDx = rawDx + d; }
-        });
-      }
-      var overlapX = Math.min(candMaxX, ob.maxX) - Math.max(candMinX, ob.minX);
-      if (overlapX > -tol) {
-        [ob.minY - candMaxY, ob.maxY - candMinY].forEach(function (d: any) {
-          if (Math.abs(d) < bestDyDist) { bestDyDist = Math.abs(d); bestDy = rawDy + d; }
-        });
-      }
-    });
-    return { dx: bestDx, dy: bestDy };
   }
 
   function onPointerMove(e: any) {
@@ -3240,39 +3135,6 @@ import {
       }
       return;
     }
-    if (dragMode && dragMode.indexOf('lajeEdge') === 0) {
-      var gpLE = getGroundModelPoint(e.clientX, e.clientY);
-      if (gpLE && dragElementStart) {
-        var startPtsL = dragElementStart.points;
-        var edgeIdxL = dragElementStart.edgeIndex;
-        var nL = startPtsL.length;
-        var p1L = startPtsL[edgeIdxL], p2L = startPtsL[(edgeIdxL + 1) % nL];
-        var isVerticalL = Math.abs(p1L.x - p2L.x) < 1e-6;
-        var newValueL: number;
-        if (isVerticalL) {
-          var snappedLX: number | null = nearestWallFaceCoord('x', gpLE.x, selectedLajeId);
-          newValueL = snappedLX == null ? Core.snap(gpLE.x) : snappedLX;
-        } else {
-          var snappedLY: number | null = nearestWallFaceCoord('y', gpLE.y, selectedLajeId);
-          newValueL = snappedLY == null ? Core.snap(gpLE.y) : snappedLY;
-        }
-        Store.commands.updateLajeEdgeLive(selectedLajeId, edgeIdxL, newValueL);
-      }
-      return;
-    }
-    if (dragMode === 'lajeBody') {
-      var gpLB = getGroundModelPoint(e.clientX, e.clientY);
-      if (gpLB && dragGroundStart && dragElementStart) {
-        var rawDxL = Core.snap(gpLB.x - dragGroundStart.x);
-        var rawDyL = Core.snap(gpLB.y - dragGroundStart.y);
-        var origBoundsL = Core.lajeBounds({ id: '', points: dragElementStart.points } as any);
-        var snapped = snapLajeBodyDelta(selectedLajeId, rawDxL, rawDyL, origBoundsL);
-        dragElementStart.lastDx = snapped.dx;
-        dragElementStart.lastDy = snapped.dy;
-        previewLajeDelta(snapped.dx, snapped.dy);
-      }
-      return;
-    }
     if (dragMode === 'openingEdgeLeft' || dragMode === 'openingEdgeRight') {
       var opE = Store.findOpening(selectedOpeningId);
       var gpOE = getGroundModelPoint(e.clientX, e.clientY);
@@ -3494,14 +3356,6 @@ import {
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }
-    // Laje: sem fusão automática (decisão revista — ver DEC-37, Sessão
-    // 6). Arrastar borda/corpo só solta a alça normalmente; o "colar
-    // sem sobrepor" já aconteceu ao vivo, durante o próprio arraste
-    // (ver nearestWallFaceCoord/snapLajeBodyDelta).
-    if (dragMode && dragMode.indexOf('lajeEdge') === 0) {
-      dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
-      return;
-    }
     if (dragMode === 'endpoint1' || dragMode === 'endpoint2') {
       if (selectedWallId && fuseAllOverlaps([selectedWallId])) {
         hintEl.textContent = 'Paredes fundidas — sem faces sobrepostas.';
@@ -3593,17 +3447,6 @@ import {
         Store.commands.updateColumnBodyLive(selectedColumnId, dragElementStart.lastX, dragElementStart.lastY);
       }
       columnDragObjects = [];
-      dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
-      return;
-    }
-    if (dragMode === 'lajeBody') {
-      if (selectedLajeId && dragElementStart) {
-        var finalLajePoints = dragElementStart.points.map(function (p: any) {
-          return { x: p.x + dragElementStart.lastDx, y: p.y + dragElementStart.lastDy };
-        });
-        Store.commands.updateLajePointsLive(selectedLajeId, finalLajePoints);
-      }
-      lajeDragObjects = [];
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }
@@ -4254,69 +4097,6 @@ import {
       hintEl.textContent = 'Varanda criada — arraste as bordas se quiser ajustar o tamanho. Clique direito nela pra girar qual lado é a frente.';
       return;
     }
-    if (key === 'laje') {
-      // Nasce cobrindo o contorno de tudo que já existe no pavimento
-      // (paredes + varandas) — ponto de partida sensato, não uma
-      // trava: a pessoa arrasta as bordas livremente depois, inclusive
-      // pra fora do contorno (balanço/sacada) ou pra dentro (vão
-      // aberto) — ver DEC-35.
-      var walls = Store.currentWalls(), varandasL = Store.currentVarandas();
-      var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-      walls.forEach(function (w) {
-        [[w.x1, w.y1], [w.x2, w.y2]].forEach(function (p: any) {
-          if (p[0] < minX) minX = p[0]; if (p[0] > maxX) maxX = p[0];
-          if (p[1] < minY) minY = p[1]; if (p[1] > maxY) maxY = p[1];
-        });
-      });
-      // w.x1/y1/x2/y2 são o EIXO da parede, não a face — sem esse
-      // ajuste a laje nascia encolhida (na verdade em cima do próprio
-      // eixo), deixando metade da espessura da parede de fora dela ou
-      // fazendo a lateral da laje cortar por dentro da parede. Paredes
-      // aqui são sempre alinhadas a 0°/90° (DEC-28), então dá pra só
-      // expandir o retângulo pela meia-espessura em vez de calcular
-      // face a face.
-      if (walls.length) {
-        var wallMargin = (Core.WALL_THICK / 2) * Core.GRID;
-        minX -= wallMargin; maxX += wallMargin; minY -= wallMargin; maxY += wallMargin;
-      }
-      varandasL.forEach(function (v) {
-        [Math.min(v.x1, v.x2), Math.max(v.x1, v.x2)].forEach(function (x) { if (x < minX) minX = x; if (x > maxX) maxX = x; });
-        [Math.min(v.y1, v.y2), Math.max(v.y1, v.y2)].forEach(function (y) { if (y < minY) minY = y; if (y > maxY) maxY = y; });
-      });
-      var rectL;
-      if (isFinite(minX)) {
-        rectL = { x1: minX, y1: minY, x2: maxX, y2: maxY };
-      } else {
-        // Pavimento vazio — nasce num tamanho padrão centralizado,
-        // igual telhado/varanda fariam no mesmo caso.
-        var halfL = (LAJE_DEFAULT_SIZE_M * Core.GRID) / 2;
-        rectL = { x1: -halfL, y1: -halfL, x2: halfL, y2: halfL };
-      }
-      // Já existe laje no pavimento? Nasce AO LADO de tudo que já
-      // existe (mesmo espírito de computeNextRoomSlot pra cômodo) —
-      // uma peça nova, separada, que a pessoa arrasta como bloco até
-      // encostar; o "colar sem sobrepor" acontece pelo ímã do próprio
-      // arraste (nearestWallFaceCoord/snapLajeBodyDelta), sem fundir
-      // (decisão revista — ver DEC-37, Sessão 6).
-      var existingLajes = Store.currentLajes();
-      if (existingLajes.length) {
-        var lajeMinX = Infinity, lajeMaxX = -Infinity;
-        existingLajes.forEach(function (l) {
-          l.points.forEach(function (p: any) { if (p.x < lajeMinX) lajeMinX = p.x; if (p.x > lajeMaxX) lajeMaxX = p.x; });
-        });
-        var gapL = 1 * Core.GRID; // 1m de respiro, mesmo espírito do gap entre cômodos
-        var widthL = rectL.x2 - rectL.x1, depthL = rectL.y2 - rectL.y1;
-        var newX1 = Math.max(rectL.x2, lajeMaxX) + gapL;
-        rectL = { x1: newX1, y1: rectL.y1, x2: newX1 + widthL, y2: rectL.y1 + depthL };
-      }
-      deselect();
-      var newLaje = Store.commands.createLaje(Core.rectPoints(rectL.x1, rectL.y1, rectL.x2, rectL.y2));
-      if (newLaje) selectLaje(newLaje.id);
-      hintEl.textContent = existingLajes.length
-        ? 'Nova laje criada ao lado — arraste o corpo dela pra encostar em outra (gruda sozinha, sem sobrepor).'
-        : 'Laje criada cobrindo o pavimento — arraste o corpo pra reposicionar, ou as bordas pra ajustar o formato (inclusive além da parede, pra criar um balanço/sacada).';
-      return;
-    }
     if (key === 'glazing') {
       // Painel de Envidraçamento (DEC-56) — nasce solto, numa posição
       // padrão perto do que já existe no pavimento (mesmo espírito de
@@ -4380,8 +4160,14 @@ import {
   }
 
   // Pavimento acima do térreo só pode ganhar parede/cômodo depois que o
-  // pavimento de baixo já tem uma laje colocada (ver DEC-35) — sem
-  // isso, não existe "chão" nenhum pra sustentar o que nasceria ali.
+  // pavimento de baixo já tem pelo menos um cômodo fechado (ver DEC-35
+  // e a correção que trocou a laje manual pela automática por cômodo,
+  // sessão seguinte) — sem isso, não existe "chão" nenhum pra sustentar
+  // o que nasceria ali. A laje em si não é mais um objeto colocado à
+  // parte: ela nasce sozinha, calculada junto com o piso, em cima de
+  // QUALQUER cômodo fechado (mesmo mecanismo de Core.detectRooms usado
+  // pra desenhar o piso) — então a trava passa a checar cômodo fechado
+  // no andar de baixo, não mais uma entidade Laje separada.
   // Térreo nunca precisa (ele já nasce apoiado no terreno).
   function floorBelowMissingLaje() {
     var project = Store.getProject();
@@ -4392,11 +4178,11 @@ import {
     // laje completa no nível imediatamente inferior.
     if (project.floors[idx] && project.floors[idx]!.kind === 'attic') return false;
     var belowFloor = project.floors[idx - 1];
-    return !belowFloor || !belowFloor.lajes || !belowFloor.lajes.length;
+    return !belowFloor || Core.detectRooms(belowFloor.walls).length === 0;
   }
   function requireLajeBelowOrHint() {
     if (floorBelowMissingLaje()) {
-      hintEl.textContent = 'Antes de construir neste pavimento, coloque (e ajuste) a laje do pavimento de baixo — botão "Laje", na seção Cobertura.';
+      hintEl.textContent = 'Antes de construir neste pavimento, feche pelo menos um cômodo com parede no pavimento de baixo — a laje nasce sozinha em cima dele.';
       return false;
     }
     return true;
@@ -4594,7 +4380,7 @@ import {
     });
     document.querySelectorAll('[data-room-preset]').forEach(function (btn: any) {
       btn.addEventListener('click', function () {
-        if (btn.dataset.roomPreset !== 'varanda' && btn.dataset.roomPreset !== 'laje' && btn.dataset.roomPreset !== 'glazing' && btn.dataset.roomPreset !== 'volumetria' && !requireLajeBelowOrHint()) return;
+        if (btn.dataset.roomPreset !== 'varanda' && btn.dataset.roomPreset !== 'glazing' && btn.dataset.roomPreset !== 'volumetria' && !requireLajeBelowOrHint()) return;
         placeRoomPreset(btn.dataset.roomPreset);
       });
     });

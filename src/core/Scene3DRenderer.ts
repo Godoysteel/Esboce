@@ -1931,28 +1931,17 @@ export function hashColorHex(key: string): number {
     return hitMesh;
   }
 
-  function buildLajePiece(laje: any, scale: any, offsetX: any, offsetY: any, topY: any, wallColor: any, viewState: any) {
-    var pts = laje.points;
-    if (!pts || pts.length < 3) return [];
-    var worldPts = pts.map(function (p: any) {
-      return { x: (p.x - offsetX) * scale, z: (p.y - offsetY) * scale };
-    });
-    var minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-    worldPts.forEach(function (p: any) {
-      if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
-      if (p.z < minZ) minZ = p.z; if (p.z > maxZ) maxZ = p.z;
-    });
-    var sizeX = maxX - minX, sizeZ = maxZ - minZ;
-    if (sizeX < 1e-4 || sizeZ < 1e-4) return [];
+  // Laje: nasce automática por cômodo fechado, mesmo contorno inset já
+  // calculado pro piso (insetPoints/shape) — só muda a altura (topo da
+  // parede, não a base) e a espessura/textura real de laje. Substitui
+  // buildLajePiece (objeto independente arrastável, ver DEC-35) — não
+  // existe mais objeto Laje solto; a laje é 100% derivada da geometria
+  // do cômodo, do mesmo jeito que o piso sempre foi (correção
+  // pós-lançamento, ver DEC-85 e a sessão sobre laje de entrepiso).
+  function buildAutoLajePiece(shape: any, sizeX: any, sizeZ: any, topY: any, wallColor: any, viewState: any) {
     var color = pickColor(wallColor, 'laje', viewState);
     var mat = buildParapetSegmentMaterial(color, LAJE_THICKNESS, LAJE_THICKNESS, Math.max(sizeX, sizeZ));
     mat.side = THREE.DoubleSide;
-
-    var shape = new THREE.Shape();
-    worldPts.forEach(function (p: any, i: any) {
-      if (i === 0) shape.moveTo(p.x, p.z); else shape.lineTo(p.x, p.z);
-    });
-    shape.closePath();
     var geo = new THREE.ExtrudeGeometry(shape, { depth: LAJE_THICKNESS, bevelEnabled: false });
     var mesh = new THREE.Mesh(geo, mat);
     mesh.rotation.x = Math.PI / 2;
@@ -2839,28 +2828,6 @@ export function hashColorHex(key: string): number {
       });
     }
 
-    if (viewState.selectedLaje) {
-      var lSel = viewState.selectedLaje, lYOffset = viewState.editingYOffset;
-      var lPts = lSel.points || [];
-      var lHandleY = lYOffset + WALL_HEIGHT + LAJE_THICKNESS + 0.06;
-      // Uma alça por ARESTA do contorno (não mais 4 fixas — depois de
-      // fundir duas peças que não formam um retângulo perfeito, o
-      // contorno pode ter mais pontos, ex.: um "L" com 6 arestas).
-      lPts.forEach(function (lp1: any, li: any) {
-        var lp2 = lPts[(li + 1) % lPts.length];
-        var lmx = (lp1.x + lp2.x) / 2, lmy = (lp1.y + lp2.y) / 2;
-        var lex = (lmx - offsetX) * scale, lez = (lmy - offsetY) * scale;
-        var geoLE = new THREE.SphereGeometry(0.11, 12, 12);
-        var matLE = new THREE.MeshBasicMaterial({ color: SELECTED_ACCENT, depthTest: false });
-        var meshLE = new THREE.Mesh(geoLE, matLE);
-        meshLE.renderOrder = 999;
-        meshLE.position.set(lex, lHandleY, lez);
-        meshLE.userData.handle = 'lajeEdge' + li;
-        scene.add(meshLE);
-        registry.handleMeshes.push(meshLE);
-      });
-    }
-
     if (viewState.selectedOpening) {
       var opSel = viewState.selectedOpening;
       var wSel = (walls || []).filter(function (x: any) { return x.id === opSel.wallId; })[0];
@@ -2937,19 +2904,6 @@ export function hashColorHex(key: string): number {
       // si — wallFootprints acima — mas erraria a soleira, que deve
       // cobrir exatamente onde a espessura da parede estava).
       var wallFootprintsFull = Core.computeWallFootprints(floorData.walls);
-
-      if (layers.laje) {
-        var lajeWallColor = computeWallMatchColor(floorData.walls);
-        (floorData.lajes || []).forEach(function (laje) {
-          var pieces = buildLajePiece(laje, scale, offsetX, offsetY, yOffset + currentWallHeight, lajeWallColor, viewState);
-          pieces.forEach(function (m) {
-            tagCategory(m, 'laje');
-            m.userData.lajeId = laje.id; m.userData.floorIndex = floorIdx;
-            scene.add(m);
-            registry.structureMeshes.push(m);
-          });
-        });
-      }
 
       (floorData.glazingPanels || []).forEach(function (panel) {
         // Etapa 2c: grid de verdade (moldura + perfis internos + vidro
@@ -3451,6 +3405,28 @@ export function hashColorHex(key: string): number {
         baseboardMesh.userData.roomKey = roomKey;
         scene.add(baseboardMesh);
         registry.roomMeshes.push(baseboardMesh);
+
+        // Laje — mesma técnica do piso (mesmo shape/insetPoints,
+        // já na face real da parede), só que no TOPO da parede em vez
+        // da base, e com a espessura real de laje. Sempre acompanha a
+        // parede automaticamente (não guarda nada — recalculada a
+        // cada render, exatamente como o piso), incluindo quando a
+        // parede é arrastada: não existe "sincronizar" porque nunca
+        // existiu um estado separado pra ficar dessincronizado.
+        var lajeSizeX = 0, lajeSizeZ = 0;
+        insetPoints.forEach(function (p: any, i: any) {
+          var p2 = insetPoints[(i + 1) % insetPoints.length];
+          lajeSizeX = Math.max(lajeSizeX, Math.abs(p.x - p2.x) * scale);
+          lajeSizeZ = Math.max(lajeSizeZ, Math.abs(p.y - p2.y) * scale);
+        });
+        var lajeWallColor = computeWallMatchColor(floorData.walls);
+        var lajePieces = buildAutoLajePiece(shape, lajeSizeX, lajeSizeZ, yOffset + currentWallHeight, lajeWallColor, viewState);
+        lajePieces.forEach(function (m: any) {
+          tagCategory(m, 'laje');
+          m.userData.roomKey = roomKey; m.userData.floorIndex = floorIdx;
+          scene.add(m);
+          registry.roomMeshes.push(m);
+        });
       });
 
       // Soleira — depois de gerar o piso de TODOS os cômodos do

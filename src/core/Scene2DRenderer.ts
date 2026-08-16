@@ -78,9 +78,14 @@ export class Scene2DRenderer {
       }));
       project.terreno.muros.forEach((wall) => wallLine(scene, wall, 'scene2d-muro', selectedWallIds.has(wall.id)));
     }
-    floor.lajes?.forEach((laje) => {
-      if (laje.points.length >= 3) scene.append(svgElement('polygon', {
-        points: laje.points.map((point) => `${point.x},${point.y}`).join(' '), class: 'scene2d-laje',
+    // Laje: passou a nascer automática por cômodo fechado (mesmo
+    // Core.detectRooms usado pelo 3D pro piso) — não é mais um objeto
+    // independente guardado em floor.lajes. No 2D isso vira um
+    // preenchimento leve por cômodo, em vez do retângulo único que a
+    // laje manual antiga desenhava.
+    Core.detectRooms(floor.walls).forEach((room) => {
+      if (room.points.length >= 3) scene.append(svgElement('polygon', {
+        points: room.points.map((point) => `${point.x},${point.y}`).join(' '), class: 'scene2d-laje',
       }));
     });
     floor.roofs?.forEach((roof) => scene.append(svgElement('rect', {

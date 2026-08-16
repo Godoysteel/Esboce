@@ -21,10 +21,15 @@ test('renderizador 2D deriva paredes e aberturas do mesmo Store do 3D', () => {
   assert.doesNotMatch(renderer, /Store\.commands\./);
 });
 
-test('primeira fase representa pilares, lajes, terreno, muros e telhados', () => {
-  for (const token of ['floor.columns', 'floor.lajes', 'project.terreno', 'terreno.muros', 'floor.roofs']) {
+test('primeira fase representa pilares, lajes (automáticas por cômodo), terreno, muros e telhados', () => {
+  for (const token of ['floor.columns', 'project.terreno', 'terreno.muros', 'floor.roofs']) {
     assert.ok(renderer.includes(token), `representação ausente: ${token}`);
   }
+  // Laje deixou de ser floor.lajes (objeto independente) — passou a
+  // nascer automática por cômodo fechado, mesmo Core.detectRooms usado
+  // pro piso no 3D (ver DEC-35 revista, correção pós-lançamento).
+  assert.match(renderer, /Core\.detectRooms\(floor\.walls\)\.forEach/);
+  assert.doesNotMatch(renderer, /floor\.lajes\?\.forEach/);
 });
 
 test('viewport 2D oferece zoom e pan sem alterar coordenadas durante a navegação', () => {
