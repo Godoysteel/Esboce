@@ -223,6 +223,30 @@ export interface VolumeBox {
   normalSign?: 1 | -1;
 }
 
+// Planta baixa importada (imagem, ou primeira página de um PDF já
+// rasterizada) — vira uma referência visual no CHÃO do pavimento, pra
+// o Product Owner desenhar as paredes por cima em vez de medir tudo do
+// zero. Uma por pavimento (não uma lista — não faz sentido ter duas
+// plantas de referência sobrepostas no mesmo andar). Nasce com um
+// tamanho padrão (10m de largura, mantendo a proporção original da
+// imagem) e é ajustada por PASSO FIXO (mover/girar/escalar), mesmo
+// espírito dos botões do Bloco de Volumetria — arrastar de verdade
+// fica pra uma etapa futura (ver DEC).
+export interface PlanUnderlay {
+  id: string;
+  imageDataUrl: string;
+  /** Proporção largura/altura da imagem original — preservada ao escalar. */
+  naturalAspect: number;
+  widthM: number;
+  heightM: number;
+  /** Centro, mesma unidade de grade de Wall.x1/y1 (GRID=20 por metro). */
+  x: number;
+  y: number;
+  rotationDeg: number;
+  opacity: number;
+  visible: boolean;
+}
+
 export interface Floor {
   id: string;
   name: string;
@@ -238,6 +262,7 @@ export interface Floor {
   furniture: Furniture[];
   glazingPanels: GlazingPanel[];
   volumeBoxes: VolumeBox[];
+  planUnderlay?: PlanUnderlay | null;
   roomFinishes: Record<string, string>;
   roomFinishSettings?: Record<string, { scale: number; rotation: number }>;
 }
