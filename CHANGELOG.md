@@ -1,5 +1,7 @@
 # Changelog
 
+> Adicionado: catálogo do fornecedor "O Mercador" — 2.119 produtos triados (de um catálogo de origem com 6.081 itens) com relação direta com orçamento de obra: Hidráulica, Elétrica, Tintas e Vernizes, Pisos e Revestimentos, Cimento e Argamassa, Cobertura, Esquadrias e Ferragens, Impermeabilização, Ferro e Aço, Tijolos e Blocos, Areia/Brita/Agregados e Madeiras. Ferramentas, abrasivos, EPI, fixação avulsa e itens sem relação com construção ficaram de fora. Ver DEC-85.
+
 > Corrigido: uma das duas linhas de risco na parede colinear ainda aparecia depois da correção anterior — faltava zerar `extended`, não só `free`. Ver DEC-83 (emenda à correção nº5).
 
 > Corrigido: bug de fundo em `Core.computeWallFootprints` — uma parede reta dividida em dois pedaços (por causa de uma junção em T) ganhava linhas de aresta/tampa no meio dela, sem canto nenhum ali, sempre que sobrava só 1 vizinho colinear (ex.: depois de demolir a parede perpendicular que fazia a junção). Corrigido sem afetar o caso de dobra rasa de verdade, que continua se comportando igual. Ver DEC-83 (correção pós-lançamento nº5).
