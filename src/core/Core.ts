@@ -915,6 +915,51 @@ export function findRoomWallIds(wallList: Wall[], room: Room): string[] {
   return ids;
 }
 
+// Todos os cômodos (fechados) que uma parede ajuda a formar — 1 pra
+// parede externa, até 2 pra parede compartilhada entre dois cômodos.
+// Reaproveitado tanto pra saber "essa parede tem cômodo pra ter altura
+// própria?" quanto pra resolver a regra de altura de parede compartilhada
+// (ver resolveRoomHeightUpdate abaixo).
+export function roomsContainingWall(wallList: Wall[], wallId: string): Room[] {
+  return detectRooms(wallList).filter((room) => (
+    findRoomWallIds(wallList, room).indexOf(wallId) !== -1
+  ));
+}
+
+// Altura EFETIVA de um cômodo hoje: a maior entre Wall.heightM (quando
+// definido) das paredes do contorno, ou a altura padrão do pavimento
+// quando nenhuma parede tem override. Usada tanto pra saber onde
+// posicionar a alça de arraste quanto pra resolver a parede compartilhada.
+export function roomHeightM(wallList: Wall[], roomWallIds: string[], floorDefaultHeightM: number, excludeWallId?: string): number {
+  let height = floorDefaultHeightM;
+  roomWallIds.forEach((id) => {
+    if (id === excludeWallId) return;
+    const w = wallList.find((ww) => ww.id === id);
+    if (w && w.heightM != null && w.heightM > height) height = w.heightM;
+  });
+  return height;
+}
+
+// Resolve o novo Wall.heightM de cada parede do cômodo arrastado, quando
+// o usuário pede uma altura nova pro cômodo inteiro. Regra combinada com
+// o Product Owner: uma parede exclusiva desse cômodo recebe a altura nova
+// direto; uma parede COMPARTILHADA com outro cômodo nunca fica mais baixa
+// do que esse outro cômodo já está — o resultado é sempre o maior dos
+// dois, nunca um "degrau" que deixasse o cômodo vizinho sem parede.
+export function resolveRoomHeightUpdate(wallList: Wall[], roomWallIds: string[], newHeightM: number, floorDefaultHeightM: number): { id: string; heightM: number }[] {
+  const roomSet = new Set(roomWallIds);
+  const allRooms = detectRooms(wallList).map((room) => ({ room, ids: findRoomWallIds(wallList, room) }));
+  return roomWallIds.map((wallId) => {
+    const owning = allRooms.filter((entry) => entry.ids.indexOf(wallId) !== -1);
+    // "outro" cômodo = qualquer um que essa parede também forma, mas que
+    // tem pelo menos uma parede FORA do cômodo sendo arrastado agora.
+    const otherEntry = owning.find((entry) => entry.ids.some((id) => !roomSet.has(id)));
+    if (!otherEntry) return { id: wallId, heightM: newHeightM };
+    const otherHeight = roomHeightM(wallList, otherEntry.ids, floorDefaultHeightM, wallId);
+    return { id: wallId, heightM: Math.max(newHeightM, otherHeight) };
+  });
+}
+
 // Devolve o contorno inteiro apenas quando a parede clicada pertence a um
 // unico comodo fechado e esse contorno ainda nao tem nenhuma ligacao com
 // paredes externas. Essa e a fronteira entre dois modos de edicao:
@@ -1623,6 +1668,7 @@ export const Core = {
   roofRidgeHeightMeters, roofPitchForRidgeHeight, roofsCanFuse, fusedRoofBounds,
   rectPoints, lajeBounds,
   rectsNearby, pointInPolygon, roomModelBounds, findRoomWallIds, findIsolatedRoomWallIds, wallResizeTopology, resolveWallResizeOffset, computeWallFootprints,
+  roomsContainingWall, roomHeightM, resolveRoomHeightUpdate,
   wallResizeEndpointNeedsBridge,
   distPointToLine, wallOBB, furnitureOBB, openingOBB, obbOverlapMTV, wallOverlapsForeignOpening, resolveWallOffsetAgainstOpenings, wallsCanFuse, wallsMeetAtEndpoint, resolveWallGroupGridDelta,
   findWallTJunctionSplits,

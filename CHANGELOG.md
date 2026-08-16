@@ -1,5 +1,7 @@
 # Changelog
 
+> Adicionado: altura de CÔMODO individual — selecione uma parede e arraste a nova alça roxa (acima dela) pra cima/baixo pra aumentar ou diminuir o pé-direito só daquele cômodo (ex.: uma sala com teto mais alto). Parede compartilhada entre dois cômodos de alturas diferentes sempre fica com a altura do cômodo mais alto, nunca deixa o vizinho sem parede no lugar certo. A laje automática do cômodo acompanha sozinha. Ver DEC-88.
+
 > Melhorado: arrastar uma parede (empurrar/redimensionar) agora move uma prévia translúcida em vez de reconstruir a casa inteira a cada movimento do mouse — a parede de verdade só regenera ao soltar, mesmo princípio já usado no arraste de cômodo, telhado, envidraçamento e bloco de volumetria. Deixa o arraste bem mais fluido, principalmente em projetos maiores. Ver DEC-87.
 
 > Alterado: laje de entrepiso deixa de ser um objeto colocável manualmente (arrastar/redimensionar) e passa a nascer automática, uma por cômodo fechado, dentro do contorno de parede — exatamente como o piso já funciona, inclusive acompanhando a parede quando ela é arrastada. Varanda, balanço/sacada e vão aberto (ex.: poço de escada) deixam de ter cobertura automática de laje por enquanto. Ver DEC-86.

@@ -129,6 +129,11 @@ import {
   // está perto disso no arraste. Não gera vale de verdade — só alinha a
   // altura, feedback visual.
   var ROOF_PITCH_SNAP_DEG = 3.5;
+  // Faixa de altura permitida pro arraste de altura de CÔMODO (DEC-88) —
+  // teto liberal o bastante pra pé-direito duplo/vaulted, sem deixar
+  // arrastar a parede a uma altura absurda por acidente.
+  var ROOM_HEIGHT_MIN_M = 2.0;
+  var ROOM_HEIGHT_MAX_M = 6.0;
   var ROOF_NEARBY_TOLERANCE = Core.SNAP_UNIT * 2; // ~1m de folga pra contar como "encostado"
   // Ímã de eixo entre borda de telhado e parede (ver Core.snapCoordinateToWalls):
   // mesma folga do snap comum (meio SNAP_UNIT), pra grudar exatamente no eixo
@@ -365,12 +370,16 @@ import {
     wallResizeHiddenObjects = [];
   }
 
-  function previewWallResize(candidateWalls: any[], wallIds: string[]) {
+  // wallHeight opcional: usado tanto pelo arraste de UMA parede (altura
+  // padrão do pavimento, footprint/posição mudando) quanto pelo arraste
+  // de altura de CÔMODO (DEC-88: posição igual, só a altura candidata
+  // muda) — mesma prévia fantasma, dois gestos diferentes.
+  function previewWallResize(candidateWalls: any[], wallIds: string[], wallHeight?: number) {
     clearWallResizePreview();
     beginWallResizePreview(wallIds);
     var yOffset = currentFloorYOffset();
     wallResizePreviewMeshes = Scene3DRenderer.createWallResizePreviewMeshes(
-      candidateWalls, wallIds, scale, offsetX, offsetY, yOffset, Scene3DRenderer.WALL_HEIGHT_GETTER()
+      candidateWalls, wallIds, scale, offsetX, offsetY, yOffset, wallHeight != null ? wallHeight : Scene3DRenderer.WALL_HEIGHT_GETTER()
     );
     wallResizePreviewMeshes.forEach(function (object) { scene.add(object); });
   }
@@ -2305,6 +2314,13 @@ import {
         startWallResizeDrag(selectedWallId, e.clientX, e.clientY);
         return;
       }
+      if (handle === 'roomHeight') {
+        // Alça roxa acima da parede selecionada (DEC-88) — arrasta pra
+        // cima/baixo pra aumentar/diminuir a altura do CÔMODO inteiro,
+        // não só desta parede.
+        startRoomHeightDrag(selectedWallId, e.clientY);
+        return;
+      }
       dragMode = handle; // 'endpoint1' | 'endpoint2' | 'roofRidge' | 'roofParapetHeight' | 'roofEdge*' | 'varandaEdge*' | 'lajeEdge*'
       if (handle === 'endpoint1' || handle === 'endpoint2') {
         var endpointWall = Store.findWall(selectedWallId);
@@ -2876,7 +2892,7 @@ import {
     // ela mesma (projeta o arraste do mouse nessa direção), e move junto
     // qualquer ponta de outra parede que estava encostada na dela.
     if (dragMode === 'wallResize') {
-      // Prévia fantasma (DEC-8x): NÃO chama Store aqui — atualizar a
+      // Prévia fantasma (DEC-87): NÃO chama Store aqui — atualizar a
       // parede a cada pointermove disparava reconstrução da cena
       // inteira dezenas de vezes por segundo (mesmo problema já corrigido
       // pro painel de Envidraçamento e pro Bloco de Volumetria, ver
@@ -2894,6 +2910,19 @@ import {
         previewWallResize(wallResizeCandidate.candidateWalls, wallResizeCandidate.previewIds);
         dragElementStart.diagnosticDeltaX = wallResizeCandidate.rx1 - dragElementStart.x1;
         dragElementStart.diagnosticDeltaY = wallResizeCandidate.ry1 - dragElementStart.y1;
+      }
+      return;
+    }
+    if (dragMode === 'roomHeight') {
+      // Mesma prévia fantasma do arraste de UMA parede (DEC-87), reusada
+      // aqui: a posição das paredes não muda, só a altura candidata —
+      // por isso não precisa de resolveWallResizeCandidate nenhum,
+      // Store.currentWalls() já serve de "candidateWalls" direto.
+      if (dragElementStart) {
+        var deltaScreenH = dragElementStart.startScreenY - e.clientY; // positivo = arrastou pra cima
+        var candidateHeight = Math.max(ROOM_HEIGHT_MIN_M, Math.min(ROOM_HEIGHT_MAX_M, dragElementStart.startHeight + deltaScreenH * 0.01));
+        dragElementStart.lastHeight = candidateHeight;
+        previewWallResize(Store.currentWalls(), dragElementStart.roomWallIds, candidateHeight);
       }
       return;
     }
@@ -3306,6 +3335,25 @@ import {
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }
+    if (dragMode === 'roomHeight') {
+      // Commit único (DEC-88): resolve a altura de cada parede do
+      // contorno de uma vez, aplicando a regra combinada com o Product
+      // Owner — parede compartilhada com outro cômodo nunca fica mais
+      // baixa do que esse outro cômodo já está (Core.resolveRoomHeightUpdate).
+      if (dragElementStart && dragElementStart.roomWallIds && dragElementStart.lastHeight != null) {
+        var heightUpdates = Core.resolveRoomHeightUpdate(
+          Store.currentWalls(),
+          dragElementStart.roomWallIds,
+          dragElementStart.lastHeight,
+          Scene3DRenderer.WALL_HEIGHT_GETTER()
+        );
+        Store.commands.updateRoomWallsHeightLive(heightUpdates);
+        hintEl.textContent = 'Altura do cômodo ajustada — ' + dragElementStart.lastHeight.toFixed(2).replace('.', ',') + ' m.';
+      }
+      clearWallResizePreview();
+      dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
+      return;
+    }
 
     // Rede de segurança no fim do arraste. O cômodo inteiro já se move
     // discretamente no grid, mas o corpo de uma parede solta ainda usa
@@ -3602,6 +3650,26 @@ import {
       ));
     }
     render();
+  }
+
+  // Início do arraste de altura de CÔMODO (DEC-88) — clique na alça
+  // 'roomHeight'. Congela o contorno do cômodo (Core.roomsContainingWall
+  // + findRoomWallIds) e a altura efetiva atual logo no começo do gesto,
+  // mesmo espírito de "congelar a rede" já usado em startWallResizeDrag:
+  // recalcular a topologia a cada frame não é necessário aqui (a forma
+  // do cômodo não muda, só a altura), então fica mais simples travar uma
+  // vez só.
+  function startRoomHeightDrag(wallId: any, clientY: any) {
+    var w = Store.findWall(wallId);
+    if (!w) return;
+    var owningRooms = Core.roomsContainingWall(Store.currentWalls(), wallId);
+    if (!owningRooms.length) return;
+    var roomWallIds = Core.findRoomWallIds(Store.currentWalls(), owningRooms[0]!);
+    if (!roomWallIds.length) return;
+    var startHeight = Core.roomHeightM(Store.currentWalls(), roomWallIds, Scene3DRenderer.WALL_HEIGHT_GETTER());
+    dragElementStart = { roomWallIds: roomWallIds, startHeight: startHeight, startScreenY: clientY };
+    dragMode = 'roomHeight';
+    Store.commands.beginTransaction();
   }
 
   // O cômodo só pode parar em linhas do grid. Paredes colineares com

@@ -2734,6 +2734,38 @@ export function hashColorHex(key: string): number {
         scene.add(poleP);
         registry.handleMeshes.push(poleP);
       });
+
+      // Alça de altura do CÔMODO (DEC-88) — só aparece se essa parede
+      // fecha pelo menos um cômodo de verdade (Core.roomsContainingWall);
+      // parede solta sem contorno fechado não tem "cômodo" pra ter altura
+      // própria. Posição = altura EFETIVA atual do cômodo
+      // (Core.roomHeightM — a maior entre as paredes do contorno, ou o
+      // padrão do pavimento), não a altura desta parede isolada, pra já
+      // nascer no lugar certo mesmo se o cômodo já tiver sido alterado
+      // antes. Parede COMPARTILHADA entre dois cômodos controla sempre o
+      // primeiro dos dois (mesma ordem que Core.detectRooms devolve) —
+      // simplificação deliberada; pra mirar o outro cômodo, selecione uma
+      // parede que só pertença a ele.
+      var owningRoomsForHeight = Core.roomsContainingWall(walls, w.id);
+      if (owningRoomsForHeight.length) {
+        var roomWallIdsForHeight = Core.findRoomWallIds(walls, owningRoomsForHeight[0]!);
+        var roomHeightNow = Core.roomHeightM(walls, roomWallIdsForHeight, wallHeight);
+        var heightHandleY = yOffset + roomHeightNow;
+        var hx = (midX - offsetX) * scale, hz = (midY - offsetY) * scale;
+        var geoH = new THREE.SphereGeometry(0.1, 12, 12);
+        var matH = new THREE.MeshBasicMaterial({ color: SELECTED_ACCENT, depthTest: false });
+        var meshH = new THREE.Mesh(geoH, matH);
+        meshH.renderOrder = 999;
+        meshH.position.set(hx, heightHandleY, hz);
+        meshH.userData.handle = 'roomHeight';
+        scene.add(meshH);
+        registry.handleMeshes.push(meshH);
+        var poleH = ridgeLineMesh(new THREE.Vector3(hx, yOffset, hz), new THREE.Vector3(hx, heightHandleY, hz));
+        poleH.material.depthTest = false;
+        poleH.renderOrder = 998;
+        scene.add(poleH);
+        registry.handleMeshes.push(poleH);
+      }
     }
     if (viewState.selectedRoof) {
       var r = viewState.selectedRoof, roofYOffset = viewState.editingYOffset;
@@ -3003,7 +3035,10 @@ export function hashColorHex(key: string): number {
           var generatedAtticRoof = (floorData.roofs || []).find(function (roof) {
             return roof.atticMode === 'generated' && (roof.atticWallIds || []).indexOf(w.id) !== -1;
           });
-          var renderedWallHeight = generatedAtticRoof ? (generatedAtticRoof.baseHeightM || 1.2) : currentWallHeight;
+          // Wall.heightM (altura de cômodo individual, ver DEC-88) tem
+          // prioridade sobre a altura padrão do pavimento — mas nunca
+          // sobre a extensão de ático, que já é um caso mais específico.
+          var renderedWallHeight = generatedAtticRoof ? (generatedAtticRoof.baseHeightM || 1.2) : (w.heightM != null ? w.heightM : currentWallHeight);
           var x1 = (w.x1 - offsetX) * scale, z1 = (w.y1 - offsetY) * scale;
           var x2 = (w.x2 - offsetX) * scale, z2 = (w.y2 - offsetY) * scale;
           var length = Math.hypot(x2 - x1, z2 - z1);
@@ -3452,7 +3487,14 @@ export function hashColorHex(key: string): number {
           lajeSizeZ = Math.max(lajeSizeZ, Math.abs(p.y - p2.y) * scale);
         });
         var lajeWallColor = computeWallMatchColor(floorData.walls);
-        var lajePieces = buildAutoLajePiece(shape, lajeSizeX, lajeSizeZ, yOffset + currentWallHeight, lajeWallColor, viewState);
+        // Acompanha a altura EFETIVA deste cômodo (maior Wall.heightM do
+        // próprio contorno, ou o padrão do pavimento quando nenhuma
+        // parede tem override — ver DEC-88), não mais uma altura única
+        // fixa pro pavimento inteiro. Um cômodo mais alto empurra a
+        // própria laje pra cima; os vizinhos não-alterados continuam na
+        // altura padrão.
+        var roomHeight = Core.roomHeightM(floorData.walls, insetWallIds.filter(function (id: any) { return !!id; }), currentWallHeight);
+        var lajePieces = buildAutoLajePiece(shape, lajeSizeX, lajeSizeZ, yOffset + roomHeight, lajeWallColor, viewState);
         lajePieces.forEach(function (m: any) {
           tagCategory(m, 'laje');
           m.userData.roomKey = roomKey; m.userData.floorIndex = floorIdx;

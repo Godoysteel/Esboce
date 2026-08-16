@@ -20,9 +20,12 @@ import {
   lajeBounds,
   resolveOpeningEdgeResize,
   resolveOpeningHeightResize,
+  resolveRoomHeightUpdate,
   resolveWallOffsetAgainstOpenings,
   resolveWallGroupGridDelta,
   resolveWallResizeOffset,
+  roomHeightM,
+  roomsContainingWall,
   wallOBB,
   wallsCanFuse,
   wallsMeetAtEndpoint,
@@ -115,7 +118,12 @@ test('laje nasce automática por cômodo, dentro do mesmo loop que já gera o pi
   const roomsStart = scene3DRendererSource.indexOf('rooms.forEach(function (room) {');
   const roomsEnd = scene3DRendererSource.indexOf('\n      });', roomsStart);
   const roomsFlow = scene3DRendererSource.slice(roomsStart, roomsEnd);
-  assert.match(roomsFlow, /buildAutoLajePiece\(shape, lajeSizeX, lajeSizeZ, yOffset \+ currentWallHeight/);
+  // A partir da DEC-88 (altura de cômodo individual), a laje acompanha a
+  // altura EFETIVA do próprio cômodo (Core.roomHeightM sobre as paredes
+  // do contorno), não mais currentWallHeight (altura fixa do pavimento
+  // inteiro) direto.
+  assert.match(roomsFlow, /roomHeight = Core\.roomHeightM\(floorData\.walls, insetWallIds/);
+  assert.match(roomsFlow, /buildAutoLajePiece\(shape, lajeSizeX, lajeSizeZ, yOffset \+ roomHeight/);
   // A ferramenta/entidade manual antiga não existe mais: nenhum lugar do
   // renderer lê mais floorData.lajes (a prop pode continuar existindo no
   // modelo salvo, por compatibilidade com projeto antigo — só não é mais
@@ -966,4 +974,59 @@ test('polygonAreaModelUnits: contorno em "L" — área bate com retângulo maior
   const areaRaw = polygonAreaModelUnits(lShape.points);
   assert.equal(Math.abs(areaRaw), 30000);
   assert.equal(Math.abs(areaRaw) / (GRID * GRID), 75);
+});
+
+// Altura de cômodo individual (DEC-88) — dois cômodos 3×3m lado a lado,
+// compartilhando a parede do meio ("shared"), mesmo padrão de coordenadas
+// (GRID=20 unidades/metro) já usado no resto do arquivo.
+function twoRoomsSharingWall() {
+  return [
+    { id: 'a1', x1: 0, y1: 0, x2: 60, y2: 0 },
+    { id: 'shared', x1: 60, y1: 0, x2: 60, y2: 60 },
+    { id: 'a3', x1: 60, y1: 60, x2: 0, y2: 60 },
+    { id: 'a4', x1: 0, y1: 60, x2: 0, y2: 0 },
+    { id: 'b1', x1: 60, y1: 0, x2: 120, y2: 0 },
+    { id: 'b2', x1: 120, y1: 0, x2: 120, y2: 60 },
+    { id: 'b3', x1: 120, y1: 60, x2: 60, y2: 60 },
+  ];
+}
+
+test('roomsContainingWall: parede do meio pertence aos dois cômodos, parede externa só ao próprio', () => {
+  const walls = twoRoomsSharingWall();
+  assert.equal(roomsContainingWall(walls, 'shared').length, 2);
+  assert.equal(roomsContainingWall(walls, 'a1').length, 1);
+});
+
+test('roomHeightM: sem override nenhum cai no padrão do pavimento; maior Wall.heightM do contorno vence', () => {
+  const walls = twoRoomsSharingWall();
+  const roomAIds = ['a1', 'shared', 'a3', 'a4'];
+  assert.equal(roomHeightM(walls, roomAIds, 2.7), 2.7);
+  walls[0].heightM = 3.5; // a1
+  assert.equal(roomHeightM(walls, roomAIds, 2.7), 3.5);
+});
+
+test('resolveRoomHeightUpdate: parede compartilhada nunca fica mais baixa que o cômodo vizinho', () => {
+  const walls = twoRoomsSharingWall();
+  const roomAIds = ['a1', 'shared', 'a3', 'a4'];
+  // Cômodo B já foi levantado pra 3,0 m antes (simulado via b1.heightM).
+  walls.find((w) => w.id === 'b1').heightM = 3.0;
+
+  // Levanta o cômodo A pra 4,0 m — mais alto que B: a parede
+  // compartilhada segue A (é a maior das duas).
+  const raised = resolveRoomHeightUpdate(walls, roomAIds, 4.0, 2.7);
+  const byIdRaised = Object.fromEntries(raised.map((u) => [u.id, u.heightM]));
+  assert.equal(byIdRaised.a1, 4.0);
+  assert.equal(byIdRaised.a3, 4.0);
+  assert.equal(byIdRaised.a4, 4.0);
+  assert.equal(byIdRaised.shared, 4.0);
+
+  // Reduz o cômodo A pra 2,0 m — mais baixo que B (3,0 m): as paredes
+  // EXCLUSIVAS de A obedecem o pedido, mas a parede compartilhada
+  // continua na altura de B (nunca deixa o vizinho sem parede).
+  const lowered = resolveRoomHeightUpdate(walls, roomAIds, 2.0, 2.7);
+  const byIdLowered = Object.fromEntries(lowered.map((u) => [u.id, u.heightM]));
+  assert.equal(byIdLowered.a1, 2.0);
+  assert.equal(byIdLowered.a3, 2.0);
+  assert.equal(byIdLowered.a4, 2.0);
+  assert.equal(byIdLowered.shared, 3.0);
 });

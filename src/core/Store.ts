@@ -432,6 +432,18 @@ export const commands = {
     emit({ type: 'WallResizeDragged', wallId, live: true });
   },
 
+  // Altura de UM cômodo (Wall.heightM de cada parede do contorno) — as
+  // atualizações já vêm resolvidas (ver Core.resolveRoomHeightUpdate,
+  // que aplica a regra de "parede compartilhada nunca fica mais baixa
+  // que o cômodo vizinho"); este comando só grava.
+  updateRoomWallsHeightLive(updates: { id: string; heightM: number }[]): void {
+    updates.forEach((u) => {
+      const w = findWall(u.id); if (!w) return;
+      w.heightM = u.heightM;
+    });
+    emit({ type: 'RoomHeightDragged', live: true });
+  },
+
   // Funde o trecho onde A e B se sobrepõem na mesma linha, sem apagar
   // identidade de quem sobra fora da sobreposição. Ver comentário
   // histórico completo em legacy/index-monolito-original.html.
