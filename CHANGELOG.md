@@ -1,5 +1,7 @@
 # Changelog
 
+> Melhorado: arrastar uma parede (empurrar/redimensionar) agora move uma prévia translúcida em vez de reconstruir a casa inteira a cada movimento do mouse — a parede de verdade só regenera ao soltar, mesmo princípio já usado no arraste de cômodo, telhado, envidraçamento e bloco de volumetria. Deixa o arraste bem mais fluido, principalmente em projetos maiores. Ver DEC-87.
+
 > Alterado: laje de entrepiso deixa de ser um objeto colocável manualmente (arrastar/redimensionar) e passa a nascer automática, uma por cômodo fechado, dentro do contorno de parede — exatamente como o piso já funciona, inclusive acompanhando a parede quando ela é arrastada. Varanda, balanço/sacada e vão aberto (ex.: poço de escada) deixam de ter cobertura automática de laje por enquanto. Ver DEC-86.
 
 > Corrigido: catálogo de produtos — a busca de produtos não tinha paginação e ficava sujeita ao limite de "Max Rows" do Supabase (1000 por padrão), cortando produtos de departamentos inteiros silenciosamente sempre que o catálogo passasse desse total. Agora busca em páginas, sem depender de configurar esse limite manualmente. Ver DEC-85 (correção pós-lançamento nº3).

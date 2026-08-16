@@ -1613,6 +1613,38 @@ export function hashColorHex(key: string): number {
     });
   }
 
+  // Prévia fantasma do arraste de UMA parede (empurrar/redimensionar) —
+  // mesmo princípio de createRoofResizePreviewMeshes acima: recalcula só
+  // o footprint (Core.computeWallFootprints) de uma lista CANDIDATA de
+  // paredes (a arrastada, já na posição nova, + vizinhas diretamente
+  // ligadas nas pontas, também já ajustadas) e desenha um volume
+  // translúcido por parede — sem abertura/rodapé/acabamento (é só
+  // feedback visual do gesto; a reconstrução completa e correta acontece
+  // no commit real, ao soltar). previewWallIds decide quais paredes da
+  // lista candidata ganham malha (normalmente a arrastada + suas
+  // vizinhas diretas, não a planta inteira).
+  export function createWallResizePreviewMeshes(candidateWalls: any[], previewWallIds: string[], scale: number, offsetX: number, offsetY: number, yOffset: number, wallHeight: number): THREE.Object3D[] {
+    var footprints = Core.computeWallFootprints(candidateWalls);
+    function toScene(p: any) { return { x: (p.x - offsetX) * scale, z: (p.y - offsetY) * scale }; }
+    var previewMaterial = new THREE.MeshStandardMaterial({
+      color: SELECTED_ACCENT, flatShading: true, side: THREE.DoubleSide,
+      transparent: true, opacity: 0.38, depthWrite: false
+    });
+    var meshes: THREE.Object3D[] = [];
+    previewWallIds.forEach(function (id) {
+      var fpModel = footprints[id];
+      if (!fpModel) return;
+      var fp = {
+        p1a: toScene(fpModel.p1a), p1b: toScene(fpModel.p1b), p2a: toScene(fpModel.p2a), p2b: toScene(fpModel.p2b),
+        p1Free: fpModel.p1Free, p2Free: fpModel.p2Free, p1Extended: fpModel.p1Extended, p2Extended: fpModel.p2Extended
+      };
+      var mesh = buildWallMeshFromFootprint(fp, wallHeight, yOffset, previewMaterial);
+      mesh.userData = { wallResizePreview: true };
+      meshes.push(mesh);
+    });
+    return meshes;
+  }
+
   // Laje colocável de verdade (ver DEC-35) — uma caixa achatada com o
   // MESMO material liso das paredes/parapeito (reaproveita
   // buildParapetSegmentMaterial, já usado no parapeito da platibanda —
@@ -3561,6 +3593,7 @@ export function hashColorHex(key: string): number {
 export const Scene3DRenderer = {
   rebuild,
   createRoofResizePreviewMeshes,
+  createWallResizePreviewMeshes,
   setOnFurnitureAssetLoaded,
   getFurnitureMeshes,
   getOpeningModelMeshes,

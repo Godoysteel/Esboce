@@ -102,6 +102,14 @@ import {
   var roofGroupDragObjects: { object: any; startX: number; startZ: number }[] = [];
   var roofResizePreviewMeshes: THREE.Object3D[] = [];
   var roofResizeHiddenObjects: THREE.Object3D[] = [];
+  // Prévia fantasma do arraste de UMA parede (empurrar/redimensionar,
+  // dragMode 'wallResize') — mesmo princípio do telhado acima: durante o
+  // gesto, um footprint translúcido da parede + vizinhas diretamente
+  // ligadas é reconstruído a cada pointermove SEM tocar no Store (evita
+  // reconstruir a cena inteira dezenas de vezes por segundo); a parede
+  // de verdade só é atualizada uma vez, no soltar (ver DEC-8x).
+  var wallResizePreviewMeshes: THREE.Object3D[] = [];
+  var wallResizeHiddenObjects: THREE.Object3D[] = [];
   var pendingRoofAttic = false;
   var pendingGenerateRoofId: any = null;
   var generateAtticBtnEl: any = null;
@@ -336,6 +344,93 @@ import {
     var floorTopY = currentFloorYOffset() + (roof.atticMode ? (roof.baseHeightM || 1.2) : Scene3DRenderer.WALL_HEIGHT_GETTER());
     roofResizePreviewMeshes = Scene3DRenderer.createRoofResizePreviewMeshes(previewRoof, scale, offsetX, offsetY, floorTopY);
     roofResizePreviewMeshes.forEach(function (object) { scene.add(object); });
+  }
+
+  function beginWallResizePreview(wallIds: string[]) {
+    wallResizeHiddenObjects = scene.children.filter(function (object: any) {
+      return object.userData && object.userData.wallId && wallIds.indexOf(object.userData.wallId) !== -1;
+    });
+    wallResizeHiddenObjects.forEach(function (object) { object.visible = false; });
+  }
+
+  function clearWallResizePreview() {
+    wallResizePreviewMeshes.forEach(function (object: any) {
+      scene.remove(object);
+      if (object.geometry) object.geometry.dispose();
+      var materials = Array.isArray(object.material) ? object.material : [object.material];
+      materials.forEach(function (material: any) { if (material && material.dispose) material.dispose(); });
+    });
+    wallResizePreviewMeshes = [];
+    wallResizeHiddenObjects.forEach(function (object) { object.visible = true; });
+    wallResizeHiddenObjects = [];
+  }
+
+  function previewWallResize(candidateWalls: any[], wallIds: string[]) {
+    clearWallResizePreview();
+    beginWallResizePreview(wallIds);
+    var yOffset = currentFloorYOffset();
+    wallResizePreviewMeshes = Scene3DRenderer.createWallResizePreviewMeshes(
+      candidateWalls, wallIds, scale, offsetX, offsetY, yOffset, Scene3DRenderer.WALL_HEIGHT_GETTER()
+    );
+    wallResizePreviewMeshes.forEach(function (object) { scene.add(object); });
+  }
+
+  // Calcula o candidato de arraste (offset perpendicular, posição final
+  // da parede arrastada e das vizinhas ligadas, e a lista de paredes
+  // "como ficaria") a partir de um evento de ponteiro — usado tanto pela
+  // prévia (pointermove, sem tocar no Store) quanto pelo commit final
+  // (pointerup, chamando o Store uma única vez). Mesma matemática de
+  // sempre (Core.resolveWallResizeOffset/resolveWallOffsetAgainstOpenings),
+  // só que devolvida como dado em vez de aplicada direto.
+  function resolveWallResizeCandidate(e: any) {
+    if (!resizeWallId || !dragElementStart || !dragGroundStart) return null;
+    var gp = getGroundModelPoint(e.clientX, e.clientY);
+    if (!gp) return null;
+    var rawDx = gp.x - dragGroundStart.x, rawDy = gp.y - dragGroundStart.y;
+    var requestedOffset = Core.snap(rawDx * dragElementStart.nx + rawDy * dragElementStart.ny);
+    var offsetResolution = dragElementStart.ownerCount > 0
+      ? Core.resolveWallResizeOffset(
+          dragElementStart.originalWall,
+          dragElementStart.diagnosticBefore,
+          requestedOffset,
+          dragElementStart.nx,
+          dragElementStart.ny
+        )
+      : { offset: requestedOffset, limited: false, blockingWallId: null };
+    var offset = offsetResolution.offset;
+    var openingResolution = Core.resolveWallOffsetAgainstOpenings(
+      dragElementStart.originalWall,
+      offset,
+      dragElementStart.nx,
+      dragElementStart.ny,
+      [resizeWallId],
+      Store.currentOpenings(),
+      dragElementStart.diagnosticBefore
+    );
+    offset = openingResolution.offset;
+    var hint: string | null = null;
+    if (openingResolution.limited) {
+      hint = 'Movimento bloqueado: a parede não pode atravessar uma porta ou janela.';
+    } else if (offsetResolution.limited) {
+      hint = 'Limite atingido: a parede não pode atravessar outra parede da planta.';
+    }
+    dragElementStart.resizeLimitWallId = offsetResolution.limited ? offsetResolution.blockingWallId : null;
+    var rx1 = dragElementStart.x1 + dragElementStart.nx * offset, ry1 = dragElementStart.y1 + dragElementStart.ny * offset;
+    var rx2 = dragElementStart.x2 + dragElementStart.nx * offset, ry2 = dragElementStart.y2 + dragElementStart.ny * offset;
+    var linked = dragElementStart.linksStart.map(function (l: any) { return { id: l.id, which: l.which, x: rx1, y: ry1 }; })
+      .concat(dragElementStart.linksEnd.map(function (l: any) { return { id: l.id, which: l.which, x: rx2, y: ry2 }; }));
+    var candidateWalls = Store.currentWalls().map(function (cw: any) {
+      if (cw.id === resizeWallId) return Object.assign({}, cw, { x1: rx1, y1: ry1, x2: rx2, y2: ry2 });
+      var matchingLinks = linked.filter(function (l: any) { return l.id === cw.id; });
+      if (!matchingLinks.length) return cw;
+      var patched = cw;
+      matchingLinks.forEach(function (l: any) {
+        patched = Object.assign({}, patched, l.which === 1 ? { x1: l.x, y1: l.y } : { x2: l.x, y2: l.y });
+      });
+      return patched;
+    });
+    var previewIds = [resizeWallId].concat(linked.map(function (l: any) { return l.id; }));
+    return { offset: offset, rx1: rx1, ry1: ry1, rx2: rx2, ry2: ry2, linked: linked, candidateWalls: candidateWalls, previewIds: previewIds, hint: hint };
   }
 
   // Centro do painel de Envidraçamento em coordenadas de MODELO (antes
@@ -2781,130 +2876,24 @@ import {
     // ela mesma (projeta o arraste do mouse nessa direção), e move junto
     // qualquer ponta de outra parede que estava encostada na dela.
     if (dragMode === 'wallResize') {
-      var gpZ = getGroundModelPoint(e.clientX, e.clientY);
-      if (gpZ && dragGroundStart && dragElementStart) {
-        var rawDx = gpZ.x - dragGroundStart.x, rawDy = gpZ.y - dragGroundStart.y;
-        var requestedOffset = Core.snap(rawDx * dragElementStart.nx + rawDy * dragElementStart.ny);
-        var offsetResolution = dragElementStart.ownerCount > 0
-          ? Core.resolveWallResizeOffset(
-              dragElementStart.originalWall,
-              dragElementStart.diagnosticBefore,
-              requestedOffset,
-              dragElementStart.nx,
-              dragElementStart.ny
-            )
-          : { offset: requestedOffset, limited: false };
-        var offset = offsetResolution.offset;
-        var openingResolution = Core.resolveWallOffsetAgainstOpenings(
-          dragElementStart.originalWall,
-          offset,
-          dragElementStart.nx,
-          dragElementStart.ny,
-          [resizeWallId],
-          Store.currentOpenings(),
-          dragElementStart.diagnosticBefore
-        );
-        if (openingResolution.limited) {
-          offset = openingResolution.offset;
-          hintEl.textContent = 'Movimento bloqueado: a parede não pode atravessar uma porta ou janela.';
-        } else {
-          offset = openingResolution.offset;
-        }
-        dragElementStart.resizeLimitWallId = offsetResolution.limited ? offsetResolution.blockingWallId : null;
-        if (offsetResolution.limited) {
-          hintEl.textContent = 'Limite atingido: a parede não pode atravessar outra parede da planta.';
-        }
-        var rx1 = dragElementStart.x1 + dragElementStart.nx * offset, ry1 = dragElementStart.y1 + dragElementStart.ny * offset;
-        var rx2 = dragElementStart.x2 + dragElementStart.nx * offset, ry2 = dragElementStart.y2 + dragElementStart.ny * offset;
-        var linked = dragElementStart.linksStart.map(function (l: any) { return { id: l.id, which: l.which, x: rx1, y: ry1 }; })
-          .concat(dragElementStart.linksEnd.map(function (l: any) { return { id: l.id, which: l.which, x: rx2, y: ry2 }; }));
-        Store.commands.updateWallResizeLive(resizeWallId, rx1, ry1, rx2, ry2, linked);
-
-        // Precisa de rastro somente quando uma conexão original realmente
-        // ficou no nó antigo. Uma parede compartilhada pode ter todas as
-        // vizinhas perpendiculares acompanhando o arraste e, ainda assim,
-        // possuir uma continuação colinear que deve ficar parada. Nesse
-        // caso o rastro fecha o degrau entre os dois nós. Usar apenas
-        // ownerCount escondia essa continuação e rompia o grafo.
-        var endpointStillOnSupport = function (supportIds: any[], x: number, y: number) {
-          return supportIds.some(function (supportId: any) {
-            var support = Store.findWall(supportId);
-            return support && Core.distToSegment(x, y, support.x1, support.y1, support.x2, support.y2) <= Core.COINCIDENCE_TOL;
-          });
-        };
-        var startSlides = endpointStillOnSupport(dragElementStart.startSlidingSupports, rx1, ry1);
-        var endSlides = endpointStillOnSupport(dragElementStart.endSlidingSupports, rx2, ry2);
-        // Uma vizinha perpendicular que alongou pode ligar sozinha o no
-        // antigo ao novo. Nesse sentido do arraste, criar outra parede por
-        // cima dela duplicaria o trecho. No sentido oposto ela encurta e
-        // deixa de cobrir o no antigo; ai a ponte continua necessaria.
-        var oldNodeCoveredByMovedLink = function (links: any[], oldX: number, oldY: number) {
-          return links.some(function (link: any) {
-            var linkedWall = Store.findWall(link.id);
-            return linkedWall && Core.distToSegment(
-              oldX, oldY,
-              linkedWall.x1, linkedWall.y1,
-              linkedWall.x2, linkedWall.y2
-            ) <= Core.COINCIDENCE_TOL;
-          });
-        };
-        var startCovered = oldNodeCoveredByMovedLink(
-          dragElementStart.linksStart,
-          dragElementStart.x1,
-          dragElementStart.y1
-        );
-        var endCovered = oldNodeCoveredByMovedLink(
-          dragElementStart.linksEnd,
-          dragElementStart.x2,
-          dragElementStart.y2
-        );
-        var needsBridgeStart = Core.wallResizeEndpointNeedsBridge(
-          dragElementStart.rawStart,
-          dragElementStart.linksStart,
-          startSlides || startCovered
-        );
-        var needsBridgeEnd = Core.wallResizeEndpointNeedsBridge(
-          dragElementStart.rawEnd,
-          dragElementStart.linksEnd,
-          endSlides || endCovered
-        );
-
-        if (needsBridgeStart) {
-          if (Math.hypot(rx1 - dragElementStart.x1, ry1 - dragElementStart.y1) > 0.5) {
-            if (!dragElementStart.bridgeStartId) {
-              dragElementStart.bridgeStartId = Store.commands.createBridgeWallLive(dragElementStart.x1, dragElementStart.y1, rx1, ry1);
-            } else {
-              Store.commands.updateBridgeWallLive(dragElementStart.bridgeStartId, dragElementStart.x1, dragElementStart.y1, rx1, ry1);
-            }
-          } else if (dragElementStart.bridgeStartId) {
-            Store.commands.removeBridgeWallSilent(dragElementStart.bridgeStartId);
-            dragElementStart.bridgeStartId = null;
-          }
-        }
-        if (needsBridgeEnd) {
-          if (Math.hypot(rx2 - dragElementStart.x2, ry2 - dragElementStart.y2) > 0.5) {
-            if (!dragElementStart.bridgeEndId) {
-              dragElementStart.bridgeEndId = Store.commands.createBridgeWallLive(dragElementStart.x2, dragElementStart.y2, rx2, ry2);
-            } else {
-              Store.commands.updateBridgeWallLive(dragElementStart.bridgeEndId, dragElementStart.x2, dragElementStart.y2, rx2, ry2);
-            }
-          } else if (dragElementStart.bridgeEndId) {
-            Store.commands.removeBridgeWallSilent(dragElementStart.bridgeEndId);
-            dragElementStart.bridgeEndId = null;
-          }
-        }
-        dragElementStart.diagnosticDeltaX = rx1 - dragElementStart.x1;
-        dragElementStart.diagnosticDeltaY = ry1 - dragElementStart.y1;
-        if (dragElementStart.diagnosticBefore) {
-          showWallDiagnostic(addWallCrossingPrevention(analyzeWallResize(
-            dragElementStart.diagnosticBefore,
-            cloneWallsForDiagnostics(Store.currentWalls()),
-            resizeWallId,
-            dragElementStart.diagnosticDeltaX,
-            dragElementStart.diagnosticDeltaY,
-            'preview'
-          ), dragElementStart.resizeLimitWallId));
-        }
+      // Prévia fantasma (DEC-8x): NÃO chama Store aqui — atualizar a
+      // parede a cada pointermove disparava reconstrução da cena
+      // inteira dezenas de vezes por segundo (mesmo problema já corrigido
+      // pro painel de Envidraçamento e pro Bloco de Volumetria, ver
+      // comentários deles). resolveWallResizeCandidate faz a MESMA
+      // matemática de sempre (offset perpendicular, limite de junção,
+      // limite contra abertura) só que devolvendo o candidato como dado;
+      // previewWallResize desenha um footprint translúcido só da parede
+      // arrastada + vizinhas diretamente ligadas, sem tocar no Store.
+      // Rastro (parede-ponte), diagnóstico ao vivo e o commit de verdade
+      // ficam pro pointerup, uma única vez — mesmo princípio já usado no
+      // arraste de cômodo individual (roomGroup/DEC-57).
+      var wallResizeCandidate = resolveWallResizeCandidate(e);
+      if (wallResizeCandidate) {
+        if (wallResizeCandidate.hint) hintEl.textContent = wallResizeCandidate.hint;
+        previewWallResize(wallResizeCandidate.candidateWalls, wallResizeCandidate.previewIds);
+        dragElementStart.diagnosticDeltaX = wallResizeCandidate.rx1 - dragElementStart.x1;
+        dragElementStart.diagnosticDeltaY = wallResizeCandidate.ry1 - dragElementStart.y1;
       }
       return;
     }
@@ -3224,6 +3213,51 @@ import {
       // uma sobreposição antiga, parada, seria fundida só por causa de
       // um clique de seleção, sem nenhuma ação explícita da pessoa).
       if (resizeWallId && dragElementStart) {
+        // Commit final da prévia fantasma — a ÚNICA vez que o Store é
+        // tocado no gesto inteiro (ver resolveWallResizeCandidate /
+        // previewWallResize no pointermove). Recalcula o candidato uma
+        // última vez a partir da posição de soltar do mouse (mesma
+        // matemática, evita guardar valores "penúltimos" de um frame
+        // anterior) e só então aplica de verdade, incluindo a
+        // parede-ponte (rastro) se algum lado precisar — mesma lógica
+        // que antes rodava a cada pointermove, agora uma vez só.
+        var finalCandidate = resolveWallResizeCandidate(e);
+        if (finalCandidate) {
+          Store.commands.updateWallResizeLive(
+            resizeWallId, finalCandidate.rx1, finalCandidate.ry1, finalCandidate.rx2, finalCandidate.ry2, finalCandidate.linked
+          );
+          var endpointStillOnSupport = function (supportIds: any[], x: number, y: number) {
+            return supportIds.some(function (supportId: any) {
+              var support = Store.findWall(supportId);
+              return support && Core.distToSegment(x, y, support.x1, support.y1, support.x2, support.y2) <= Core.COINCIDENCE_TOL;
+            });
+          };
+          var startSlides = endpointStillOnSupport(dragElementStart.startSlidingSupports, finalCandidate.rx1, finalCandidate.ry1);
+          var endSlides = endpointStillOnSupport(dragElementStart.endSlidingSupports, finalCandidate.rx2, finalCandidate.ry2);
+          var oldNodeCoveredByMovedLink = function (links: any[], oldX: number, oldY: number) {
+            return links.some(function (link: any) {
+              var linkedWall = Store.findWall(link.id);
+              return linkedWall && Core.distToSegment(
+                oldX, oldY,
+                linkedWall.x1, linkedWall.y1,
+                linkedWall.x2, linkedWall.y2
+              ) <= Core.COINCIDENCE_TOL;
+            });
+          };
+          var startCovered = oldNodeCoveredByMovedLink(dragElementStart.linksStart, dragElementStart.x1, dragElementStart.y1);
+          var endCovered = oldNodeCoveredByMovedLink(dragElementStart.linksEnd, dragElementStart.x2, dragElementStart.y2);
+          var needsBridgeStart = Core.wallResizeEndpointNeedsBridge(dragElementStart.rawStart, dragElementStart.linksStart, startSlides || startCovered);
+          var needsBridgeEnd = Core.wallResizeEndpointNeedsBridge(dragElementStart.rawEnd, dragElementStart.linksEnd, endSlides || endCovered);
+          if (needsBridgeStart && Math.hypot(finalCandidate.rx1 - dragElementStart.x1, finalCandidate.ry1 - dragElementStart.y1) > 0.5) {
+            dragElementStart.bridgeStartId = Store.commands.createBridgeWallLive(dragElementStart.x1, dragElementStart.y1, finalCandidate.rx1, finalCandidate.ry1);
+          }
+          if (needsBridgeEnd && Math.hypot(finalCandidate.rx2 - dragElementStart.x2, finalCandidate.ry2 - dragElementStart.y2) > 0.5) {
+            dragElementStart.bridgeEndId = Store.commands.createBridgeWallLive(dragElementStart.x2, dragElementStart.y2, finalCandidate.rx2, finalCandidate.ry2);
+          }
+          dragElementStart.diagnosticDeltaX = finalCandidate.rx1 - dragElementStart.x1;
+          dragElementStart.diagnosticDeltaY = finalCandidate.ry1 - dragElementStart.y1;
+        }
+        clearWallResizePreview();
         var wNow = Store.findWall(resizeWallId);
         var moved = wNow && (
           Math.hypot(wNow.x1 - dragElementStart.x1, wNow.y1 - dragElementStart.y1) > 0.5 ||
@@ -3264,6 +3298,11 @@ import {
           }
         }
       }
+      // Rede de segurança: garante que nenhuma malha real fique escondida
+      // pra sempre se o gesto terminou de um jeito que o bloco acima não
+      // previu (ex.: resizeWallId zerado no meio do caminho) — a prévia
+      // já devia ter sido limpa lá em cima, isso só evita vazamento.
+      clearWallResizePreview();
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }
