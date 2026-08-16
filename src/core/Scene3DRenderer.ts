@@ -86,6 +86,11 @@ export function hashColorHex(key: string): number {
   var SELECTED_ACCENT = 0xE8963C;
   var WALL_TOP_COLOR = GABLE_COLOR;
   var WALL_EDGE_COLOR = 0x6F879C;
+  // Camada "Paredes transparentes" (ProjectLayers.paredesTransparentes)
+  // — opacidade baixa o bastante pra enxergar a Planta Baixa importada
+  // (DEC-82) por baixo, mas alta o bastante pra ainda reconhecer onde
+  // cada parede está sem precisar desligar a camada inteira.
+  var WALL_TRANSPARENT_OPACITY = 0.28;
   var OPENING_FRAME_COLOR = 0xF4F1E8;
   var WALL_PLASTER_TILE_METERS = 1.25;
   var soleiraMarbleMaps: { map: THREE.Texture; normalMap: THREE.Texture; roughnessMap: THREE.Texture } | null = null;
@@ -2971,6 +2976,11 @@ export function hashColorHex(key: string): number {
           var isGroupSelected = viewState.roomGroupWallIds && viewState.roomGroupWallIds.indexOf(w.id) !== -1;
           var isResizeTarget = viewState.resizeWallId === w.id;
           var highlighted = isSelected || isResizeTarget || isGroupSelected;
+          // Camada "Paredes transparentes" (ver comentário completo mais
+          // abaixo, junto das faces) — declarada aqui em cima porque
+          // tanto a tampa de topo (topMat) quanto as faces (faceMat)
+          // precisam dela, e a tampa é construída primeiro no fluxo.
+          var wallsTransparent = !!layers.paredesTransparentes;
 
           // Caixa de referência: a espessura real da parede, mas sem
           // preenchimento colorido — quem carrega cor agora são as duas
@@ -3042,7 +3052,10 @@ export function hashColorHex(key: string): number {
           var topMat = new THREE.MeshStandardMaterial({
             color: highlighted ? SELECTED_ACCENT : WALL_TOP_COLOR,
             side: THREE.DoubleSide,
-            flatShading: true
+            flatShading: true,
+            transparent: wallsTransparent,
+            opacity: wallsTransparent ? WALL_TRANSPARENT_OPACITY : 1,
+            depthWrite: !wallsTransparent
           });
           var topCapMesh = tagCategory(buildWallTopCapMesh(fp, yOffset + renderedWallHeight, topMat), wallCategory);
           topCapMesh.userData.wallId = w.id;
@@ -3081,6 +3094,17 @@ export function hashColorHex(key: string): number {
           // Reboco (textura PBR) removido de toda a casa — ver Sessão
           // 27: sem acabamento cerâmico, a face fica em cor lisa.
           var wallDefaultColor = GABLE_COLOR;
+          // "Paredes transparentes" (camada, ver ProjectLayers) — pedido
+          // do Product Owner depois de importar a Planta Baixa (DEC-82):
+          // com a planta deitada no chão, a parede opaca tampava a
+          // referência por baixo. Só reduz a OPACIDADE da face (a caixa
+          // de referência/clique, a porta/janela e o resto continuam
+          // exatamente iguais) — não é a mesma coisa que a camada
+          // "Paredes — térreo/superiores" desligada, que some com a
+          // parede inteira (inclusive o clique nela); aqui ela continua
+          // selecionável, só fica vazada. `wallsTransparent` já foi
+          // declarado lá em cima (perto de `highlighted`) — a tampa de
+          // topo também usa.
           (['a', 'b'] as const).forEach(function (side) {
             var productId = side === 'a' ? w.finishA : w.finishB;
             var product = productId ? Catalog.getProduct(productId) : null;
@@ -3101,7 +3125,10 @@ export function hashColorHex(key: string): number {
               // diferentes e a costura aparecia como uma faixa/rasgo.
               // Sobreposições reais são eliminadas ao concluir o gesto.
               polygonOffsetFactor: 1,
-              polygonOffsetUnits: 1
+              polygonOffsetUnits: 1,
+              transparent: wallsTransparent,
+              opacity: wallsTransparent ? WALL_TRANSPARENT_OPACITY : 1,
+              depthWrite: !wallsTransparent
             });
             // Sem tagCategory/wallId de propósito: a face não é alvo de
             // clique próprio — a caixa de referência (mesma posição)

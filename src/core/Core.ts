@@ -566,7 +566,8 @@ export function createProject(constructionSystem: Project['constructionSystem'] 
       paredesSuperiores: true,
       aberturas: true,
       varanda: true,
-      instalacoes: true
+      instalacoes: true,
+      paredesTransparentes: false
     },
     foundationType: 'baldrame',
     constructionSystem,

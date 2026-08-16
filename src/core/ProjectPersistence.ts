@@ -41,6 +41,7 @@ const DEFAULT_LAYERS: ProjectLayers = {
   aberturas: true,
   varanda: true,
   instalacoes: true,
+  paredesTransparentes: false,
 };
 
 function parseHydraulicNode(value: unknown, path: string): HydraulicNode {
