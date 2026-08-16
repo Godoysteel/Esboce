@@ -1784,6 +1784,68 @@ export function hashColorHex(key: string): number {
     return hitMesh;
   }
 
+  // Bloco de Volumetria (fachada procedural) — box sólido simples.
+  // Diferente do painel de Envidraçamento, não recorta nenhuma banda
+  // da parede: é um volume que só se ENCOSTA e protrai pra fora,
+  // igual um caixilho saliente/bay window/ornamento de massa. Mesma
+  // técnica de hitMesh invisível + malha de verdade como filho (pick/
+  // arraste enxergam o hitMesh, a malha visual acompanha sozinha).
+  function buildVolumeBoxMesh(box: any) {
+    var geo = new THREE.BoxGeometry(box.widthM, box.heightM, box.depthM);
+    var color = box.colorHex || Core.VOLUME_BOX_DEFAULT_COLOR;
+    var mat = new THREE.MeshStandardMaterial({ color: new THREE.Color(color), roughness: 0.85, metalness: 0.05 });
+    var mesh = new THREE.Mesh(geo, mat);
+    var edges = new THREE.EdgesGeometry(geo);
+    var edgeLines = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x1B1C1E }));
+    var group = new THREE.Group();
+    group.add(mesh); group.add(edgeLines);
+    return group;
+  }
+
+  function buildVolumeBoxPreviewMesh(box: any, scale: any, offsetX: any, offsetY: any, yOffset: any) {
+    var hitGeo = new THREE.BoxGeometry(box.widthM, box.heightM, box.depthM);
+    var hitMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 });
+    var hitMesh = new THREE.Mesh(hitGeo, hitMat);
+    var group = buildVolumeBoxMesh(box);
+    hitMesh.add(group);
+    var px = ((box.x || 0) - offsetX) * scale, pz = ((box.y || 0) - offsetY) * scale;
+    hitMesh.position.set(px, yOffset + box.heightM / 2, pz);
+    hitMesh.rotation.y = -((box.rotationDeg || 0) * Math.PI / 180);
+    return hitMesh;
+  }
+
+  // Volume já encostado (state 'attached') — nasce na face da parede
+  // (metade da espessura dela a partir do eixo) e protrai depthM pra
+  // fora, no lado indicado por normalSign (decidido uma vez no
+  // momento do encosto — ver Store.commands.attachVolumeBoxToWall).
+  function buildVolumeBoxAttachedMesh(box: any, wall: any, scale: any, offsetX: any, offsetY: any, yOffset: any) {
+    var dx = wall.x2 - wall.x1, dy = wall.y2 - wall.y1;
+    var lenModel = Math.hypot(dx, dy) || 1e-6;
+    var ux = dx / lenModel, uy = dy / lenModel;
+    var nx = -uy, ny = ux; // normal unitária, perpendicular ao eixo da parede
+    var sign = box.normalSign === -1 ? -1 : 1;
+    var offsetModel = (box.offsetM || 0) * Core.GRID;
+    var alongX = wall.x1 + ux * offsetModel, alongY = wall.y1 + uy * offsetModel;
+    var faceDistM = (Core.WALL_THICK / 2) + (box.depthM / 2);
+    var cxModel = alongX + nx * sign * faceDistM * Core.GRID;
+    var cyModel = alongY + ny * sign * faceDistM * Core.GRID;
+    var hitGeo = new THREE.BoxGeometry(box.widthM, box.heightM, box.depthM);
+    var hitMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 });
+    var hitMesh = new THREE.Mesh(hitGeo, hitMat);
+    var group = buildVolumeBoxMesh(box);
+    hitMesh.add(group);
+    var px = (cxModel - offsetX) * scale, pz = (cyModel - offsetY) * scale;
+    var sill = box.sillHeightM || 0;
+    hitMesh.position.set(px, yOffset + sill + box.heightM / 2, pz);
+    // A caixa (BoxGeometry) é simétrica no eixo local Z (profundidade)
+    // — quem decide pra que lado ela protrai é só a translação acima
+    // (cxModel/cyModel já deslocados por normalSign), não a rotação.
+    // A rotação só precisa alinhar a largura da caixa com o eixo da
+    // parede, mesma fórmula do painel de Envidraçamento.
+    hitMesh.rotation.y = -Math.atan2(uy, ux);
+    return hitMesh;
+  }
+
   function buildLajePiece(laje: any, scale: any, offsetX: any, offsetY: any, topY: any, wallColor: any, viewState: any) {
     var pts = laje.points;
     if (!pts || pts.length < 3) return [];
@@ -2793,6 +2855,27 @@ export function hashColorHex(key: string): number {
         mesh.userData.glazingPanelId = panel.id; mesh.userData.floorIndex = floorIdx;
         scene.add(mesh);
         registry.furnitureMeshes.push(mesh);
+      });
+
+      (floorData.volumeBoxes || []).forEach(function (box) {
+        // Mesmo raciocínio de registro do painel de Envidraçamento
+        // acima: furnitureMeshes (não structureMeshes) porque o volume
+        // também é um Group com filhos (malha + arestas) dentro do
+        // hitMesh — precisa da limpeza recursiva.
+        var vmesh;
+        if (box.state === 'attached' && box.wallId) {
+          var hostWallV = (floorData.walls || []).find(function (w) { return w.id === box.wallId; });
+          if (!hostWallV) return;
+          vmesh = buildVolumeBoxAttachedMesh(box, hostWallV, scale, offsetX, offsetY, yOffset);
+        } else if (box.state === 'preview') {
+          vmesh = buildVolumeBoxPreviewMesh(box, scale, offsetX, offsetY, yOffset);
+        } else {
+          return;
+        }
+        tagCategory(vmesh, 'volumeBox');
+        vmesh.userData.volumeBoxId = box.id; vmesh.userData.floorIndex = floorIdx;
+        scene.add(vmesh);
+        registry.furnitureMeshes.push(vmesh);
       });
 
       if (wallsVisible) {

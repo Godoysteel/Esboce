@@ -189,6 +189,40 @@ export interface GlazingPanel {
   sillHeightM?: number;
 }
 
+// Bloco de Volumetria (fachada procedural) — box sólido que nasce
+// solto ("preview") e pode ser arrastado até encostar numa parede
+// ("attached"), mesmo espírito de state machine do GlazingPanel acima.
+// Diferença chave: em vez de recortar a parede como um vão (a técnica
+// de banda usada por Opening/GlazingPanel), o volume PROTRAI pra fora
+// da face externa da parede — normalSign guarda de qual lado do eixo
+// da parede ele nasceu, decidido uma única vez no momento do encosto
+// (attachVolumeBoxToWall), pra saber pra que lado protrair depois.
+export type VolumeBoxState = 'preview' | 'attached';
+
+export interface VolumeBox {
+  id: string;
+  state: VolumeBoxState;
+  widthM: number;
+  heightM: number;
+  /** Profundidade da protrusão a partir da face da parede, em metros. */
+  depthM: number;
+  colorHex?: string;
+  // Posição/orientação enquanto solto (state === 'preview') — mesma
+  // unidade de grade de Wall.x1/y1 (20 = 1 metro). Deixam de ser
+  // usados assim que vira 'attached'.
+  x?: number;
+  y?: number;
+  rotationDeg?: number;
+  // Só existem quando state === 'attached':
+  wallId?: string;
+  /** Distância ao longo da parede, mesma convenção de Opening.offset. */
+  offsetM?: number;
+  /** Altura da base do volume em relação ao piso — 0 = nível do chão. */
+  sillHeightM?: number;
+  /** De qual lado do eixo da parede o volume protrai (+1 ou -1). */
+  normalSign?: 1 | -1;
+}
+
 export interface Floor {
   id: string;
   name: string;
@@ -203,6 +237,7 @@ export interface Floor {
   lajes: Laje[];
   furniture: Furniture[];
   glazingPanels: GlazingPanel[];
+  volumeBoxes: VolumeBox[];
   roomFinishes: Record<string, string>;
   roomFinishSettings?: Record<string, { scale: number; rotation: number }>;
 }

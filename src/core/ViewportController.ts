@@ -64,7 +64,7 @@ import {
   var selectedPaintRoomKey: any = null;
   var floorFinishScale = 1;
   var floorFinishRotation = 0;
-  var selectedWallId: any = null, selectedColumnId: any = null, selectedRoofId: any = null, selectedOpeningId: any = null, selectedVarandaId: any = null, selectedLajeId: any = null, selectedFurnitureId: any = null, selectedGlazingPanelId: any = null, selectedHydraulicNodeId: any = null;
+  var selectedWallId: any = null, selectedColumnId: any = null, selectedRoofId: any = null, selectedOpeningId: any = null, selectedVarandaId: any = null, selectedLajeId: any = null, selectedFurnitureId: any = null, selectedGlazingPanelId: any = null, selectedVolumeBoxId: any = null, selectedHydraulicNodeId: any = null;
   var selectedRoomWallIds: any = null; // cômodo isolado selecionado como módulo; após qualquer junção o clique volta a ser individual
   var resizeWallId: any = null; // parede em modo de deslocamento perpendicular, iniciado no primeiro clique/arraste
   var gizmoMenuOpen = false;
@@ -82,6 +82,7 @@ import {
   // dezenas de vezes por segundo. O Store só é atualizado UMA VEZ, ao
   // soltar o mouse.
   var glazingPanelDragMesh: any = null;
+  var volumeBoxDragMesh: any = null;
   var glazingResizePreview: any = null;
   var glazingResizeHiddenObject: any = null;
   // Prévia incremental do arraste de um cômodo isolado. Guardamos os
@@ -226,6 +227,12 @@ import {
     }) || null;
   }
 
+  function findVolumeBoxSceneObject(id: string) {
+    return scene.children.find(function (object: any) {
+      return object.userData && object.userData.volumeBoxId === id;
+    }) || null;
+  }
+
   function clearGlazingResizePreview() {
     if (glazingResizePreview) {
       scene.remove(glazingResizePreview);
@@ -359,6 +366,28 @@ import {
       }
     }
     return { x: panel.x || 0, y: panel.y || 0 };
+  }
+
+  // Mesma matemática de glazingPanelModelCenter, mas a posição final
+  // (attached) já inclui o deslocamento pra fora da face da parede
+  // (mesmo cálculo de buildVolumeBoxAttachedMesh) — usado pra
+  // posicionar o gizmo de fechar/excluir bem em cima do volume.
+  function volumeBoxModelCenter(box: any) {
+    if (box.state === 'attached' && box.wallId) {
+      var w = Store.findWall(box.wallId);
+      if (w) {
+        var dxW = w.x2 - w.x1, dyW = w.y2 - w.y1;
+        var lenW = Math.hypot(dxW, dyW) || 1e-6;
+        var uxW = dxW / lenW, uyW = dyW / lenW;
+        var nxW = -uyW, nyW = uxW;
+        var signW = box.normalSign === -1 ? -1 : 1;
+        var offsetModel = (box.offsetM || 0) * Core.GRID;
+        var alongX = w.x1 + uxW * offsetModel, alongY = w.y1 + uyW * offsetModel;
+        var faceDistM = (Core.WALL_THICK / 2) + (box.depthM / 2);
+        return { x: alongX + nxW * signW * faceDistM * Core.GRID, y: alongY + nyW * signW * faceDistM * Core.GRID };
+      }
+    }
+    return { x: box.x || 0, y: box.y || 0 };
   }
   function worldToModel(wx: any, wz: any) { return { x: wx / scale + offsetX, y: wz / scale + offsetY }; }
 
@@ -560,16 +589,16 @@ import {
     if (!mesh) return false;
     var editingIdx = Store.getProject().currentFloorIndex;
     if (mesh.userData.floorIndex !== editingIdx) return false;
-    return mesh.userData.category === 'paredesTerreo' || mesh.userData.category === 'paredesSuperiores' || mesh.userData.category === 'colunas' || mesh.userData.category === 'telhado' || mesh.userData.category === 'aberturas' || mesh.userData.category === 'varanda' || mesh.userData.category === 'furniture' || mesh.userData.category === 'glazingPanel' || !!mesh.userData.lajeId || !!mesh.userData.hydraulicEditable;
+    return mesh.userData.category === 'paredesTerreo' || mesh.userData.category === 'paredesSuperiores' || mesh.userData.category === 'colunas' || mesh.userData.category === 'telhado' || mesh.userData.category === 'aberturas' || mesh.userData.category === 'varanda' || mesh.userData.category === 'furniture' || mesh.userData.category === 'glazingPanel' || mesh.userData.category === 'volumeBox' || !!mesh.userData.lajeId || !!mesh.userData.hydraulicEditable;
   }
 
   function select(wallId: any) {
-    selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedWallId = wallId; gizmoMenuOpen = false;
+    selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedVolumeBoxId = null; selectedWallId = wallId; gizmoMenuOpen = false;
     if (DEBUG_COLOR_MODE && wallId) hintEl.textContent = 'Debug — parede selecionada: ' + wallId;
     render();
   }
-  function selectColumn(columnId: any) { selectedWallId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedColumnId = columnId; gizmoMenuOpen = false; render(); }
-  function selectRoof(roofId: any) { selectedWallId = null; selectedColumnId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedRoofId = roofId; gizmoMenuOpen = false; render(); }
+  function selectColumn(columnId: any) { selectedWallId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedVolumeBoxId = null; selectedColumnId = columnId; gizmoMenuOpen = false; render(); }
+  function selectRoof(roofId: any) { selectedWallId = null; selectedColumnId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedVolumeBoxId = null; selectedRoofId = roofId; gizmoMenuOpen = false; render(); }
 
   function connectedRoofIds(startId: any) {
     var selected = Store.findRoof(startId);
@@ -596,30 +625,31 @@ import {
   }
   // "Agarra" o cômodo inteiro (clique único numa parede que fecha só um
   // cômodo) — sem seleção de parede individual, sem gizmo de parede.
-  function selectRoomGroup(wallIds: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedRoomWallIds = wallIds; gizmoMenuOpen = false; render(); }
+  function selectRoomGroup(wallIds: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedVolumeBoxId = null; selectedRoomWallIds = wallIds; gizmoMenuOpen = false; render(); }
   // Porta/janela: gizmo próprio (deslizar/excluir), sempre visível assim
   // que seleciona — diferente de parede/coluna/telhado, não precisa de
   // um segundo clique (clique direito) pra "abrir o menu", porque não
   // existe aqui a ambiguidade de "agarrar o cômodo inteiro" que motivou
   // aquele gesto extra nos outros tipos.
-  function selectOpening(openingId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedOpeningId = openingId; gizmoMenuOpen = false; render(); }
+  function selectOpening(openingId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedVolumeBoxId = null; selectedOpeningId = openingId; gizmoMenuOpen = false; render(); }
   // Varanda: mesmo padrão do telhado (clique seleciona, clique direito
   // de novo abre o menu com girar/excluir).
-  function selectVaranda(varandaId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedVarandaId = varandaId; gizmoMenuOpen = false; render(); }
+  function selectVaranda(varandaId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedVolumeBoxId = null; selectedVarandaId = varandaId; gizmoMenuOpen = false; render(); }
   // Laje: mesmo padrão da varanda — clique seleciona, arraste livre nas
   // bordas (nunca trava em contorno de parede — ver DEC-35).
-  function selectLaje(lajeId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedLajeId = lajeId; gizmoMenuOpen = false; render(); }
+  function selectLaje(lajeId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedVolumeBoxId = null; selectedLajeId = lajeId; gizmoMenuOpen = false; render(); }
 
-  function selectGlazingPanel(glazingPanelId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = glazingPanelId; gizmoMenuOpen = false; openObjectPanel('glazingMaterial'); render(); }
+  function selectGlazingPanel(glazingPanelId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedVolumeBoxId = null; selectedGlazingPanelId = glazingPanelId; gizmoMenuOpen = false; openObjectPanel('glazingMaterial'); render(); }
+  function selectVolumeBox(volumeBoxId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedVolumeBoxId = volumeBoxId; gizmoMenuOpen = false; render(); }
   // Móvel: mesmo padrão da coluna (clique seleciona e já mostra o gizmo
   // completo — girar/duplicar/excluir — sem precisar de segundo clique).
-  function selectFurniture(furnitureId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedGlazingPanelId = null; selectedFurnitureId = furnitureId; gizmoMenuOpen = false; render(); }
-  function selectHydraulicNode(hydraulicNodeId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedHydraulicNodeId = hydraulicNodeId; gizmoMenuOpen = true; render(); }
+  function selectFurniture(furnitureId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedGlazingPanelId = null; selectedVolumeBoxId = null; selectedFurnitureId = furnitureId; gizmoMenuOpen = false; render(); }
+  function selectHydraulicNode(hydraulicNodeId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedVolumeBoxId = null; selectedHydraulicNodeId = hydraulicNodeId; gizmoMenuOpen = true; render(); }
   function deselect() {
     commitRoomGroupIfNeeded(); // "clicou fora do objeto" — decide agora se funde
     var leavingRoof = selectedRoofId ? Store.findRoof(selectedRoofId) : null;
     if (leavingRoof && leavingRoof.atticMode === 'preview') pendingGenerateRoofId = leavingRoof.id;
-    selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedHydraulicNodeId = null;
+    selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedVolumeBoxId = null; selectedHydraulicNodeId = null;
     if (generateAtticBtnEl) generateAtticBtnEl.classList.toggle('visible', !!pendingGenerateRoofId);
     gizmoMenuOpen = false; closeObjectPanel(); render();
   }
@@ -971,6 +1001,26 @@ import {
     }
     roomGizmoEl.classList.remove('visible');
 
+    // Bloco de Volumetria: mesmo raciocínio do painel de Envidraçamento
+    // acima — gizmo próprio (roomGizmoEl reaproveitado), só fechar/
+    // excluir, sempre visível.
+    if (selectedVolumeBoxId) {
+      var vbSel = Store.findVolumeBox(selectedVolumeBoxId);
+      if (!vbSel) {
+        selectedVolumeBoxId = null;
+        roomGizmoEl.classList.remove('visible');
+      } else {
+        var centerVb = volumeBoxModelCenter(vbSel);
+        var wpVb = modelToWorld(centerVb.x, centerVb.y);
+        var topYVb = currentFloorYOffset() + (vbSel.sillHeightM || 0) + vbSel.heightM + 0.15;
+        positionFloatingPanel(roomGizmoEl, wpVb.x, topYVb, wpVb.z, 0);
+        roomGizmoEl.classList.add('visible');
+      }
+      gizmoEl.classList.remove('visible'); columnShapePanelEl.classList.remove('visible'); roofTypePanelEl.classList.remove('visible');
+      return;
+    }
+    roomGizmoEl.classList.remove('visible');
+
     // Cômodo "agarrado" inteiro (clique único numa parede que fecha só
     // um cômodo — ver selectRoomGroup): gizmo próprio, só com excluir,
     // também sempre visível (mesmo raciocínio da esquadria — não tem a
@@ -1052,7 +1102,7 @@ import {
     // genérico reaproveitado, sem painel extra próprio).
     if (selectedFurnitureId) {
       var fItem = Store.findFurniture(selectedFurnitureId);
-      if (!fItem) { selectedFurnitureId = null; selectedGlazingPanelId = null; gizmoEl.classList.remove('visible'); return; }
+      if (!fItem) { selectedFurnitureId = null; selectedGlazingPanelId = null; selectedVolumeBoxId = null; gizmoEl.classList.remove('visible'); return; }
       var midF = modelToWorld(fItem.x, fItem.y);
       positionFloatingPanel(gizmoEl, midF.x, yOffset + Scene3DRenderer.FLOOR_STACK_HEIGHT_GETTER(), midF.z, 0);
       gizmoEl.classList.add('visible');
@@ -1168,7 +1218,7 @@ import {
   }
 
   function render() {
-    if (selectedHydraulicNodeId && (selectedWallId || selectedColumnId || selectedRoofId || selectedOpeningId || selectedVarandaId || selectedLajeId || selectedFurnitureId || selectedGlazingPanelId || selectedRoomWallIds)) selectedHydraulicNodeId = null;
+    if (selectedHydraulicNodeId && (selectedWallId || selectedColumnId || selectedRoofId || selectedOpeningId || selectedVarandaId || selectedLajeId || selectedFurnitureId || selectedGlazingPanelId || selectedVolumeBoxId || selectedRoomWallIds)) selectedHydraulicNodeId = null;
     var project = Store.getProject();
     var selectedWall = selectedWallId ? Store.findWall(selectedWallId) : null;
     var selectedColumn = selectedColumnId ? Store.findColumn(selectedColumnId) : null;
@@ -1206,6 +1256,7 @@ import {
     if (selectedVarandaId && !Store.findVaranda(selectedVarandaId)) selectedVarandaId = null;
     if (selectedLajeId && !Store.findLaje(selectedLajeId)) selectedLajeId = null;
     if (selectedGlazingPanelId && !Store.findGlazingPanel(selectedGlazingPanelId)) selectedGlazingPanelId = null;
+    if (selectedVolumeBoxId && !Store.findVolumeBox(selectedVolumeBoxId)) selectedVolumeBoxId = null;
     if (selectedHydraulicNodeId && !Store.findHydraulicNode(selectedHydraulicNodeId)) selectedHydraulicNodeId = null;
     if (resizeWallId && !Store.findWall(resizeWallId)) resizeWallId = null;
     if (selectedRoomWallIds) {
@@ -2462,6 +2513,21 @@ import {
             glazingPanelDragMesh = findGlazingPanelSceneObject(glazingPanelId);
             Store.commands.beginTransaction();
           }
+        } else if (mesh.userData.volumeBoxId) {
+          // Bloco de Volumetria: mesmo raciocínio do painel de
+          // Envidraçamento acima — solto (preview) arrasta livre, já
+          // anexado (attached) só seleciona (pra dar acesso ao gizmo
+          // de excluir; reposicionar ao longo da parede fica pra depois).
+          var volumeBoxId = mesh.userData.volumeBoxId;
+          var vbEnt = Store.findVolumeBox(volumeBoxId)!;
+          selectVolumeBox(volumeBoxId);
+          if (vbEnt.state === 'preview') {
+            dragMode = 'volumeBoxBody';
+            dragElementStart = { x: vbEnt.x || 0, y: vbEnt.y || 0 };
+            dragGroundStart = getGroundModelPoint(e.clientX, e.clientY);
+            volumeBoxDragMesh = findVolumeBoxSceneObject(volumeBoxId);
+            Store.commands.beginTransaction();
+          }
         } else if (mesh.userData.openingId) {
           // Esquadria: arrasta livre (sem "segundo clique pra abrir
           // menu") desliza ao longo do EIXO da própria parede — mesma
@@ -2596,6 +2662,27 @@ import {
     var p = Store.findGlazingPanel(glazingPanelId);
     if (!p || p.state !== 'preview') return null;
     var px = p.x || 0, py = p.y || 0;
+    var walls = Store.currentWalls();
+    var bestId: string | null = null, bestDist = GLAZING_ATTACH_TOLERANCE_MODEL;
+    walls.forEach(function (w: any) {
+      var dx = w.x2 - w.x1, dy = w.y2 - w.y1;
+      var lenSq = dx * dx + dy * dy;
+      if (lenSq < 1e-9) return;
+      var t = Math.max(0, Math.min(1, ((px - w.x1) * dx + (py - w.y1) * dy) / lenSq));
+      var projX = w.x1 + dx * t, projY = w.y1 + dy * t;
+      var dist = Math.hypot(px - projX, py - projY);
+      if (dist < bestDist) { bestDist = dist; bestId = w.id; }
+    });
+    return bestId;
+  }
+
+  // Mesmo ímã de encosto, reaproveitado pro Bloco de Volumetria — a
+  // mesma tolerância e a mesma matemática de menor distância perpendicular
+  // até o segmento da parede.
+  function nearestWallForVolumeBoxAttach(volumeBoxId: any): string | null {
+    var b = Store.findVolumeBox(volumeBoxId);
+    if (!b || b.state !== 'preview') return null;
+    var px = b.x || 0, py = b.y || 0;
     var walls = Store.currentWalls();
     var bestId: string | null = null, bestDist = GLAZING_ATTACH_TOLERANCE_MODEL;
     walls.forEach(function (w: any) {
@@ -2937,6 +3024,19 @@ import {
         var wpG = modelToWorld(liveXG, liveYG);
         glazingPanelDragMesh.position.x = wpG.x;
         glazingPanelDragMesh.position.z = wpG.z;
+      }
+      return;
+    }
+    if (dragMode === 'volumeBoxBody') {
+      // Mesmo raciocínio de performance do painel de Envidraçamento
+      // acima — só move o mesh visual direto durante o arraste.
+      var vbG = getGroundModelPoint(e.clientX, e.clientY);
+      if (vbG && dragGroundStart && volumeBoxDragMesh) {
+        var dxVb = vbG.x - dragGroundStart.x, dyVb = vbG.y - dragGroundStart.y;
+        var liveXVb = dragElementStart.x + dxVb, liveYVb = dragElementStart.y + dyVb;
+        var wpVb = modelToWorld(liveXVb, liveYVb);
+        volumeBoxDragMesh.position.x = wpVb.x;
+        volumeBoxDragMesh.position.z = wpVb.z;
       }
       return;
     }
@@ -3398,6 +3498,25 @@ import {
       if (gpId) {
         var nearWallId = nearestWallForGlazingAttach(gpId);
         if (nearWallId) Store.commands.attachGlazingPanelToWall(gpId, nearWallId);
+      }
+      return;
+    }
+    if (dragMode === 'volumeBoxBody') {
+      // Mesmo padrão do painel de Envidraçamento — uma única
+      // atualização de Store, com o ímã de encosto rodando por último.
+      var vbId = selectedVolumeBoxId;
+      if (vbId && dragElementStart && dragGroundStart) {
+        var vbUp = getGroundModelPoint(e.clientX, e.clientY);
+        if (vbUp) {
+          var dxVbUp = vbUp.x - dragGroundStart.x, dyVbUp = vbUp.y - dragGroundStart.y;
+          Store.commands.updateVolumeBoxBodyLive(vbId, dragElementStart.x + dxVbUp, dragElementStart.y + dyVbUp);
+        }
+      }
+      dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
+      volumeBoxDragMesh = null;
+      if (vbId) {
+        var nearWallIdVb = nearestWallForVolumeBoxAttach(vbId);
+        if (nearWallIdVb) Store.commands.attachVolumeBoxToWall(vbId, nearWallIdVb);
       }
       return;
     }
@@ -4188,6 +4307,32 @@ import {
         : 'Não foi possível criar o painel de Fachada.';
       return;
     }
+    if (key === 'volumetria') {
+      // Bloco de Volumetria — mesmo padrão de nascimento solto do
+      // painel de Envidraçamento acima (perto do que já existe, com
+      // 1m de vão). Arraste até perto de uma parede pra encostar
+      // (ímã automático) — ver nearestWallForVolumeBoxAttach/
+      // attachVolumeBoxToWall. Diferente do painel, não recorta a
+      // parede: protrai pra fora dela (ver
+      // Scene3DRenderer.buildVolumeBoxAttachedMesh).
+      var wallsV = Store.currentWalls();
+      var minXv = Infinity, maxXv = -Infinity, minYv = Infinity;
+      wallsV.forEach(function (w) {
+        [[w.x1, w.y1], [w.x2, w.y2]].forEach(function (p: any) {
+          if (p[0] < minXv) minXv = p[0]; if (p[0] > maxXv) maxXv = p[0];
+          if (p[1] < minYv) minYv = p[1];
+        });
+      });
+      var gapV = 1 * Core.GRID;
+      var gxV = isFinite(maxXv) ? maxXv + gapV : 0;
+      var gyV = isFinite(minYv) ? minYv : 0;
+      deselect();
+      var newBox = Store.commands.createVolumeBox(gxV, gyV);
+      hintEl.textContent = newBox
+        ? 'Volume criado — arraste o corpo dele até perto de uma parede pra encostar.'
+        : 'Não foi possível criar o volume.';
+      return;
+    }
     var preset = ROOM_PRESETS[key];
     if (!preset) return;
     var rect = computeNextRoomSlot(preset.widthM, preset.depthM);
@@ -4408,7 +4553,7 @@ import {
     });
     document.querySelectorAll('[data-room-preset]').forEach(function (btn: any) {
       btn.addEventListener('click', function () {
-        if (btn.dataset.roomPreset !== 'varanda' && btn.dataset.roomPreset !== 'laje' && btn.dataset.roomPreset !== 'glazing' && !requireLajeBelowOrHint()) return;
+        if (btn.dataset.roomPreset !== 'varanda' && btn.dataset.roomPreset !== 'laje' && btn.dataset.roomPreset !== 'glazing' && btn.dataset.roomPreset !== 'volumetria' && !requireLajeBelowOrHint()) return;
         placeRoomPreset(btn.dataset.roomPreset);
       });
     });
@@ -4448,6 +4593,7 @@ import {
   export function getSelectedLajeId() { return selectedLajeId; }
   export function getSelectedFurnitureId() { return selectedFurnitureId; }
   export function getSelectedGlazingPanelId() { return selectedGlazingPanelId; }
+  export function getSelectedVolumeBoxId() { return selectedVolumeBoxId; }
   export function getSelectedHydraulicNodeId() { return selectedHydraulicNodeId; }
   export function getSelectedRoomWallIds() { return selectedRoomWallIds; }
   export function setNextRoofAtticMode(enabled: boolean) { pendingRoofAttic = enabled; }
@@ -4456,9 +4602,9 @@ import {
 // Scene3DRenderer.ts (chamadas ViewportController.xxx no código legado).
 export const ViewportController = {
   init, render, onModelChanged, deselect,
-  select, selectColumn, selectRoof, selectOpening, selectVaranda, selectFurniture, selectGlazingPanel, selectHydraulicNode, beginHydraulicRouteDraw,
+  select, selectColumn, selectRoof, selectOpening, selectVaranda, selectFurniture, selectGlazingPanel, selectVolumeBox, selectHydraulicNode, beginHydraulicRouteDraw,
   getSelectedWallId, getSelectedColumnId, getSelectedRoofId,
-  getSelectedOpeningId, getSelectedVarandaId, getSelectedLajeId, getSelectedFurnitureId, getSelectedGlazingPanelId, getSelectedHydraulicNodeId, getSelectedRoomWallIds,
+  getSelectedOpeningId, getSelectedVarandaId, getSelectedLajeId, getSelectedFurnitureId, getSelectedGlazingPanelId, getSelectedVolumeBoxId, getSelectedHydraulicNodeId, getSelectedRoomWallIds,
   setNextRoofAtticMode, toggleDimensions,
   toggleWallDiagnostics,
   resetCamera,

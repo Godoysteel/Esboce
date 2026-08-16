@@ -82,6 +82,16 @@ function handleGlazingPanelAction(glazingPanelId: string, action: string): void 
   if (action === 'delete') { Store.commands.deleteGlazingPanel(glazingPanelId); ViewportController.deselect(); return; }
 }
 
+// Bloco de Volumetria — mesmo espírito do painel de Envidraçamento
+// acima: só close/delete, sem girar nem duplicar (nasce pelo botão
+// "Volumetria" do container Fachada, um de cada vez).
+function handleVolumeBoxAction(volumeBoxId: string, action: string): void {
+  const b = Store.findVolumeBox(volumeBoxId);
+  if (!b) return;
+  if (action === 'close') { ViewportController.deselect(); return; }
+  if (action === 'delete') { Store.commands.deleteVolumeBox(volumeBoxId); ViewportController.deselect(); return; }
+}
+
 // Móvel: girar (90° por clique)/duplicar/excluir. Mover é só arrasto
 // livre direto na peça (ver ViewportController — dragMode
 // 'furnitureBody'); os botões de seta não fazem sentido aqui porque o
@@ -197,6 +207,9 @@ export function init(): void {
 
     const glazingPanelId = ViewportController.getSelectedGlazingPanelId();
     if (glazingPanelId) { handleGlazingPanelAction(glazingPanelId, action); return; }
+
+    const volumeBoxId = ViewportController.getSelectedVolumeBoxId();
+    if (volumeBoxId) { handleVolumeBoxAction(volumeBoxId, action); return; }
 
     const wallIds = ViewportController.getSelectedRoomWallIds();
     if (!wallIds || !wallIds.length) return;

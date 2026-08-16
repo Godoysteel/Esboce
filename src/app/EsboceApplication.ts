@@ -314,6 +314,23 @@ export class EsboceApplication {
     const orbitBtn = this.requireElement("viewModeOrbitBtn");
     const view3DBtn = this.requireElement("viewMode3DBtn");
     const view2DBtn = this.requireElement("viewMode2DBtn");
+    // Botão-mestre "Fachada" — abre/fecha o container de sub-ferramentas
+    // (Envidraçamento/Volumetria/Ornamentos/Brises) em acordeão dentro
+    // da própria barra lateral, mesmo espírito de toggle do botão de
+    // Hidráulica (hydraulicsBtn) abaixo, só que sem painel flutuante —
+    // o container nasce logo abaixo do botão no fluxo normal da lista,
+    // então não precisa de posicionamento calculado.
+    const fachadaToggleBtn = document.getElementById('fachadaToggleBtn');
+    const fachadaFlyout = document.getElementById('fachadaFlyout');
+    if (fachadaToggleBtn && fachadaFlyout) {
+      fachadaToggleBtn.addEventListener('click', () => {
+        const willOpen = !fachadaFlyout.classList.contains('visible');
+        fachadaFlyout.classList.toggle('visible', willOpen);
+        fachadaFlyout.setAttribute('aria-hidden', String(!willOpen));
+        fachadaToggleBtn.classList.toggle('active', willOpen);
+        fachadaToggleBtn.setAttribute('aria-expanded', String(willOpen));
+      });
+    }
     const hydraulicsBtn = this.requireElement("hydraulicsBtn");
     const hydraulicToolsPanel = document.getElementById('hydraulicToolsPanel');
     if (hydraulicToolsPanel) {

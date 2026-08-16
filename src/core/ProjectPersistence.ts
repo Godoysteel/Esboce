@@ -1,5 +1,5 @@
 import type {
-  Column, Floor, Furniture, GlazingPanel, HydraulicNode, HydraulicSegment, Laje, Opening, Project, ProjectLayers, Roof, Terreno, Varanda, Wall,
+  Column, Floor, Furniture, GlazingPanel, VolumeBox, HydraulicNode, HydraulicSegment, Laje, Opening, Project, ProjectLayers, Roof, Terreno, Varanda, Wall,
 } from './types.js';
 
 // v6: adiciona `project.terreno` (opcional) — tamanho do lote e muros de
@@ -261,6 +261,35 @@ function parseGlazingPanel(value: unknown, path: string): GlazingPanel {
   return panel;
 }
 
+function parseVolumeBox(value: unknown, path: string): VolumeBox {
+  const v = record(value, path);
+  const box: VolumeBox = {
+    id: string(v.id, `${path}.id`),
+    state: enumValue(v.state, ['preview', 'attached'], `${path}.state`, 'preview'),
+    widthM: number(v.widthM, `${path}.widthM`),
+    heightM: number(v.heightM, `${path}.heightM`),
+    depthM: number(v.depthM, `${path}.depthM`, 0.3),
+  };
+  const colorHex = optionalString(v.colorHex, `${path}.colorHex`);
+  const wallId = optionalString(v.wallId, `${path}.wallId`);
+  const offsetM = optionalNumber(v.offsetM, `${path}.offsetM`);
+  const sillHeightM = optionalNumber(v.sillHeightM, `${path}.sillHeightM`);
+  const x = optionalNumber(v.x, `${path}.x`);
+  const y = optionalNumber(v.y, `${path}.y`);
+  const rotationDeg = optionalNumber(v.rotationDeg, `${path}.rotationDeg`);
+  const normalSign = optionalNumber(v.normalSign, `${path}.normalSign`);
+  if (colorHex !== undefined) box.colorHex = colorHex;
+  if (wallId !== undefined) box.wallId = wallId;
+  if (offsetM !== undefined) box.offsetM = offsetM;
+  if (sillHeightM !== undefined) box.sillHeightM = sillHeightM;
+  if (x !== undefined) box.x = x;
+  if (y !== undefined) box.y = y;
+  if (rotationDeg !== undefined) box.rotationDeg = rotationDeg;
+  if (normalSign !== undefined) box.normalSign = normalSign < 0 ? -1 : 1;
+  if (box.state === 'attached' && !box.wallId) fail(`${path}.wallId`, 'volume anexado precisa de parede hospedeira');
+  return box;
+}
+
 function parseFurniture(value: unknown, path: string): Furniture {
   const v = record(value, path);
   return {
@@ -307,6 +336,7 @@ function parseFloor(value: unknown, path: string): Floor {
     lajes: array(v.lajes, `${path}.lajes`, true).map((item, i) => parseLaje(item, `${path}.lajes[${i}]`)),
     furniture: array(v.furniture, `${path}.furniture`, true).map((item, i) => parseFurniture(item, `${path}.furniture[${i}]`)),
     glazingPanels: array(v.glazingPanels, `${path}.glazingPanels`, true).map((item, i) => parseGlazingPanel(item, `${path}.glazingPanels[${i}]`)),
+    volumeBoxes: array(v.volumeBoxes, `${path}.volumeBoxes`, true).map((item, i) => parseVolumeBox(item, `${path}.volumeBoxes[${i}]`)),
     roomFinishes: stringMap(v.roomFinishes, `${path}.roomFinishes`),
     roomFinishSettings: settingsMap(v.roomFinishSettings, `${path}.roomFinishSettings`),
   };
@@ -318,7 +348,10 @@ function parseFloor(value: unknown, path: string): Floor {
   floor.glazingPanels.forEach((panel, index) => {
     if (panel.wallId && !wallIds.has(panel.wallId)) fail(`${path}.glazingPanels[${index}].wallId`, 'parede hospedeira não existe');
   });
-  const ids = [...floor.walls, ...floor.columns, ...floor.roofs, ...floor.openings, ...floor.varandas, ...floor.lajes, ...floor.furniture, ...floor.glazingPanels].map((item) => item.id);
+  floor.volumeBoxes.forEach((box, index) => {
+    if (box.wallId && !wallIds.has(box.wallId)) fail(`${path}.volumeBoxes[${index}].wallId`, 'parede hospedeira não existe');
+  });
+  const ids = [...floor.walls, ...floor.columns, ...floor.roofs, ...floor.openings, ...floor.varandas, ...floor.lajes, ...floor.furniture, ...floor.glazingPanels, ...floor.volumeBoxes].map((item) => item.id);
   if (new Set(ids).size !== ids.length) fail(path, 'há identificadores de entidades duplicados');
   return floor;
 }

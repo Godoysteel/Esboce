@@ -9,7 +9,7 @@ import { buildColdWaterKitchenPrototype, buildColdWaterNetworkFromFixtures, buil
 import type {
   Project, Floor, Wall, Column, Roof, Opening, OpeningKind, Varanda, Laje, Furniture, ColumnShape, RoofType,
   RidgeAxis, VarandaFrontSide, FoundationType, StoreEvent, StoreListener,
-  WallSnapshot, LinkedWallUpdate, GlazingPanel, GlazingGlassMaterial, Terreno, TerrenoMuroSide
+  WallSnapshot, LinkedWallUpdate, GlazingPanel, GlazingGlassMaterial, VolumeBox, Terreno, TerrenoMuroSide
 } from './types.js';
 
 let project: Project = Core.createProject();
@@ -116,6 +116,21 @@ export function findLaje(id: string): Laje | null {
 export function findGlazingPanel(id: string): GlazingPanel | null {
   const panels = currentGlazingPanels();
   for (let i = 0; i < panels.length; i++) if (panels[i]!.id === id) return panels[i]!;
+  return null;
+}
+
+export function currentVolumeBoxes(): VolumeBox[] {
+  const f = currentFloor();
+  if (!f.volumeBoxes) f.volumeBoxes = [];
+  return f.volumeBoxes;
+}
+export function volumeBoxesOfFloor(floor: Floor): VolumeBox[] {
+  if (!floor.volumeBoxes) floor.volumeBoxes = [];
+  return floor.volumeBoxes;
+}
+export function findVolumeBox(id: string): VolumeBox | null {
+  const boxes = currentVolumeBoxes();
+  for (let i = 0; i < boxes.length; i++) if (boxes[i]!.id === id) return boxes[i]!;
   return null;
 }
 export function currentFurniture(): Furniture[] {
@@ -1177,6 +1192,63 @@ export const commands = {
     emit({ type: 'GlazingPanelDeleted', glazingPanelId });
   },
 
+  // Bloco de Volumetria (fachada procedural) — mesmo ciclo de vida do
+  // painel de Envidraçamento (createGlazingPanel/attachGlazingPanelToWall
+  // acima): nasce solto (state 'preview'), arrasta livre, e ao soltar
+  // perto o bastante de uma parede vira 'attached' (wallId + offsetM).
+  // Diferença: em vez de recortar a parede como um vão, o volume
+  // PROTRAI pra fora da face dela — por isso guarda normalSign (de que
+  // lado do eixo da parede protrair), decidido uma única vez aqui, a
+  // partir de que lado o centro do volume estava ao soltar o arraste.
+  createVolumeBox(x: number, y: number): VolumeBox | null {
+    pushUndoSnapshot();
+    const b = Core.createVolumeBoxEntity(x, y);
+    currentVolumeBoxes().push(b);
+    emit({ type: 'VolumeBoxCreated', floorIndex: project.currentFloorIndex, volumeBoxId: b.id });
+    return b;
+  },
+
+  updateVolumeBoxBodyLive(volumeBoxId: string, x: number, y: number): void {
+    const b = findVolumeBox(volumeBoxId); if (!b || b.state !== 'preview') return;
+    b.x = x; b.y = y;
+    emit({ type: 'VolumeBoxMoved', volumeBoxId, live: true });
+  },
+
+  attachVolumeBoxToWall(volumeBoxId: string, wallId: string): void {
+    const b = findVolumeBox(volumeBoxId); if (!b || b.state !== 'preview') return;
+    const w = findWall(wallId); if (!w) return;
+    const wallLenM = Core.wallLengthMeters(w);
+    if (wallLenM < 1e-6) return;
+    pushUndoSnapshot();
+    const widthM = Math.min(b.widthM, wallLenM);
+    const ux = (w.x2 - w.x1) / (wallLenM * Core.GRID), uy = (w.y2 - w.y1) / (wallLenM * Core.GRID);
+    const rawOffsetM = (((b.x ?? w.x1) - w.x1) * ux + ((b.y ?? w.y1) - w.y1) * uy) / Core.GRID;
+    const offsetM = Math.max(widthM / 2, Math.min(wallLenM - widthM / 2, rawOffsetM));
+    // Lado do eixo da parede em que o volume estava ao soltar — mesmo
+    // teste de sinal (produto vetorial 2D) usado em
+    // findRoomsAdjacentToOpening pra decidir de que lado de uma parede
+    // um cômodo fica.
+    const nx = -uy, ny = ux;
+    const projX = w.x1 + ux * rawOffsetM * Core.GRID, projY = w.y1 + uy * rawOffsetM * Core.GRID;
+    const side = ((b.x ?? projX) - projX) * nx + ((b.y ?? projY) - projY) * ny;
+    b.state = 'attached';
+    b.widthM = widthM;
+    b.wallId = wallId; b.offsetM = offsetM; b.sillHeightM = 0;
+    b.normalSign = side < 0 ? -1 : 1;
+    delete b.x; delete b.y; delete b.rotationDeg;
+    emit({ type: 'VolumeBoxAttached', volumeBoxId, wallId });
+  },
+
+  deleteVolumeBox(volumeBoxId: string): void {
+    const list = currentVolumeBoxes();
+    let idx = -1;
+    for (let i = 0; i < list.length; i++) if (list[i]!.id === volumeBoxId) { idx = i; break; }
+    if (idx < 0) return;
+    pushUndoSnapshot();
+    list.splice(idx, 1);
+    emit({ type: 'VolumeBoxDeleted', volumeBoxId });
+  },
+
   // Móvel: mesmo padrão de Coluna — um único ponto (x,y), arrastável
   // livremente, mais rotação em passos de 90°. productId aponta pro
   // Catalog (categoria 'furniture'), que resolve qual .glb carregar.
@@ -1379,6 +1451,7 @@ export const Store = {
   currentVarandas,
   currentLajes,
   currentGlazingPanels,
+  currentVolumeBoxes,
   currentFurniture,
   findWall,
   findColumn,
@@ -1387,6 +1460,7 @@ export const Store = {
   findVaranda,
   findLaje,
   findGlazingPanel,
+  findVolumeBox,
   findFurniture,
   findHydraulicNode,
   currentTerreno,
