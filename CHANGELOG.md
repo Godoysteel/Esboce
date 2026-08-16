@@ -1,6 +1,10 @@
 # Changelog
 
-> Corrigido: catálogo do fornecedor "O Mercador" — as tintas do Mercador estavam numa aba separada ("Tintas e Vernizes") da aba "Tintas" que já existia com produtos genéricos, e vaso sanitário/torneira/chuveiro/cuba (152 produtos) estavam dentro de "Hidráulica" em vez do departamento "Louças e Metais" que já existia pra isso. Ver DEC-85 (correção pós-lançamento).
+> Corrigido: catálogo de produtos — a busca de produtos não tinha paginação e ficava sujeita ao limite de "Max Rows" do Supabase (1000 por padrão), cortando produtos de departamentos inteiros silenciosamente sempre que o catálogo passasse desse total. Agora busca em páginas, sem depender de configurar esse limite manualmente. Ver DEC-85 (correção pós-lançamento nº3).
+
+> Corrigido: catálogo do fornecedor "O Mercador" — os produtos reclassificados pra "Tintas" e "Louças e Metais" (departamentos que já existiam) tinham ficado sem vínculo nenhum de departamento, então sumiam do catálogo por completo. Ver DEC-85 (correção pós-lançamento nº2).
+
+> Corrigido: catálogo do fornecedor "O Mercador" — as tintas do Mercador estavam numa aba separada ("Tintas e Vernizes") da aba "Tintas" que já existia com produtos genéricos, e vaso sanitário/torneira/chuveiro/cuba (152 produtos) estavam dentro de "Hidráulica" em vez do departamento "Louças e Metais" que já existia pra isso. Ver DEC-85 (correção pós-lançamento nº1).
 
 > Adicionado: catálogo do fornecedor "O Mercador" — 2.119 produtos triados (de um catálogo de origem com 6.081 itens) com relação direta com orçamento de obra: Hidráulica, Elétrica, Tintas e Vernizes, Pisos e Revestimentos, Cimento e Argamassa, Cobertura, Esquadrias e Ferragens, Impermeabilização, Ferro e Aço, Tijolos e Blocos, Areia/Brita/Agregados e Madeiras. Ferramentas, abrasivos, EPI, fixação avulsa e itens sem relação com construção ficaram de fora. Ver DEC-85.
 

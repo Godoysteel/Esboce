@@ -281,19 +281,45 @@ export async function listManufacturers(): Promise<CatalogManufacturer[]> {
   return (data ?? []) as CatalogManufacturer[];
 }
 
+// Busca TODAS as linhas de products, em páginas — o Supabase corta
+// qualquer resposta em "Max Rows" (configurado no projeto, ver Project
+// Settings > API), silenciosamente: a query não erra, só devolve menos
+// linhas do que existem. Um catálogo com mais produtos que esse limite
+// (ex.: depois da carga do fornecedor "O Mercador", ver DEC-85 — correção
+// pós-lançamento) fazia sumir produtos de departamentos inteiros sem
+// nenhum aviso. Paginar aqui garante o resultado completo independente
+// de quantas linhas a tabela tiver, sem depender de aumentar Max Rows
+// manualmente a cada vez que o catálogo crescer.
+const CATALOG_PAGE_SIZE = 1000;
+async function fetchAllProductRows(): Promise<any[]> {
+  const rows: any[] = [];
+  let from = 0;
+  for (;;) {
+    const { data, error } = await supabase
+      .from('products')
+      .select('id, manufacturer_id, categoria, nome, sku, preco, unidade, specs, foto_url, origem')
+      .eq('ativo', true)
+      .range(from, from + CATALOG_PAGE_SIZE - 1);
+    if (error) throw error;
+    rows.push(...(data ?? []));
+    if (!data || data.length < CATALOG_PAGE_SIZE) break; // última página
+    from += CATALOG_PAGE_SIZE;
+  }
+  return rows;
+}
+
 // Devolve todos os produtos ativos, já com o department_id resolvido
 // (via category_departments) — pra montar a vitrine sem precisar de 3
 // idas e vindas separadas no app.
 export interface CatalogProductWithDepartment extends CatalogProduct { department_id: string | null; }
 export async function listCatalogProducts(): Promise<CatalogProductWithDepartment[]> {
-  const [{ data: products, error: productsError }, { data: mappings, error: mappingsError }] = await Promise.all([
-    supabase.from('products').select('id, manufacturer_id, categoria, nome, sku, preco, unidade, specs, foto_url, origem').eq('ativo', true),
+  const [products, { data: mappings, error: mappingsError }] = await Promise.all([
+    fetchAllProductRows(),
     supabase.from('category_departments').select('categoria, department_id'),
   ]);
-  if (productsError) throw productsError;
   if (mappingsError) throw mappingsError;
   const categoryToDept = new Map((mappings ?? []).map((m: any) => [m.categoria, m.department_id]));
-  return (products ?? []).map((p: any) => ({ ...p, department_id: categoryToDept.get(p.categoria) ?? null })) as CatalogProductWithDepartment[];
+  return products.map((p: any) => ({ ...p, department_id: categoryToDept.get(p.categoria) ?? null })) as CatalogProductWithDepartment[];
 }
 
 // O aceite é versionado: uma nova versão dos documentos pode exigir
