@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { Core } from "../core/Core.js";
+import { readPlanFile } from "../core/PlanImport.js";
 import { FloorTabsController } from "../core/FloorTabsController.js";
 import { GizmoController } from "../core/GizmoController.js";
 import { LayersPanel } from "../core/LayersPanel.js";
@@ -329,6 +330,45 @@ export class EsboceApplication {
         fachadaFlyout.setAttribute('aria-hidden', String(!willOpen));
         fachadaToggleBtn.classList.toggle('active', willOpen);
         fachadaToggleBtn.setAttribute('aria-expanded', String(willOpen));
+      });
+    }
+    // Importar Planta Baixa — botão dispara o <input type="file"> oculto;
+    // aceita imagem direto ou PDF (primeira página, rasterizada via
+    // pdfjs-dist em PlanImport.ts). Nasce centrada na caixa delimitadora
+    // das paredes já existentes no pavimento atual (ou na origem, se o
+    // pavimento ainda estiver vazio) — mesmo espírito de "gap perto do
+    // que já existe" usado pelos presets de cômodo/Fachada.
+    const importPlanUnderlayBtn = document.getElementById('importPlanUnderlayBtn');
+    const planUnderlayFileInput = document.getElementById('planUnderlayFileInput') as HTMLInputElement | null;
+    if (importPlanUnderlayBtn && planUnderlayFileInput) {
+      importPlanUnderlayBtn.addEventListener('click', () => planUnderlayFileInput.click());
+      planUnderlayFileInput.addEventListener('change', async () => {
+        const file = planUnderlayFileInput.files?.[0];
+        planUnderlayFileInput.value = ''; // permite reimportar o mesmo arquivo depois
+        if (!file) return;
+        this.requireElement('viewportHint').textContent = 'Importando planta baixa...';
+        try {
+          const { dataUrl, aspect } = await readPlanFile(file);
+          const walls = Store.currentWalls();
+          let x = 0, y = 0;
+          if (walls.length) {
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+            walls.forEach((w) => {
+              ([[w.x1, w.y1], [w.x2, w.y2]] as const).forEach((p) => {
+                if (p[0] < minX) minX = p[0]; if (p[0] > maxX) maxX = p[0];
+                if (p[1] < minY) minY = p[1]; if (p[1] > maxY) maxY = p[1];
+              });
+            });
+            x = (minX + maxX) / 2; y = (minY + maxY) / 2;
+          }
+          Store.commands.setPlanUnderlay(dataUrl, aspect, x, y);
+          ViewportController.selectPlanUnderlay();
+          this.requireElement('viewportHint').textContent =
+            'Planta importada — use os botões do menu dela pra mover, girar e escalar até bater com o tamanho real (compare com uma parede já desenhada ou uma medida conhecida).';
+        } catch (err) {
+          this.requireElement('viewportHint').textContent =
+            err instanceof Error ? err.message : 'Não foi possível importar essa planta.';
+        }
       });
     }
     const hydraulicsBtn = this.requireElement("hydraulicsBtn");

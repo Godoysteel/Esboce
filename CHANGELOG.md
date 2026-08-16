@@ -1,5 +1,13 @@
 # Changelog
 
+> Adicionado: importar planta baixa (imagem ou PDF) como referência visual no chão do pavimento na vista 3D — clique em "Importar planta", solte a imagem/PDF, e ela aparece deitada no chão, pronta pra desenhar as paredes por cima. Mover/girar/escalar (mantendo a proporção) pelo menu que aparece depois de importar. Ver DEC-82.
+
+> Corrigido: Volumetria — o encosto na parede tinha tolerância apertada (1m) e nenhum aviso de sucesso/falha, o que fazia parecer que não funcionava; aumentada pra 1,5m e agora avisa no rodapé se encostou ou não. Também corrigido um bug que zerava a seleção do volume a cada mudança no modelo.
+
+> Adicionado: gizmo próprio do volume (Volumetria) com botões de subir/descer (altura em relação ao chão) e aumentar/diminuir largura e altura do próprio volume, em passos de 0,1m.
+
+> Adicionado: seção "Fachada" reestruturada na barra lateral — botão-mestre que abre um container com Envidraçamento, Volumetria, Ornamentos (em breve) e Brises (em breve). Nova ferramenta "Volumetria": cria um bloco sólido (1x1x0,3m) que nasce solto, arrasta livre e encosta numa parede (protrai pra fora dela, sem recortar). Ver DEC-81.
+
 > Adicionado: novo botão de cômodo "Área de Circulação" (1x1m) na barra lateral, junto dos demais (Banheiro, Quarto, Sala, Garagem, Lavanderia, Escritório) — clique cria as 4 paredes já no tamanho, igual os outros. Ver DEC-80.
 
 > Corrigido: vidro de porta/janela agora tem transparência de verdade (dá pra enxergar através), mantendo o reflexo. Corrigido também: uma "tampinha" fecha o requadro entre o caixilho do modelo e a espessura da parede — antes sobrava uma folga crua, sem acabamento, visível de ângulos mais abertos.

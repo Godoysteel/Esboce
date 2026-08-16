@@ -89,6 +89,12 @@ export function hashColorHex(key: string): number {
   var OPENING_FRAME_COLOR = 0xF4F1E8;
   var WALL_PLASTER_TILE_METERS = 1.25;
   var soleiraMarbleMaps: { map: THREE.Texture; normalMap: THREE.Texture; roughnessMap: THREE.Texture } | null = null;
+  // Cache da textura da planta baixa importada — recarregar do zero a
+  // cada rebuild() (que roda a cada mudança no modelo, dezenas de
+  // vezes por sessão) seria pesado à toa pra uma imagem que só muda
+  // quando o Product Owner importa uma nova. Só recria se o dataURL
+  // mudou (nova imagem importada).
+  var planUnderlayTextureCache: { key: string; texture: THREE.Texture } | null = null;
 
   // Mármore da soleira externa — textura PBR fornecida pelo usuário
   // (Marble016), reduzida de 1K/16-bit pra 512x512/8-bit em JPG antes de
@@ -1790,6 +1796,52 @@ export function hashColorHex(key: string): number {
   // igual um caixilho saliente/bay window/ornamento de massa. Mesma
   // técnica de hitMesh invisível + malha de verdade como filho (pick/
   // arraste enxergam o hitMesh, a malha visual acompanha sozinha).
+  // Planta baixa importada — um plano texturizado deitado no chão,
+  // MESMA técnica do plano de grama fixo (EsboceApplication.ts:
+  // PlaneGeometry + rotation.x), só que com a imagem importada como
+  // textura em vez de grama, na altura do pavimento sendo editado.
+  // Sem tag de categoria (nunca entra em pickMesh/targets) — de
+  // propósito: assim o clique da ferramenta de parede/cômodo atravessa
+  // a planta normalmente pro plano matemático do chão (mesmo raycasting
+  // que já atravessa a grama hoje, ver ViewportController.
+  // getGroundModelPoint), sem risco de "roubar" o clique de desenho.
+  // Mover/girar/escalar acontece só pelos botões do gizmo dedicado.
+  function getPlanUnderlayTexture(imageDataUrl: string) {
+    if (planUnderlayTextureCache && planUnderlayTextureCache.key === imageDataUrl) {
+      return planUnderlayTextureCache.texture;
+    }
+    if (planUnderlayTextureCache) planUnderlayTextureCache.texture.dispose();
+    var tex = new THREE.TextureLoader().load(imageDataUrl);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    planUnderlayTextureCache = { key: imageDataUrl, texture: tex };
+    return tex;
+  }
+
+  function buildPlanUnderlayMesh(underlay: any, scale: any, offsetX: any, offsetY: any, yOffset: any) {
+    var geo = new THREE.PlaneGeometry(underlay.widthM, underlay.heightM);
+    var mat = new THREE.MeshBasicMaterial({
+      map: getPlanUnderlayTexture(underlay.imageDataUrl),
+      transparent: true, opacity: underlay.opacity != null ? underlay.opacity : 0.65,
+      side: THREE.DoubleSide, depthWrite: false,
+    });
+    mat.userData.sharedMap = true;
+    var mesh = new THREE.Mesh(geo, mat);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.rotation.z = (underlay.rotationDeg || 0) * Math.PI / 180;
+    var px = ((underlay.x || 0) - offsetX) * scale, pz = ((underlay.y || 0) - offsetY) * scale;
+    // Um pouco acima do plano de grama (y=-0.01) e da laje/piso (y=0),
+    // pra não brigar em z-fighting com nenhum dos dois.
+    mesh.position.set(px, yOffset + 0.002, pz);
+    mesh.renderOrder = -1;
+    return mesh;
+  }
+
+  // Bloco de Volumetria (fachada procedural) — box sólido simples.
+  // Diferente do painel de Envidraçamento, não recorta nenhuma banda
+  // da parede: é um volume que só se ENCOSTA e protrai pra fora,
+  // igual um caixilho saliente/bay window/ornamento de massa. Mesma
+  // técnica de hitMesh invisível + malha de verdade como filho (pick/
+  // arraste enxergam o hitMesh, a malha visual acompanha sozinha).
   function buildVolumeBoxMesh(box: any) {
     var geo = new THREE.BoxGeometry(box.widthM, box.heightM, box.depthM);
     var color = box.colorHex || Core.VOLUME_BOX_DEFAULT_COLOR;
@@ -2366,7 +2418,13 @@ export function hashColorHex(key: string): number {
     if (obj.geometry) obj.geometry.dispose();
     var mats = Array.isArray(obj.material) ? obj.material : (obj.material ? [obj.material] : []);
     mats.forEach(function (mat: any) {
-      if (mat.map) mat.map.dispose();
+      // A textura da planta baixa importada é cacheada fora do ciclo de
+      // rebuild (ver getPlanUnderlayTexture) — sem essa flag, o
+      // dispose() daqui destruiria a MESMA textura que o cache ainda
+      // pretende reaproveitar no próximo rebuild, e a planta sumiria ou
+      // corromperia na tela na primeira mudança de modelo depois de
+      // importar.
+      if (mat.map && !mat.userData?.sharedMap) mat.map.dispose();
       mat.dispose();
     });
   }
@@ -2856,6 +2914,12 @@ export function hashColorHex(key: string): number {
         scene.add(mesh);
         registry.furnitureMeshes.push(mesh);
       });
+
+      if (floorData.planUnderlay && floorData.planUnderlay.visible && floorIdx === editingIdx) {
+        var underlayMesh = buildPlanUnderlayMesh(floorData.planUnderlay, scale, offsetX, offsetY, yOffset);
+        scene.add(underlayMesh);
+        registry.structureMeshes.push(underlayMesh);
+      }
 
       (floorData.volumeBoxes || []).forEach(function (box) {
         // Mesmo raciocínio de registro do painel de Envidraçamento

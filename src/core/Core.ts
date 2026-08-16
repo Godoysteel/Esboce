@@ -10,7 +10,7 @@
 import type {
   Point, Wall, Column, ColumnShape, Roof, RoofType, RidgeAxis,
   Varanda, VarandaFrontSide, Laje, Opening, OpeningKind, Floor, Project,
-  Room, WallFootprint, WallOBB, MTV, Interval, Furniture, GlazingPanel, VolumeBox,
+  Room, WallFootprint, WallOBB, MTV, Interval, Furniture, GlazingPanel, VolumeBox, PlanUnderlay,
   Terreno, TerrenoMuroSide
 } from './types.js';
 
@@ -267,6 +267,30 @@ export function createVolumeBoxEntity(
     depthM: depthM != null ? depthM : VOLUME_BOX_DEFAULT_DEPTH_M,
     colorHex: VOLUME_BOX_DEFAULT_COLOR,
     x, y, rotationDeg: rotationDeg || 0,
+  };
+}
+
+// Planta baixa importada — nasce com 10m de largura (mantendo a
+// proporção da imagem original) centrada em (x,y). Nenhuma extração
+// automática de parede aqui (isso é outra etapa, bem maior — ver
+// conversa) — é só uma referência visual pro Product Owner desenhar
+// por cima com a ferramenta de parede que já existe.
+export const PLAN_UNDERLAY_DEFAULT_WIDTH_M = 10;
+export const PLAN_UNDERLAY_DEFAULT_OPACITY = 0.65;
+
+export function createPlanUnderlayEntity(
+  imageDataUrl: string, naturalAspect: number, x: number, y: number, id?: string
+): PlanUnderlay {
+  const widthM = PLAN_UNDERLAY_DEFAULT_WIDTH_M;
+  return {
+    id: id || nextId('planunderlay'),
+    imageDataUrl,
+    naturalAspect: naturalAspect > 0 ? naturalAspect : 1,
+    widthM,
+    heightM: widthM / (naturalAspect > 0 ? naturalAspect : 1),
+    x, y, rotationDeg: 0,
+    opacity: PLAN_UNDERLAY_DEFAULT_OPACITY,
+    visible: true,
   };
 }
 
@@ -1564,6 +1588,7 @@ export const Core = {
   createFurnitureEntity,
   createGlazingPanelEntity, GLAZING_DEFAULT_WIDTH_M, GLAZING_DEFAULT_HEIGHT_M, GLAZING_DEFAULT_MODULE_TARGET_M,
   createVolumeBoxEntity, VOLUME_BOX_DEFAULT_WIDTH_M, VOLUME_BOX_DEFAULT_HEIGHT_M, VOLUME_BOX_DEFAULT_DEPTH_M, VOLUME_BOX_DEFAULT_COLOR,
+  createPlanUnderlayEntity, PLAN_UNDERLAY_DEFAULT_WIDTH_M, PLAN_UNDERLAY_DEFAULT_OPACITY,
   createProject, distToSegment, projectOnSegment, detectRooms,
   TERRENO_MURO_HEIGHT_M, terrenoMuroId, terrenoMuroSegment, createTerrenoEntity, createTerrenoMuroEntity
 };

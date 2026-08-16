@@ -9,7 +9,7 @@ import { buildColdWaterKitchenPrototype, buildColdWaterNetworkFromFixtures, buil
 import type {
   Project, Floor, Wall, Column, Roof, Opening, OpeningKind, Varanda, Laje, Furniture, ColumnShape, RoofType,
   RidgeAxis, VarandaFrontSide, FoundationType, StoreEvent, StoreListener,
-  WallSnapshot, LinkedWallUpdate, GlazingPanel, GlazingGlassMaterial, VolumeBox, Terreno, TerrenoMuroSide
+  WallSnapshot, LinkedWallUpdate, GlazingPanel, GlazingGlassMaterial, VolumeBox, PlanUnderlay, Terreno, TerrenoMuroSide
 } from './types.js';
 
 let project: Project = Core.createProject();
@@ -132,6 +132,11 @@ export function findVolumeBox(id: string): VolumeBox | null {
   const boxes = currentVolumeBoxes();
   for (let i = 0; i < boxes.length; i++) if (boxes[i]!.id === id) return boxes[i]!;
   return null;
+}
+// Planta baixa importada — uma por pavimento (não lista), por isso
+// getter simples em vez do padrão current*/find* das entidades acima.
+export function currentPlanUnderlay(): PlanUnderlay | null {
+  return currentFloor().planUnderlay || null;
 }
 export function currentFurniture(): Furniture[] {
   const f = currentFloor();
@@ -1249,6 +1254,108 @@ export const commands = {
     emit({ type: 'VolumeBoxDeleted', volumeBoxId });
   },
 
+  // Ajustes finos pós-encosto (etapa seguinte à Etapa 1 acima) — sem
+  // arraste de borda ainda (essa é a próxima etapa, se pedida); por
+  // ora dá controle real de altura e forma por passo fixo, puxado
+  // pelos botões do gizmo dedicado (ver GizmoController.
+  // handleVolumeBoxAction / #volumeBoxGizmo em index.html).
+  nudgeVolumeBoxHeight(volumeBoxId: string, deltaM: number): void {
+    const b = findVolumeBox(volumeBoxId); if (!b || b.state !== 'attached') return;
+    pushUndoSnapshot();
+    b.sillHeightM = Math.max(0, (b.sillHeightM || 0) + deltaM);
+    emit({ type: 'VolumeBoxResized', volumeBoxId });
+  },
+
+  resizeVolumeBoxWidth(volumeBoxId: string, deltaM: number): void {
+    const b = findVolumeBox(volumeBoxId); if (!b) return;
+    pushUndoSnapshot();
+    let newWidthM = Math.max(0.2, b.widthM + deltaM);
+    if (b.state === 'attached' && b.wallId) {
+      const w = findWall(b.wallId);
+      if (w) {
+        const wallLenM = Core.wallLengthMeters(w);
+        newWidthM = Math.min(newWidthM, wallLenM);
+        // Recentra o offset (mesmo espírito de attachVolumeBoxToWall)
+        // pra caber dentro do trecho de parede, mesmo depois de crescer.
+        b.offsetM = Math.max(newWidthM / 2, Math.min(wallLenM - newWidthM / 2, b.offsetM || 0));
+      }
+    }
+    b.widthM = newWidthM;
+    emit({ type: 'VolumeBoxResized', volumeBoxId });
+  },
+
+  resizeVolumeBoxHeight(volumeBoxId: string, deltaM: number): void {
+    const b = findVolumeBox(volumeBoxId); if (!b) return;
+    pushUndoSnapshot();
+    b.heightM = Math.max(0.2, b.heightM + deltaM);
+    emit({ type: 'VolumeBoxResized', volumeBoxId });
+  },
+
+  resizeVolumeBoxDepth(volumeBoxId: string, deltaM: number): void {
+    const b = findVolumeBox(volumeBoxId); if (!b) return;
+    pushUndoSnapshot();
+    b.depthM = Math.max(0.05, b.depthM + deltaM);
+    emit({ type: 'VolumeBoxResized', volumeBoxId });
+  },
+
+  // Planta baixa importada (referência visual no chão) — uma por
+  // pavimento, por isso "set" (substitui a que já existisse) em vez de
+  // "create" numa lista. Ajustes por passo fixo (mover/girar/escalar),
+  // mesmo espírito dos comandos de Volumetria acima — arrastar de
+  // verdade fica pra uma etapa futura.
+  setPlanUnderlay(imageDataUrl: string, naturalAspect: number, x: number, y: number): PlanUnderlay {
+    pushUndoSnapshot();
+    const u = Core.createPlanUnderlayEntity(imageDataUrl, naturalAspect, x, y);
+    currentFloor().planUnderlay = u;
+    emit({ type: 'PlanUnderlayCreated', underlayId: u.id });
+    return u;
+  },
+
+  movePlanUnderlay(dxM: number, dyM: number): void {
+    const u = currentFloor().planUnderlay; if (!u) return;
+    pushUndoSnapshot();
+    u.x += dxM * Core.GRID; u.y += dyM * Core.GRID;
+    emit({ type: 'PlanUnderlayMoved', underlayId: u.id });
+  },
+
+  rotatePlanUnderlay(deltaDeg: number): void {
+    const u = currentFloor().planUnderlay; if (!u) return;
+    pushUndoSnapshot();
+    u.rotationDeg = ((u.rotationDeg + deltaDeg) % 360 + 360) % 360;
+    emit({ type: 'PlanUnderlayRotated', underlayId: u.id });
+  },
+
+  scalePlanUnderlay(factor: number): void {
+    const u = currentFloor().planUnderlay; if (!u) return;
+    pushUndoSnapshot();
+    const newWidthM = Math.max(0.5, Math.min(200, u.widthM * factor));
+    u.widthM = newWidthM;
+    u.heightM = newWidthM / u.naturalAspect;
+    emit({ type: 'PlanUnderlayScaled', underlayId: u.id });
+  },
+
+  setPlanUnderlayOpacity(opacity: number): void {
+    const u = currentFloor().planUnderlay; if (!u) return;
+    u.opacity = Math.max(0.1, Math.min(1, opacity));
+    emit({ type: 'PlanUnderlayOpacityChanged', underlayId: u.id, live: true });
+  },
+
+  togglePlanUnderlayVisible(): void {
+    const u = currentFloor().planUnderlay; if (!u) return;
+    pushUndoSnapshot();
+    u.visible = !u.visible;
+    emit({ type: 'PlanUnderlayVisibilityChanged', underlayId: u.id });
+  },
+
+  deletePlanUnderlay(): void {
+    const f = currentFloor();
+    if (!f.planUnderlay) return;
+    pushUndoSnapshot();
+    const id = f.planUnderlay.id;
+    f.planUnderlay = null;
+    emit({ type: 'PlanUnderlayDeleted', underlayId: id });
+  },
+
   // Móvel: mesmo padrão de Coluna — um único ponto (x,y), arrastável
   // livremente, mais rotação em passos de 90°. productId aponta pro
   // Catalog (categoria 'furniture'), que resolve qual .glb carregar.
@@ -1452,6 +1559,7 @@ export const Store = {
   currentLajes,
   currentGlazingPanels,
   currentVolumeBoxes,
+  currentPlanUnderlay,
   currentFurniture,
   findWall,
   findColumn,

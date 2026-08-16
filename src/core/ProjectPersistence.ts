@@ -1,5 +1,5 @@
 import type {
-  Column, Floor, Furniture, GlazingPanel, VolumeBox, HydraulicNode, HydraulicSegment, Laje, Opening, Project, ProjectLayers, Roof, Terreno, Varanda, Wall,
+  Column, Floor, Furniture, GlazingPanel, VolumeBox, PlanUnderlay, HydraulicNode, HydraulicSegment, Laje, Opening, Project, ProjectLayers, Roof, Terreno, Varanda, Wall,
 } from './types.js';
 
 // v6: adiciona `project.terreno` (opcional) — tamanho do lote e muros de
@@ -290,6 +290,28 @@ function parseVolumeBox(value: unknown, path: string): VolumeBox {
   return box;
 }
 
+// Planta baixa importada — dataURL pode ser um texto BEM grande (uma
+// imagem inteira em base64); tratado como uma string comum igual
+// qualquer outra, sem limite especial — o projeto inteiro já vira um
+// JSON grande quando tem fotos/materiais customizados, essa não é a
+// primeira vez.
+function parsePlanUnderlay(value: unknown, path: string): PlanUnderlay {
+  const v = record(value, path);
+  const naturalAspect = number(v.naturalAspect, `${path}.naturalAspect`, 1);
+  return {
+    id: string(v.id, `${path}.id`),
+    imageDataUrl: string(v.imageDataUrl, `${path}.imageDataUrl`),
+    naturalAspect: naturalAspect > 0 ? naturalAspect : 1,
+    widthM: number(v.widthM, `${path}.widthM`),
+    heightM: number(v.heightM, `${path}.heightM`),
+    x: number(v.x, `${path}.x`),
+    y: number(v.y, `${path}.y`),
+    rotationDeg: number(v.rotationDeg, `${path}.rotationDeg`, 0),
+    opacity: number(v.opacity, `${path}.opacity`, 0.65),
+    visible: v.visible !== false,
+  };
+}
+
 function parseFurniture(value: unknown, path: string): Furniture {
   const v = record(value, path);
   return {
@@ -340,6 +362,12 @@ function parseFloor(value: unknown, path: string): Floor {
     roomFinishes: stringMap(v.roomFinishes, `${path}.roomFinishes`),
     roomFinishSettings: settingsMap(v.roomFinishSettings, `${path}.roomFinishSettings`),
   };
+  // Só entra no objeto quando existe de verdade — mesmo padrão de
+  // wallHeightM logo abaixo (campo opcional, não "sempre null"), pra
+  // não acrescentar uma chave nova em todo projeto salvo antes desta
+  // feature existir (e não quebrar o teste de round-trip que compara
+  // o projeto serializado com um molde fixo).
+  if (v.planUnderlay) floor.planUnderlay = parsePlanUnderlay(v.planUnderlay, `${path}.planUnderlay`);
   if (floor.kind === 'attic') floor.wallHeightM = number(v.wallHeightM, `${path}.wallHeightM`, 1.2);
   const wallIds = new Set(floor.walls.map((wall) => wall.id));
   floor.openings.forEach((opening, index) => {

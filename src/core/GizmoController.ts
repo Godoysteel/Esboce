@@ -83,13 +83,23 @@ function handleGlazingPanelAction(glazingPanelId: string, action: string): void 
 }
 
 // Bloco de Volumetria — mesmo espírito do painel de Envidraçamento
-// acima: só close/delete, sem girar nem duplicar (nasce pelo botão
-// "Volumetria" do container Fachada, um de cada vez).
+// acima: close/delete continuam aqui; os ajustes de forma/altura (ver
+// #volumeBoxGizmo/index.html) são passo fixo de 0,1m por clique —
+// ainda não é arrastar a borda de verdade (isso fica pra uma próxima
+// etapa, se pedida), mas já dá controle real sem precisar de um painel
+// numérico à parte.
+const VOLUME_BOX_STEP_M = 0.1;
 function handleVolumeBoxAction(volumeBoxId: string, action: string): void {
   const b = Store.findVolumeBox(volumeBoxId);
   if (!b) return;
   if (action === 'close') { ViewportController.deselect(); return; }
   if (action === 'delete') { Store.commands.deleteVolumeBox(volumeBoxId); ViewportController.deselect(); return; }
+  if (action === 'up') { Store.commands.nudgeVolumeBoxHeight(volumeBoxId, VOLUME_BOX_STEP_M); return; }
+  if (action === 'down') { Store.commands.nudgeVolumeBoxHeight(volumeBoxId, -VOLUME_BOX_STEP_M); return; }
+  if (action === 'widthUp') { Store.commands.resizeVolumeBoxWidth(volumeBoxId, VOLUME_BOX_STEP_M); return; }
+  if (action === 'widthDown') { Store.commands.resizeVolumeBoxWidth(volumeBoxId, -VOLUME_BOX_STEP_M); return; }
+  if (action === 'heightUp') { Store.commands.resizeVolumeBoxHeight(volumeBoxId, VOLUME_BOX_STEP_M); return; }
+  if (action === 'heightDown') { Store.commands.resizeVolumeBoxHeight(volumeBoxId, -VOLUME_BOX_STEP_M); return; }
 }
 
 // Móvel: girar (90° por clique)/duplicar/excluir. Mover é só arrasto
@@ -208,13 +218,48 @@ export function init(): void {
     const glazingPanelId = ViewportController.getSelectedGlazingPanelId();
     if (glazingPanelId) { handleGlazingPanelAction(glazingPanelId, action); return; }
 
-    const volumeBoxId = ViewportController.getSelectedVolumeBoxId();
-    if (volumeBoxId) { handleVolumeBoxAction(volumeBoxId, action); return; }
-
     const wallIds = ViewportController.getSelectedRoomWallIds();
     if (!wallIds || !wallIds.length) return;
     if (action === 'close') { ViewportController.deselect(); return; }
     if (action === 'delete') { Store.commands.deleteRoomGroup(wallIds); ViewportController.deselect(); return; }
+  });
+
+  // Gizmo próprio do Bloco de Volumetria (index.html#volumeBoxGizmo) —
+  // separado do roomGizmo compartilhado acima porque tem botões demais
+  // (altura/largura/subir/descer) pra conviver com os botões de
+  // hidráulica sem confundir visualmente qual ação pertence a qual tipo
+  // de seleção.
+  const volumeBoxGizmoEl = document.getElementById('volumeBoxGizmo');
+  volumeBoxGizmoEl?.addEventListener('click', function (e: any) {
+    const btn = e.target.closest('button.gz');
+    if (!btn) return;
+    const volumeBoxId = ViewportController.getSelectedVolumeBoxId();
+    if (!volumeBoxId) return;
+    handleVolumeBoxAction(volumeBoxId, btn.dataset.action);
+  });
+
+  // Gizmo da Planta Baixa importada (index.html#planUnderlayGizmo) —
+  // mover/girar/escalar por passo fixo, mesmo espírito do gizmo do
+  // Bloco de Volumetria acima. Sem ID (é singular por pavimento — ver
+  // Store.commands.setPlanUnderlay), então nenhuma checagem de "qual
+  // objeto", só se existe planta importada no pavimento atual.
+  const PLAN_UNDERLAY_MOVE_STEP_M = 0.2, PLAN_UNDERLAY_ROTATE_STEP_DEG = 5, PLAN_UNDERLAY_SCALE_STEP = 1.05;
+  const planUnderlayGizmoEl = document.getElementById('planUnderlayGizmo');
+  planUnderlayGizmoEl?.addEventListener('click', function (e: any) {
+    const btn = e.target.closest('button.gz');
+    if (!btn) return;
+    if (!ViewportController.getSelectedPlanUnderlay()) return;
+    const action = btn.dataset.action;
+    if (action === 'close') { ViewportController.deselect(); return; }
+    if (action === 'delete') { Store.commands.deletePlanUnderlay(); ViewportController.deselect(); return; }
+    if (action === 'up') { Store.commands.movePlanUnderlay(0, -PLAN_UNDERLAY_MOVE_STEP_M); return; }
+    if (action === 'down') { Store.commands.movePlanUnderlay(0, PLAN_UNDERLAY_MOVE_STEP_M); return; }
+    if (action === 'left') { Store.commands.movePlanUnderlay(-PLAN_UNDERLAY_MOVE_STEP_M, 0); return; }
+    if (action === 'right') { Store.commands.movePlanUnderlay(PLAN_UNDERLAY_MOVE_STEP_M, 0); return; }
+    if (action === 'rotateCw') { Store.commands.rotatePlanUnderlay(PLAN_UNDERLAY_ROTATE_STEP_DEG); return; }
+    if (action === 'rotateCcw') { Store.commands.rotatePlanUnderlay(-PLAN_UNDERLAY_ROTATE_STEP_DEG); return; }
+    if (action === 'scaleUp') { Store.commands.scalePlanUnderlay(PLAN_UNDERLAY_SCALE_STEP); return; }
+    if (action === 'scaleDown') { Store.commands.scalePlanUnderlay(1 / PLAN_UNDERLAY_SCALE_STEP); return; }
   });
 }
 
