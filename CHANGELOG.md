@@ -1,5 +1,7 @@
 # Changelog
 
+> Corrigido: catálogo do fornecedor "O Mercador" — as tintas do Mercador estavam numa aba separada ("Tintas e Vernizes") da aba "Tintas" que já existia com produtos genéricos, e vaso sanitário/torneira/chuveiro/cuba (152 produtos) estavam dentro de "Hidráulica" em vez do departamento "Louças e Metais" que já existia pra isso. Ver DEC-85 (correção pós-lançamento).
+
 > Adicionado: catálogo do fornecedor "O Mercador" — 2.119 produtos triados (de um catálogo de origem com 6.081 itens) com relação direta com orçamento de obra: Hidráulica, Elétrica, Tintas e Vernizes, Pisos e Revestimentos, Cimento e Argamassa, Cobertura, Esquadrias e Ferragens, Impermeabilização, Ferro e Aço, Tijolos e Blocos, Areia/Brita/Agregados e Madeiras. Ferramentas, abrasivos, EPI, fixação avulsa e itens sem relação com construção ficaram de fora. Ver DEC-85.
 
 > Corrigido: uma das duas linhas de risco na parede colinear ainda aparecia depois da correção anterior — faltava zerar `extended`, não só `free`. Ver DEC-83 (emenda à correção nº5).
