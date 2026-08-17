@@ -1121,9 +1121,14 @@ test('junção em T e fusão de paredes propagam Wall.heightM pro pedaço novo c
 // mais baixa — bug reportado como "canto aberto, sem tampinha" depois de
 // um arrasto que reconstrói a junção em T.
 test('tampa parcial de canto cobre o vão quando a vizinha do canto "fechado" é mais baixa (DEC-91)', () => {
+  // Tolerante a CRLF/LF de propósito — o blob local (Windows) e o checkout
+  // do runner de CI (Linux) já divergiram nisso antes (git normaliza fim
+  // de linha de formas diferentes conforme o ambiente).
   const roomsStart = scene3DRendererSource.indexOf('project.floors.forEach(function (floorData, floorIdx) {');
   const wallLoopStart = scene3DRendererSource.indexOf('floorData.walls.forEach(function (w) {', roomsStart);
-  const wallLoopEnd = scene3DRendererSource.indexOf('\r\n\r\n', scene3DRendererSource.indexOf("(['a', 'b'] as const).forEach(function (side) {", wallLoopStart));
+  const afterFacesStart = scene3DRendererSource.indexOf("(['a', 'b'] as const).forEach(function (side) {", wallLoopStart);
+  const blankLineMatch = scene3DRendererSource.slice(afterFacesStart).match(/\r?\n\r?\n/);
+  const wallLoopEnd = blankLineMatch ? afterFacesStart + blankLineMatch.index : scene3DRendererSource.length;
   const wallFlow = scene3DRendererSource.slice(wallLoopStart, wallLoopEnd);
 
   // Altura efetiva de qualquer parede (não só a `w` da vez) — mesma regra

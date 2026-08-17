@@ -153,9 +153,13 @@ test('parede demolida ganha o mesmo tratamento de "buraco no piso" que arco/port
   // fosse desenhada.
   assert.match(renderer3DSource, /var wallFootprintsFull = Core\.computeWallFootprints\(floorData\.walls\);/);
 
-  const demolishedSlabBlock = renderer3DSource.slice(
-    renderer3DSource.indexOf('floorData.walls.forEach(function (w) {\r\n          if (!w.demolished) return;\r\n          var wallLenM'),
+  // Tolerante a CRLF/LF de propósito — o blob local (Windows) e o checkout
+  // do runner de CI (Linux) já divergiram nisso antes (git normaliza fim
+  // de linha de formas diferentes conforme o ambiente).
+  const demolishedBlockMatch = renderer3DSource.match(
+    /floorData\.walls\.forEach\(function \(w\) \{\r?\n\s*if \(!w\.demolished\) return;\r?\n\s*var wallLenM[\s\S]*/,
   );
+  const demolishedSlabBlock = demolishedBlockMatch ? demolishedBlockMatch[0] : '';
   assert.ok(demolishedSlabBlock.length > 0, 'bloco de soleira pra parede demolida não encontrado');
   // Vão sintético cobrindo o comprimento INTEIRO (não um trecho) —
   // offset no meio, largura = comprimento todo da parede.
