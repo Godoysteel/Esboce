@@ -1222,9 +1222,12 @@ test('Scene3DRenderer usa Core.resolvedWallHeights (não mais Wall.heightM cru) 
 // cheia (chão ao teto) desenhada no meio da face das paredes vizinhas —
 // lê como rachadura, mesmo sem buraco nenhum na malha por baixo.
 test('linha de contorno vertical só aparece em ponta LIVRE de verdade (free === true) — junção em T disfarçada (free: false, extended: true) não ganha linha espúria no meio da face da vizinha (DEC-93)', () => {
+  // Tolerante a CRLF/LF de propósito — o blob local (Windows) e o checkout
+  // do runner de CI (Linux) já divergiram nisso antes (ver DEC-91).
   const fnStart = scene3DRendererSource.indexOf('function buildWallFootprintEdgeLines(fp: any, height: any, yOffset: any, showTop = true) {');
   assert.notEqual(fnStart, -1);
-  const fnEnd = scene3DRendererSource.indexOf('\r\n  }', fnStart);
+  const fnEndMatch = scene3DRendererSource.slice(fnStart).match(/\r?\n  \}/);
+  const fnEnd = fnStart + fnEndMatch.index;
   const fnBody = scene3DRendererSource.slice(fnStart, fnEnd);
   assert.match(fnBody, /if \(fp\.p1Free === true\) \{/);
   assert.match(fnBody, /if \(fp\.p2Free === true\) \{/);
@@ -1236,8 +1239,7 @@ test('linha de contorno vertical só aparece em ponta LIVRE de verdade (free ===
   // O endcap SÓLIDO (tampa de verdade, DEC-91) continua usando a condição
   // ampla de propósito — ele PRECISA fechar o volume ali, ao contrário da
   // linha, que é só contorno cosmético.
-  const endcapStart = scene3DRendererSource.indexOf("if (fp.p1Free !== false || fp.p1Extended) {\r\n            var endCap1");
-  assert.notEqual(endcapStart, -1, 'endcap sólido continua com a condição ampla — só a linha de contorno mudou');
+  assert.match(scene3DRendererSource, /if \(fp\.p1Free !== false \|\| fp\.p1Extended\) \{\r?\n\s*var endCap1/, 'endcap sólido continua com a condição ampla — só a linha de contorno mudou');
 });
 
 // DEC-90 — botão "Gerar Laje": cômodo nasce sem laje visível/contabilizada;
