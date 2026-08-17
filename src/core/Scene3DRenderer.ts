@@ -2069,16 +2069,37 @@ export function hashColorHex(key: string): number {
     return meshes;
   }
 
-  function makeSlabMesh(shape: any, thickness: any, topY: any, color: any, opacity: any, polyOffset?: any, texture?: THREE.Texture | null) {
+  function makeSlabMesh(shape: any, thickness: any, topY: any, color: any, opacity: any, polyOffset?: any, texture?: THREE.Texture | null, materialOverride?: THREE.Material | null, uvTileMeters?: number | null) {
     var geo = new THREE.ExtrudeGeometry(shape, { depth: thickness, bevelEnabled: false });
-    var matOpts: any = { color: color, map: texture || null, side: THREE.DoubleSide, transparent: opacity < 1, opacity: opacity };
+    // UV em metros reais (posição do vértice / tileMeters do produto) —
+    // só quando um material com textura PBR de verdade é passado
+    // (materialOverride, ver buildFloorTileMaterial). O UV padrão do
+    // ExtrudeGeometry (normalizado 0-1 pelo bounding box do contorno) é
+    // mantido pra tudo mais — inclusive a cerâmica procedural
+    // (buildCeramicTexture), que já usa seu próprio `repeat` fixo e não
+    // depende de escala física real.
+    if (uvTileMeters) {
+      var posAttr = geo.getAttribute('position');
+      var uvArr = new Float32Array(posAttr.count * 2);
+      for (var i = 0; i < posAttr.count; i++) {
+        uvArr[i * 2] = posAttr.getX(i) / uvTileMeters;
+        uvArr[i * 2 + 1] = posAttr.getY(i) / uvTileMeters;
+      }
+      geo.setAttribute('uv', new THREE.BufferAttribute(uvArr, 2));
+    }
+    var mat: any;
+    if (materialOverride) {
+      mat = materialOverride;
+    } else {
+      var matOpts: any = { color: color, map: texture || null, side: THREE.DoubleSide, transparent: opacity < 1, opacity: opacity };
+      mat = new THREE.MeshStandardMaterial(matOpts);
+    }
     // Onde a borda da laje é EXATAMENTE coplanar com a face de uma
     // parede vizinha (ex.: o piso do cômodo, que agora encosta exato na
     // face corrigida da parede — nunca mais no eixo), as duas brigam
     // pelo mesmo pixel de profundidade sem esse viés — o clássico
     // z-fighting, visto como uma fresta/tremulação na costura.
-    if (polyOffset) { matOpts.polygonOffset = true; matOpts.polygonOffsetFactor = 4; matOpts.polygonOffsetUnits = 1; }
-    var mat = new THREE.MeshStandardMaterial(matOpts);
+    if (polyOffset) { mat.polygonOffset = true; mat.polygonOffsetFactor = 4; mat.polygonOffsetUnits = 1; }
     var mesh = new THREE.Mesh(geo, mat);
     mesh.rotation.x = Math.PI / 2;
     mesh.position.y = topY;
@@ -2317,6 +2338,55 @@ export function hashColorHex(key: string): number {
     geo.computeVertexNormals();
     var mat = new THREE.MeshStandardMaterial({ color: color, map: texture || null, side: THREE.DoubleSide });
     return new THREE.Mesh(geo, mat);
+  }
+
+  // Piso com textura PBR de verdade (cor + relevo + rugosidade, ver
+  // Catálogo — mesma técnica já usada pro telhado, buildRoofTileMaterial)
+  // em vez do padrão procedural de cerâmica (buildCeramicTexture, só cor
+  // sólida + linha de rejunte). Cache por produto — cada clone reaproveita
+  // a MESMA imagem já decodificada (custo de GPU novo, mas sem novo
+  // download/decode), porque cada cômodo pode ter escala/rotação própria
+  // (roomFinishSettings) sobre o mesmo produto.
+  var floorTextureCache: Record<string, any> = {};
+  function buildFloorTileMaterial(product: any, scale: number, rotationDeg: number) {
+    var tex = product.assets.textures!;
+    if (!floorTextureCache[product.id]) {
+      var loader = new THREE.TextureLoader();
+      function load(dataUri: any, srgb: any) {
+        if (!dataUri) return null;
+        var t = loader.load(dataUri);
+        t.wrapS = THREE.RepeatWrapping; t.wrapT = THREE.RepeatWrapping;
+        if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+        return t;
+      }
+      floorTextureCache[product.id] = {
+        map: load(tex.map, true),
+        normalMap: load(tex.normalMap, false),
+        roughnessMap: load(tex.roughnessMap, false),
+        aoMap: load(tex.aoMap, false)
+      };
+    }
+    var maps = floorTextureCache[product.id];
+    function cloneMap(t: any) {
+      if (!t) return null;
+      var c = t.clone();
+      c.wrapS = THREE.RepeatWrapping; c.wrapT = THREE.RepeatWrapping;
+      c.colorSpace = t.colorSpace;
+      c.center.set(0.5, 0.5);
+      c.rotation = (rotationDeg || 0) * Math.PI / 180;
+      return c;
+    }
+    var mat = new THREE.MeshStandardMaterial({
+      map: cloneMap(maps.map), normalMap: cloneMap(maps.normalMap), roughnessMap: cloneMap(maps.roughnessMap), aoMap: cloneMap(maps.aoMap),
+      side: THREE.DoubleSide
+    });
+    // Mesmo "scale" ajustável (0,25–4) que buildCeramicTexture já aceita
+    // do painel Materiais — aqui multiplica o tamanho físico do ladrilho
+    // (tileMeters) em vez de um `repeat` fixo, então continua em metros
+    // reais mesmo escalado.
+    var safeScale = Math.max(0.25, Math.min(4, scale || 1));
+    mat.userData.tileMeters = (product.assets.tileMeters || 1) * safeScale;
+    return mat;
   }
 
   function buildCeramicTexture(colorHex: string, scale: number, rotationDeg: number) {
@@ -3570,10 +3640,20 @@ export function hashColorHex(key: string): number {
         var pisoBaseColor = effectiveFinish ? parseInt(effectiveFinish.assets.colorHex.slice(1), 16) : 0xCFE8CF;
         var pisoColorFinal = DEBUG_COLOR_MODE ? hashColorHex('room:' + roomKey) : pisoBaseColor;
         var color = DEBUG_COLOR_MODE ? pisoColorFinal : pickColor(pisoColorFinal, 'laje', viewState);
-        var pisoTexture = effectiveFinish
+        // Produto com textura PBR de verdade (assets.textures — ver
+        // Catálogo) usa a imagem real, em tamanho físico real
+        // (tileMeters), no lugar do padrão procedural de cerâmica —
+        // sem isso, uma textura de piso de madeira ficaria com cara de
+        // cerâmica lisa (só a cor média + linha de rejunte).
+        var pisoHasRealTexture = !!(effectiveFinish && effectiveFinish.assets.textures);
+        var pisoTexture = (effectiveFinish && !pisoHasRealTexture)
           ? buildCeramicTexture(effectiveFinish.assets.colorHex, roomFinishSettings.scale, roomFinishSettings.rotation)
           : null;
-        var mesh = tagCategory(makeSlabMesh(shape, thickness, pisoTopY, color, 1, true, pisoTexture), 'laje');
+        var pisoMaterial = pisoHasRealTexture
+          ? buildFloorTileMaterial(effectiveFinish, roomFinishSettings.scale, roomFinishSettings.rotation)
+          : null;
+        var pisoUvTileMeters = pisoMaterial ? pisoMaterial.userData.tileMeters : null;
+        var mesh = tagCategory(makeSlabMesh(shape, thickness, pisoTopY, color, 1, true, pisoTexture, pisoMaterial, pisoUvTileMeters), 'laje');
         mesh.userData.debugRoomKey = roomKey;
         mesh.userData.roomKey = roomKey;
         scene.add(mesh);

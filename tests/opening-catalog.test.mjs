@@ -81,3 +81,41 @@ test('modelo de esquadria ganha 4 tiras de requadro fechando a folga entre o cai
   // profundidade de caixilho, sem precisar conhecer a do modelo específico.
   assert.match(source, /new THREE\.BoxGeometry\(sizeX, sizeY, Core\.WALL_THICK\)/);
 });
+
+// DEC-97 — piso com textura PBR de verdade (Product Owner trouxe uma
+// textura de piso laminado real, pediu pra "ter essa textura para
+// piso"). Produto de teste segue a MESMA convenção já usada pra
+// telhado/tabeira (teste.telha.ceramica-pbr, teste.tabeira.madeira-pbr):
+// mapas reais (cor+normal+rugosidade), sku/preço placeholder, tileMeters
+// como estimativa visual.
+test('Catalog: produto de piso laminado (teste PBR) existe com os mapas certos, sem aoMap (fonte não trouxe)', () => {
+  const product = Catalog.getProduct('teste.piso.laminado-pbr');
+  assert.ok(product, 'produto teste.piso.laminado-pbr não encontrado no Catálogo');
+  assert.equal(product.category, 'floor_tile');
+  assert.ok(product.assets.textures, 'produto sem assets.textures');
+  assert.match(product.assets.textures.map, /^data:image\/jpeg;base64,/);
+  assert.match(product.assets.textures.normalMap, /^data:image\/jpeg;base64,/);
+  assert.match(product.assets.textures.roughnessMap, /^data:image\/jpeg;base64,/);
+  assert.equal(product.assets.textures.aoMap, undefined);
+  assert.ok(product.assets.tileMeters > 0);
+});
+
+test('Scene3DRenderer: piso usa a textura PBR de verdade (buildFloorTileMaterial, UV em metros reais) quando o produto tem assets.textures — cai no padrão procedural de cerâmica só quando não tem', () => {
+  const source = readFileSync(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
+  assert.match(source, /function buildFloorTileMaterial\(product: any, scale: number, rotationDeg: number\) \{/);
+  // Cache por produto (evita recarregar a imagem a cada rebuild da cena,
+  // igual buildRoofTileMaterial já faz), clone por cômodo (cada um pode
+  // ter escala/rotação própria em cima do mesmo produto).
+  assert.match(source, /var floorTextureCache: Record<string, any> = \{\};/);
+  assert.match(source, /var c = t\.clone\(\);/);
+  // UV recalculado em metros reais (posição do vértice \/ tileMeters),
+  // não o UV normalizado 0-1 padrão do ExtrudeGeometry — só quando um
+  // material de verdade (materialOverride) é passado pra makeSlabMesh.
+  assert.match(source, /uvArr\[i \* 2\] = posAttr\.getX\(i\) \/ uvTileMeters;/);
+  // Ramo de decisão no render do piso: produto com textura real usa
+  // buildFloorTileMaterial; sem isso, cai no buildCeramicTexture de
+  // sempre (cor sólida + linha de rejunte) — comportamento antigo
+  // preservado pra todo produto que não tem assets.textures.
+  assert.match(source, /var pisoHasRealTexture = !!\(effectiveFinish && effectiveFinish\.assets\.textures\);/);
+  assert.match(source, /var pisoMaterial = pisoHasRealTexture\s*\n\s*\? buildFloorTileMaterial\(effectiveFinish, roomFinishSettings\.scale, roomFinishSettings\.rotation\)\s*\n\s*: null;/);
+});
