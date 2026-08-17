@@ -49,7 +49,8 @@ node scripts/texturas/insert_catalog_entry.js \
   <SKU, ex: TESTE-004> \
   <colorHex, ex: #9B8063> \
   <tileMeters, ex: 2.0> \
-  "<âncora — texto curto e único logo onde deve inserir>"
+  "<âncora — texto curto e único logo onde deve inserir>" \
+  [categoria, floor_tile (padrão, cobre piso E parede) | roof_tile | trim]
 ```
 
 A âncora precisa ser um texto CURTO (não uma das linhas gigantes) que já

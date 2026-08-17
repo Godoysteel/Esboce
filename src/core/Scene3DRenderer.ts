@@ -1523,6 +1523,14 @@ export function hashColorHex(key: string): number {
 
   function buildGableWallMaterial(productId: any, viewState: any) {
     var product = productId ? Catalog.getProduct(productId) : null;
+    if (product && product.category === 'floor_tile' && product.assets.textures) {
+      var gablePbrMaps = buildWallFaceMaterial(product);
+      return new THREE.MeshStandardMaterial({
+        color: 0xFFFFFF,
+        map: gablePbrMaps.map, normalMap: gablePbrMaps.normalMap, roughnessMap: gablePbrMaps.roughnessMap, aoMap: gablePbrMaps.aoMap,
+        side: THREE.DoubleSide
+      });
+    }
     if (product && product.category === 'floor_tile') {
       return new THREE.MeshStandardMaterial({
         color: 0xFFFFFF,
@@ -2387,6 +2395,46 @@ export function hashColorHex(key: string): number {
     var safeScale = Math.max(0.25, Math.min(4, scale || 1));
     mat.userData.tileMeters = (product.assets.tileMeters || 1) * safeScale;
     return mat;
+  }
+
+  // Face de parede com textura PBR de verdade — mesma ideia de
+  // buildFloorTileMaterial (mesmo cache de imagem decodificada,
+  // reaproveitado entre piso e parede pro mesmo produto), mas SEM
+  // recalcular UV por vértice: buildFaceStripMesh/buildFaceBandMesh já
+  // calculam a UV da face em unidades de WALL_PLASTER_TILE_METERS (não
+  // normalizada 0-1 como o ExtrudeGeometry do piso), então basta ajustar
+  // `texture.repeat` pela razão entre essa unidade fixa e o tileMeters
+  // do produto pra cada ladrilho da textura sair no tamanho físico
+  // certo — sem tocar a geometria.
+  function buildWallFaceMaterial(product: any) {
+    var tex = product.assets.textures!;
+    if (!floorTextureCache[product.id]) {
+      var loader = new THREE.TextureLoader();
+      function load(dataUri: any, srgb: any) {
+        if (!dataUri) return null;
+        var t = loader.load(dataUri);
+        t.wrapS = THREE.RepeatWrapping; t.wrapT = THREE.RepeatWrapping;
+        if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+        return t;
+      }
+      floorTextureCache[product.id] = {
+        map: load(tex.map, true),
+        normalMap: load(tex.normalMap, false),
+        roughnessMap: load(tex.roughnessMap, false),
+        aoMap: load(tex.aoMap, false)
+      };
+    }
+    var maps = floorTextureCache[product.id];
+    var repeatUnits = WALL_PLASTER_TILE_METERS / (product.assets.tileMeters || 1);
+    function cloneMap(t: any) {
+      if (!t) return null;
+      var c = t.clone();
+      c.wrapS = THREE.RepeatWrapping; c.wrapT = THREE.RepeatWrapping;
+      c.colorSpace = t.colorSpace;
+      c.repeat.set(repeatUnits, repeatUnits);
+      return c;
+    }
+    return { map: cloneMap(maps.map), normalMap: cloneMap(maps.normalMap), roughnessMap: cloneMap(maps.roughnessMap), aoMap: cloneMap(maps.aoMap) };
   }
 
   function buildCeramicTexture(colorHex: string, scale: number, rotationDeg: number) {
@@ -3376,15 +3424,20 @@ export function hashColorHex(key: string): number {
           (['a', 'b'] as const).forEach(function (side) {
             var productId = side === 'a' ? w.finishA : w.finishB;
             var product = productId ? Catalog.getProduct(productId) : null;
-            var isCeramic = product && product.category === 'floor_tile';
+            var hasRealTexture = !!(product && product.category === 'floor_tile' && product.assets.textures);
+            var isCeramic = product && product.category === 'floor_tile' && !hasRealTexture;
             var ceramicMap = isCeramic ? buildCeramicTexture(product!.assets.colorHex, 1, 0) : null;
+            var wallPbrMaps = hasRealTexture ? buildWallFaceMaterial(product) : null;
             var faceColorHex = product ? parseInt(product.assets.colorHex.slice(1), 16) : wallDefaultColor;
-            if (isCeramic) faceColorHex = 0xFFFFFF;
+            if (isCeramic || hasRealTexture) faceColorHex = 0xFFFFFF;
             var faceColor = highlighted ? SELECTED_ACCENT : (DEBUG_COLOR_MODE ? hashColorHex(w.id + '-' + side) : faceColorHex);
             var faceMat = new THREE.MeshStandardMaterial({
               color: (floorIdx === editingIdx && !DEBUG_COLOR_MODE) ? pickColor(faceColor, wallCategory, viewState) : faceColor,
-              map: DEBUG_COLOR_MODE ? null : ceramicMap,
-              roughness: 0.92,
+              map: DEBUG_COLOR_MODE ? null : (hasRealTexture ? wallPbrMaps!.map : ceramicMap),
+              normalMap: DEBUG_COLOR_MODE ? null : (hasRealTexture ? wallPbrMaps!.normalMap : null),
+              roughnessMap: DEBUG_COLOR_MODE ? null : (hasRealTexture ? wallPbrMaps!.roughnessMap : null),
+              aoMap: DEBUG_COLOR_MODE ? null : (hasRealTexture ? wallPbrMaps!.aoMap : null),
+              roughness: hasRealTexture ? 1 : 0.92,
               flatShading: true,
               side: THREE.DoubleSide,
               polygonOffset: true,

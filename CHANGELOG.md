@@ -1,5 +1,7 @@
 # Changelog
 
+> Adicionado: parede (e oitão) agora também pode usar textura real (foto + relevo + rugosidade) — mesma melhoria do piso (ver abaixo), agora na ferramenta Pintar > Paredes. Primeiro produto disponível: pedra empilhada (teste). Ver DEC-98.
+
 > Adicionado: piso agora pode usar textura real (foto + relevo + rugosidade), com o padrão físico mantido em tamanho real de metros — antes todo piso usava só um padrão de cerâmica desenhado (cor sólida + linha de rejunte), mesmo quando o produto escolhido tinha uma textura de verdade cadastrada. Primeiro produto disponível: piso laminado (teste). Ver DEC-97.
 
 > Alterado: arrastar uma parede pra empurrá-la agora permite chegar até encostar numa parede paralela e fundir as duas (o trecho compartilhado vira uma parede só), em vez de parar meio metro antes dela sem nunca conseguir fundir. Continua não sendo possível atravessar a parede pro outro lado. Vale nas duas visualizações (3D e 2D). Ver DEC-96.

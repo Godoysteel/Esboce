@@ -1,4 +1,4 @@
-const fs = require('fs');
+import fs from 'fs';
 
 const catalogPath = 'C:/Users/godoy/Desktop/esboce-drag/src/core/Catalog.ts';
 const snippetPath = process.argv[2];
@@ -8,6 +8,7 @@ const sku = process.argv[5];
 const colorHex = process.argv[6];
 const tileMeters = process.argv[7];
 const anchor = process.argv[8]; // texto curto e unico logo apos onde inserir
+const category = process.argv[9] || 'floor_tile'; // floor_tile (piso/parede) | roof_tile | trim
 
 const textures = fs.readFileSync(snippetPath, 'utf8').replace(/\r?\n$/, '');
 const src = fs.readFileSync(catalogPath, 'utf8');
@@ -18,7 +19,7 @@ if (idx === -1) {
   process.exit(1);
 }
 
-const entry = `    { id: '${productId}', name: '${productName}', manufacturer: 'vortice', category: 'floor_tile',
+const entry = `    { id: '${productId}', name: '${productName}', manufacturer: 'vortice', category: '${category}',
       commercial: { sku: '${sku}', price: 0, unit: 'm2' },
       assets: {
         colorHex: '${colorHex}', textureUrl: null,

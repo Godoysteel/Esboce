@@ -119,3 +119,47 @@ test('Scene3DRenderer: piso usa a textura PBR de verdade (buildFloorTileMaterial
   assert.match(source, /var pisoHasRealTexture = !!\(effectiveFinish && effectiveFinish\.assets\.textures\);/);
   assert.match(source, /var pisoMaterial = pisoHasRealTexture\s*\n\s*\? buildFloorTileMaterial\(effectiveFinish, roomFinishSettings\.scale, roomFinishSettings\.rotation\)\s*\n\s*: null;/);
 });
+
+// DEC-98 — parede ganha o mesmo tratamento do piso (DEC-97): Product
+// Owner trouxe uma textura de pedra empilhada, pediu pra aplicar em
+// parede. A face da parede também só usava buildCeramicTexture (cor
+// sólida + linha de rejunte) mesmo quando o produto tinha mapas PBR
+// reais — mesmo gap arquitetônico do piso, só que na parede.
+test('Catalog: produto de pedra empilhada (teste PBR) existe com os mapas certos, sem aoMap (fonte não trouxe)', () => {
+  const product = Catalog.getProduct('teste.parede.pedra-empilhada-pbr');
+  assert.ok(product, 'produto teste.parede.pedra-empilhada-pbr não encontrado no Catálogo');
+  assert.equal(product.category, 'floor_tile');
+  assert.ok(product.assets.textures, 'produto sem assets.textures');
+  assert.match(product.assets.textures.map, /^data:image\/jpeg;base64,/);
+  assert.match(product.assets.textures.normalMap, /^data:image\/jpeg;base64,/);
+  assert.match(product.assets.textures.roughnessMap, /^data:image\/jpeg;base64,/);
+  assert.equal(product.assets.textures.aoMap, undefined);
+  assert.ok(product.assets.tileMeters > 0);
+});
+
+test('Scene3DRenderer: face da parede (e do oitão) usa a textura PBR de verdade (buildWallFaceMaterial, repeat em metros reais) quando o produto tem assets.textures — cai no padrão procedural de cerâmica só quando não tem', () => {
+  const source = readFileSync(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
+  assert.match(source, /function buildWallFaceMaterial\(product: any\) \{/);
+  // Reaproveita o MESMO cache de textura decodificada do piso (chave por
+  // product.id) — sem recarregar a imagem quando o mesmo produto já foi
+  // usado em algum cômodo.
+  assert.match(source, /function buildWallFaceMaterial\(product: any\) \{\s*\n\s*var tex = product\.assets\.textures!;\s*\n\s*if \(!floorTextureCache\[product\.id\]\)/);
+  // Sem recalcular UV por vértice (a face é um quad plano, UV já em
+  // unidades de WALL_PLASTER_TILE_METERS) — só repeat pela razão entre
+  // essa unidade fixa e o tileMeters do produto.
+  assert.match(source, /var repeatUnits = WALL_PLASTER_TILE_METERS \/ \(product\.assets\.tileMeters \|\| 1\);/);
+  assert.match(source, /c\.repeat\.set\(repeatUnits, repeatUnits\);/);
+  // Ramo de decisão na face da parede: produto com textura real usa
+  // buildWallFaceMaterial (com normalMap/roughnessMap/aoMap de verdade);
+  // sem isso, cai no buildCeramicTexture de sempre — comportamento
+  // antigo preservado pra todo produto sem assets.textures.
+  assert.match(source, /var hasRealTexture = !!\(product && product\.category === 'floor_tile' && product\.assets\.textures\);/);
+  assert.match(source, /var wallPbrMaps = hasRealTexture \? buildWallFaceMaterial\(product\) : null;/);
+  assert.match(source, /normalMap: DEBUG_COLOR_MODE \? null : \(hasRealTexture \? wallPbrMaps!\.normalMap : null\),/);
+  // Oitão (parede triangular sob telhado de duas águas) usa a mesma
+  // categoria de produto quando pintado como "parede" — ganha o mesmo
+  // tratamento, senão a mesma textura aplicaria PBR na parede reta mas
+  // cerâmica lisa no oitão da mesma casa.
+  assert.match(source, /function buildGableWallMaterial\(productId: any, viewState: any\) \{/);
+  assert.match(source, /if \(product && product\.category === 'floor_tile' && product\.assets\.textures\) \{/);
+});

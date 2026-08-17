@@ -33,7 +33,7 @@ test('Scene3DRenderer reduz a opacidade da FACE e da TAMPA DE TOPO da parede qua
   assert.match(rendererSource, /var wallsTransparent = !!layers\.paredesTransparentes;/);
   // A opacidade tem que ser MENOR que 1 (senão "transparente" não faz nada)
   assert.ok(0.28 < 1);
-  const faceMatBlock = rendererSource.slice(rendererSource.indexOf('var faceMat = new THREE.MeshStandardMaterial'), rendererSource.indexOf('var faceMat = new THREE.MeshStandardMaterial') + 1000);
+  const faceMatBlock = rendererSource.slice(rendererSource.indexOf('var faceMat = new THREE.MeshStandardMaterial'), rendererSource.indexOf('var faceMat = new THREE.MeshStandardMaterial') + 1400);
   assert.match(faceMatBlock, /transparent: wallsTransparent/);
   assert.match(faceMatBlock, /opacity: wallsTransparent \? WALL_TRANSPARENT_OPACITY : 1/);
   const topMatBlock = rendererSource.slice(rendererSource.indexOf('var topMat = new THREE.MeshStandardMaterial'), rendererSource.indexOf('var topMat = new THREE.MeshStandardMaterial') + 400);
