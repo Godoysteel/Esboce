@@ -64,10 +64,12 @@ test('todas as 17 esquadrias já têm thumbnail — última imagem (Basculante) 
   assert.equal(basculante.assets.thumbnailUrl, 'images/esquadrias/janela-basculante-700x500.png');
 });
 
-test('vidro dos modelos de esquadria usa o mesmo material de vidro do envidraçamento, mas com transparência real (não o padrão 100% opaco da fachada)', () => {
+test('vidro dos modelos de esquadria usa o mesmo material de vidro do envidraçamento, mas com transparência real (não o padrão 100% opaco da fachada) e reflexo reduzido (DEC-99)', () => {
   const source = readFileSync(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
   assert.match(source, /glass\|vidro/i);
-  assert.match(source, /buildGlazingGlassMaterial\(\{ \.\.\.DEFAULT_GLAZING_GLASS_MATERIAL, opacity: 0\.35 \}\)/);
+  // roughness/reflectionIntensity sobrescritos só aqui — reflexo reduzido
+  // nas esquadrias sem mexer no padrão do vidro da fachada (Envidraçamento).
+  assert.match(source, /buildGlazingGlassMaterial\(\{ \.\.\.DEFAULT_GLAZING_GLASS_MATERIAL, opacity: 0\.35, roughness: 0\.22, reflectionIntensity: 1\.0 \}\)/);
 });
 
 test('modelo de esquadria ganha 4 tiras de requadro fechando a folga entre o caixilho e a espessura da parede', () => {

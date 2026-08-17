@@ -1,5 +1,7 @@
 # Changelog
 
+> Alterado: reflexo do vidro das esquadrias (porta/janela) reduzido — ficava espelhado demais numa folha pequena, com a mesma calibração usada na fachada de vidro grande (Envidraçamento). O vidro da fachada continua igual. Ver DEC-99.
+
 > Adicionado: parede (e oitão) agora também pode usar textura real (foto + relevo + rugosidade) — mesma melhoria do piso (ver abaixo), agora na ferramenta Pintar > Paredes. Primeiro produto disponível: pedra empilhada (teste). Ver DEC-98.
 
 > Adicionado: piso agora pode usar textura real (foto + relevo + rugosidade), com o padrão físico mantido em tamanho real de metros — antes todo piso usava só um padrão de cerâmica desenhado (cor sólida + linha de rejunte), mesmo quando o produto escolhido tinha uma textura de verdade cadastrada. Primeiro produto disponível: piso laminado (teste). Ver DEC-97.

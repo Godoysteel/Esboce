@@ -1083,11 +1083,15 @@ export function hashColorHex(key: string): number {
     // diferente do padrão do envidraçamento (DEFAULT_GLAZING_GLASS_MATERIAL,
     // opacity=1 sempre) que faz sentido pra fachada de vidro grande, mas
     // não pro vidro pequeno de uma folha de porta/janela: aqui a pessoa
-    // espera enxergar através, não só o reflexo espelhado.
+    // espera enxergar através, não só o reflexo espelhado. roughness e
+    // reflectionIntensity também reduzidos em relação ao padrão da
+    // fachada (0,06/2,15) — pedido do Product Owner pra amenizar o
+    // reflexo espelhado nas esquadrias especificamente, sem mexer no
+    // vidro da fachada (Envidraçamento), que continua usando o padrão.
     var glassMaterial: any = null;
     instance.traverse(function (child: any) {
       if (child.isMesh && child.material && /glass|vidro/i.test(child.material.name || '')) {
-        if (!glassMaterial) glassMaterial = buildGlazingGlassMaterial({ ...DEFAULT_GLAZING_GLASS_MATERIAL, opacity: 0.35 });
+        if (!glassMaterial) glassMaterial = buildGlazingGlassMaterial({ ...DEFAULT_GLAZING_GLASS_MATERIAL, opacity: 0.35, roughness: 0.22, reflectionIntensity: 1.0 });
         child.material = glassMaterial;
       }
     });
