@@ -1,5 +1,7 @@
 # Changelog
 
+> Corrigido: uma junção em T ainda podia mostrar uma rachadura fina (linha do chão ao teto) bem no meio da face de uma parede vizinha, mesmo com o volume da parede já fechado por completo — a linha de contorno era desenhada num ponto que não é uma aresta de verdade. Ver DEC-93.
+
 > Corrigido: parede compartilhada entre um cômodo alto e um cômodo baixo podia ficar "esquecida" na altura antiga (não só no canto — na extensão inteira dela) depois de uma mudança de topologia posterior ao arraste que levantou o cômodo. A altura de cada parede agora é recalculada sempre a partir dos cômodos que ela fecha, então fica correta não importa a ordem das edições. Ver DEC-92.
 
 > Corrigido: canto entre duas paredes de alturas diferentes (altura de cômodo individual, ver DEC-88) podia ficar aberto — sem "tampinha" fechando a quina — depois de arrastar uma parede próxima e reconstruir o encontro entre elas. A parede mais alta agora ganha uma tampa extra cobrindo exatamente a faixa acima da altura da vizinha mais baixa. Ver DEC-91.

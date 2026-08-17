@@ -812,12 +812,24 @@ export function hashColorHex(key: string): number {
     function vertical(p: any) { pts.push(p.x, y0, p.z, p.x, y1, p.z); }
     // Uma ponta conectada e não estendida fica dentro da continuidade de
     // outra parede. Desenhar sua vertical expõe a emenda interna depois
-    // da fusão. Pontas livres e a parede que fecha a quina permanecem.
-    if (fp.p1Free !== false || fp.p1Extended) {
+    // da fusão. Só ponta LIVRE de verdade (free === true — a dobra rasa
+    // de duas paredes, sem mais ninguém cobrindo aquele canto) desenha a
+    // linha; `p1Extended` sozinho NÃO basta. A parede perpendicular de
+    // uma junção em T "disfarçada" (3 vias — ver computeWallFootprints)
+    // também fica com `extended: true`, mas com `free: false`: seu canto
+    // estendido fica sobreposto ao território das duas paredes retas que
+    // ela mesma fecha, não é uma aresta real. Contava como "ponta que
+    // fecha a quina" e ganhava uma vertical do chão ao teto bem no meio
+    // da face das paredes vizinhas — visualmente uma rachadura, mesmo com
+    // a tampa sólida (endcap, que continua usando a condição mais ampla
+    // de propósito — ela SIM precisa fechar o volume ali) sem buraco
+    // nenhum por baixo. Bug relatado como "quina aberta, sem tampinha"
+    // depois que a DEC-91/92 já tinham fechado o volume de verdade.
+    if (fp.p1Free === true) {
       vertical(fp.p1a);
       vertical(fp.p1b);
     }
-    if (fp.p2Free !== false || fp.p2Extended) {
+    if (fp.p2Free === true) {
       vertical(fp.p2a);
       vertical(fp.p2b);
     }

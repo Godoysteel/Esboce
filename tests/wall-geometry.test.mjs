@@ -1209,6 +1209,37 @@ test('Scene3DRenderer usa Core.resolvedWallHeights (não mais Wall.heightM cru) 
   assert.match(scene3DRendererSource, /return wAtticRoof \? \(wAtticRoof\.baseHeightM \|\| 1\.2\) : \(resolvedWallHeightsMap\[ww\.id\]/);
 });
 
+// DEC-93 — correção pós-lançamento: a "quina aberta" continuava aparecendo
+// mesmo depois da DEC-91/92 fecharem o volume sólido de verdade. Causa:
+// buildWallFootprintEdgeLines desenhava uma linha VERTICAL do chão ao teto
+// no canto ESTENDIDO da parede perpendicular de uma junção em T "disfarçada"
+// de 3 vias (free: false, extended: true) — condição idêntica à usada pra
+// decidir a TAMPA SÓLIDA (`p1Free !== false || p1Extended`), mas o canto
+// estendido desse caso específico fica sobreposto ao território das duas
+// paredes retas que ele mesmo fecha (não é uma aresta real, ao contrário
+// da dobra rasa de 2 paredes, onde o mesmo par free:true/extended:true
+// realmente é a única coisa cobrindo o canto). O resultado era uma linha
+// cheia (chão ao teto) desenhada no meio da face das paredes vizinhas —
+// lê como rachadura, mesmo sem buraco nenhum na malha por baixo.
+test('linha de contorno vertical só aparece em ponta LIVRE de verdade (free === true) — junção em T disfarçada (free: false, extended: true) não ganha linha espúria no meio da face da vizinha (DEC-93)', () => {
+  const fnStart = scene3DRendererSource.indexOf('function buildWallFootprintEdgeLines(fp: any, height: any, yOffset: any, showTop = true) {');
+  assert.notEqual(fnStart, -1);
+  const fnEnd = scene3DRendererSource.indexOf('\r\n  }', fnStart);
+  const fnBody = scene3DRendererSource.slice(fnStart, fnEnd);
+  assert.match(fnBody, /if \(fp\.p1Free === true\) \{/);
+  assert.match(fnBody, /if \(fp\.p2Free === true\) \{/);
+  // Não pode voltar a usar a condição ampla (a mesma do endcap sólido) —
+  // essa é exatamente a regressão que causou a rachadura visual.
+  assert.doesNotMatch(fnBody, /if \(fp\.p1Free !== false \|\| fp\.p1Extended\)/);
+  assert.doesNotMatch(fnBody, /if \(fp\.p2Free !== false \|\| fp\.p2Extended\)/);
+
+  // O endcap SÓLIDO (tampa de verdade, DEC-91) continua usando a condição
+  // ampla de propósito — ele PRECISA fechar o volume ali, ao contrário da
+  // linha, que é só contorno cosmético.
+  const endcapStart = scene3DRendererSource.indexOf("if (fp.p1Free !== false || fp.p1Extended) {\r\n            var endCap1");
+  assert.notEqual(endcapStart, -1, 'endcap sólido continua com a condição ampla — só a linha de contorno mudou');
+});
+
 // DEC-90 — botão "Gerar Laje": cômodo nasce sem laje visível/contabilizada;
 // um clique marca TODOS os cômodos fechados do pavimento atual de uma vez
 // (cada um com seu próprio roomKey, não uma peça única fundida).
