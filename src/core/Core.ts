@@ -1123,11 +1123,18 @@ export interface WallResizeOffsetResolution {
   blockingWallId?: string;
 }
 
-// Impede que uma parede de um comodo atravesse outra parede paralela
-// durante o empurrao perpendicular. O limite conserva uma celula principal
-// da grade (0,50 m) entre os dois eixos: alem de evitar a inversao do
-// contorno, isso impede que o ambiente colapse ate largura zero antes que o
-// protetor topologico final tenha a chance de validar a transacao.
+// Impede que uma parede de um comodo ATRAVESSE (passe pro outro lado de)
+// outra parede paralela durante o empurrao perpendicular — mas permite
+// SOBREPOR ate o eixo dela, ja que sobreposicao exata e exatamente o que
+// Store.commands.fuseOverlappingWalls (chamado uma vez no pointerup) usa
+// pra fundir as duas num trecho so. Pedido do Product Owner: a trava
+// antiga parava meia celula da grade (0,50 m) ANTES da parede obstaculo,
+// o que evitava cruzar mas tambem impedia a sobreposicao exata que a
+// fusao exige (Core.wallsCanFuse pede as duas paredes coincidentes,
+// dentro de COINCIDENCE_TOL) — na pratica, nunca dava pra fundir empurrando
+// uma parede ate a vizinha. Agora o limite e o proprio eixo da parede
+// obstaculo: alcanca e sobrepoe (fusao acontece normalmente), mas nao
+// passa pro outro lado.
 //
 // A funcao usa sempre a fotografia do INICIO do gesto. Assim o obstaculo nao
 // muda de lugar conforme as paredes vizinhas alongam/encurtam na previa.
@@ -1137,7 +1144,6 @@ export function resolveWallResizeOffset(
   requestedOffset: number,
   nx: number,
   ny: number,
-  minimumSeparation = SNAP_UNIT,
 ): WallResizeOffsetResolution {
   const requested = snap(requestedOffset);
   if (!target || Math.abs(requested) < 1e-6) return { offset: 0, limited: false };
@@ -1175,14 +1181,14 @@ export function resolveWallResizeOffset(
     const signedDistance = (otherMidX - target.x1) * nx + (otherMidY - target.y1) * ny;
     if (Math.abs(signedDistance) <= COINCIDENCE_TOL) continue;
 
-    if (requested > 0 && signedDistance > 0 && requested >= signedDistance - minimumSeparation) {
-      const candidate = Math.max(0, snap(signedDistance - minimumSeparation));
+    if (requested > 0 && signedDistance > 0 && requested >= signedDistance) {
+      const candidate = Math.max(0, snap(signedDistance));
       if (candidate < allowed) {
         allowed = candidate;
         blockingWallId = other.id;
       }
-    } else if (requested < 0 && signedDistance < 0 && requested <= signedDistance + minimumSeparation) {
-      const candidate = Math.min(0, snap(signedDistance + minimumSeparation));
+    } else if (requested < 0 && signedDistance < 0 && requested <= signedDistance) {
+      const candidate = Math.min(0, snap(signedDistance));
       if (candidate > allowed) {
         allowed = candidate;
         blockingWallId = other.id;

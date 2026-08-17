@@ -1,5 +1,7 @@
 # Changelog
 
+> Alterado: arrastar uma parede pra empurrá-la agora permite chegar até encostar numa parede paralela e fundir as duas (o trecho compartilhado vira uma parede só), em vez de parar meio metro antes dela sem nunca conseguir fundir. Continua não sendo possível atravessar a parede pro outro lado. Vale nas duas visualizações (3D e 2D). Ver DEC-96.
+
 > Corrigido: telhado/parapeito que tocava a parede compartilhada de um cômodo mais alto, mas tinha o centro em um cômodo mais baixo, ficava com a parede "furando" por cima (dava pra ver através, por cima do parapeito). Agora o telhado nunca fica mais baixo que a parede compartilhada mais alta que ele toca, mesmo com o centro caindo no cômodo baixo. Ver DEC-95.
 
 > Adicionado: o telhado (tanto o fantasma da ferramenta quanto o já colocado) agora acompanha a altura PRÓPRIA do cômodo embaixo dele — passe o mouse sobre um cômodo mais alto (altura individual, ver DEC-88) e o telhado fantasma sobe sozinho pra ficar sobre ele, em vez de ficar preso na altura padrão do pavimento inteiro. Ver DEC-94.

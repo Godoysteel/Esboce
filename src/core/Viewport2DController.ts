@@ -218,6 +218,13 @@ export class Viewport2DController {
             .concat(drag.linksEnd.map((link) => ({ ...link, x: x2, y: y2 })));
           Store.commands.beginTransaction();
           Store.commands.updateWallResizeLive(drag.target.id, x1, y1, x2, y2, linked);
+          // Empurrar até sobrepor uma parede paralela (agora permitido —
+          // ver Core.resolveWallResizeOffset) só fecha o trecho compartilhado
+          // se a sobreposição virar de fato uma fusão aqui, igual o 3D já
+          // faz (ViewportController.fuseAllOverlaps): sem isso, as duas
+          // paredes ficariam coincidentes mas continuariam duas peças
+          // separadas.
+          this.fuseOverlapsAfterResize(drag.target.id);
           Store.commands.splitWallsAtTJunctions();
         }
         this.render();
@@ -283,6 +290,36 @@ export class Viewport2DController {
       });
       return copy;
     });
+  }
+
+  // Empurrar uma parede até sobrepor outra paralela (Core.resolveWallResizeOffset
+  // agora permite chegar até o eixo dela, não mais parar meia célula antes)
+  // deixa as duas coincidentes, mas ainda como peças separadas — funde de
+  // verdade aqui, mesma técnica de ViewportController.fuseAllOverlaps (3D).
+  // Reidentifica o alvo pela POSIÇÃO (não pelo id, que muda a cada fusão —
+  // o trecho fundido nasce com um id novo, ver Store.commands.
+  // fuseOverlappingWalls) em passes sucessivos, já que uma fusão pode
+  // revelar outra sobreposição (ex.: a parede recém-fundida encostando
+  // numa terceira).
+  private fuseOverlapsAfterResize(wallId: string): void {
+    const seed = Store.findWall(wallId);
+    if (!seed) return;
+    let x1 = seed.x1, y1 = seed.y1, x2 = seed.x2, y2 = seed.y2;
+    for (let pass = 0; pass < 6; pass++) {
+      const target = Store.currentWalls().find((w) => (
+        Core.distToSegment(x1, y1, w.x1, w.y1, w.x2, w.y2) <= Core.COINCIDENCE_TOL
+        && Core.distToSegment(x2, y2, w.x1, w.y1, w.x2, w.y2) <= Core.COINCIDENCE_TOL
+      ));
+      if (!target) break;
+      const match = Store.currentWalls().find((other) => Core.wallsCanFuse(target, other));
+      if (!match) break;
+      Store.commands.fuseOverlappingWalls(target.id, match.id);
+      const fused = Store.currentWalls().find((w) => (
+        Core.distToSegment(x1, y1, w.x1, w.y1, w.x2, w.y2) <= Core.COINCIDENCE_TOL
+      ));
+      if (!fused) break;
+      x1 = fused.x1; y1 = fused.y1; x2 = fused.x2; y2 = fused.y2;
+    }
   }
 
   private modelPoint(event: PointerEvent): { x: number; y: number } {

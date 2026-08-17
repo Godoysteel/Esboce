@@ -429,25 +429,32 @@ test('parede transversal para antes da esquadria mesmo quando o ponteiro salta o
   );
 });
 
-test('parede de comodo para a 0,50 m antes de atravessar parede paralela', () => {
+// Pedido do Product Owner: a parede não pode ATRAVESSAR (passar pro
+// outro lado de) uma parede paralela, mas deve poder SOBREPOR até o eixo
+// dela — sobreposição exata é o que Store.commands.fuseOverlappingWalls
+// usa pra fundir as duas (Core.wallsCanFuse exige coincidência, não só
+// proximidade). Antes o limite parava meia célula da grade (0,50 m) ANTES
+// da parede obstáculo — evitava cruzar, mas também nunca permitia chegar
+// perto o bastante da sobreposição exata que a fusão exige.
+test('parede de cômodo para exatamente no eixo da parede paralela — sobrepõe pra fundir, mas não atravessa pro outro lado', () => {
   const moving = { id: 'moving', x1: 0, y1: 0, x2: 80, y2: 0 };
   const obstacle = { id: 'obstacle', x1: 20, y1: 40, x2: 100, y2: 40 };
 
   const result = resolveWallResizeOffset(moving, [moving, obstacle], 60, 0, 1);
 
   assert.deepEqual(result, {
-    offset: 30,
+    offset: 40,
     limited: true,
     blockingWallId: 'obstacle',
   });
 });
 
-test('limite preventivo funciona nos dois sentidos e ignora parede sem sobreposicao', () => {
+test('limite funciona nos dois sentidos e ignora parede sem sobreposicao', () => {
   const moving = { id: 'moving', x1: 0, y1: 0, x2: 80, y2: 0 };
   const behind = { id: 'behind', x1: 0, y1: -40, x2: 80, y2: -40 };
   const outsideSpan = { id: 'outside', x1: 100, y1: 20, x2: 140, y2: 20 };
 
-  assert.equal(resolveWallResizeOffset(moving, [moving, behind], -60, 0, 1).offset, -30);
+  assert.equal(resolveWallResizeOffset(moving, [moving, behind], -60, 0, 1).offset, -40);
   assert.deepEqual(
     resolveWallResizeOffset(moving, [moving, outsideSpan], 60, 0, 1),
     { offset: 60, limited: false },

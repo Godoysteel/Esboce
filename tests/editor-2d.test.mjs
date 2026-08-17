@@ -72,3 +72,20 @@ test('parede selecionada arrasta pela alça sem atualizar o Store durante a pré
   assert.match(controller, /this\.wallDrag\.preview = this\.wallResizePreview/);
   assert.match(controller, /Store\.commands\.updateWallResizeLive/);
 });
+
+// Pedido do Product Owner: arrastar uma parede não pode atravessar outra
+// paralela, mas deve poder SOBREPOR até o eixo dela — sobreposição exata
+// é o que Core.wallsCanFuse exige pra fundir (ver Core.resolveWallResizeOffset,
+// que passou a permitir chegar exatamente até a parede obstáculo em vez
+// de parar meia célula da grade antes). Sem fundir de verdade ao soltar,
+// as duas ficariam coincidentes mas continuariam duas peças separadas —
+// mesmo problema que o 3D já resolve (ViewportController.fuseAllOverlaps).
+test('soltar o arrasto de parede funde sobreposição com outra parede (Core.wallsCanFuse), igual o 3D já faz', () => {
+  assert.match(controller, /private fuseOverlapsAfterResize\(wallId: string\): void \{/);
+  assert.match(controller, /Core\.wallsCanFuse\(target, other\)/);
+  assert.match(controller, /Store\.commands\.fuseOverlappingWalls\(target\.id, match\.id\)/);
+  // Chamado no finish() do arrasto de parede, ANTES da divisão em T (mesma
+  // ordem do 3D: funde primeiro, só depois resolve junções em T novas).
+  const finishBlock = controller.slice(controller.indexOf('Store.commands.updateWallResizeLive(drag.target.id'));
+  assert.match(finishBlock.slice(0, 900), /this\.fuseOverlapsAfterResize\(drag\.target\.id\);\s*\n\s*Store\.commands\.splitWallsAtTJunctions\(\);/);
+});
