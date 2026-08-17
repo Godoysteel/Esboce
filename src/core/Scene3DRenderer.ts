@@ -2971,15 +2971,27 @@ export function hashColorHex(key: string): number {
       // si — wallFootprints acima — mas erraria a soleira, que deve
       // cobrir exatamente onde a espessura da parede estava).
       var wallFootprintsFull = Core.computeWallFootprints(floorData.walls);
+      // Altura de renderização de CADA parede, recalculada aqui (não só
+      // confiando em Wall.heightM) — ver Core.resolvedWallHeights: uma
+      // parede compartilhada por 2+ cômodos nunca fica mais baixa do que
+      // o mais alto deles, mesmo quando Wall.heightM ficou desatualizado
+      // por uma mudança de topologia posterior ao arraste original que
+      // definiu essa altura (dividir/fundir parede criando um trecho novo
+      // que passa a tocar um cômodo mais alto, por exemplo). Correção
+      // pós-lançamento: um vão na fachada ao longo da parede INTEIRA,
+      // não só no canto — a tampa parcial de canto (abaixo) sozinha não
+      // resolve isso porque o problema não é o canto, é a altura da
+      // parede em si estar errada.
+      var resolvedWallHeightsMap = Core.resolvedWallHeights(floorData.walls, currentWallHeight);
       // Altura efetiva de QUALQUER parede do pavimento (não só a `w` da
       // vez) — usada abaixo pra achar a altura da vizinha num canto.
       // Mesma regra de prioridade da linha `renderedWallHeight` logo
-      // adiante (heightM > ático gerado > padrão do pavimento).
+      // adiante (ático gerado > resolvedWallHeightsMap).
       function wallEffectiveHeight(ww: any) {
         var wAtticRoof = (floorData.roofs || []).find(function (roof: any) {
           return roof.atticMode === 'generated' && (roof.atticWallIds || []).indexOf(ww.id) !== -1;
         });
-        return wAtticRoof ? (wAtticRoof.baseHeightM || 1.2) : (ww.heightM != null ? ww.heightM : currentWallHeight);
+        return wAtticRoof ? (wAtticRoof.baseHeightM || 1.2) : (resolvedWallHeightsMap[ww.id] != null ? resolvedWallHeightsMap[ww.id]! : currentWallHeight);
       }
       // Altura máxima entre as paredes que tocam o ponto (px,py) — usado
       // pra saber até onde a VIZINHA cobre um canto "fechado" (Free:
@@ -3066,10 +3078,12 @@ export function hashColorHex(key: string): number {
           var generatedAtticRoof = (floorData.roofs || []).find(function (roof) {
             return roof.atticMode === 'generated' && (roof.atticWallIds || []).indexOf(w.id) !== -1;
           });
-          // Wall.heightM (altura de cômodo individual, ver DEC-88) tem
-          // prioridade sobre a altura padrão do pavimento — mas nunca
-          // sobre a extensão de ático, que já é um caso mais específico.
-          var renderedWallHeight = generatedAtticRoof ? (generatedAtticRoof.baseHeightM || 1.2) : (w.heightM != null ? w.heightM : currentWallHeight);
+          // Wall.heightM (altura de cômodo individual, ver DEC-88), com a
+          // regra de parede compartilhada reaplicada ao vivo (ver
+          // resolvedWallHeightsMap acima), tem prioridade sobre a altura
+          // padrão do pavimento — mas nunca sobre a extensão de ático,
+          // que já é um caso mais específico.
+          var renderedWallHeight = generatedAtticRoof ? (generatedAtticRoof.baseHeightM || 1.2) : (resolvedWallHeightsMap[w.id] != null ? resolvedWallHeightsMap[w.id]! : currentWallHeight);
           var x1 = (w.x1 - offsetX) * scale, z1 = (w.y1 - offsetY) * scale;
           var x2 = (w.x2 - offsetX) * scale, z2 = (w.y2 - offsetY) * scale;
           var length = Math.hypot(x2 - x1, z2 - z1);

@@ -988,6 +988,42 @@ export function resolveRoomHeightUpdate(wallList: Wall[], roomWallIds: string[],
   });
 }
 
+// Altura de RENDERIZAÇÃO de cada parede do pavimento, calculada de novo a
+// cada chamada em vez de confiar cegamente em Wall.heightM. resolveRoomHeightUpdate
+// (acima) só aplica a regra "parede compartilhada nunca fica mais baixa
+// que o cômodo vizinho" NO MOMENTO do arraste — uma mudança de topologia
+// DEPOIS disso (dividir/fundir criando um novo trecho colinear que passa
+// a tocar um cômodo mais alto, ou uma parede nova encostando numa parede
+// que já era compartilhada) não reaplica a regra sozinha, e Wall.heightM
+// fica "desatualizado": mais baixo do que o cômodo que ela agora fecha
+// exige. Sintoma reportado: um vão/buraco na fachada, não só no canto,
+// ao longo de toda a extensão dessa parede — Core.computeWallFootprints
+// (2D puro) e a tampa parcial de canto (DEC-91) não resolvem isso porque
+// o problema não é o CANTO, é a parede inteira estar na altura errada.
+// Esta função devolve, pra CADA parede, o maior valor entre a própria
+// Wall.heightM (ou o padrão do pavimento) e a Core.roomOwnHeightM de
+// QUALQUER cômodo que essa parede feche — mas só entra em ação quando a
+// parede é compartilhada por 2+ cômodos ao mesmo tempo (Core.roomsContainingWall).
+// Uma parede exclusiva de um único cômodo nunca é forçada por aqui — não
+// existe "cômodo vizinho mais alto" pra comparar.
+export function resolvedWallHeights(wallList: Wall[], floorDefaultHeightM: number): Record<string, number> {
+  const roomsWithIds = detectRooms(wallList).map((room) => ({ room, ids: findRoomWallIds(wallList, room) }));
+  const roomOwnHeights = roomsWithIds.map((entry) => roomOwnHeightM(wallList, entry.ids, floorDefaultHeightM));
+  const result: Record<string, number> = {};
+  wallList.forEach((wall) => {
+    const ownHeight = wall.heightM != null ? wall.heightM : floorDefaultHeightM;
+    let owningCount = 0;
+    let height = ownHeight;
+    roomsWithIds.forEach((entry, i) => {
+      if (entry.ids.indexOf(wall.id) === -1) return;
+      owningCount += 1;
+      if (roomOwnHeights[i]! > height) height = roomOwnHeights[i]!;
+    });
+    result[wall.id] = owningCount >= 2 ? height : ownHeight;
+  });
+  return result;
+}
+
 // Devolve o contorno inteiro apenas quando a parede clicada pertence a um
 // unico comodo fechado e esse contorno ainda nao tem nenhuma ligacao com
 // paredes externas. Essa e a fronteira entre dois modos de edicao:
@@ -1696,7 +1732,7 @@ export const Core = {
   roofRidgeHeightMeters, roofPitchForRidgeHeight, roofsCanFuse, fusedRoofBounds,
   rectPoints, lajeBounds,
   rectsNearby, pointInPolygon, roomModelBounds, findRoomWallIds, findIsolatedRoomWallIds, wallResizeTopology, resolveWallResizeOffset, computeWallFootprints,
-  roomsContainingWall, roomHeightM, roomOwnHeightM, resolveRoomHeightUpdate,
+  roomsContainingWall, roomHeightM, roomOwnHeightM, resolveRoomHeightUpdate, resolvedWallHeights,
   wallResizeEndpointNeedsBridge,
   distPointToLine, wallOBB, furnitureOBB, openingOBB, obbOverlapMTV, wallOverlapsForeignOpening, resolveWallOffsetAgainstOpenings, wallsCanFuse, wallsMeetAtEndpoint, resolveWallGroupGridDelta,
   findWallTJunctionSplits,

@@ -27,6 +27,7 @@ import {
   roomHeightM,
   roomOwnHeightM,
   roomsContainingWall,
+  resolvedWallHeights,
   wallOBB,
   wallsCanFuse,
   wallsMeetAtEndpoint,
@@ -1147,6 +1148,65 @@ test('tampa parcial de canto cobre o vão quando a vizinha do canto "fechado" é
   assert.match(wallFlow, /buildWallEndCapMesh\(fp, renderedWallHeight - p2NeighborMaxH, yOffset \+ p2NeighborMaxH, topMat, 2\)/);
   // Ático gerado já resolve a extensão de parede à parte (buildAtticWallExtensions) — não duplica aqui.
   assert.match(wallFlow, /if \(!generatedAtticRoof\) \{\s*\n\s*if \(!\(fp\.p1Free/);
+});
+
+// DEC-92 — correção pós-lançamento: resolveRoomHeightUpdate (DEC-88) só
+// aplica a regra "parede compartilhada nunca fica mais baixa que o
+// cômodo vizinho" NO MOMENTO do arraste. Uma mudança de topologia DEPOIS
+// disso (nova junção encostando numa parede que já era compartilhada,
+// por exemplo) não reaplica a regra sozinha — Wall.heightM fica
+// desatualizado, mais baixo do que deveria. Sintoma reportado pelo
+// Product Owner: vão/buraco na fachada ao longo da parede INTEIRA (não
+// só no canto — a tampa parcial da DEC-91 sozinha não resolve, porque o
+// problema não é o canto, é a altura da parede em si estar errada).
+// resolvedWallHeights recalcula a altura de renderização de CADA parede
+// do zero a cada chamada, então fica correto não importa a ordem/histórico
+// de edições que levou até aquele estado.
+test('resolvedWallHeights: parede compartilhada "esquecida" na altura antiga (por mudança de topologia) é recalculada certa, sem depender de Wall.heightM já estar em dia (DEC-92)', () => {
+  const walls = twoRoomsSharingWall();
+  const roomAIds = ['a1', 'shared', 'a3', 'a4'];
+  // Cômodo A foi levantado pra 4,5 m (via resolveRoomHeightUpdate, que na
+  // hora JÁ teria levantado 'shared' junto) — mas aqui simulamos o caso
+  // real reportado: 'shared' ficou pra trás, sem heightM nenhum, como se
+  // essa junção só tivesse passado a existir DEPOIS do arraste original.
+  walls.find((w) => w.id === 'a1').heightM = 4.5;
+  walls.find((w) => w.id === 'a3').heightM = 4.5;
+  walls.find((w) => w.id === 'a4').heightM = 4.5;
+  // 'shared'.heightM continua undefined — o "esquecimento" sendo testado.
+  assert.equal(walls.find((w) => w.id === 'shared').heightM, undefined);
+
+  const resolved = resolvedWallHeights(walls, 2.7);
+  // A parede compartilhada é recalculada pra 4,5 m mesmo sem Wall.heightM
+  // ter sido atualizado — a regra "sempre o cômodo mais alto" é reaplicada
+  // ao vivo, não só uma vez no momento do arraste original.
+  assert.equal(resolved.shared, 4.5);
+  assert.equal(resolved.a1, 4.5);
+  // Do lado do cômodo B (não participou do arraste, continua no padrão):
+  // suas paredes EXCLUSIVAS (b1/b2/b3) não são forçadas pra cima — só a
+  // parede que ele COMPARTILHA com A é que segue a regra.
+  assert.equal(resolved.b1, 2.7);
+  assert.equal(resolved.b2, 2.7);
+  assert.equal(resolved.b3, 2.7);
+});
+
+test('resolvedWallHeights: parede exclusiva de um único cômodo nunca é forçada — só existe "vizinho mais alto" quando há 2+ cômodos', () => {
+  const walls = twoRoomsSharingWall();
+  // a1 é exclusiva de A (não aparece no contorno de B) — mesmo que outra
+  // parede exclusiva do mesmo cômodo (a3) esteja mais alta, a1 não é
+  // arrastada junto por esta função (resolvedWallHeights só entra em
+  // ação pra parede COMPARTILHADA entre 2+ cômodos).
+  walls.find((w) => w.id === 'a3').heightM = 5.0;
+  const resolved = resolvedWallHeights(walls, 2.7);
+  assert.equal(resolved.a1, 2.7);
+  assert.equal(resolved.a3, 5.0);
+});
+
+test('Scene3DRenderer usa Core.resolvedWallHeights (não mais Wall.heightM cru) pra decidir a altura renderizada de cada parede (DEC-92)', () => {
+  assert.match(scene3DRendererSource, /var resolvedWallHeightsMap = Core\.resolvedWallHeights\(floorData\.walls, currentWallHeight\);/);
+  assert.match(scene3DRendererSource, /var renderedWallHeight = generatedAtticRoof \? \(generatedAtticRoof\.baseHeightM \|\| 1\.2\) : \(resolvedWallHeightsMap\[w\.id\]/);
+  // wallEffectiveHeight (usada pela tampa parcial de canto da DEC-91) fica
+  // consistente com a mesma fonte, em vez de reler w.heightM cru.
+  assert.match(scene3DRendererSource, /return wAtticRoof \? \(wAtticRoof\.baseHeightM \|\| 1\.2\) : \(resolvedWallHeightsMap\[ww\.id\]/);
 });
 
 // DEC-90 — botão "Gerar Laje": cômodo nasce sem laje visível/contabilizada;
