@@ -154,7 +154,7 @@ test('parede demolida ganha o mesmo tratamento de "buraco no piso" que arco/port
   assert.match(renderer3DSource, /var wallFootprintsFull = Core\.computeWallFootprints\(floorData\.walls\);/);
 
   const demolishedSlabBlock = renderer3DSource.slice(
-    renderer3DSource.indexOf('floorData.walls.forEach(function (w) {\n          if (!w.demolished) return;\n          var wallLenM'),
+    renderer3DSource.indexOf('floorData.walls.forEach(function (w) {\r\n          if (!w.demolished) return;\r\n          var wallLenM'),
   );
   assert.ok(demolishedSlabBlock.length > 0, 'bloco de soleira pra parede demolida não encontrado');
   // Vão sintético cobrindo o comprimento INTEIRO (não um trecho) —

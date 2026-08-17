@@ -2971,6 +2971,34 @@ export function hashColorHex(key: string): number {
       // si — wallFootprints acima — mas erraria a soleira, que deve
       // cobrir exatamente onde a espessura da parede estava).
       var wallFootprintsFull = Core.computeWallFootprints(floorData.walls);
+      // Altura efetiva de QUALQUER parede do pavimento (não só a `w` da
+      // vez) — usada abaixo pra achar a altura da vizinha num canto.
+      // Mesma regra de prioridade da linha `renderedWallHeight` logo
+      // adiante (heightM > ático gerado > padrão do pavimento).
+      function wallEffectiveHeight(ww: any) {
+        var wAtticRoof = (floorData.roofs || []).find(function (roof: any) {
+          return roof.atticMode === 'generated' && (roof.atticWallIds || []).indexOf(ww.id) !== -1;
+        });
+        return wAtticRoof ? (wAtticRoof.baseHeightM || 1.2) : (ww.heightM != null ? ww.heightM : currentWallHeight);
+      }
+      // Altura máxima entre as paredes que tocam o ponto (px,py) — usado
+      // pra saber até onde a VIZINHA cobre um canto "fechado" (Free:
+      // false, sem tampa própria). Um canto 2D fechado presume as duas
+      // paredes na MESMA altura; com Wall.heightM (DEC-88) elas podem
+      // divergir, e a mais alta fica com um vão aberto acima da mais
+      // baixa — ver comentário completo junto da tampa parcial abaixo.
+      function neighborMaxHeightAt(px: number, py: number, excludeId: string) {
+        var maxH: number | null = null;
+        activeWallsForFootprint.forEach(function (other) {
+          if (other.id === excludeId) return;
+          var atEnd1 = Math.hypot(other.x1 - px, other.y1 - py) <= Core.COINCIDENCE_TOL;
+          var atEnd2 = Math.hypot(other.x2 - px, other.y2 - py) <= Core.COINCIDENCE_TOL;
+          if (!atEnd1 && !atEnd2) return;
+          var h = wallEffectiveHeight(other);
+          if (maxH === null || h > maxH) maxH = h;
+        });
+        return maxH;
+      }
 
       (floorData.glazingPanels || []).forEach(function (panel) {
         // Etapa 2c: grid de verdade (moldura + perfis internos + vidro
@@ -3169,6 +3197,40 @@ export function hashColorHex(key: string): number {
             endCap2.userData.floorIndex = floorIdx;
             scene.add(endCap2);
             registry.wallMeshes.push(endCap2);
+          }
+
+          // Tampa PARCIAL de canto "fechado" — cobre o vão acima da
+          // vizinha mais baixa. O par Free:false/Extended:false acima
+          // presume que a vizinha nesse canto tampa o volume até o
+          // TOPO desta parede; isso só é verdade quando as duas têm a
+          // mesma altura. Desde que Wall.heightM ficou editável por
+          // cômodo (DEC-88), a parede compartilhada pode ser mais alta
+          // que a vizinha — sobra um vão sem tampa nem parede vizinha
+          // cobrindo, exatamente o buraco reportado (canto "aberto",
+          // sem quina) quando um arrasto de parede reconstrói o T e o
+          // canto vira "fechado" de novo. Some 0 sempre que a vizinha
+          // já alcança (ou passa d)a nossa altura.
+          if (!generatedAtticRoof) {
+            if (!(fp.p1Free !== false || fp.p1Extended)) {
+              var p1NeighborMaxH = neighborMaxHeightAt(w.x1, w.y1, w.id);
+              if (p1NeighborMaxH !== null && p1NeighborMaxH < renderedWallHeight - 0.001) {
+                var partialCap1 = tagCategory(buildWallEndCapMesh(fp, renderedWallHeight - p1NeighborMaxH, yOffset + p1NeighborMaxH, topMat, 1), wallCategory);
+                partialCap1.userData.wallId = w.id;
+                partialCap1.userData.floorIndex = floorIdx;
+                scene.add(partialCap1);
+                registry.wallMeshes.push(partialCap1);
+              }
+            }
+            if (!(fp.p2Free !== false || fp.p2Extended)) {
+              var p2NeighborMaxH = neighborMaxHeightAt(w.x2, w.y2, w.id);
+              if (p2NeighborMaxH !== null && p2NeighborMaxH < renderedWallHeight - 0.001) {
+                var partialCap2 = tagCategory(buildWallEndCapMesh(fp, renderedWallHeight - p2NeighborMaxH, yOffset + p2NeighborMaxH, topMat, 2), wallCategory);
+                partialCap2.userData.wallId = w.id;
+                partialCap2.userData.floorIndex = floorIdx;
+                scene.add(partialCap2);
+                registry.wallMeshes.push(partialCap2);
+              }
+            }
           }
 
           if (generatedAtticRoof) {

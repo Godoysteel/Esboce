@@ -4550,5 +4550,5 @@ export const ViewportController = {
   toggleTouchCameraMode,
   getZoomPercent, zoomIn, zoomOut, setOnZoomChanged,
   toggleLayersMenuAtElement,
-  repositionDimensions: repositionDimensionCotas
+  repositionDimensions: repositionDimensionCotas,
 };

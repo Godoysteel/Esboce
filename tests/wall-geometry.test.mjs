@@ -1113,6 +1113,37 @@ test('junção em T e fusão de paredes propagam Wall.heightM pro pedaço novo c
   assert.match(fuseBlock, /if \(source\.heightM !== undefined\) piece\.heightM = source\.heightM;/);
 });
 
+// DEC-91 — correção pós-lançamento: Core.computeWallFootprints é geometria
+// 2D pura (não sabe nada de Wall.heightM) — um canto "fechado" (Free:
+// false, sem tampa própria) presume as duas paredes na MESMA altura. Com
+// altura por cômodo (DEC-88), a parede mais alta ficava com um vão aberto
+// (sem tampa e sem vizinha cobrindo) na faixa acima da altura da vizinha
+// mais baixa — bug reportado como "canto aberto, sem tampinha" depois de
+// um arrasto que reconstrói a junção em T.
+test('tampa parcial de canto cobre o vão quando a vizinha do canto "fechado" é mais baixa (DEC-91)', () => {
+  const roomsStart = scene3DRendererSource.indexOf('project.floors.forEach(function (floorData, floorIdx) {');
+  const wallLoopStart = scene3DRendererSource.indexOf('floorData.walls.forEach(function (w) {', roomsStart);
+  const wallLoopEnd = scene3DRendererSource.indexOf('\r\n\r\n', scene3DRendererSource.indexOf("(['a', 'b'] as const).forEach(function (side) {", wallLoopStart));
+  const wallFlow = scene3DRendererSource.slice(wallLoopStart, wallLoopEnd);
+
+  // Altura efetiva de qualquer parede (não só a `w` da vez) — mesma regra
+  // de prioridade (heightM > ático gerado > padrão do pavimento) usada
+  // pra achar a altura da vizinha num canto.
+  assert.match(scene3DRendererSource, /function wallEffectiveHeight\(ww: any\) \{/);
+  assert.match(scene3DRendererSource, /function neighborMaxHeightAt\(px: number, py: number, excludeId: string\) \{/);
+
+  // Só entra quando o canto já está "fechado" (nem free nem extended) —
+  // senão duplicaria a tampa de ponta livre que já existe acima.
+  assert.match(wallFlow, /if \(!\(fp\.p1Free !== false \|\| fp\.p1Extended\)\) \{/);
+  assert.match(wallFlow, /if \(!\(fp\.p2Free !== false \|\| fp\.p2Extended\)\) \{/);
+  // Reaproveita buildWallEndCapMesh com um yOffset deslocado pra altura da
+  // vizinha — a "sobra" vai só de neighborMaxH até a altura própria.
+  assert.match(wallFlow, /buildWallEndCapMesh\(fp, renderedWallHeight - p1NeighborMaxH, yOffset \+ p1NeighborMaxH, topMat, 1\)/);
+  assert.match(wallFlow, /buildWallEndCapMesh\(fp, renderedWallHeight - p2NeighborMaxH, yOffset \+ p2NeighborMaxH, topMat, 2\)/);
+  // Ático gerado já resolve a extensão de parede à parte (buildAtticWallExtensions) — não duplica aqui.
+  assert.match(wallFlow, /if \(!generatedAtticRoof\) \{\s*\n\s*if \(!\(fp\.p1Free/);
+});
+
 // DEC-90 — botão "Gerar Laje": cômodo nasce sem laje visível/contabilizada;
 // um clique marca TODOS os cômodos fechados do pavimento atual de uma vez
 // (cada um com seu próprio roomKey, não uma peça única fundida).

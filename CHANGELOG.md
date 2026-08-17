@@ -1,5 +1,7 @@
 # Changelog
 
+> Corrigido: canto entre duas paredes de alturas diferentes (altura de cômodo individual, ver DEC-88) podia ficar aberto — sem "tampinha" fechando a quina — depois de arrastar uma parede próxima e reconstruir o encontro entre elas. A parede mais alta agora ganha uma tampa extra cobrindo exatamente a faixa acima da altura da vizinha mais baixa. Ver DEC-91.
+
 > Alterado: laje deixa de ser automática — cômodo nasce sem laje visível nem contabilizada no orçamento. Novo botão "Gerar Laje" (grupo Cobertura, na barra lateral) cobre de uma vez todos os cômodos fechados do pavimento atual; cada laje continua sendo uma peça individual do próprio cômodo, não uma peça única fundida. A laje agora cobre o cômodo inteiro rente à face EXTERNA da parede (antes parava na face interna, igual o piso). Um cômodo criado depois de clicar o botão nasce sem laje de novo — clique outra vez pra cobrir ele também. Ver DEC-90.
 
 > Corrigido: dois bugs da altura de cômodo individual. (1) A laje do cômodo VIZINHO estava subindo junto quando só um cômodo era levantado — a parede compartilhada, corretamente elevada pra acompanhar o cômodo mais alto, fazia o vizinho achar que também precisava de teto mais alto; agora cada cômodo calcula sua própria altura só pelas paredes exclusivas dele. (2) Arrastar uma parede perto de um cômodo com altura customizada podia "abrir um buraco" nela — dividir/fundir parede em uma junção não copiava a altura customizada pro pedaço novo, que caía pra altura padrão no meio do caminho. Ver DEC-89.
