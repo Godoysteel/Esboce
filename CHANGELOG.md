@@ -1,5 +1,7 @@
 # Changelog
 
+> Corrigido: telhado/parapeito que tocava a parede compartilhada de um cômodo mais alto, mas tinha o centro em um cômodo mais baixo, ficava com a parede "furando" por cima (dava pra ver através, por cima do parapeito). Agora o telhado nunca fica mais baixo que a parede compartilhada mais alta que ele toca, mesmo com o centro caindo no cômodo baixo. Ver DEC-95.
+
 > Adicionado: o telhado (tanto o fantasma da ferramenta quanto o já colocado) agora acompanha a altura PRÓPRIA do cômodo embaixo dele — passe o mouse sobre um cômodo mais alto (altura individual, ver DEC-88) e o telhado fantasma sobe sozinho pra ficar sobre ele, em vez de ficar preso na altura padrão do pavimento inteiro. Ver DEC-94.
 
 > Corrigido: uma junção em T ainda podia mostrar uma rachadura fina (linha do chão ao teto) bem no meio da face de uma parede vizinha, mesmo com o volume da parede já fechado por completo — a linha de contorno era desenhada num ponto que não é uma aresta de verdade. Ver DEC-93.

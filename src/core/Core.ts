@@ -1033,19 +1033,45 @@ export function roomAtPoint(wallList: Wall[], x: number, y: number): Room | null
   return rooms.find((room) => pointInPolygon(x, y, room.points)) || null;
 }
 
-// Altura de apoio do TELHADO no ponto central do retângulo (x1,y1)-(x2,y2)
-// — acompanha o cômodo que estiver embaixo do centro do telhado (mesma
-// regra de "altura própria" já usada pra laje, Core.roomOwnHeightM), caindo
-// pro padrão do pavimento quando não há cômodo fechado ali (ex.: área
-// externa, ou vão ainda sem paredes fechando). Recalculada do zero a cada
-// chamada — mesmo espírito de Core.resolvedWallHeights: não guarda um
-// valor que possa ficar desatualizado se o cômodo mudar de altura depois.
+// Altura de apoio do TELHADO no retângulo (x1,y1)-(x2,y2) — parte do
+// cômodo embaixo do CENTRO (mesma regra de "altura própria" já usada pra
+// laje, Core.roomOwnHeightM), caindo pro padrão do pavimento quando não
+// há cômodo fechado ali (ex.: área externa, ou vão ainda sem paredes
+// fechando). Recalculada do zero a cada chamada — mesmo espírito de
+// Core.resolvedWallHeights: não guarda um valor que possa ficar
+// desatualizado se o cômodo mudar de altura depois.
+//
+// Correção pós-lançamento: um único retângulo de telhado pode tocar
+// paredes de MAIS de um cômodo (o centro cai num cômodo baixo, mas uma
+// borda do retângulo esbarra numa parede COMPARTILHADA com um cômodo
+// mais alto) — só olhar o cômodo do centro deixava essa parede
+// compartilhada "furando" o telhado por cima (a mesma parede, resolvida
+// certo pra 3,97m via Core.resolvedWallHeights, ficava mais alta que o
+// telhado apoiado nos 2,7m do cômodo do centro). Por isso o resultado
+// nunca fica abaixo da maior Core.resolvedWallHeights entre as paredes
+// cujas PONTAS caem dentro do retângulo — mesma regra "nunca mais baixo
+// que a parede compartilhada mais alta" já usada em toda a cadeia
+// DEC-88/92/94, agora também pro telhado.
 export function roofHeightAtRect(wallList: Wall[], x1: number, y1: number, x2: number, y2: number, floorDefaultHeightM: number): number {
   const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
   const room = roomAtPoint(wallList, cx, cy);
-  if (!room) return floorDefaultHeightM;
-  const roomWallIds = findRoomWallIds(wallList, room);
-  return roomOwnHeightM(wallList, roomWallIds, floorDefaultHeightM);
+  let height = floorDefaultHeightM;
+  if (room) {
+    const roomWallIds = findRoomWallIds(wallList, room);
+    height = roomOwnHeightM(wallList, roomWallIds, floorDefaultHeightM);
+  }
+  const minX = Math.min(x1, x2), maxX = Math.max(x1, x2);
+  const minY = Math.min(y1, y2), maxY = Math.max(y1, y2);
+  const resolved = resolvedWallHeights(wallList, floorDefaultHeightM);
+  const inRect = (px: number, py: number) => (
+    px >= minX - COINCIDENCE_TOL && px <= maxX + COINCIDENCE_TOL && py >= minY - COINCIDENCE_TOL && py <= maxY + COINCIDENCE_TOL
+  );
+  wallList.forEach((wall) => {
+    if (!inRect(wall.x1, wall.y1) && !inRect(wall.x2, wall.y2)) return;
+    const wallHeight = resolved[wall.id];
+    if (wallHeight != null && wallHeight > height) height = wallHeight;
+  });
+  return height;
 }
 
 // Devolve o contorno inteiro apenas quando a parede clicada pertence a um

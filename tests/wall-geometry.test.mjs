@@ -1275,6 +1275,32 @@ test('roofHeightAtRect: acompanha a altura PRÓPRIA do cômodo sob o centro do r
   assert.equal(rectOutside, 2.7, 'fora de qualquer cômodo fechado cai pro padrão do pavimento');
 });
 
+// Correção pós-lançamento da DEC-94: um retângulo de telhado real
+// (projeto reportado, link "?p=a34kapj2") tinha o CENTRO dentro do
+// cômodo baixo (B, sem override), mas as BORDAS do retângulo tocavam a
+// parede compartilhada com o cômodo alto (A) — e essa parede compartilhada
+// (corretamente resolvida pra altura de A via Core.resolvedWallHeights)
+// ficava mais alta que o telhado apoiado só na altura do cômodo do
+// centro, furando o parapeito por cima. Confirmado ao vivo por ray
+// casting: telhado a 2,7m-based, parede compartilhada a 3,97m — depois
+// da correção, telhado sobe pra acompanhar a parede mais alta que toca.
+test('roofHeightAtRect: nunca fica mais baixo que a parede COMPARTILHADA mais alta cujas pontas o retângulo toca, mesmo com o centro caindo no cômodo baixo', () => {
+  const walls = twoRoomsSharingWall();
+  // Cômodo A levantado pra 4,5 m — a parede compartilhada ('shared') segue junto.
+  ['a1', 'a3', 'a4', 'shared'].forEach((id) => { walls.find((w) => w.id === id).heightM = 4.5; });
+
+  // Retângulo com centro em (35,30) — dentro do cômodo B, NÃO alterado —
+  // mas que se estende até x=65, tocando as duas pontas de 'shared' (x=60).
+  const rectTouchingShared = roofHeightAtRect(walls, 5, -5, 65, 65, 2.7);
+  assert.equal(rectTouchingShared, 4.5, 'a parede compartilhada mais alta não pode furar o telhado por cima');
+
+  // Controle: um retângulo do lado de B (não alterado), que não chega a
+  // tocar 'shared' (x=60), continua só na altura do cômodo do centro —
+  // comportamento de antes, inalterado.
+  const rectNotTouchingShared = roofHeightAtRect(walls, 65, 5, 115, 55, 2.7);
+  assert.equal(rectNotTouchingShared, 2.7, 'sem tocar a parede compartilhada, cai só na altura do cômodo do centro');
+});
+
 test('ViewportController: hover da ferramenta Telhado calcula Core.roofHeightAtRect e grava em drawPreview.roofBaseHeightM', () => {
   const hoverStart = viewportControllerSource.indexOf("if (currentTool === 'telhado' && !placingDraw && !selectedRoofId) {");
   assert.notEqual(hoverStart, -1);
