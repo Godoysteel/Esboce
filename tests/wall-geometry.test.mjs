@@ -28,6 +28,8 @@ import {
   roomOwnHeightM,
   roomsContainingWall,
   resolvedWallHeights,
+  roomAtPoint,
+  roofHeightAtRect,
   wallOBB,
   wallsCanFuse,
   wallsMeetAtEndpoint,
@@ -1240,6 +1242,61 @@ test('linha de contorno vertical só aparece em ponta LIVRE de verdade (free ===
   // ampla de propósito — ele PRECISA fechar o volume ali, ao contrário da
   // linha, que é só contorno cosmético.
   assert.match(scene3DRendererSource, /if \(fp\.p1Free !== false \|\| fp\.p1Extended\) \{\r?\n\s*var endCap1/, 'endcap sólido continua com a condição ampla — só a linha de contorno mudou');
+});
+
+// DEC-94 — telhado fantasma (prévia, antes do primeiro clique) acompanha a
+// altura do cômodo embaixo dele: arrastar sobre um cômodo mais alto sobe o
+// fantasma, arrastar sobre um cômodo padrão desce de volta. Antes, tanto o
+// fantasma quanto o telhado já colocado usavam sempre `currentWallHeight`
+// (altura única do pavimento inteiro), então um telhado sobre um cômodo
+// elevado (DEC-88) ficava encravado dentro da parede alta.
+test('roomAtPoint: acha o cômodo fechado que contém o ponto; null fora de qualquer contorno', () => {
+  const walls = twoRoomsSharingWall();
+  const roomA = roomAtPoint(walls, 30, 30); // dentro do cômodo A (0,0)-(60,60)
+  assert.ok(roomA, 'deveria achar o cômodo A');
+  const roomB = roomAtPoint(walls, 90, 30); // dentro do cômodo B (60,0)-(120,60)
+  assert.ok(roomB, 'deveria achar o cômodo B');
+  assert.notDeepEqual(roomA.points, roomB.points);
+  assert.equal(roomAtPoint(walls, 500, 500), null, 'ponto fora de qualquer cômodo fechado devolve null');
+});
+
+test('roofHeightAtRect: acompanha a altura PRÓPRIA do cômodo sob o centro do retângulo, cai pro padrão do pavimento fora de cômodo fechado (DEC-94)', () => {
+  const walls = twoRoomsSharingWall();
+  // Cômodo B levantado pra 4,5 m — a parede compartilhada ('shared') segue junto.
+  ['b1', 'b2', 'b3', 'shared'].forEach((id) => { walls.find((w) => w.id === id).heightM = 4.5; });
+
+  const rectOverA = roofHeightAtRect(walls, 5, 5, 55, 55, 2.7); // centro (30,30), dentro de A
+  assert.equal(rectOverA, 2.7, 'cômodo A não foi alterado, permanece no padrão do pavimento');
+
+  const rectOverB = roofHeightAtRect(walls, 65, 5, 115, 55, 2.7); // centro (90,30), dentro de B
+  assert.equal(rectOverB, 4.5, 'cômodo B foi levantado — o telhado sobre ele acompanha');
+
+  const rectOutside = roofHeightAtRect(walls, 500, 500, 550, 550, 2.7);
+  assert.equal(rectOutside, 2.7, 'fora de qualquer cômodo fechado cai pro padrão do pavimento');
+});
+
+test('ViewportController: hover da ferramenta Telhado calcula Core.roofHeightAtRect e grava em drawPreview.roofBaseHeightM', () => {
+  const hoverStart = viewportControllerSource.indexOf("if (currentTool === 'telhado' && !placingDraw && !selectedRoofId) {");
+  assert.notEqual(hoverStart, -1);
+  const hoverBlock = viewportControllerSource.slice(hoverStart, hoverStart + 1200);
+  assert.match(hoverBlock, /var roofHeightT = Core\.roofHeightAtRect\(Store\.currentWalls\(\), rectT\.x1, rectT\.y1, rectT\.x2, rectT\.y2, Scene3DRenderer\.WALL_HEIGHT_GETTER\(\)\);/);
+  assert.match(hoverBlock, /roofBaseHeightM: roofHeightT/);
+});
+
+test('Scene3DRenderer: prévia (ghost) do telhado usa drawPreview.roofBaseHeightM, e o telhado já colocado usa Core.roofHeightAtRect por cômodo (DEC-94)', () => {
+  const ghostStart = scene3DRendererSource.indexOf("} else if (p.tool === 'telhado') {");
+  assert.notEqual(ghostStart, -1);
+  const ghostEndMatch = scene3DRendererSource.slice(ghostStart).match(/\r?\n {4}\}\r?\n {2}\}/);
+  assert.ok(ghostEndMatch, 'bloco de prévia do telhado não encontrado por inteiro');
+  const ghostBlock = scene3DRendererSource.slice(ghostStart, ghostStart + ghostEndMatch.index + ghostEndMatch[0].length);
+  assert.match(ghostBlock, /var ghostRoofHeight = p\.roofBaseHeightM != null \? p\.roofBaseHeightM : WALL_HEIGHT;/);
+  assert.match(ghostBlock, /p\.yOffset \+ ghostRoofHeight \+ 0\.01/);
+  assert.match(ghostBlock, /p\.yOffset \+ ghostRoofHeight, viewState/);
+
+  assert.match(
+    scene3DRendererSource,
+    /var roofOwnHeight = roof\.atticMode \? \(roof\.baseHeightM \|\| 1\.2\) : Core\.roofHeightAtRect\(floorData\.walls, roof\.x1, roof\.y1, roof\.x2, roof\.y2, currentWallHeight\);/
+  );
 });
 
 // DEC-90 — botão "Gerar Laje": cômodo nasce sem laje visível/contabilizada;

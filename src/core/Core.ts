@@ -1024,6 +1024,30 @@ export function resolvedWallHeights(wallList: Wall[], floorDefaultHeightM: numbe
   return result;
 }
 
+// Cômodo (fechado) que contém o ponto (x,y), se existir — mesma técnica
+// já usada por ViewportController.findRoomBoundsAt (ferramenta de
+// telhado) pra saber sobre qual cômodo o mouse está: detecta todos os
+// cômodos e testa point-in-polygon em cada um.
+export function roomAtPoint(wallList: Wall[], x: number, y: number): Room | null {
+  const rooms = detectRooms(wallList);
+  return rooms.find((room) => pointInPolygon(x, y, room.points)) || null;
+}
+
+// Altura de apoio do TELHADO no ponto central do retângulo (x1,y1)-(x2,y2)
+// — acompanha o cômodo que estiver embaixo do centro do telhado (mesma
+// regra de "altura própria" já usada pra laje, Core.roomOwnHeightM), caindo
+// pro padrão do pavimento quando não há cômodo fechado ali (ex.: área
+// externa, ou vão ainda sem paredes fechando). Recalculada do zero a cada
+// chamada — mesmo espírito de Core.resolvedWallHeights: não guarda um
+// valor que possa ficar desatualizado se o cômodo mudar de altura depois.
+export function roofHeightAtRect(wallList: Wall[], x1: number, y1: number, x2: number, y2: number, floorDefaultHeightM: number): number {
+  const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
+  const room = roomAtPoint(wallList, cx, cy);
+  if (!room) return floorDefaultHeightM;
+  const roomWallIds = findRoomWallIds(wallList, room);
+  return roomOwnHeightM(wallList, roomWallIds, floorDefaultHeightM);
+}
+
 // Devolve o contorno inteiro apenas quando a parede clicada pertence a um
 // unico comodo fechado e esse contorno ainda nao tem nenhuma ligacao com
 // paredes externas. Essa e a fronteira entre dois modos de edicao:
@@ -1733,6 +1757,7 @@ export const Core = {
   rectPoints, lajeBounds,
   rectsNearby, pointInPolygon, roomModelBounds, findRoomWallIds, findIsolatedRoomWallIds, wallResizeTopology, resolveWallResizeOffset, computeWallFootprints,
   roomsContainingWall, roomHeightM, roomOwnHeightM, resolveRoomHeightUpdate, resolvedWallHeights,
+  roomAtPoint, roofHeightAtRect,
   wallResizeEndpointNeedsBridge,
   distPointToLine, wallOBB, furnitureOBB, openingOBB, obbOverlapMTV, wallOverlapsForeignOpening, resolveWallOffsetAgainstOpenings, wallsCanFuse, wallsMeetAtEndpoint, resolveWallGroupGridDelta,
   findWallTJunctionSplits,

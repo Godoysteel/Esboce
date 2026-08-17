@@ -3187,7 +3187,12 @@ import {
         var cxT = Core.snap(gpT!.x), cyT = Core.snap(gpT!.y);
         var halfT = ROOF_DEFAULT_SIZE / 2;
         var rectT = clampRectToRegion(cxT - halfT, cyT - halfT, cxT + halfT, cyT + halfT, regionT);
-        drawPreview = { tool: 'telhado', x1: rectT.x1, y1: rectT.y1, x2: rectT.x2, y2: rectT.y2, yOffset: currentFloorYOffset(), roofType: pendingRoofType, pitchDeg: 28 };
+        // Acompanha a altura PRÓPRIA do cômodo embaixo do centro do
+        // retângulo (Core.roofHeightAtRect, mesma regra da laje) — arrastar
+        // o fantasma pra cima de um cômodo mais alto sobe o telhado junto,
+        // em vez de ficar preso na altura padrão do pavimento inteiro.
+        var roofHeightT = Core.roofHeightAtRect(Store.currentWalls(), rectT.x1, rectT.y1, rectT.x2, rectT.y2, Scene3DRenderer.WALL_HEIGHT_GETTER());
+        drawPreview = { tool: 'telhado', x1: rectT.x1, y1: rectT.y1, x2: rectT.x2, y2: rectT.y2, yOffset: currentFloorYOffset(), roofType: pendingRoofType, pitchDeg: 28, roofBaseHeightM: roofHeightT };
       } else {
         drawPreview = null; // fora de qualquer grid — não mostra prévia, não dá pra colocar ali
       }

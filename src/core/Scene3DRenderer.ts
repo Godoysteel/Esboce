@@ -2662,7 +2662,11 @@ export function hashColorHex(key: string): number {
       // antes mesmo da forma inclinada aparecer por cima
       var fMinX = (p.x1 - offsetX) * scale, fMaxX = (p.x2 - offsetX) * scale;
       var fMinZ = (p.y1 - offsetY) * scale, fMaxZ = (p.y2 - offsetY) * scale;
-      var gridLines = buildFootprintGridLines(fMinX, fMaxX, fMinZ, fMaxZ, p.yOffset + WALL_HEIGHT + 0.01, color);
+      // Acompanha a altura do cômodo embaixo do centro (Core.roofHeightAtRect,
+      // calculada no hover — ver ViewportController) — cai pra altura padrão
+      // do pavimento (WALL_HEIGHT) só quando essa altura não veio calculada.
+      var ghostRoofHeight = p.roofBaseHeightM != null ? p.roofBaseHeightM : WALL_HEIGHT;
+      var gridLines = buildFootprintGridLines(fMinX, fMaxX, fMinZ, fMaxZ, p.yOffset + ghostRoofHeight + 0.01, color);
       scene.add(gridLines);
       registry.previewMeshes.push(gridLines);
 
@@ -2672,7 +2676,7 @@ export function hashColorHex(key: string): number {
       // assim que o telhado é efetivamente colocado, em buildRoofPiece
       // via rebuild().
       var ghostRoof = { x1: p.x1, y1: p.y1, x2: p.x2, y2: p.y2, type: p.roofType, pitchDeg: p.pitchDeg, ridgeAxis: p.ridgeAxis, parapetHeight: p.parapetHeight };
-      buildRoofPiece(ghostRoof, scale, offsetX, offsetY, p.yOffset + WALL_HEIGHT, viewState).forEach(function (m) {
+      buildRoofPiece(ghostRoof, scale, offsetX, offsetY, p.yOffset + ghostRoofHeight, viewState).forEach(function (m) {
         m.material = m.material.clone();
         m.material.transparent = true; m.material.opacity = 0.45;
         scene.add(m);
@@ -3425,7 +3429,15 @@ export function hashColorHex(key: string): number {
         var roofTopY = yOffset + currentWallHeight;
         var wallMatchColor = computeWallMatchColor(floorData.walls);
         floorData.roofs.forEach(function (roof) {
-          var pieceBaseY = yOffset + (roof.atticMode ? (roof.baseHeightM || 1.2) : currentWallHeight);
+          // Acompanha a altura PRÓPRIA do cômodo embaixo do centro do
+          // telhado (Core.roofHeightAtRect, mesma regra da laje/DEC-88) —
+          // recalculado a cada render, não um valor gravado que possa
+          // ficar desatualizado se o cômodo mudar de altura depois (mesmo
+          // espírito de Core.resolvedWallHeights). Cai pro padrão do
+          // pavimento quando não há cômodo fechado sob o telhado. Ático
+          // continua usando `baseHeightM` — campo próprio, deliberado.
+          var roofOwnHeight = roof.atticMode ? (roof.baseHeightM || 1.2) : Core.roofHeightAtRect(floorData.walls, roof.x1, roof.y1, roof.x2, roof.y2, currentWallHeight);
+          var pieceBaseY = yOffset + roofOwnHeight;
           var pieces = buildRoofPiece(roof, scale, offsetX, offsetY, pieceBaseY, viewState, wallMatchColor);
           if (roof.atticMode === 'preview') pieces.forEach(function (piece) {
             var materials = Array.isArray(piece.material) ? piece.material : [piece.material];
