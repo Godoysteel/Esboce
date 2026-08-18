@@ -158,89 +158,107 @@ test('laje nasce automática por cômodo, dentro do mesmo loop que já gera o pi
   assert.doesNotMatch(scene3DRendererSource, /buildLajePiece\(laje/);
 });
 
-// DEC (mesma sessão, depois do DEC do fuseAllOverlaps no finalizeDraw):
-// Product Owner, testando com print, mostrou que a laje ainda ficava
-// "confusa"/com brecha em cômodos com parede compartilhada mesmo depois
-// da correção da parede duplicada. Causa raiz separada: outsetPoints
-// projetava cada vértice do contorno usando SÓ a parede que SAI dele
-// (insetWallIds[i]) — nunca a que CHEGA. Numa junção em T, a parede
-// "tronco" (a que atravessa) ganha a face estendida pra fechar o
-// encontro (computeWallFootprints), a outra fica rente/recuada; usar só
-// uma das duas pegava ora a face de DENTRO da junção (perto do vizinho,
-// não da fachada de fora), ora não estendia o bastante — uma aresta da
-// laje inteira ficava na diagonal em vez de reta, rente à parede real.
-// Corrigido calculando a face externa pelas DUAS paredes do vértice
-// (outsetCandidate) e ficando com a mais longe do centro — a parede cuja
-// própria face plana já é a mais externa nesse ponto vence.
-test('outsetPoints (contorno da laje) considera a parede que CHEGA no vértice, não só a que sai — evita pegar a face errada numa junção em T', () => {
+// DEC (mesma sessão, depois do DEC do fuseAllOverlaps no finalizeDraw e do
+// DEC do outsetCandidate por-parede): Product Owner testou de novo — dessa
+// vez um cômodo em L (uma sala recuada em relação à outra, não cobrindo a
+// profundidade toda da vizinha) — e a laje ficou com um contorno visivelmente
+// errado. Causa raiz: a tentativa anterior (outsetCandidate, ver histórico
+// no registro de decisões técnicas) ainda reaproveitava `wallFootprints`,
+// calibrado pra RENDERIZAR paredes (uma parede de uma junção em T fica
+// deliberadamente estendida, a outra rente) — num cômodo em L, as DUAS
+// arestas de um vértice do contorno podem pertencer à MESMA parede (o
+// contorno toca a parede compartilhada duas vezes), e nesse caso as duas
+// "opções" eram sempre o mesmo valor errado, criando um ponto DUPLICADO
+// que distorcia a laje inteira.
+//
+// Substituído por uma técnica padrão, independente de `wallFootprints`:
+// infla o contorno por ARESTA (não por parede). Como toda parede aqui
+// nasce e permanece alinhada ao eixo, cada aresta do contorno é
+// puramente horizontal OU vertical — empurrar cada uma pra fora (testado
+// com Core.pointInPolygon, sem depender de sentido/winding) pela meia-
+// espessura da parede dá, em cada vértice, uma componente X de uma
+// aresta e Y da outra. Um vértice "falso" no meio de uma parede reta
+// (as duas arestas do vértice pertencem à mesma parede) fica com um
+// componente zerado automaticamente, só deslizando perpendicular à
+// parede — sem inventar canto novo nem duplicar ponto.
+test('outsetPoints (contorno da laje) infla o contorno por ARESTA — não depende mais de wallFootprints nem de qual parede "sai" ou "chega" no vértice', () => {
   const roomsStart = scene3DRendererSource.indexOf('rooms.forEach(function (room) {');
   const roomsEnd = scene3DRendererSource.indexOf('\n      });', roomsStart);
   const roomsFlow = scene3DRendererSource.slice(roomsStart, roomsEnd);
-  assert.match(roomsFlow, /function outsetCandidate\(wallId: any, p1: any\) \{/);
-  assert.match(roomsFlow, /var outgoing = outsetCandidate\(insetWallIds\[i\], p1\);/);
-  assert.match(roomsFlow, /var incoming = outsetCandidate\(insetWallIds\[\(i - 1 \+ vertexCount\) % vertexCount\], p1\);/);
-  assert.match(roomsFlow, /return distOut >= distIn \? outgoing : incoming;/);
+  assert.match(roomsFlow, /function edgeOutwardPush\(p1: any, p2: any\) \{/);
+  assert.match(roomsFlow, /Core\.pointInPolygon\(midX \+ nx \* 0\.5, midY \+ ny \* 0\.5, room\.points\)/);
+  assert.match(roomsFlow, /var pushIn = edgeOutwardPush\(prev, p\);/);
+  assert.match(roomsFlow, /var pushOut = edgeOutwardPush\(p, next\);/);
+  assert.match(roomsFlow, /return \{ x: p\.x \+ \(pushIn\.x \|\| pushOut\.x\) \* lajeMargin, y: p\.y \+ \(pushIn\.y \|\| pushOut\.y\) \* lajeMargin \};/);
+  assert.doesNotMatch(roomsFlow, /outsetCandidate/);
 });
 
-test('numérico: na junção em T de dois cômodos vizinhos, a face externa "mais longe do centro" de cada parede bate exatamente com a da parede vizinha — sem brecha nem sobreposição diagonal', () => {
-  // Dois cômodos lado a lado (4,5m x 3m cada, GRID=20) compartilhando a
-  // parede vertical em x=70 — mesma parede já fundida em UMA (sem
-  // duplicata, ver room-tool-fusion.test.mjs pro caso da parede
-  // duplicada).
-  const walls = [
-    { id: 'wall_1', x1: 0, y1: 0, x2: 70, y2: 0 },
-    { id: 'wall_2', x1: 70, y1: 60, x2: 70, y2: 0 },
-    { id: 'wall_3', x1: 70, y1: 60, x2: 0, y2: 60 },
-    { id: 'wall_4', x1: 0, y1: 60, x2: 0, y2: 0 },
-    { id: 'wall_5', x1: 70, y1: 0, x2: 130, y2: 0 },
-    { id: 'wall_6', x1: 130, y1: 0, x2: 130, y2: 60 },
-    { id: 'wall_7', x1: 130, y1: 60, x2: 70, y2: 60 },
-  ];
-  const fp = computeWallFootprints(walls);
-
-  function outsetCandidate(wall, p1, cx, cy) {
-    const d1 = Math.hypot(wall.x1 - p1.x, wall.y1 - p1.y);
-    const d2 = Math.hypot(wall.x2 - p1.x, wall.y2 - p1.y);
-    const face = d1 <= d2 ? { a: fp[wall.id].p1a, b: fp[wall.id].p1b } : { a: fp[wall.id].p2a, b: fp[wall.id].p2b };
-    const distA = Math.hypot(face.a.x - cx, face.a.y - cy);
-    const distB = Math.hypot(face.b.x - cx, face.b.y - cy);
-    return distA >= distB ? face.a : face.b;
+function pointInPolygonTest(x, y, poly) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i].x, yi = poly[i].y, xj = poly[j].x, yj = poly[j].y;
+    const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
   }
-  function farther(a, b, cx, cy) {
-    const distA = Math.hypot(a.x - cx, a.y - cy);
-    const distB = Math.hypot(b.x - cx, b.y - cy);
-    return distA >= distB ? a : b;
+  return inside;
+}
+function outsetPointsByEdgePush(points, margin) {
+  const n = points.length;
+  function edgeOutwardPush(p1, p2) {
+    const dx = p2.x - p1.x, dy = p2.y - p1.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len, ny = dx / len;
+    const midX = (p1.x + p2.x) / 2, midY = (p1.y + p2.y) / 2;
+    const sign = pointInPolygonTest(midX + nx * 0.5, midY + ny * 0.5, points) ? -1 : 1;
+    return { x: nx * sign, y: ny * sign };
   }
+  return points.map((p, i) => {
+    const prev = points[(i - 1 + n) % n], next = points[(i + 1) % n];
+    const pushIn = edgeOutwardPush(prev, p), pushOut = edgeOutwardPush(p, next);
+    return { x: p.x + (pushIn.x || pushOut.x) * margin, y: p.y + (pushIn.y || pushOut.y) * margin };
+  });
+}
 
-  // Vértice (70,0), visto pelo cômodo A (paredes 1-4, centro 35,30):
-  // contorno percorre wall_1 (chegada, rente/não-estendida) -> wall_2
-  // (saída, estendida pro encontro em T). A correta (mais longe do
-  // centro) é a de wall_1 — plana, sem distorcer a parede inteira na
-  // diagonal.
-  const centerA = { x: 35, y: 30 };
-  const p = { x: 70, y: 0 };
-  const cornerFromA = farther(
-    outsetCandidate(walls[1], p, centerA.x, centerA.y), // wall_2, a "saída" de A neste vértice
-    outsetCandidate(walls[0], p, centerA.x, centerA.y), // wall_1, a "chegada"
-    centerA.x, centerA.y,
-  );
-  assert.deepEqual(cornerFromA, { x: 70, y: -1.2 });
+test('numérico: dois cômodos lado a lado com a mesma profundidade — nenhuma brecha nem sobreposição estranha na parede compartilhada', () => {
+  const roomA = [{ x: 0, y: 0 }, { x: 70, y: 0 }, { x: 70, y: 60 }, { x: 0, y: 60 }];
+  const roomB = [{ x: 70, y: 60 }, { x: 70, y: 0 }, { x: 130, y: 0 }, { x: 130, y: 60 }];
+  const outA = outsetPointsByEdgePush(roomA, 1.2);
+  const outB = outsetPointsByEdgePush(roomB, 1.2);
+  let gaps = 0;
+  for (let x = -2; x <= 132; x += 0.5) {
+    for (let y = -2; y <= 62; y += 0.5) {
+      if (x < -1.2 || x > 131.2 || y < -1.2 || y > 61.2) continue;
+      if (!pointInPolygonTest(x, y, outA) && !pointInPolygonTest(x, y, outB)) gaps++;
+    }
+  }
+  assert.equal(gaps, 0);
+});
 
-  // Mesmo vértice físico, visto pelo cômodo B (paredes 2,5,6,7, centro
-  // 100,30): contorno percorre wall_2 (chegada, estendida) -> wall_5
-  // (saída, rente). A correta (mais longe do centro de B) também é a de
-  // wall_5 — mesmo ponto exato que o cômodo A calculou.
-  const centerB = { x: 100, y: 30 };
-  const cornerFromB = farther(
-    outsetCandidate(walls[4], p, centerB.x, centerB.y), // wall_5, a "saída" de B neste vértice
-    outsetCandidate(walls[1], p, centerB.x, centerB.y), // wall_2, a "chegada"
-    centerB.x, centerB.y,
-  );
-  assert.deepEqual(cornerFromB, { x: 70, y: -1.2 });
+test('numérico: cômodo em L (um cômodo recuado, não cobre a profundidade toda do vizinho) — o vértice "falso" no meio da parede compartilhada não distorce nem duplica ponto', () => {
+  // Sala A é maior (0,0)-(100,100); sala B encosta só na metade de baixo
+  // de A (100,30)-(180,100) — o contorno de A toca a parede
+  // compartilhada (x=100) duas vezes: uma vez saindo de (100,0) e de
+  // novo em (100,30), onde ela "passa" pelo ponto sem virar canto de
+  // verdade.
+  const roomA = [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 30 }, { x: 100, y: 100 }, { x: 0, y: 100 }];
+  const roomB = [{ x: 100, y: 100 }, { x: 100, y: 30 }, { x: 180, y: 30 }, { x: 180, y: 100 }];
+  const outA = outsetPointsByEdgePush(roomA, 1.2);
+  // O vértice "falso" (100,30) do meio da parede reta: as duas arestas
+  // adjacentes pertencem à MESMA parede (vertical) — só desliza em X
+  // (101.2), sem inventar deslocamento em Y (fica exatamente 30, não
+  // um valor arbitrário como nas tentativas anteriores).
+  assert.deepEqual(outA[2], { x: 101.2, y: 30 });
 
-  // Os dois cômodos concordam EXATAMENTE sobre onde fica esse canto —
-  // nenhuma brecha, nenhuma sobreposição diagonal.
-  assert.deepEqual(cornerFromA, cornerFromB);
+  const outB = outsetPointsByEdgePush(roomB, 1.2);
+  let gaps = 0;
+  for (let x = -2; x <= 182; x += 0.5) {
+    for (let y = -2; y <= 102; y += 0.5) {
+      if (x < -1.2 || x > 181.2 || y < -1.2 || y > 101.2) continue;
+      if (x > 100 - 1.2 && y < 30 - 1.2) continue; // fora do L (região sem cômodo nenhum)
+      if (!pointInPolygonTest(x, y, outA) && !pointInPolygonTest(x, y, outB)) gaps++;
+    }
+  }
+  assert.equal(gaps, 0);
 });
 
 test('ferramenta manual "Laje" (botão da barra lateral) foi removida — sem criação avulsa', () => {

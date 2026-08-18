@@ -3772,48 +3772,58 @@ export function hashColorHex(key: string): number {
           if (i === 0) shape.moveTo(wx, wz); else shape.lineTo(wx, wz);
         });
         shape.closePath();
-        // Contorno EXTERNO (DEC-90) — mesmo raciocínio de insetPoints
-        // acima (mesma parede real por trecho), só que pega a face mais
-        // LONGE do centro em vez da mais perto. Usado só pela laje (que
-        // deve cobrir o cômodo inteiro rente à parede, como uma laje de
-        // verdade apoiada em cima dela) — piso, rodapé e contorno do piso
-        // continuam na face interna (insetPoints).
+        // Contorno EXTERNO (DEC-90) — cobre o cômodo inteiro rente à
+        // parede, como uma laje de verdade apoiada em cima dela; piso,
+        // rodapé e contorno do piso continuam na face interna
+        // (insetPoints, acima).
         //
-        // Cada vértice do contorno é encontro de DUAS paredes (a que
-        // termina ali e a que começa) — considerar só a parede que
-        // COMEÇA nesse vértice (como insetPoints faz, sem problema pro
-        // piso) quebra a laje numa junção em T: a parede "tronco" do T é
-        // desenhada ESTENDIDA pra fechar o encontro (computeWallFootprints
-        // — ver comentário "T disfarçada"), a outra fica rente; usar só
-        // uma delas ora pega a face errada (do lado de DENTRO da junção,
-        // não de fora), ora não estende o bastante — o resultado é uma
-        // aresta da laje na diagonal atravessando a parede inteira em vez
-        // de ficar reta, rente à face real (relatado pelo Product Owner:
-        // "a laje fica confusa em paredes compartilhadas"). Corrigido
-        // calculando a face de fora pelas DUAS paredes do vértice e
-        // ficando com a que cai mais longe do centro — a parede cuja
-        // própria face plana já é a mais externa nesse ponto vence, sem
-        // herdar a extensão/retração da parede vizinha.
-        function outsetCandidate(wallId: any, p1: any) {
-          var w = wallId && floorData.walls.find(function (item: any) { return item.id === wallId; });
-          var fp = w && wallFootprints[w.id];
-          if (!w || !fp) return null;
-          var d1 = Math.hypot(w.x1 - p1.x, w.y1 - p1.y);
-          var d2 = Math.hypot(w.x2 - p1.x, w.y2 - p1.y);
-          var face = (d1 <= d2) ? { a: fp.p1a, b: fp.p1b } : { a: fp.p2a, b: fp.p2b };
-          var distA = Math.hypot(face.a.x - cx, face.a.y - cy);
-          var distB = Math.hypot(face.b.x - cx, face.b.y - cy);
-          return distA >= distB ? face.a : face.b;
+        // Duas tentativas anteriores (buscar a parede "que sai" do
+        // vértice, depois a mais externa entre a que sai e a que chega —
+        // ver histórico no registro de decisões técnicas) reaproveitavam
+        // `wallFootprints`, calibrado pra RENDERIZAR paredes — onde uma
+        // parede de uma junção em T fica deliberadamente ESTENDIDA pra
+        // fechar o encontro e a outra rente (ver comentário "T
+        // disfarçada" em computeWallFootprints). Reaproveitar esse mitre
+        // pro contorno da laje ora pegava a face de dentro da junção, ora
+        // criava um ponto DUPLICADO no meio de uma parede reta (quando as
+        // duas arestas do vértice pertenciam à mesma parede, caso de
+        // cômodos em L) — sintomas confirmados com o Product Owner em
+        // duas rodadas de print diferentes.
+        //
+        // Substituído por uma técnica padrão e independente de
+        // `wallFootprints`: "infla" o contorno por ARESTA, não por
+        // parede. Toda parede aqui nasce e permanece alinhada ao eixo
+        // (nunca diagonal — ver Core.ts), então cada aresta do contorno é
+        // puramente horizontal OU vertical; empurrar cada uma pra FORA do
+        // cômodo (achado testando os dois lados com Core.pointInPolygon,
+        // sem depender de convenção de sentido/winding) pela meia-
+        // espessura da parede dá, em cada vértice, uma componente X de
+        // uma aresta e uma componente Y da outra — a interseção das duas
+        // retas empurradas é trivial (elas já são os próprios eixos X/Y).
+        // Um vértice "falso" no meio de uma parede reta (as duas arestas
+        // pertencem à mesma parede — típico de cômodo em L, onde o
+        // contorno toca a parede compartilhada duas vezes) automaticamente
+        // fica com um componente zerado, então só desliza perpendicular
+        // à parede, sem inventar canto novo. Verificado com varredura de
+        // cobertura ponto-a-ponto em três formatos (retângulo simples,
+        // dois cômodos com a mesma profundidade, cômodos em L) — zero
+        // brechas nos três.
+        var lajeMargin = (Core.WALL_THICK * Core.GRID) / 2;
+        function edgeOutwardPush(p1: any, p2: any) {
+          var dx = p2.x - p1.x, dy = p2.y - p1.y;
+          var len = Math.hypot(dx, dy) || 1;
+          var nx = -dy / len, ny = dx / len;
+          var midX = (p1.x + p2.x) / 2, midY = (p1.y + p2.y) / 2;
+          var sign = Core.pointInPolygon(midX + nx * 0.5, midY + ny * 0.5, room.points) ? -1 : 1;
+          return { x: nx * sign, y: ny * sign };
         }
         var vertexCount = room.points.length;
-        var outsetPoints = room.points.map(function (p1: any, i: any) {
-          var outgoing = outsetCandidate(insetWallIds[i], p1);
-          var incoming = outsetCandidate(insetWallIds[(i - 1 + vertexCount) % vertexCount], p1);
-          if (!outgoing) return incoming || p1;
-          if (!incoming) return outgoing;
-          var distOut = Math.hypot(outgoing.x - cx, outgoing.y - cy);
-          var distIn = Math.hypot(incoming.x - cx, incoming.y - cy);
-          return distOut >= distIn ? outgoing : incoming;
+        var outsetPoints = room.points.map(function (p: any, i: any) {
+          var prev = room.points[(i - 1 + vertexCount) % vertexCount];
+          var next = room.points[(i + 1) % vertexCount];
+          var pushIn = edgeOutwardPush(prev, p);
+          var pushOut = edgeOutwardPush(p, next);
+          return { x: p.x + (pushIn.x || pushOut.x) * lajeMargin, y: p.y + (pushIn.y || pushOut.y) * lajeMargin };
         });
         // Espessura fina (3cm) e base sempre no mesmo nível da base da
         // parede (yOffset — o mesmo y0 usado em buildWallMeshFromFootprint),
@@ -3893,7 +3903,7 @@ export function hashColorHex(key: string): number {
           lajeShape.closePath();
           var lajeSizeX = 0, lajeSizeZ = 0;
           outsetPoints.forEach(function (p: any, i: any) {
-            var p2 = outsetPoints[(i + 1) % outsetPoints.length];
+            var p2 = outsetPoints[(i + 1) % outsetPoints.length]!;
             lajeSizeX = Math.max(lajeSizeX, Math.abs(p.x - p2.x) * scale);
             lajeSizeZ = Math.max(lajeSizeZ, Math.abs(p.y - p2.y) * scale);
           });
