@@ -963,6 +963,91 @@ function exportCsv(): void {
   URL.revokeObjectURL(url);
 }
 
+// ---------------------------------------------------------------
+// ORÇAMENTO EM PDF — pedido explícito do Product Owner: "bem bonito e
+// organizado, lista simples, não confuso", rodapé "Orçamento gerado
+// por esboce.com.br". Reaproveita buildRows() (mesma fonte de dados
+// da tela/CSV/planilha — nunca uma leitura própria) e reagrupa em
+// seções por categoria (um título por categoria, sem repetir o nome
+// dela em toda linha como a tabela do painel/planilha faz) — o pedido
+// era "lista simples", uma seção por categoria lê mais limpo que uma
+// tabela com a mesma palavra repetida em cada linha.
+//
+// Sem biblioteca de geração de PDF nenhuma: abre uma aba só com HTML
+// impresso (mesma técnica já usada em MaterialsSheet.open()), estilizada
+// pra impressão, e aciona window.print() — o "Salvar como PDF" do
+// próprio navegador gera o arquivo. Isso evita adicionar mais uma
+// dependência pesada ao bundle (já sinalizado grande demais no build)
+// só pra um recurso que o navegador já faz nativamente.
+//
+// Aviso de responsabilidade técnica (ADR-006 §13-15) É OBRIGATÓRIO
+// aqui — a própria ADR-006 §15 lista "PDF" explicitamente entre os
+// lugares onde o aviso precisa aparecer, não só nos Termos de Uso.
+const PDF_DISCLAIMER = 'O Esboce é uma ferramenta de apoio ao planejamento. Ele não substitui arquiteto ou engenheiro. Os quantitativos e valores deste orçamento são uma estimativa — merecem a validação de um profissional legalmente habilitado antes de qualquer execução.';
+
+const PDF_STYLE = '' +
+  '@page { margin: 18mm 16mm 22mm; }' +
+  'body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;margin:0;padding:0;color:#2C2C2A;}' +
+  '.pdf-header{display:flex; justify-content:space-between; align-items:flex-end; border-bottom:2px solid #534AB7; padding-bottom:10px; margin-bottom:4px;}' +
+  '.pdf-header h1{font-size:22px; margin:0; color:#534AB7;}' +
+  '.pdf-header .date{font-size:12px; color:#5F5E5A;}' +
+  '.pdf-disclaimer{font-size:10.5px; color:#5F5E5A; background:#F4F1EA; border-radius:6px; padding:8px 10px; margin:12px 0 18px; line-height:1.4;}' +
+  '.pdf-section{margin-bottom:14px; break-inside:avoid;}' +
+  '.pdf-section h2{font-size:13px; text-transform:uppercase; letter-spacing:.03em; color:#534AB7; border-bottom:1px solid #D3D1C7; padding-bottom:4px; margin:0 0 6px;}' +
+  '.pdf-row{display:flex; justify-content:space-between; gap:12px; padding:4px 0; font-size:13px; border-bottom:1px solid #F0EEE7;}' +
+  '.pdf-row .item{flex:1; color:#2C2C2A;}' +
+  '.pdf-row .qty{color:#77746C; white-space:nowrap;}' +
+  '.pdf-row .cost{width:100px; text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap;}' +
+  '.pdf-total{display:flex; justify-content:space-between; align-items:center; margin-top:18px; padding-top:12px; border-top:2px solid #534AB7;}' +
+  '.pdf-total .label{font-size:14px; font-weight:600;}' +
+  '.pdf-total .value{font-size:22px; font-weight:700; color:#534AB7;}' +
+  '.pdf-footer{position:fixed; bottom:8mm; left:16mm; right:16mm; font-size:10px; color:#9C9A92; border-top:1px solid #EDEAE1; padding-top:6px; text-align:center;}' +
+  '.pdf-noprint{margin:16px 0;}' +
+  '.pdf-noprint button{background:#534AB7; color:#FFFFFF; border:none; border-radius:6px; padding:9px 16px; font-size:13px; cursor:pointer;}' +
+  '@media print { .pdf-noprint{display:none;} }';
+
+function pdfSections(rows: (string | number)[][]): string {
+  let html = '';
+  let currentCat: string | number | null = null;
+  let sectionOpen = false;
+  rows.forEach(function (r) {
+    if (r[0] === 'TOTAL') return; // total vira o bloco especial no fim, não mais uma seção
+    if (r[0] !== currentCat) {
+      if (sectionOpen) html += '</div>';
+      currentCat = r[0]!;
+      html += '<div class="pdf-section"><h2>' + escapeCell(currentCat) + '</h2>';
+      sectionOpen = true;
+    }
+    const item = r[1], qty = r[2] + ' ' + r[3], cost = r[5] && r[5] !== '—' ? r[5] : '';
+    html += '<div class="pdf-row"><span class="item">' + escapeCell(item) + '</span><span class="qty">' + escapeCell(qty) + '</span><span class="cost">' + escapeCell(cost) + '</span></div>';
+  });
+  if (sectionOpen) html += '</div>';
+  return html;
+}
+
+function escapeCell(s: unknown): string {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function exportPdf(): void {
+  const rows = buildRows();
+  const totalRow = rows.length && rows[rows.length - 1]![0] === 'TOTAL' ? rows[rows.length - 1]! : null;
+  const win = window.open('', 'esboce-orcamento-pdf');
+  if (!win) return; // pop-up bloqueado pelo navegador
+  const today = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+  win.document.title = 'Orçamento — Esboce';
+  win.document.head.innerHTML = '<meta charset="UTF-8"><style>' + PDF_STYLE + '</style>';
+  win.document.body.innerHTML =
+    '<div class="pdf-noprint"><button onclick="window.print()">Imprimir / Salvar como PDF</button></div>' +
+    '<div class="pdf-header"><h1>Orçamento Estimado</h1><span class="date">' + today + '</span></div>' +
+    '<div class="pdf-disclaimer">' + PDF_DISCLAIMER + '</div>' +
+    pdfSections(rows) +
+    (totalRow ? '<div class="pdf-total"><span class="label">Total estimado</span><span class="value">' + totalRow[5] + '</span></div>' : '') +
+    '<div class="pdf-footer">Orçamento gerado por esboce.com.br</div>';
+  win.focus();
+  setTimeout(function () { win.print(); }, 300); // dá tempo do layout assentar antes do diálogo abrir
+}
+
 export function init(): void {
   panelEl = document.getElementById('materialsPanel');
   bodyEl = document.getElementById('materialsPanelBody');
@@ -970,8 +1055,10 @@ export function init(): void {
   const closeBtn = document.getElementById('materialsPanelClose');
   const exportBtn = document.getElementById('materialsExportBtn');
   const sheetBtn = document.getElementById('materialsSheetBtn');
+  const pdfBtn = document.getElementById('materialsPdfBtn');
   if (exportBtn) exportBtn.addEventListener('click', exportCsv);
   if (sheetBtn) sheetBtn.addEventListener('click', function () { MaterialsSheet.open(); });
+  if (pdfBtn) pdfBtn.addEventListener('click', exportPdf);
   if (toggleBtn) toggleBtn.addEventListener('click', function () {
     panelEl!.classList.toggle('visible');
     if (panelEl!.classList.contains('visible')) render();
