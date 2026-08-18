@@ -418,7 +418,18 @@ export interface ProductTextures {
 export interface ProductAssets {
   colorHex: string;
   textureUrl: string | null;
+  // Escala de repetição da TEXTURA na renderização 3D (metros reais por
+  // repetição da imagem) — NUNCA usado pra cálculo de orçamento. Ver
+  // pecaCoverageM2 pra cobertura física de peça (telha, unit: 'peca').
   tileMeters?: number;
+  // Cobertura física real de UMA peça, em m² — usado só por
+  // MaterialsPanel.productUnitCost()/purchaseQuantity() pra calcular
+  // quantidade de compra (telha vendida em unit: 'peca'). Separado de
+  // tileMeters de propósito: são conceitos diferentes que coincidem só
+  // por acaso pra alguns produtos — misturar os dois já causou telha
+  // cerâmica real mudar de escala visual sem querer (ver Registro de
+  // Decisões Técnicas).
+  pecaCoverageM2?: number;
   textures?: ProductTextures;
   // Caminho (relativo a public/, sem barra inicial) de um modelo glTF/GLB
   // pronto — usado por produtos da categoria 'furniture'. Nunca um caminho

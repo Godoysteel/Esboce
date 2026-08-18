@@ -46,11 +46,27 @@ test('os 4 produtos padrão apontam pra IDs reais existentes no Catalog', () => 
   }
 });
 
-test('telhas cerâmicas reais (não-teste) ganham tileMeters — sem isso productUnitCost não calcula quantidade nenhuma pra unit "peca"', () => {
+test('telhas cerâmicas reais (não-teste) ganham pecaCoverageM2 — sem isso productUnitCost não calcula quantidade nenhuma pra unit "peca"', () => {
   const start = catalogSource.indexOf("id: 'vortice.telha.ceramica-natural'");
   const end = catalogSource.indexOf('} },', start);
   const body = catalogSource.slice(start, end);
-  assert.match(body, /tileMeters:\s*0\.06/);
+  assert.match(body, /pecaCoverageM2:\s*0\.06/);
+});
+
+// Correção pós-lançamento: tileMeters é escala de repetição de TEXTURA
+// na renderização 3D — usar o mesmo campo pra cobertura física de
+// orçamento fazia telha cerâmica real mudar de escala visual sem
+// querer. pecaCoverageM2 é um campo separado, só pra orçamento.
+test('telhas cerâmicas reais NÃO ganham tileMeters — isso mudaria a escala visual da textura sem querer', () => {
+  const start = catalogSource.indexOf("id: 'vortice.telha.ceramica-natural'");
+  const end = catalogSource.indexOf('} },', start);
+  const body = catalogSource.slice(start, end);
+  assert.doesNotMatch(body, /tileMeters/);
+});
+
+test('produtiUnitCost/purchaseQuantity leem pecaCoverageM2, nunca tileMeters, pra calcular quantidade de peça', () => {
+  assert.match(materialsSource, /p\.commercial\.unit === 'peca' && p\.assets && p\.assets\.pecaCoverageM2/);
+  assert.match(materialsSource, /Math\.ceil\(areaM2 \/ p\.assets\.pecaCoverageM2\) \* price/);
 });
 
 // Correção de domínio: telhado platibanda ("embutido" atrás do
@@ -110,8 +126,8 @@ test('purchaseQuantity converte tinta pra lata(s) 18L e telha/peça pra peça(s)
   const body = materialsSource.slice(start, end);
   assert.match(body, /unit === 'lata_18L'/);
   assert.match(body, /Math\.ceil\(\(areaM2 \* PAINT_COATS\) \/ PAINT_YIELD_M2_PER_CAN_PER_COAT\)/);
-  assert.match(body, /unit === 'peca' && p\.assets && p\.assets\.tileMeters/);
-  assert.match(body, /Math\.ceil\(areaM2 \/ p\.assets\.tileMeters\)/);
+  assert.match(body, /unit === 'peca' && p\.assets && p\.assets\.pecaCoverageM2/);
+  assert.match(body, /Math\.ceil\(areaM2 \/ p\.assets\.pecaCoverageM2\)/);
   assert.match(body, /return \{ qty: areaM2, unit: 'm²' \};/);
 });
 

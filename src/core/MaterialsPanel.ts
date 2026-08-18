@@ -605,11 +605,11 @@ function productLine(productId: string, areaM2: number): string {
   const p = Catalog.getProduct(productId);
   const name = p ? p.name : productId;
   let extra = '';
-  // Peças estimadas quando o produto informa a metragem coberta por
-  // peça (hoje só os materiais de teste PBR de telha/tabeira têm
-  // tileMeters — ver comentário no Catalog).
-  if (p && p.assets && p.assets.tileMeters) {
-    extra = ' &middot; ~' + Math.ceil(areaM2 / p.assets.tileMeters) + ' peças';
+  // Peças estimadas quando o produto informa a cobertura física por
+  // peça (pecaCoverageM2 — NUNCA tileMeters, que é escala de textura
+  // na renderização 3D, campo separado de propósito).
+  if (p && p.assets && p.assets.pecaCoverageM2) {
+    extra = ' &middot; ~' + Math.ceil(areaM2 / p.assets.pecaCoverageM2) + ' peças';
   }
   return '<div class="materials-line"><span>' + name + '</span><span>' + fmtM2(areaM2) + extra + '</span></div>';
 }
@@ -884,8 +884,8 @@ function productUnitCost(productId: string, areaM2: number): number | null {
   if (!p || !p.commercial || p.commercial.price == null) return null;
   const price = p.commercial.price;
   if (p.commercial.unit === 'm2' || p.commercial.unit === 'un') return areaM2 * price;
-  if (p.commercial.unit === 'peca' && p.assets && p.assets.tileMeters) {
-    return Math.ceil(areaM2 / p.assets.tileMeters) * price;
+  if (p.commercial.unit === 'peca' && p.assets && p.assets.pecaCoverageM2) {
+    return Math.ceil(areaM2 / p.assets.pecaCoverageM2) * price;
   }
   if (p.commercial.unit === 'lata_18L') {
     const latas = Math.ceil((areaM2 * PAINT_COATS) / PAINT_YIELD_M2_PER_CAN_PER_COAT);
@@ -1062,8 +1062,8 @@ export function buildRows(): (string | number)[][] {
     if (p && p.commercial && p.commercial.unit === 'lata_18L') {
       return { qty: Math.ceil((areaM2 * PAINT_COATS) / PAINT_YIELD_M2_PER_CAN_PER_COAT), unit: 'lata(s) 18L' };
     }
-    if (p && p.commercial && p.commercial.unit === 'peca' && p.assets && p.assets.tileMeters) {
-      return { qty: Math.ceil(areaM2 / p.assets.tileMeters), unit: 'peça(s)' };
+    if (p && p.commercial && p.commercial.unit === 'peca' && p.assets && p.assets.pecaCoverageM2) {
+      return { qty: Math.ceil(areaM2 / p.assets.pecaCoverageM2), unit: 'peça(s)' };
     }
     return { qty: areaM2, unit: 'm²' };
   }
