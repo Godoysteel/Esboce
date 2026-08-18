@@ -321,8 +321,10 @@ export interface HydraulicNode {
   wallFaceSide?: 1 | -1;
   equipmentId?: string;
   connectorKey?: string;
-  /** Presente somente em pontos-guia (junctions) criados por um percurso manual (H2). Identifica a `fixture` dona do trecho, para permitir substituir só aquele percurso ao redesenhar. */
+  /** Presente somente em pontos-guia (junctions) criados por um percurso manual (H2) OU pelo traçado ingênuo automático. Identifica a `fixture` dona do trecho, para permitir substituir só aquele percurso ao redesenhar. */
   ownerFixtureId?: string;
+  /** true apenas nos nós de um percurso manual (H2, buildGuidedColdWaterHeaderRoute) — nunca nos do traçado ingênuo automático, mesmo esses também tendo `ownerFixtureId`. Distingue "usuário desenhou este trecho, preserve" de "isto foi gerado automaticamente da última vez, pode regenerar" (ex.: ao mover a origem/caixa d'água). */
+  guided?: boolean;
 }
 
 export interface HydraulicSegment {
@@ -333,6 +335,8 @@ export interface HydraulicSegment {
   diameterMm: number;
   /** Mesma finalidade de `HydraulicNode.ownerFixtureId`, aplicada ao trecho. */
   ownerFixtureId?: string;
+  /** Mesma finalidade de `HydraulicNode.guided`, aplicada ao trecho. */
+  guided?: boolean;
 }
 
 export type HydraulicJunctionKind = 'straight' | 'elbow45' | 'elbow90' | 'tee' | 'cross' | 'end';

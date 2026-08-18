@@ -194,6 +194,27 @@ export const commands = {
     return node;
   },
 
+  // Arraste da caixa d'água (kind 'source'): regenera o trecho não-guiado
+  // da rede (buildColdWaterNetworkFromFixtures) a partir da nova posição —
+  // sem isso, os canos já traçados ficariam desalinhados/"para trás" da
+  // caixa (Product Owner: "quero arrastar a caixa d'água sem que ela se
+  // desconecte dos canos"). Percursos guiados manualmente (H2,
+  // ownerFixtureId) nunca são sobrescritos por essa regeneração — e o
+  // primeiro trecho deles já acompanha a nova posição sozinho, porque
+  // referencia a origem por ID, não por cópia de coordenada. Sem
+  // pushUndoSnapshot aqui de propósito — a captura do pré-arraste já
+  // acontece em beginTransaction(), no pointerdown (mesmo padrão de
+  // updateHydraulicFixtureBodyLive).
+  updateHydraulicSourceBodyLive(nodeId: string, x: number, y: number) {
+    const node = findHydraulicNode(nodeId);
+    if (!node || node.kind !== 'source') return null;
+    node.x = x;
+    node.y = y;
+    project.hydraulics = buildColdWaterNetworkFromFixtures(project.floors, project.hydraulics);
+    emit({ type: 'HydraulicSourceMoved', hydraulicNodeId: node.id });
+    return node;
+  },
+
   flipHydraulicFixtureFace(nodeId: string): void {
     const node = findHydraulicNode(nodeId);
     if (!node || node.kind !== 'fixture' || node.placementSurface !== 'wall' || !node.wallId) return;

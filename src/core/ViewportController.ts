@@ -2613,6 +2613,19 @@ import {
             Store.commands.beginTransaction();
             return;
           }
+          if (hydraulicEntity.kind === 'source') {
+            // Caixa d'água: arraste livre no plano (sem parede, sem grid —
+            // mesmo tratamento dos pontos de piso). A rede é regenerada só
+            // no soltar (updateHydraulicSourceBodyLive), pra não desconectar
+            // os canos já traçados da nova posição.
+            selectHydraulicNode(hydraulicId);
+            dragMode = 'hydraulicSourceBody';
+            dragElementStart = { x: hydraulicEntity.x, y: hydraulicEntity.y, lastX: hydraulicEntity.x, lastY: hydraulicEntity.y };
+            dragGroundStart = getGroundModelPoint(e.clientX, e.clientY);
+            hydraulicFixtureDragObjects = findHydraulicFixtureSceneObjects(hydraulicId);
+            Store.commands.beginTransaction();
+            return;
+          }
           if (!hydraulicEntity.fixtureType) return;
           selectHydraulicNode(hydraulicId);
           dragMode = 'hydraulicFixtureBody';
@@ -3141,6 +3154,21 @@ import {
       }
       return;
     }
+    if (dragMode === 'hydraulicSourceBody') {
+      var sourceGround = getGroundModelPoint(e.clientX, e.clientY);
+      if (sourceGround && dragGroundStart && hydraulicFixtureDragObjects.length) {
+        var sourceDx = sourceGround.x - dragGroundStart.x, sourceDy = sourceGround.y - dragGroundStart.y;
+        var sourceNextX = dragElementStart.x + sourceDx, sourceNextY = dragElementStart.y + sourceDy;
+        dragElementStart.lastX = sourceNextX;
+        dragElementStart.lastY = sourceNextY;
+        var sourceWorld = modelToWorld(sourceNextX, sourceNextY);
+        hydraulicFixtureDragObjects.forEach(function (object: any) {
+          object.position.x = sourceWorld.x;
+          object.position.z = sourceWorld.z;
+        });
+      }
+      return;
+    }
     if (dragMode && dragMode.indexOf('glazingWidth') === 0) {
       var gpResizeW = Store.findGlazingPanel(selectedGlazingPanelId);
       var groundResizeW = getGroundModelPoint(e.clientX, e.clientY);
@@ -3562,6 +3590,15 @@ import {
         Store.commands.moveHydraulicJunction(selectedHydraulicNodeId, dragElementStart.lastX, dragElementStart.lastY);
       }
       clearHydraulicDragCotas();
+      hydraulicFixtureDragObjects = [];
+      dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
+      render();
+      return;
+    }
+    if (dragMode === 'hydraulicSourceBody') {
+      if (selectedHydraulicNodeId && dragElementStart) {
+        Store.commands.updateHydraulicSourceBodyLive(selectedHydraulicNodeId, dragElementStart.lastX, dragElementStart.lastY);
+      }
       hydraulicFixtureDragObjects = [];
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       render();

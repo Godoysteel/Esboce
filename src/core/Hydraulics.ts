@@ -153,11 +153,16 @@ export function buildColdWaterNetworkFromFixtures(floors: Floor[], existing: Hyd
   const nodes: HydraulicNode[] = [...fixtures, source];
   const segments: HydraulicSystem['segments'] = [];
   waterFixtures.forEach((fixture) => {
-    // Um percurso guiado manualmente (H2, ownerFixtureId) nunca é
-    // sobrescrito pela geração automática — só os pontos ainda sem
-    // percurso próprio recebem o traçado ingênuo abaixo.
-    const guidedNodes = existing.nodes.filter((node) => node.ownerFixtureId === fixture.id);
-    const guidedSegments = existing.segments.filter((segment) => segment.ownerFixtureId === fixture.id);
+    // Um percurso guiado manualmente (H2, ownerFixtureId + guided: true)
+    // nunca é sobrescrito pela geração automática — só os pontos ainda sem
+    // percurso próprio (ou com percurso INGÊNUO de uma geração anterior,
+    // sem a flag `guided`) recebem o traçado ingênuo abaixo, recalculado
+    // do zero. Sem o filtro por `guided` aqui, o traçado ingênuo de uma
+    // fixture já roteada uma vez nunca mais seria regerado — inclusive ao
+    // mover a origem (caixa d'água) ou a própria fixture, os canos
+    // ficariam presos na posição antiga da primeira geração.
+    const guidedNodes = existing.nodes.filter((node) => node.ownerFixtureId === fixture.id && node.guided);
+    const guidedSegments = existing.segments.filter((segment) => segment.ownerFixtureId === fixture.id && segment.guided);
     if (guidedNodes.length || guidedSegments.length) {
       nodes.push(...guidedNodes);
       segments.push(...guidedSegments);
@@ -302,7 +307,7 @@ export function buildGuidedColdWaterHeaderRoute(
     const node: HydraulicNode = {
       id: nextHydraulicId('hyd-waypoint'), kind: 'junction', networkType: 'cold_water',
       label: 'Ponto-guia', x: point.x, y: point.y, elevationM: source.elevationM,
-      ownerFixtureId, ...(source.floorIndex != null ? { floorIndex: source.floorIndex } : {}),
+      ownerFixtureId, guided: true, ...(source.floorIndex != null ? { floorIndex: source.floorIndex } : {}),
     };
     nodes.push(node);
     planNodeIds.push(node.id);
@@ -310,7 +315,7 @@ export function buildGuidedColdWaterHeaderRoute(
   const aboveFixture: HydraulicNode = {
     id: nextHydraulicId('hyd-waypoint'), kind: 'junction', networkType: 'cold_water',
     label: 'Descida do ponto', x: fixture.x, y: fixture.y, elevationM: source.elevationM,
-    ownerFixtureId, ...(source.floorIndex != null ? { floorIndex: source.floorIndex } : {}),
+    ownerFixtureId, guided: true, ...(source.floorIndex != null ? { floorIndex: source.floorIndex } : {}),
   };
   nodes.push(aboveFixture);
   type ChainPoint = { id: string; x: number; y: number; floorIndex?: number; elevationM: number };
@@ -328,7 +333,7 @@ export function buildGuidedColdWaterHeaderRoute(
     const aGlobal = (a.floorIndex || 0) * FLOOR_STACK_HEIGHT_M + a.elevationM;
     const bGlobal = (b.floorIndex || 0) * FLOOR_STACK_HEIGHT_M + b.elevationM;
     if (a.x === b.x && a.y === b.y && aGlobal === bGlobal) continue; // sem trecho de comprimento zero
-    segments.push({ id: nextHydraulicId('hyd-segment'), networkType: 'cold_water', startNodeId: a.id, endNodeId: b.id, diameterMm: 20, ownerFixtureId });
+    segments.push({ id: nextHydraulicId('hyd-segment'), networkType: 'cold_water', startNodeId: a.id, endNodeId: b.id, diameterMm: 20, ownerFixtureId, guided: true });
   }
   return { nodes, segments };
 }

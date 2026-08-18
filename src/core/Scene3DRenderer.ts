@@ -2788,48 +2788,68 @@ export function hashColorHex(key: string): number {
       registry.structureMeshes.push(mesh);
     });
     (project.hydraulics.nodes || []).forEach(function (node) {
-      var radius = node.kind === 'junction' ? 0.035 : node.kind === 'fixture' ? 0.07 : 0.055;
-      var geometry = new THREE.SphereGeometry(radius, 18, 14);
       var selected = viewState && viewState.selectedHydraulicNode && viewState.selectedHydraulicNode.id === node.id;
-      var baseColor = node.kind === 'fixture' ? hydraulicFixtureColor(node.networkType) : hydraulicColor(node.networkType);
-      var marker = new THREE.Mesh(
-        geometry,
-        new THREE.MeshStandardMaterial({ color: selected ? 0xf4a340 : baseColor, emissive: selected ? 0xf4a340 : baseColor, emissiveIntensity: selected ? 0.5 : 0.22, roughness: 0.32, depthTest: node.kind !== 'fixture' })
-      );
-      if (node.kind === 'fixture') marker.renderOrder = 900;
       var nodeFloorOffset = (node.floorIndex || 0) * FLOOR_STACK_HEIGHT;
-      var hostWall = node.wallId ? project.floors.flatMap(function (floor) { return floor.walls; }).find(function (wall) { return wall.id === node.wallId; }) : undefined;
-      var allProjectWalls = project.floors.flatMap(function (floor) { return floor.walls; });
-      var visualPoint = node.kind === 'fixture' ? hydraulicFixtureVisualPosition(node, hostWall, allProjectWalls) : { x: node.x, y: node.y };
-      marker.position.set((visualPoint.x - offsetX) * scale, nodeFloorOffset + node.elevationM, (visualPoint.y - offsetY) * scale);
-      tagCategory(marker, 'instalacoes');
-      marker.userData.hydraulicNodeId = node.id;
-      marker.userData.floorIndex = node.floorIndex || 0;
-      marker.userData.hydraulicEditable = (node.kind === 'fixture' && !!node.fixtureType) || (node.kind === 'junction' && !!node.ownerFixtureId);
-      scene.add(marker);
-      registry.structureMeshes.push(marker);
-      if (node.kind === 'fixture' && node.fixtureType && selected) {
-        var labelSprite = hydraulicLabelSprite(node.label, hydraulicFixtureColor(node.networkType));
-        labelSprite.position.copy(marker.position); labelSprite.position.y += 0.28;
-        labelSprite.userData.hydraulicNodeId = node.id;
-        labelSprite.userData.floorIndex = node.floorIndex || 0;
-        labelSprite.userData.hydraulicEditable = true;
-        labelSprite.userData.hydraulicLabel = true;
-        tagCategory(labelSprite, 'instalacoes');
-        scene.add(labelSprite); registry.structureMeshes.push(labelSprite);
+      // Origem de água (kind 'source') é representada só pelo tanque
+      // abaixo — a esfera genérica sobreporia o mesmo ponto, sem
+      // hydraulicEditable, e podia "roubar" o raycast de clique dependendo
+      // do ângulo de câmera (achado ao implementar o arraste da caixa
+      // d'água). Demais tipos de nó continuam com a esfera normalmente.
+      if (!(node.kind === 'source' && node.networkType === 'cold_water')) {
+        var radius = node.kind === 'junction' ? 0.035 : node.kind === 'fixture' ? 0.07 : 0.055;
+        var geometry = new THREE.SphereGeometry(radius, 18, 14);
+        var baseColor = node.kind === 'fixture' ? hydraulicFixtureColor(node.networkType) : hydraulicColor(node.networkType);
+        var marker = new THREE.Mesh(
+          geometry,
+          new THREE.MeshStandardMaterial({ color: selected ? 0xf4a340 : baseColor, emissive: selected ? 0xf4a340 : baseColor, emissiveIntensity: selected ? 0.5 : 0.22, roughness: 0.32, depthTest: node.kind !== 'fixture' })
+        );
+        if (node.kind === 'fixture') marker.renderOrder = 900;
+        var hostWall = node.wallId ? project.floors.flatMap(function (floor) { return floor.walls; }).find(function (wall) { return wall.id === node.wallId; }) : undefined;
+        var allProjectWalls = project.floors.flatMap(function (floor) { return floor.walls; });
+        var visualPoint = node.kind === 'fixture' ? hydraulicFixtureVisualPosition(node, hostWall, allProjectWalls) : { x: node.x, y: node.y };
+        marker.position.set((visualPoint.x - offsetX) * scale, nodeFloorOffset + node.elevationM, (visualPoint.y - offsetY) * scale);
+        tagCategory(marker, 'instalacoes');
+        marker.userData.hydraulicNodeId = node.id;
+        marker.userData.floorIndex = node.floorIndex || 0;
+        marker.userData.hydraulicEditable = (node.kind === 'fixture' && !!node.fixtureType) || (node.kind === 'junction' && !!node.ownerFixtureId);
+        scene.add(marker);
+        registry.structureMeshes.push(marker);
+        if (node.kind === 'fixture' && node.fixtureType && selected) {
+          var labelSprite = hydraulicLabelSprite(node.label, hydraulicFixtureColor(node.networkType));
+          labelSprite.position.copy(marker.position); labelSprite.position.y += 0.28;
+          labelSprite.userData.hydraulicNodeId = node.id;
+          labelSprite.userData.floorIndex = node.floorIndex || 0;
+          labelSprite.userData.hydraulicEditable = true;
+          labelSprite.userData.hydraulicLabel = true;
+          tagCategory(labelSprite, 'instalacoes');
+          scene.add(labelSprite); registry.structureMeshes.push(labelSprite);
+        }
       }
       if (node.kind === 'source' && node.networkType === 'cold_water') {
-        var tank = new THREE.Group();
-        var tankMaterial = new THREE.MeshStandardMaterial({ color: 0x4f8fc4, roughness: 0.42, metalness: 0.04 });
+        // Arrastável (Product Owner: "quero a opção de arrastar a caixa de
+        // água sem que ela se desconecte dos canos") — DUAS malhas
+        // separadas (corpo + tampa), não um THREE.Group: pickMesh
+        // (ViewportController.ts) só faz raycast não-recursivo contra
+        // filhos DIRETOS de scene com `.isMesh`, então um Group nunca seria
+        // encontrado nem arrastável, mesmo com hydraulicEditable marcado
+        // nele. Mesma técnica de "vários objetos com o mesmo
+        // hydraulicNodeId se movem juntos" já usada pelo marcador+etiqueta
+        // de uma fixture selecionada, logo acima.
+        var tankMaterial = new THREE.MeshStandardMaterial({ color: selected ? 0xf4a340 : 0x4f8fc4, emissive: selected ? 0xf4a340 : 0x000000, emissiveIntensity: selected ? 0.35 : 0, roughness: 0.42, metalness: 0.04 });
+        var tankX = (node.x - offsetX) * scale, tankZ = (node.y - offsetY) * scale;
+        var tankBaseY = nodeFloorOffset + node.elevationM + 0.36;
         var body = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.46, 0.72, 28), tankMaterial);
+        body.position.set(tankX, tankBaseY, tankZ);
         var lid = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.08, 28), tankMaterial);
-        lid.position.y = 0.4;
-        tank.add(body, lid);
-        tank.position.set((node.x - offsetX) * scale, nodeFloorOffset + node.elevationM + 0.36, (node.y - offsetY) * scale);
-        tank.userData.hydraulicNodeId = node.id;
-        tank.userData.category = 'instalacoes';
-        scene.add(tank);
-        registry.structureMeshes.push(tank);
+        lid.position.set(tankX, tankBaseY + 0.4, tankZ);
+        [body, lid].forEach(function (piece: any) {
+          piece.userData.hydraulicNodeId = node.id;
+          piece.userData.floorIndex = node.floorIndex || 0;
+          piece.userData.hydraulicEditable = true;
+          tagCategory(piece, 'instalacoes');
+          scene.add(piece);
+          registry.structureMeshes.push(piece);
+        });
       }
     });
   }

@@ -9,7 +9,14 @@ import type {
 // usado pelo percurso guiado de água fria (H2) para saber quais nós/trechos
 // pertencem ao roteamento manual de qual ponto de consumo. Documentos v7 e
 // anteriores continuam abrindo normalmente, sem essa marcação (ver DEC-61).
-export const CURRENT_PROJECT_SCHEMA_VERSION = 8;
+// v9: adiciona `guided` opcional em HydraulicNode/HydraulicSegment — distingue
+// percurso desenhado à mão (H2) do traçado ingênuo automático, que também usa
+// `ownerFixtureId` mas deve poder ser regenerado (ex.: ao mover a origem/caixa
+// d'água, DEC-116). Documentos v8 e anteriores abrem normalmente sem a
+// marcação — seus trechos ingênuos antigos passam a se comportar como
+// regeneráveis (correto), e trechos guiados antigos só voltam a ficar
+// protegidos contra sobrescrita depois de redesenhados uma vez nesta versão.
+export const CURRENT_PROJECT_SCHEMA_VERSION = 9;
 
 export interface StoredProjectDocument {
   schemaVersion: number;
@@ -72,6 +79,7 @@ function parseHydraulicNode(value: unknown, path: string): HydraulicNode {
   if (wallId !== undefined) node.wallId = wallId;
   if (ownerFixtureId !== undefined) node.ownerFixtureId = ownerFixtureId;
   if (placementSurface !== undefined) node.placementSurface = placementSurface;
+  if (v.guided === true) node.guided = true;
   if (v.wallFaceSide != null) {
     const wallFaceSide = number(v.wallFaceSide, `${path}.wallFaceSide`);
     if (wallFaceSide !== -1 && wallFaceSide !== 1) fail(`${path}.wallFaceSide`, 'face da parede inválida');
@@ -93,6 +101,7 @@ function parseHydraulicSegment(value: unknown, path: string): HydraulicSegment {
   };
   const ownerFixtureId = optionalString(v.ownerFixtureId, `${path}.ownerFixtureId`);
   if (ownerFixtureId !== undefined) segment.ownerFixtureId = ownerFixtureId;
+  if (v.guided === true) segment.guided = true;
   return segment;
 }
 
