@@ -55,14 +55,14 @@ test('alvo abaixo do piso de segurança é elevado ao piso antes do cálculo', (
   assert.ok(layout.columns.moduleSizeM >= MIN_MODULE_M - 1e-9);
 });
 
-// --- netGlassSizeM: desconto da junta de 10mm -------------------------
+// --- netGlassSizeM: desconto da junta de 20mm -------------------------
 
-test('junta padrão é 10mm', () => {
-  assert.equal(JOINT_MM, 10);
+test('junta padrão é 20mm', () => {
+  assert.equal(JOINT_MM, 20);
 });
 
-test('vidro líquido descontando a junta de 10mm', () => {
-  assert.ok(Math.abs(netGlassSizeM(1.2) - (1.2 - 0.01)) < 1e-9);
+test('vidro líquido descontando a junta de 20mm', () => {
+  assert.ok(Math.abs(netGlassSizeM(1.2) - (1.2 - 0.02)) < 1e-9);
 });
 
 test('vidro líquido nunca fica negativo em módulo menor que a junta', () => {

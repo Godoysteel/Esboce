@@ -17,7 +17,7 @@
 export const MIN_MODULE_M = 0.6;
 
 /** Folga (junta) entre vidros vizinhos, em milímetros — espaço do silicone estrutural. */
-export const JOINT_MM = 10;
+export const JOINT_MM = 20;
 
 // Largura/profundidade dos perfis — valores extraídos do modelo de
 // referência feito no Blender pelo usuário (Fachada_Glazing.glb,

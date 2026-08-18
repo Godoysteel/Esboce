@@ -1808,22 +1808,28 @@ export function hashColorHex(key: string): number {
       addBar(0, rowY - MULLION_HORIZONTAL_WIDTH_M / 2, widthM, MULLION_HORIZONTAL_WIDTH_M);
     }
 
-    // Vidros — um por célula do grid, com a junta de 10mm descontada
-    // em todas as bordas (netGlassSizeM).
+    // Vidros — um por célula do grid, com a junta descontada em todas
+    // as bordas (netGlassSizeM). Fica MONTADO POR FORA da profundidade
+    // do perfil (face frontal do caixilho), não centralizado/embutido
+    // dentro dela — reproduz vidro estrutural colado por fora, com a
+    // moldura escondida atrás, e não uma vidraça encaixada num rebaixo
+    // entre os perfis.
     var cw = layout.columns.moduleSizeM, rh = layout.rows.moduleSizeM;
     var glassW = netGlassSizeM(cw), glassH = netGlassSizeM(rh);
+    var glassDepth = 0.01;
+    var glassZ = PROFILE_DEPTH_M / 2 + glassDepth / 2;
     // O GLB de referência traz todos os quatro vidros numa única malha.
     // Mantemos a mesma característica com InstancedMesh: um único draw
     // transparente evita que o Three.js reordene cada célula de maneira
     // diferente quando a câmera passa de frente para trás do painel.
-    var glassGeo = new THREE.BoxGeometry(Math.max(glassW, 0.001), Math.max(glassH, 0.001), 0.01);
+    var glassGeo = new THREE.BoxGeometry(Math.max(glassW, 0.001), Math.max(glassH, 0.001), glassDepth);
     var glassCount = layout.columns.count * layout.rows.count;
     var glassInstances = new THREE.InstancedMesh(glassGeo, glassMat, glassCount);
     var glassMatrix = new THREE.Matrix4();
     var glassIndex = 0;
     for (var ci = 0; ci < layout.columns.count; ci++) {
       for (var ri = 0; ri < layout.rows.count; ri++) {
-        glassMatrix.makeTranslation(-widthM / 2 + cw * ci + cw / 2, rh * ri + rh / 2, 0);
+        glassMatrix.makeTranslation(-widthM / 2 + cw * ci + cw / 2, rh * ri + rh / 2, glassZ);
         glassInstances.setMatrixAt(glassIndex++, glassMatrix);
       }
     }
