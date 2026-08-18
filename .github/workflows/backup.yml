@@ -22,19 +22,6 @@ jobs:
           sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
           sudo apt-get install -y postgresql-client-17
 
-      # TEMPORÁRIO — remover depois de diagnosticar a falha de autenticação.
-      # Não imprime a secret, só o tamanho e se o formato bate com o esperado.
-      - name: Diagnóstico do secret (temporário)
-        env:
-          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
-        run: |
-          echo "Tamanho da URL: ${#DATABASE_URL}"
-          if [[ "$DATABASE_URL" =~ ^postgresql://postgres\.[a-zA-Z0-9]+:[^@]+@aws-0-sa-east-1\.pooler\.supabase\.com:5432/postgres$ ]]; then
-            echo "Formato: OK"
-          else
-            echo "Formato: INESPERADO"
-          fi
-
       - name: Gerar dump do banco
         env:
           DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
