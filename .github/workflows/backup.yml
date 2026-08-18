@@ -12,8 +12,15 @@ jobs:
   backup:
     runs-on: ubuntu-latest
     steps:
-      - name: Instalar cliente PostgreSQL
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      # O apt padrão do Ubuntu instala um pg_dump mais antigo que o Postgres
+      # 17 do Supabase; pg_dump se recusa a rodar contra servidor mais novo
+      # que ele mesmo. Por isso instalamos direto do repositório oficial do
+      # PostgreSQL (PGDG), pedindo a versão 17 explicitamente.
+      - name: Instalar cliente PostgreSQL 17
+        run: |
+          sudo apt-get install -y postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-client-17
 
       # TEMPORÁRIO — remover depois de diagnosticar a falha de autenticação.
       # Não imprime a secret, só o tamanho e se o formato bate com o esperado.
