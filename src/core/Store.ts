@@ -1270,9 +1270,21 @@ export const commands = {
     const ux = (w.x2 - w.x1) / (wallLenM * Core.GRID), uy = (w.y2 - w.y1) / (wallLenM * Core.GRID);
     const rawOffsetM = (((p.x ?? w.x1) - w.x1) * ux + ((p.y ?? w.y1) - w.y1) * uy) / Core.GRID;
     const offsetM = Math.max(widthM / 2, Math.min(wallLenM - widthM / 2, rawOffsetM));
+    // Lado do eixo da parede em que o painel estava ao soltar — mesmo
+    // teste de sinal (produto vetorial 2D) usado em
+    // attachVolumeBoxToWall. Sem isso, o vidro (que fica só na face da
+    // FRENTE do painel, não centralizado no Z local — ver
+    // buildGlazingPanelGroup) virava pro lado que a parede por acaso
+    // tinha sido desenhada (x1→x2), não pro lado que o Product Owner
+    // realmente queria (relatado como "o vidro fica virado pra dentro
+    // da casa").
+    const nx = -uy, ny = ux;
+    const projX = w.x1 + ux * rawOffsetM * Core.GRID, projY = w.y1 + uy * rawOffsetM * Core.GRID;
+    const side = ((p.x ?? projX) - projX) * nx + ((p.y ?? projY) - projY) * ny;
     p.state = 'attached';
     p.widthM = widthM; p.heightM = heightM;
     p.wallId = wallId; p.offsetM = offsetM; p.sillHeightM = 0;
+    p.normalSign = side < 0 ? -1 : 1;
     delete p.x; delete p.y; delete p.rotationDeg;
     emit({ type: 'GlazingPanelAttached', glazingPanelId, wallId });
   },

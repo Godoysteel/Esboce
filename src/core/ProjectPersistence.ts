@@ -16,7 +16,12 @@ import type {
 // marcação — seus trechos ingênuos antigos passam a se comportar como
 // regeneráveis (correto), e trechos guiados antigos só voltam a ficar
 // protegidos contra sobrescrita depois de redesenhados uma vez nesta versão.
-export const CURRENT_PROJECT_SCHEMA_VERSION = 9;
+// v10: adiciona `normalSign` opcional em GlazingPanel, mesmo campo que
+// VolumeBox já tinha — corrige o vidro nascendo virado pra dentro da casa em
+// painéis já salvos antes desta versão (DEC-118). Documentos v9 e anteriores
+// abrem normalmente; sem o campo, o painel usa o sinal padrão (+1) até ser
+// reanexado a uma parede, quando passa a gravar o lado correto.
+export const CURRENT_PROJECT_SCHEMA_VERSION = 10;
 
 export interface StoredProjectDocument {
   schemaVersion: number;
@@ -249,6 +254,7 @@ function parseGlazingPanel(value: unknown, path: string): GlazingPanel {
   const x = optionalNumber(v.x, `${path}.x`);
   const y = optionalNumber(v.y, `${path}.y`);
   const rotationDeg = optionalNumber(v.rotationDeg, `${path}.rotationDeg`);
+  const normalSign = optionalNumber(v.normalSign, `${path}.normalSign`);
   if (v.glassMaterial != null) {
     const material = record(v.glassMaterial, `${path}.glassMaterial`);
     const color = string(material.color, `${path}.glassMaterial.color`);
@@ -267,6 +273,7 @@ function parseGlazingPanel(value: unknown, path: string): GlazingPanel {
   if (x !== undefined) panel.x = x;
   if (y !== undefined) panel.y = y;
   if (rotationDeg !== undefined) panel.rotationDeg = rotationDeg;
+  if (normalSign !== undefined) panel.normalSign = normalSign < 0 ? -1 : 1;
   if (panel.state === 'attached' && !panel.wallId) fail(`${path}.wallId`, 'painel anexado precisa de parede hospedeira');
   return panel;
 }

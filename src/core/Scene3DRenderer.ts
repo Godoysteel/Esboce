@@ -1961,7 +1961,16 @@ export function hashColorHex(key: string): number {
     var px = (cxModel - offsetX) * scale, pz = (cyModel - offsetY) * scale;
     var sill = panel.sillHeightM || 0;
     hitMesh.position.set(px, yOffset + sill + panel.heightM / 2, pz);
-    hitMesh.rotation.y = -Math.atan2(uy, ux);
+    // O vidro (buildGlazingPanelGroup) fica só na face local +Z do
+    // painel, não centralizado — sem correção, essa face aponta pro
+    // lado que a parede por acaso foi desenhada (x1→x2), não pro lado
+    // real que o usuário arrastou o painel (relatado como "o vidro fica
+    // virado pra dentro da casa"). +180° quando normalSign é -1 espelha
+    // a orientação pro lado certo — mesmo campo/decisão de
+    // Store.commands.attachGlazingPanelToWall (ver VolumeBox.normalSign
+    // pro precedente desse padrão nesta mesma técnica de encosto).
+    var sign = panel.normalSign === -1 ? -1 : 1;
+    hitMesh.rotation.y = -Math.atan2(uy, ux) + (sign === -1 ? Math.PI : 0);
     return hitMesh;
   }
 

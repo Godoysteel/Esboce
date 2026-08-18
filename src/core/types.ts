@@ -195,6 +195,8 @@ export interface GlazingPanel {
   offsetM?: number;
   /** Altura da base do painel em relação ao piso — 0 = do chão ao teto. */
   sillHeightM?: number;
+  /** De qual lado do eixo da parede o vidro fica virado (+1 ou -1) — mesmo campo/decisão de VolumeBox.normalSign, guardado uma vez no encosto (ver attachGlazingPanelToWall). Sem isso, o vidro (assimétrico no Z local do painel — fica só na face da frente) virava pro lado que a parede por acaso foi desenhada, não pro lado real do arraste. */
+  normalSign?: 1 | -1;
 }
 
 // Bloco de Volumetria (fachada procedural) — box sólido que nasce

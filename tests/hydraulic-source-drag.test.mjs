@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { createProject } from '../src/core/Core.ts';
-import { decodeProjectDocument, encodeProjectDocument, CURRENT_PROJECT_SCHEMA_VERSION } from '../src/core/ProjectPersistence.ts';
+import { decodeProjectDocument, encodeProjectDocument } from '../src/core/ProjectPersistence.ts';
 import { buildColdWaterNetworkFromFixtures, buildGuidedColdWaterHeaderRoute, createPositionedHydraulicFixture } from '../src/core/Hydraulics.ts';
 
 // Scene3DRenderer.ts / ViewportController.ts / Store.ts não são todos
@@ -137,8 +137,7 @@ test('mover a origem NUNCA regenera um percurso guiado manualmente — o trecho 
   assert.deepEqual({ x: waypoint.x, y: waypoint.y }, { x: 40, y: 20 }, 'a posição desenhada à mão não muda quando a origem se move');
 });
 
-test('persistência: schemaVersion 9 grava e lê guided:true em nó e segmento hidráulico, e documentos antigos (sem o campo) continuam abrindo', () => {
-  assert.equal(CURRENT_PROJECT_SCHEMA_VERSION, 9);
+test('persistência: guided:true em nó e segmento hidráulico sobrevive ao salvamento, e documentos antigos (sem o campo) continuam abrindo', () => {
   const project = createProject();
   project.hydraulics.nodes.push(
     { id: 'src', kind: 'source', networkType: 'cold_water', label: "Caixa d'água", x: 0, y: 0, elevationM: 3.35 },

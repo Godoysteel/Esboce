@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
 
 import {
   computeGlazingLayout, netGlassSizeM, MIN_MODULE_M, JOINT_MM,
@@ -111,6 +112,54 @@ test('GlazingPanel: ajuste visual do vidro sobrevive ao salvamento', () => {
   assert.deepEqual(decoded.project.floors[0].glazingPanels[0].glassMaterial, {
     color: '#789abc', opacity: 0.8, roughness: 0.22, metalness: 0.65, reflectionIntensity: 1.9,
   });
+});
+
+// --- Orientação do vidro (DEC-118) --------------------------------------
+// Product Owner: "quando aplico a fachada de vidro na parede, o vidro fica
+// virado para dentro da casa." Causa raiz: o vidro (buildGlazingPanelGroup)
+// fica só na face local +Z do painel — não centralizado —, e a rotação do
+// painel encostado (buildGlazingPanelAttachedMesh) usava só o ângulo da
+// parede (atan2), que aponta pro lado que a parede por acaso foi desenhada
+// (x1→x2), sem relação com o lado real que o usuário arrastou o painel.
+// Corrigido com `normalSign` (mesmo campo/técnica de VolumeBox.normalSign,
+// já usado pra Bloco de Volumetria) — decidido uma vez no encosto, a partir
+// de que lado do eixo da parede o painel estava ao soltar.
+
+test('GlazingPanel: normalSign sobrevive ao salvamento, e documento antigo (sem o campo) continua abrindo', () => {
+  const floor = createFloorEntity('Térreo');
+  floor.walls.push({ id: 'w1', x1: 0, y1: 0, x2: 5, y2: 0 });
+  floor.glazingPanels.push({
+    id: 'gp1', state: 'attached', widthM: 3.6, heightM: 2.4, moduleTargetM: 1.2,
+    wallId: 'w1', offsetM: 2.5, sillHeightM: 0, normalSign: -1,
+  });
+  const project = { floors: [floor], currentFloorIndex: 0, layers: {}, foundationType: 'radier', constructionSystem: 'ceramic_masonry' };
+  const decoded = decodeProjectDocument(encodeProjectDocument(project));
+  assert.equal(decoded.project.floors[0].glazingPanels[0].normalSign, -1);
+
+  // documento salvo antes desta versão, sem o campo — abre normal.
+  const legacyDoc = { schemaVersion: 9, project: structuredClone(project) };
+  delete legacyDoc.project.floors[0].glazingPanels[0].normalSign;
+  const decodedLegacy = decodeProjectDocument(legacyDoc);
+  assert.equal(decodedLegacy.project.floors[0].glazingPanels[0].normalSign, undefined);
+});
+
+test('Store.attachGlazingPanelToWall calcula normalSign a partir do lado que o painel estava ao soltar (mesmo teste de sinal de attachVolumeBoxToWall)', () => {
+  const source = readFileSync(new URL('../src/core/Store.ts', import.meta.url), 'utf8');
+  const start = source.indexOf('attachGlazingPanelToWall(glazingPanelId: string, wallId: string): void {');
+  const end = source.indexOf('\n  },', start);
+  const body = source.slice(start, end);
+  assert.match(body, /const nx = -uy, ny = ux;/);
+  assert.match(body, /const side = \(\(p\.x \?\? projX\) - projX\) \* nx \+ \(\(p\.y \?\? projY\) - projY\) \* ny;/);
+  assert.match(body, /p\.normalSign = side < 0 \? -1 : 1;/);
+});
+
+test('Scene3DRenderer aplica +180° na rotação do painel encostado quando normalSign é -1, espelhando a face do vidro pro lado certo', () => {
+  const source = readFileSync(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
+  const start = source.indexOf('function buildGlazingPanelAttachedMesh(');
+  const end = source.indexOf('\n  }', start);
+  const body = source.slice(start, end);
+  assert.match(body, /var sign = panel\.normalSign === -1 \? -1 : 1;/);
+  assert.match(body, /hitMesh\.rotation\.y = -Math\.atan2\(uy, ux\) \+ \(sign === -1 \? Math\.PI : 0\);/);
 });
 
 test('GlazingPanel: attached sem wallId é rejeitado', () => {
