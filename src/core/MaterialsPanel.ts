@@ -855,6 +855,14 @@ function materialPrice(key: MaterialPriceKey): number {
   return realPrices[key] ? realPrices[key]!.value : REFERENCE_PRICES[key];
 }
 
+// Cimento e cal são vendidos em saco fechado (50kg e 20kg), não a
+// granel — não dá pra comprar "67,28kg", só sacos inteiros. Arredonda
+// pra cima; o custo usa a mesma quantidade arredondada (você paga o
+// saco cheio, não a fração), não o kg exato calculado.
+function bagsQty(kg: number, bagKg: number): number {
+  return Math.ceil(kg / bagKg);
+}
+
 // Linha "↳ ..." mostrando de onde veio o preço em uso — só aparece
 // quando já resolveu por um produto de catálogo (fornecedor real OU
 // Vórtice); enquanto isso não chegou (ou se falhou de vez), não mostra
@@ -1001,8 +1009,10 @@ export function buildRows(): (string | number)[][] {
   if (hasCeramicMasonryEstimate(q.constructionSystem) && q.totals.wallAreaNet > 0) {
     push('Alvenaria (ref. SINAPI)', 'Blocos/tijolos', q.masonry.blocks, 'un', q.masonry.blocks * materialPrice('brickPerUnit'));
     push('Alvenaria (ref. SINAPI)', 'Argamassa de assentamento', q.masonry.mortarM3, 'm³', null);
-    push('Alvenaria (ref. SINAPI)', 'Cimento', q.masonry.cementKg, 'kg', q.masonry.cementKg * materialPrice('cementPerKg'));
-    push('Alvenaria (ref. SINAPI)', 'Cal hidratada', q.masonry.calKg, 'kg', q.masonry.calKg * materialPrice('limePerKg'));
+    const masonryCementBags = bagsQty(q.masonry.cementKg, 50);
+    const masonryCalBags = bagsQty(q.masonry.calKg, 20);
+    push('Alvenaria (ref. SINAPI)', 'Cimento', masonryCementBags, 'sc(50kg)', masonryCementBags * 50 * materialPrice('cementPerKg'));
+    push('Alvenaria (ref. SINAPI)', 'Cal hidratada', masonryCalBags, 'sc(20kg)', masonryCalBags * 20 * materialPrice('limePerKg'));
     push('Alvenaria (ref. SINAPI)', 'Areia média', q.masonry.sandM3, 'm³', q.masonry.sandM3 * materialPrice('sandPerM3'));
   }
   // Chapisco (traço 1:3) + Reboco (traço 1:2:8, 2cm) — aplicado nas DUAS
@@ -1012,25 +1022,25 @@ export function buildRows(): (string | number)[][] {
   if (q.totals.wallAreaNet > 0) {
     const bothFacesAreaM2 = q.totals.wallAreaNet * 2;
     const rLabel = 'Chapisco e Reboco (ref. mercado)';
-    const chapiscoCementKg = bothFacesAreaM2 * CHAPISCO_REF.cementKgPerM2;
+    const chapiscoCementBags = bagsQty(bothFacesAreaM2 * CHAPISCO_REF.cementKgPerM2, 50);
     const chapiscoSandM3 = bothFacesAreaM2 * CHAPISCO_REF.sandM3PerM2;
     const rebocoVolumeM3 = bothFacesAreaM2 * REBOCO_THICKNESS_M;
-    const rebocoCementKg = rebocoVolumeM3 * MASONRY_REF.cementKgPerM3;
-    const rebocoCalKg = rebocoVolumeM3 * MASONRY_REF.calKgPerM3;
+    const rebocoCementBags = bagsQty(rebocoVolumeM3 * MASONRY_REF.cementKgPerM3, 50);
+    const rebocoCalBags = bagsQty(rebocoVolumeM3 * MASONRY_REF.calKgPerM3, 20);
     const rebocoSandM3 = rebocoVolumeM3 * MASONRY_REF.sandM3PerM3;
-    push(rLabel, 'Cimento (chapisco)', chapiscoCementKg, 'kg', chapiscoCementKg * materialPrice('cementPerKg'));
+    push(rLabel, 'Cimento (chapisco)', chapiscoCementBags, 'sc(50kg)', chapiscoCementBags * 50 * materialPrice('cementPerKg'));
     push(rLabel, 'Areia (chapisco)', chapiscoSandM3, 'm³', chapiscoSandM3 * materialPrice('sandPerM3'));
-    push(rLabel, 'Cimento (reboco)', rebocoCementKg, 'kg', rebocoCementKg * materialPrice('cementPerKg'));
-    push(rLabel, 'Cal hidratada (reboco)', rebocoCalKg, 'kg', rebocoCalKg * materialPrice('limePerKg'));
+    push(rLabel, 'Cimento (reboco)', rebocoCementBags, 'sc(50kg)', rebocoCementBags * 50 * materialPrice('cementPerKg'));
+    push(rLabel, 'Cal hidratada (reboco)', rebocoCalBags, 'sc(20kg)', rebocoCalBags * 20 * materialPrice('limePerKg'));
     push(rLabel, 'Areia (reboco)', rebocoSandM3, 'm³', rebocoSandM3 * materialPrice('sandPerM3'));
   }
   // Contrapiso (traço 1:4, 3cm) — sobre a mesma área de piso já usada
   // pro acabamento (cerâmica/porcelanato).
   if (q.totals.floorArea > 0) {
     const cLabel = 'Contrapiso (ref. mercado)';
-    const contrapisoCementKg = q.totals.floorArea * CONTRAPISO_REF.cementKgPerM2;
+    const contrapisoCementBags = bagsQty(q.totals.floorArea * CONTRAPISO_REF.cementKgPerM2, 50);
     const contrapisoSandM3 = q.totals.floorArea * CONTRAPISO_REF.sandM3PerM2;
-    push(cLabel, 'Cimento', contrapisoCementKg, 'kg', contrapisoCementKg * materialPrice('cementPerKg'));
+    push(cLabel, 'Cimento', contrapisoCementBags, 'sc(50kg)', contrapisoCementBags * 50 * materialPrice('cementPerKg'));
     push(cLabel, 'Areia', contrapisoSandM3, 'm³', contrapisoSandM3 * materialPrice('sandPerM3'));
   }
   if (q.roofTimber.areaM2 > 0) {
@@ -1042,11 +1052,27 @@ export function buildRows(): (string | number)[][] {
     const nailKg = q.roofTimber.areaM2 * ROOF_TIMBER_NAIL_KG_PER_M2;
     push(tLabel, 'Pregos', nailKg, 'kg', nailKg * materialPrice('nailPerKg'));
   }
+  // Quantidade em unidade de COMPRA (o que dá pra pedir na loja), não na
+  // unidade de cálculo interno — pedido explícito do Product Owner após
+  // ver o PDF ("orçamento por quantidade de produto, ex: 02 sacos de
+  // cimento 50kg"). Latas e peças arredondam pra cima (não dá pra
+  // comprar meia lata/peça); m² continua m² pra produto vendido assim
+  // (porcelanato, pedra) — já é unidade de compra de verdade.
+  function purchaseQuantity(p: any, areaM2: number): { qty: number; unit: string } {
+    if (p && p.commercial && p.commercial.unit === 'lata_18L') {
+      return { qty: Math.ceil((areaM2 * PAINT_COATS) / PAINT_YIELD_M2_PER_CAN_PER_COAT), unit: 'lata(s) 18L' };
+    }
+    if (p && p.commercial && p.commercial.unit === 'peca' && p.assets && p.assets.tileMeters) {
+      return { qty: Math.ceil(areaM2 / p.assets.tileMeters), unit: 'peça(s)' };
+    }
+    return { qty: areaM2, unit: 'm²' };
+  }
   function addProductRows(category: string, map: Record<string, number>) {
     Object.keys(map).forEach(function (id) {
       const p = Catalog.getProduct(id);
       const areaM2 = map[id]!;
-      push(category, p ? p.name : id, areaM2, 'm²', productUnitCost(id, areaM2));
+      const { qty, unit } = purchaseQuantity(p, areaM2);
+      push(category, p ? p.name : id, qty, unit, productUnitCost(id, areaM2));
     });
   }
   addProductRows('Pintura', q.paint);

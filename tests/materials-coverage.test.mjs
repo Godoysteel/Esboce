@@ -82,6 +82,47 @@ test('Contrapiso (traço 1:4, 3cm) vira categoria própria, cobrando cimento e a
   assert.match(body, /q\.totals\.floorArea \* CONTRAPISO_REF\.sandM3PerM2/);
 });
 
+// Pedido do Product Owner após ver o PDF: quantidade em unidade de
+// COMPRA de verdade (sacos, latas, peças), não na unidade de cálculo
+// interno (kg, m²) — "orçamento por quantidade de produto, ex: 02
+// sacos de cimento 50kg".
+test('bagsQty arredonda pra cima — cimento/cal só vêm em saco fechado, não a granel', () => {
+  assert.match(materialsSource, /function bagsQty\(kg: number, bagKg: number\): number \{\s*\n\s*return Math\.ceil\(kg \/ bagKg\);/);
+});
+
+test('cimento/cal da alvenaria, chapisco/reboco e contrapiso aparecem em sacos (50kg/20kg), custo pela quantidade arredondada', () => {
+  assert.match(materialsSource, /const masonryCementBags = bagsQty\(q\.masonry\.cementKg, 50\);/);
+  assert.match(materialsSource, /push\('Alvenaria \(ref\. SINAPI\)', 'Cimento', masonryCementBags, 'sc\(50kg\)', masonryCementBags \* 50 \* materialPrice\('cementPerKg'\)\)/);
+  assert.match(materialsSource, /const masonryCalBags = bagsQty\(q\.masonry\.calKg, 20\);/);
+  assert.match(materialsSource, /const chapiscoCementBags = bagsQty\(bothFacesAreaM2 \* CHAPISCO_REF\.cementKgPerM2, 50\);/);
+  assert.match(materialsSource, /const rebocoCementBags = bagsQty\(rebocoVolumeM3 \* MASONRY_REF\.cementKgPerM3, 50\);/);
+  assert.match(materialsSource, /const rebocoCalBags = bagsQty\(rebocoVolumeM3 \* MASONRY_REF\.calKgPerM3, 20\);/);
+  assert.match(materialsSource, /const contrapisoCementBags = bagsQty\(q\.totals\.floorArea \* CONTRAPISO_REF\.cementKgPerM2, 50\);/);
+});
+
+test('areia continua em m³ (unidade de compra normal em loja de material) — não vira "saco"', () => {
+  assert.match(materialsSource, /push\('Alvenaria \(ref\. SINAPI\)', 'Areia média', q\.masonry\.sandM3, 'm³'/);
+});
+
+test('purchaseQuantity converte tinta pra lata(s) 18L e telha/peça pra peça(s), mas mantém m² pra produto vendido assim (porcelanato/pedra)', () => {
+  const start = materialsSource.indexOf('function purchaseQuantity(');
+  const end = materialsSource.indexOf('\n  }', start);
+  const body = materialsSource.slice(start, end);
+  assert.match(body, /unit === 'lata_18L'/);
+  assert.match(body, /Math\.ceil\(\(areaM2 \* PAINT_COATS\) \/ PAINT_YIELD_M2_PER_CAN_PER_COAT\)/);
+  assert.match(body, /unit === 'peca' && p\.assets && p\.assets\.tileMeters/);
+  assert.match(body, /Math\.ceil\(areaM2 \/ p\.assets\.tileMeters\)/);
+  assert.match(body, /return \{ qty: areaM2, unit: 'm²' \};/);
+});
+
+test('addProductRows usa purchaseQuantity pra exibir (não mais sempre m² cru), mas o custo continua vindo de productUnitCost sobre a área real', () => {
+  const start = materialsSource.indexOf('function addProductRows(');
+  const end = materialsSource.indexOf('\n  }', start);
+  const body = materialsSource.slice(start, end);
+  assert.match(body, /const \{ qty, unit \} = purchaseQuantity\(p, areaM2\);/);
+  assert.match(body, /push\(category, p \? p\.name : id, qty, unit, productUnitCost\(id, areaM2\)\)/);
+});
+
 test('Chapisco+Reboco vira categoria própria, aplicado nas DUAS faces de toda parede (wallAreaNet × 2)', () => {
   assert.match(materialsSource, /const CHAPISCO_REF = \{ cementKgPerM2: 2\.25, sandM3PerM2: 0\.0053 \};/);
   assert.match(materialsSource, /const REBOCO_THICKNESS_M = 0\.02;/);
