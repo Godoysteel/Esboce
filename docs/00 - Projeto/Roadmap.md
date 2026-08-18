@@ -73,6 +73,7 @@ Critérios para iniciar um piloto com usuários convidados:
 
 ## Evoluções posteriores
 
+- redesenho da navegação lateral em painéis por categoria (Ambientes, Paredes, Aberturas, Cobertura, Materiais, Mobiliário, Instalações, Mais), ícone + rótulo em vez da barra de ilhas atual — proposta validada em mockup visual em 2026-08-18, objetivo de tornar os comandos mais fáceis de encontrar. Qualquer botão de funcionalidade ainda não implementada nesse layout nasce travado/desabilitado, mesmo padrão já usado hoje nos rótulos "em breve" — nunca sugerir que algo funciona sem funcionar de fato;
 - editor 2D sincronizado com o modelo paramétrico 3D, conforme ADR-009;
 - sistema hidráulico paramétrico para água fria, esgoto sanitário e ventilação, com roteamento assistido, modo raio X, regras técnicas versionadas e quantitativos, conforme SPEC-002;
 - edição de planta com grid técnico, câmera ortográfica, simbologia arquitetônica, cotas e pavimentos;

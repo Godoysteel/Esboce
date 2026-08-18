@@ -103,3 +103,55 @@ test('volume de madeira ganha custo próprio (woodPerM3); ripas/caibros/terças 
   assert.match(body, /push\(tLabel, 'Terças', q\.roofTimber\.tercaLinearM, 'm', null\)/);
   assert.match(body, /push\(tLabel, 'Volume total de madeira', q\.roofTimber\.volumeM3, 'm³', q\.roofTimber\.volumeM3 \* materialPrice\('woodPerM3'\)\)/);
 });
+
+// DEC-106/107: portas e janelas deixam de ficar sem preço. São
+// esquadrias de tamanho livre (largura/altura ajustáveis por abertura),
+// então o preço é por M² REAL da abertura, não por unidade fixa —
+// senão uma janela pequena custaria igual a uma grande. Porta/janela
+// com Opening.productId de um fornecedor real (ex.: parceiro de vidro)
+// usa o preço próprio (pela área real); sem produto escolhido, a área
+// cai na média Vórtice por m² — mesmo padrão fornecedor real > média
+// já validado pro cimento.
+test('doorPerM2/windowPerM2 têm SKU de fallback no Vórtice e valor de emergência em REFERENCE_PRICES', () => {
+  const skuStart = materialsSource.indexOf('const VORTICE_MATERIAL_SKUS');
+  const skuEnd = materialsSource.indexOf('};', skuStart);
+  const skuBody = materialsSource.slice(skuStart, skuEnd);
+  assert.match(skuBody, /doorPerM2:\s*\{\s*sku:/);
+  assert.match(skuBody, /windowPerM2:\s*\{\s*sku:/);
+
+  const refStart = materialsSource.indexOf('const REFERENCE_PRICES');
+  const refEnd = materialsSource.indexOf('};', refStart);
+  const refBody = materialsSource.slice(refStart, refEnd);
+  assert.match(refBody, /doorPerM2:\s*700/);
+  assert.match(refBody, /windowPerM2:\s*150/);
+});
+
+test('productUnitCost aceita unidade "un" (porta/janela de fornecedor real) igual a "m2", multiplica preço × quantidade', () => {
+  const start = materialsSource.indexOf('function productUnitCost(');
+  const end = materialsSource.indexOf('\n}', start);
+  const body = materialsSource.slice(start, end);
+  assert.match(body, /p\.commercial\.unit === 'm2' \|\| p\.commercial\.unit === 'un'/);
+});
+
+test('contagem de aberturas usa a ÁREA REAL de cada porta/janela (largura×altura), não unidade fixa, e separa custo por produto real da área genérica', () => {
+  const start = materialsSource.indexOf('if (hostWall && hostWall.demolished) return;');
+  const end = materialsSource.indexOf('vergaSpanM += op.width', start);
+  const body = materialsSource.slice(start, end);
+  assert.match(body, /const openingAreaM2 = op\.width \* op\.height;/);
+  assert.match(body, /totals\.doorsProductCost \+= cost;/);
+  assert.match(body, /totals\.doorsGenericAreaM2 \+= openingAreaM2;/);
+  assert.match(body, /totals\.windowsProductCost \+= cost;/);
+  assert.match(body, /totals\.windowsGenericAreaM2 \+= openingAreaM2;/);
+});
+
+test('linha de Portas/Janelas soma custo real do produto (m² dele) com a área genérica × média Vórtice/m²', () => {
+  const start = materialsSource.indexOf('const doorCost');
+  const end = materialsSource.indexOf("push('Geral', 'Janelas'", start);
+  const body = materialsSource.slice(start, end);
+  assert.match(body, /q\.totals\.doorsProductCost \+ q\.totals\.doorsGenericAreaM2 \* materialPrice\('doorPerM2'\)/);
+  assert.match(body, /q\.totals\.windowsProductCost \+ q\.totals\.windowsGenericAreaM2 \* materialPrice\('windowPerM2'\)/);
+});
+
+test('disclaimer do PDF avisa que o total é só material, sem mão de obra/projeto/taxas/instalações', () => {
+  assert.match(materialsSource, /não inclui mão de obra/);
+});

@@ -214,8 +214,12 @@ const MASONRY_REF = {
 // de caibro mais apertado), mas manter uma referência só evita
 // multiplicar simplificações sem dado que realmente diferencie os
 // casos no modelo atual (o Roof não guarda hoje se é telhado simples
-// ou composto de verdade pra esse fim). Platibanda (laje plana, sem
-// água) NÃO entra — é laje de concreto, sem madeiramento nenhum.
+// ou composto de verdade pra esse fim). Platibanda ENTRA também — na
+// prática construtiva real (confirmado pelo Product Owner), o telhado
+// "embutido" atrás do parapeito ainda é uma estrutura de madeira comum
+// coberta com telha eternit/fibrocimento, não uma laje maciça exposta
+// sem cobertura nenhuma (correção desta sessão — ver Registro de
+// Decisões Técnicas, DEC-108).
 // Tesoura (treliça, só necessária em vãos maiores — SINAPI tem
 // composição própria, 92548, por peça e por vão) e frechal (a viga de
 // apoio no topo da parede pro madeiramento — na prática, o mesmo papel
@@ -238,9 +242,51 @@ const ROOF_TIMBER_REF = {
   wasteFactor: 1.10
 };
 
+// Consumo de prego do madeiramento (ripa+caibro+terça) — SINAPI 92539:
+// prego 22x48 0,03kg + prego 19x36 0,05kg + prego 15x15 0,07kg, por m²
+// de telhado (soma dos três tipos, tratados aqui como um único insumo
+// "pregos" — o quantitativo não distingue bitola).
+const ROOF_TIMBER_NAIL_KG_PER_M2 = 0.03 + 0.05 + 0.07;
+
+// Traço 1:3 (cimento:areia), 3-5mm de espessura, aplicado sobre TODA
+// alvenaria antes do reboco — consumo direto por m² (fonte: pesquisa de
+// mercado/composições públicas de chapisco convencional, ago/2026).
+const CHAPISCO_REF = { cementKgPerM2: 2.25, sandM3PerM2: 0.0053 };
+
+// Reboco/emboço, traço 1:2:8 (mesmo traço já usado em MASONRY_REF pra
+// assentamento — reaproveita os mesmos kg/m³ de cimento/cal e m³/m³ de
+// areia), espessura padrão 2cm — volume = espessura × área, igual
+// qualquer cálculo de argamassa/concreto por camada.
+const REBOCO_THICKNESS_M = 0.02;
+
+// Contrapiso, traço 1:4 (cimento:areia), espessura padrão 3cm — consumo
+// direto por m² (fonte: pesquisa de mercado, ago/2026): 0,21 saco de
+// cimento (50kg) e 0,033 m³ de areia por m², pra 3cm.
+const CONTRAPISO_REF = { cementKgPerM2: 0.21 * 50, sandM3PerM2: 0.033 };
+
+// Produtos-padrão de mercado usados quando o usuário NÃO escolhe
+// acabamento nenhum no editor (piso/parede/telhado) — sem isso, a
+// superfície ficava de fora do orçamento silenciosamente, mesmo
+// problema já corrigido pros materiais de teste PBR (DEC-105). Cada um
+// aponta pra um produto real do Catalog, preço pesquisado ago/2026.
+const DEFAULT_PAINT_PRODUCT_ID = 'vortice.tinta.fosco-branco-gelo';
+const DEFAULT_FLOOR_TILE_PRODUCT_ID = 'vortice.piso.porcelanato-padrao';
+const DEFAULT_CERAMIC_TILE_PRODUCT_ID = 'vortice.telha.ceramica-natural';
+const DEFAULT_ETERNIT_PRODUCT_ID = 'vortice.telha.eternit-6mm';
+
 interface Totals {
   wallLength: number; wallAreaNet: number; floorArea: number; baseboard: number; roofArea: number;
   doors: number; windows: number; arcos: number; soleiraCount: number; soleiraLength: number;
+  // Portas/janelas com Opening.productId apontando pra um produto real
+  // de catálogo (ex.: fornecedor parceiro de vidro) somam custo aqui,
+  // pelo preço próprio do produto (m² real da abertura, já que largura/
+  // altura são livres — esquadria não tem tamanho fixo). O restante
+  // (sem produto real, ou produto sem preço válido) acumula ÁREA em
+  // *GenericAreaM2, cobrado pela média Vórtice (R$/m²) em buildRows() —
+  // mesmo padrão "fornecedor real > média" já usado no cimento (ver
+  // ensureRealPrices), agora por m² em vez de por unidade fixa.
+  doorsProductCost: number; doorsGenericAreaM2: number;
+  windowsProductCost: number; windowsGenericAreaM2: number;
   columnCount: number; columnVolume: number; estimatedColumnCount: number;
   lajeCount: number; lajeAreaM2: number;
   vergaCount: number; vergaSpanM: number;
@@ -302,6 +348,7 @@ export function compute(): ComputeResult {
   const totals: Totals = {
     wallLength: 0, wallAreaNet: 0, floorArea: 0, baseboard: 0, roofArea: 0,
     doors: 0, windows: 0, arcos: 0, soleiraCount: 0, soleiraLength: 0,
+    doorsProductCost: 0, doorsGenericAreaM2: 0, windowsProductCost: 0, windowsGenericAreaM2: 0,
     columnCount: 0, columnVolume: 0, estimatedColumnCount: 0,
     lajeCount: 0, lajeAreaM2: 0,
     vergaCount: 0, vergaSpanM: 0,
@@ -331,8 +378,12 @@ export function compute(): ComputeResult {
       const atticExtensionArea = atticRoof ? Core.atticWallExtensionAreaMeters(w, atticRoof) : 0;
       const faceArea = Math.max(0, lenM * effectiveWallHeight + atticExtensionArea - openingsArea);
       totals.wallAreaNet += faceArea;
-      if (w.finishA) addTo(paint, w.finishA, faceArea);
-      if (w.finishB) addTo(paint, w.finishB, faceArea);
+      // Parede sem acabamento escolhido no editor não pode ficar de fora
+      // do orçamento — cai no padrão de mercado (mesma tinta já
+      // cadastrada, ver DEFAULT_PAINT_PRODUCT_ID), pra nenhuma face ficar
+      // sem custo só porque ninguém clicou nela ainda.
+      addTo(paint, w.finishA || DEFAULT_PAINT_PRODUCT_ID, faceArea);
+      addTo(paint, w.finishB || DEFAULT_PAINT_PRODUCT_ID, faceArea);
     });
 
     // Portas, janelas e arcos — e a verga (reforço acima do vão), que
@@ -344,9 +395,20 @@ export function compute(): ComputeResult {
     floor.openings.forEach(function (op) {
       const hostWall = floor.walls.filter(function (w) { return w.id === op.wallId; })[0];
       if (hostWall && hostWall.demolished) return;
-      if (op.kind === 'door') totals.doors++;
-      else if (op.kind === 'arco') totals.arcos++;
-      else totals.windows++;
+      const openingAreaM2 = op.width * op.height;
+      if (op.kind === 'door') {
+        totals.doors++;
+        const cost = op.productId ? productUnitCost(op.productId, openingAreaM2) : null;
+        if (cost != null) totals.doorsProductCost += cost;
+        else totals.doorsGenericAreaM2 += openingAreaM2;
+      } else if (op.kind === 'arco') {
+        totals.arcos++;
+      } else {
+        totals.windows++;
+        const cost = op.productId ? productUnitCost(op.productId, openingAreaM2) : null;
+        if (cost != null) totals.windowsProductCost += cost;
+        else totals.windowsGenericAreaM2 += openingAreaM2;
+      }
       totals.vergaCount++;
       totals.vergaSpanM += op.width + 2 * VERGA_BEARING_M;
     });
@@ -377,7 +439,10 @@ export function compute(): ComputeResult {
       totals.baseboard += polygonPerimeterMeters(room.points);
       const roomKey = Core.findRoomWallIds(floor.walls, room).slice().sort().join(',');
       const finishId = (floor.roomFinishes || {})[roomKey];
-      if (finishId) addTo(floorTile, finishId, areaM2);
+      // Cômodo sem piso escolhido no editor não pode ficar de fora do
+      // orçamento — cai no padrão de mercado (porcelanato médio, ver
+      // DEFAULT_FLOOR_TILE_PRODUCT_ID).
+      addTo(floorTile, finishId || DEFAULT_FLOOR_TILE_PRODUCT_ID, areaM2);
     });
 
     // Telhado: área REAL da água (considerando a inclinação de cada
@@ -386,20 +451,25 @@ export function compute(): ComputeResult {
     (floor.roofs || []).forEach(function (roof) {
       const areaM2 = netRoofAreas[roof.id] ?? roofAreaMeters(roof);
       totals.roofArea += areaM2;
-      // Madeiramento (ripa/caibro/terça, ver ROOF_TIMBER_REF) — se
-      // aplica a QUALQUER água (duasAguas/quatroAguas/umaAgua).
-      // Platibanda é laje plana de concreto, sem estrutura de madeira
-      // nenhuma — de propósito fora dessa soma.
-      if (roof.type !== 'platibanda') totals.roofTimberAreaM2 += areaM2;
-      if (roof.finishProductId) addTo(roofTile, roof.finishProductId, areaM2);
+      // Madeiramento (ripa/caibro/terça, ver ROOF_TIMBER_REF) — se aplica
+      // a QUALQUER água, INCLUSIVE platibanda: na prática construtiva
+      // real, o telhado "embutido" atrás do parapeito ainda é uma
+      // estrutura de madeira comum (com telha eternit/fibrocimento por
+      // cima), não uma laje maciça sem cobertura nenhuma — corrigido
+      // nesta sessão (ver Registro de Decisões Técnicas).
+      totals.roofTimberAreaM2 += areaM2;
+      // Telha: sem escolha explícita, cai no padrão por tipo de telhado
+      // — platibanda usa eternit/fibrocimento (telhado embutido atrás do
+      // parapeito), os demais usam cerâmica comum.
+      addTo(roofTile, roof.finishProductId || (roof.type === 'platibanda' ? DEFAULT_ETERNIT_PRODUCT_ID : DEFAULT_CERAMIC_TILE_PRODUCT_ID), areaM2);
       // O oitão é alvenaria derivada do telhado: entra como parede, mas
       // não participa do contorno dos cômodos. Duas águas possui duas
       // faces triangulares/retangulares iguais, uma em cada empena.
       if (roof.type === 'duasAguas' && roof.atticMode !== 'generated') {
         const oneGableArea = gableAreaMeters(roof);
         totals.wallAreaNet += oneGableArea * 2;
-        if (roof.gableFinishA) addTo(paint, roof.gableFinishA, oneGableArea);
-        if (roof.gableFinishB) addTo(paint, roof.gableFinishB, oneGableArea);
+        addTo(paint, roof.gableFinishA || DEFAULT_PAINT_PRODUCT_ID, oneGableArea);
+        addTo(paint, roof.gableFinishB || DEFAULT_PAINT_PRODUCT_ID, oneGableArea);
       }
     });
 
@@ -696,7 +766,7 @@ export function render(): void {
 // resiliência da ADR-007 §7: preço indisponível nunca trava nada, só
 // degrada.
 interface RealPriceMatch { value: number; source: string; }
-type MaterialPriceKey = 'cementPerKg' | 'limePerKg' | 'sandPerM3' | 'concretePerM3' | 'steelPerKg' | 'brickPerUnit' | 'woodPerM3';
+type MaterialPriceKey = 'cementPerKg' | 'limePerKg' | 'sandPerM3' | 'concretePerM3' | 'steelPerKg' | 'brickPerUnit' | 'woodPerM3' | 'doorPerM2' | 'windowPerM2' | 'nailPerKg';
 let realPrices: { [K in MaterialPriceKey]?: RealPriceMatch } = {};
 let realPricesFetchStarted = false;
 let onRealPricesLoaded: (() => void) | null = null;
@@ -714,6 +784,9 @@ const VORTICE_MATERIAL_SKUS: Record<MaterialPriceKey, { sku: string; unitDivisor
   steelPerKg: { sku: 'vortice-aco-ca50-kg', unitDivisor: 1 },
   brickPerUnit: { sku: 'vortice-tijolo-9x19x19-un', unitDivisor: 1 },
   woodPerM3: { sku: 'vortice-madeira-telhado-m3', unitDivisor: 1 },
+  doorPerM2: { sku: 'vortice-porta-interna-kit-m2', unitDivisor: 1 },
+  windowPerM2: { sku: 'vortice-janela-aluminio-m2', unitDivisor: 1 },
+  nailPerKg: { sku: 'vortice-prego-kg', unitDivisor: 1 },
 };
 
 async function ensureRealPrices(): Promise<void> {
@@ -763,7 +836,10 @@ const REFERENCE_PRICES = {
   concretePerM3: 450,
   steelPerKg: 8.00,
   brickPerUnit: 1.20,
-  woodPerM3: 5000.00
+  woodPerM3: 5000.00,
+  doorPerM2: 700.00,
+  windowPerM2: 150.00,
+  nailPerKg: 14.00
 };
 // Rendimento de referência pra converter área de parede em latas de
 // tinta (o Catalog vende tinta por lata, não por m² — não existe ainda
@@ -799,7 +875,7 @@ function productUnitCost(productId: string, areaM2: number): number | null {
   const p = Catalog.getProduct(productId);
   if (!p || !p.commercial || p.commercial.price == null) return null;
   const price = p.commercial.price;
-  if (p.commercial.unit === 'm2') return areaM2 * price;
+  if (p.commercial.unit === 'm2' || p.commercial.unit === 'un') return areaM2 * price;
   if (p.commercial.unit === 'peca' && p.assets && p.assets.tileMeters) {
     return Math.ceil(areaM2 / p.assets.tileMeters) * price;
   }
@@ -872,8 +948,21 @@ export function buildRows(): (string | number)[][] {
   push('Geral', 'Piso (área)', q.totals.floorArea, 'm²', null);
   push('Geral', 'Rodapé (comprimento)', q.totals.baseboard, 'm', null);
   push('Geral', 'Telhado (área real da água)', q.totals.roofArea, 'm²', null);
-  push('Geral', 'Portas', q.totals.doors, 'un', null);
-  push('Geral', 'Janelas', q.totals.windows, 'un', null);
+  // Portas/janelas são esquadrias de tamanho livre (largura/altura
+  // ajustáveis por abertura, sem medida fixa) — por isso cobradas por
+  // m² real, não por unidade fixa. Produto real de catálogo escolhido
+  // (fornecedor parceiro, ex. vidro) usa o preço próprio dele; o
+  // restante (sem produto, ou produto sem preço válido) usa a média
+  // Vórtice por m² — mesmo padrão fornecedor real > média já usado no
+  // cimento.
+  const doorCost = q.totals.doors > 0
+    ? q.totals.doorsProductCost + q.totals.doorsGenericAreaM2 * materialPrice('doorPerM2')
+    : null;
+  push('Geral', 'Portas', q.totals.doors, 'un', doorCost);
+  const windowCost = q.totals.windows > 0
+    ? q.totals.windowsProductCost + q.totals.windowsGenericAreaM2 * materialPrice('windowPerM2')
+    : null;
+  push('Geral', 'Janelas', q.totals.windows, 'un', windowCost);
   push('Geral', 'Arcos', q.totals.arcos, 'un', null);
   push('Geral', 'Soleiras externas (unidades)', q.totals.soleiraCount, 'un', null);
   push('Geral', 'Soleiras externas (comprimento)', q.totals.soleiraLength, 'm', null);
@@ -916,12 +1005,42 @@ export function buildRows(): (string | number)[][] {
     push('Alvenaria (ref. SINAPI)', 'Cal hidratada', q.masonry.calKg, 'kg', q.masonry.calKg * materialPrice('limePerKg'));
     push('Alvenaria (ref. SINAPI)', 'Areia média', q.masonry.sandM3, 'm³', q.masonry.sandM3 * materialPrice('sandPerM3'));
   }
+  // Chapisco (traço 1:3) + Reboco (traço 1:2:8, 2cm) — aplicado nas DUAS
+  // faces de toda parede (wallAreaNet é área de UMA face; alvenaria
+  // recebe reboco por dentro e por fora), mesma fonte de área já usada
+  // pra pintura/alvenaria.
+  if (q.totals.wallAreaNet > 0) {
+    const bothFacesAreaM2 = q.totals.wallAreaNet * 2;
+    const rLabel = 'Chapisco e Reboco (ref. mercado)';
+    const chapiscoCementKg = bothFacesAreaM2 * CHAPISCO_REF.cementKgPerM2;
+    const chapiscoSandM3 = bothFacesAreaM2 * CHAPISCO_REF.sandM3PerM2;
+    const rebocoVolumeM3 = bothFacesAreaM2 * REBOCO_THICKNESS_M;
+    const rebocoCementKg = rebocoVolumeM3 * MASONRY_REF.cementKgPerM3;
+    const rebocoCalKg = rebocoVolumeM3 * MASONRY_REF.calKgPerM3;
+    const rebocoSandM3 = rebocoVolumeM3 * MASONRY_REF.sandM3PerM3;
+    push(rLabel, 'Cimento (chapisco)', chapiscoCementKg, 'kg', chapiscoCementKg * materialPrice('cementPerKg'));
+    push(rLabel, 'Areia (chapisco)', chapiscoSandM3, 'm³', chapiscoSandM3 * materialPrice('sandPerM3'));
+    push(rLabel, 'Cimento (reboco)', rebocoCementKg, 'kg', rebocoCementKg * materialPrice('cementPerKg'));
+    push(rLabel, 'Cal hidratada (reboco)', rebocoCalKg, 'kg', rebocoCalKg * materialPrice('limePerKg'));
+    push(rLabel, 'Areia (reboco)', rebocoSandM3, 'm³', rebocoSandM3 * materialPrice('sandPerM3'));
+  }
+  // Contrapiso (traço 1:4, 3cm) — sobre a mesma área de piso já usada
+  // pro acabamento (cerâmica/porcelanato).
+  if (q.totals.floorArea > 0) {
+    const cLabel = 'Contrapiso (ref. mercado)';
+    const contrapisoCementKg = q.totals.floorArea * CONTRAPISO_REF.cementKgPerM2;
+    const contrapisoSandM3 = q.totals.floorArea * CONTRAPISO_REF.sandM3PerM2;
+    push(cLabel, 'Cimento', contrapisoCementKg, 'kg', contrapisoCementKg * materialPrice('cementPerKg'));
+    push(cLabel, 'Areia', contrapisoSandM3, 'm³', contrapisoSandM3 * materialPrice('sandPerM3'));
+  }
   if (q.roofTimber.areaM2 > 0) {
     const tLabel = 'Madeiramento (ref. SINAPI 92539)';
     push(tLabel, 'Ripas', q.roofTimber.ripaLinearM, 'm', null);
     push(tLabel, 'Caibros', q.roofTimber.caibroLinearM, 'm', null);
     push(tLabel, 'Terças', q.roofTimber.tercaLinearM, 'm', null);
     push(tLabel, 'Volume total de madeira', q.roofTimber.volumeM3, 'm³', q.roofTimber.volumeM3 * materialPrice('woodPerM3'));
+    const nailKg = q.roofTimber.areaM2 * ROOF_TIMBER_NAIL_KG_PER_M2;
+    push(tLabel, 'Pregos', nailKg, 'kg', nailKg * materialPrice('nailPerKg'));
   }
   function addProductRows(category: string, map: Record<string, number>) {
     Object.keys(map).forEach(function (id) {
@@ -983,7 +1102,7 @@ function exportCsv(): void {
 // Aviso de responsabilidade técnica (ADR-006 §13-15) É OBRIGATÓRIO
 // aqui — a própria ADR-006 §15 lista "PDF" explicitamente entre os
 // lugares onde o aviso precisa aparecer, não só nos Termos de Uso.
-const PDF_DISCLAIMER = 'O Esboce é uma ferramenta de apoio ao planejamento. Ele não substitui arquiteto ou engenheiro. Os quantitativos e valores deste orçamento são uma estimativa — merecem a validação de um profissional legalmente habilitado antes de qualquer execução.';
+const PDF_DISCLAIMER = 'O Esboce é uma ferramenta de apoio ao planejamento. Ele não substitui arquiteto ou engenheiro. Os quantitativos e valores deste orçamento são uma estimativa — merecem a validação de um profissional legalmente habilitado antes de qualquer execução. Este total cobre apenas material de construção — não inclui mão de obra, projeto, taxas, licenças, terreno, nem instalações elétricas/hidráulicas.';
 
 const PDF_STYLE = '' +
   '@page { margin: 18mm 16mm 22mm; }' +
