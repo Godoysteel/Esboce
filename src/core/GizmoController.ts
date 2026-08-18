@@ -175,6 +175,14 @@ export function init(): void {
       Store.commands.rotateWall(wallId, (action === 'rotateCw' ? 1 : -1) * (Math.PI / 2));
       return;
     }
+    if (action === 'heightMode') {
+      // Clique deliberado (DEC-116) — só a partir daqui a alça de
+      // altura do cômodo passa a existir/ser clicável (ver
+      // renderSelectionHandles, Scene3DRenderer.ts). Sem isso, ela nem
+      // aparece na cena.
+      ViewportController.armHeightAdjust(wallId);
+      return;
+    }
   });
 
   const openingGizmoEl = document.getElementById('openingGizmo');

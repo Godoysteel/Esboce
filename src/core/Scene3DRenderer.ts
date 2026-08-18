@@ -31,6 +31,16 @@ export interface ViewState {
   editingYOffset?: number;
   highlightedCategory?: string | null;
   resizeWallId?: string | null;
+  // Alça de altura do cômodo (DEC-88/116) só aparece — e só fica
+  // clicável — quando esta parede foi armada explicitamente pelo botão
+  // "Ajustar altura" do gizmo. Antes a alça ficava sempre presente
+  // junto com a parede selecionada, e era fácil agarrar por engano em
+  // vez da alça de mover/redimensionar (Product Owner: pessoas
+  // arrastavam ela sem querer, e o telhado saía errado). Sem isso
+  // (null/não bate com o id da parede), a alça não é criada — não
+  // aparece, não é pickável, mesma proteção de "comando separado" já
+  // pedida.
+  heightAdjustArmedWallId?: string | null;
   roomGroupWallIds?: string[] | null;
   selectedColumn?: Column | null;
   selectedOpening?: Opening | null;
@@ -2949,10 +2959,13 @@ export function hashColorHex(key: string): number {
         registry.handleMeshes.push(poleP);
       });
 
-      // Alça de altura do CÔMODO (DEC-88) — só aparece se essa parede
-      // fecha pelo menos um cômodo de verdade (Core.roomsContainingWall);
-      // parede solta sem contorno fechado não tem "cômodo" pra ter altura
-      // própria. Posição = altura EFETIVA atual do cômodo
+      // Alça de altura do CÔMODO (DEC-88, gating explícito na DEC-116) —
+      // só aparece se essa parede fecha pelo menos um cômodo de verdade
+      // (Core.roomsContainingWall) E foi armada explicitamente pelo botão
+      // "Ajustar altura" do gizmo (heightAdjustArmedWallId) — sem isso,
+      // não existe alça pra agarrar por engano. Parede solta sem contorno
+      // fechado não tem "cômodo" pra ter altura própria. Posição = altura
+      // EFETIVA atual do cômodo
       // (Core.roomHeightM — a maior entre as paredes do contorno, ou o
       // padrão do pavimento), não a altura desta parede isolada, pra já
       // nascer no lugar certo mesmo se o cômodo já tiver sido alterado
@@ -2961,7 +2974,7 @@ export function hashColorHex(key: string): number {
       // simplificação deliberada; pra mirar o outro cômodo, selecione uma
       // parede que só pertença a ele.
       var owningRoomsForHeight = Core.roomsContainingWall(walls, w.id);
-      if (owningRoomsForHeight.length) {
+      if (owningRoomsForHeight.length && viewState.heightAdjustArmedWallId === w.id) {
         var roomWallIdsForHeight = Core.findRoomWallIds(walls, owningRoomsForHeight[0]!);
         // roomOwnHeightM (não roomHeightM, DEC-89) — a alça reflete o
         // que ESTE cômodo pediu, não uma altura inflada por acompanhar

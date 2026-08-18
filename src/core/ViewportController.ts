@@ -65,6 +65,13 @@ import {
   var floorFinishScale = 1;
   var floorFinishRotation = 0;
   var selectedWallId: any = null, selectedColumnId: any = null, selectedRoofId: any = null, selectedOpeningId: any = null, selectedVarandaId: any = null, selectedLajeId: any = null, selectedFurnitureId: any = null, selectedGlazingPanelId: any = null, selectedVolumeBoxId: any = null, selectedHydraulicNodeId: any = null;
+  // Alça de altura do cômodo (DEC-116) só existe/é clicável enquanto
+  // esta variável apontar pra parede selecionada — precisa de um clique
+  // deliberado no botão "Ajustar altura" do gizmo pra armar, e desarma
+  // sozinha depois de UM ajuste (armHeightAdjust/disarmHeightAdjust) ou
+  // ao trocar seleção — nunca fica "ligada" à toa esperando um agarrão
+  // acidental.
+  var heightAdjustArmedWallId: any = null;
   // Planta baixa importada: singular por pavimento (não tem ID de
   // lista pra selecionar), então a "seleção" é só um flag — true
   // quando existe planUnderlay no pavimento atual E o usuário clicou
@@ -686,6 +693,7 @@ import {
 
   function select(wallId: any) {
     selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedVolumeBoxId = null; selectedPlanUnderlay = false; selectedWallId = wallId; gizmoMenuOpen = false;
+    heightAdjustArmedWallId = null;
     if (DEBUG_COLOR_MODE && wallId) hintEl.textContent = 'Debug — parede selecionada: ' + wallId;
     render();
   }
@@ -744,6 +752,7 @@ import {
     var leavingRoof = selectedRoofId ? Store.findRoof(selectedRoofId) : null;
     if (leavingRoof && leavingRoof.atticMode === 'preview') pendingGenerateRoofId = leavingRoof.id;
     selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedVolumeBoxId = null; selectedPlanUnderlay = false; selectedHydraulicNodeId = null;
+    heightAdjustArmedWallId = null;
     if (generateAtticBtnEl) generateAtticBtnEl.classList.toggle('visible', !!pendingGenerateRoofId);
     gizmoMenuOpen = false; closeObjectPanel(); render();
   }
@@ -1378,6 +1387,7 @@ import {
       selectedHydraulicNode: selectedHydraulicNodeId ? Store.findHydraulicNode(selectedHydraulicNodeId) : null,
       roomGroupWallIds: selectedRoomWallIds,
       resizeWallId: resizeWallId,
+      heightAdjustArmedWallId: heightAdjustArmedWallId,
       drawPreview: drawPreview,
       terrenoToolActive: currentTool === 'terreno'
     });
@@ -3375,6 +3385,9 @@ import {
         Store.commands.updateRoomWallsHeightLive(heightUpdates);
         hintEl.textContent = 'Altura do cômodo ajustada — ' + dragElementStart.lastHeight.toFixed(2).replace('.', ',') + ' m.';
       }
+      // Desarma sozinho depois de UM ajuste (DEC-116) — próxima mudança
+      // de altura exige clicar "Ajustar altura" de novo, de propósito.
+      heightAdjustArmedWallId = null;
       clearWallResizePreview();
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
@@ -4604,6 +4617,11 @@ import {
   export function getSelectedHydraulicNodeId() { return selectedHydraulicNodeId; }
   export function getSelectedRoomWallIds() { return selectedRoomWallIds; }
   export function setNextRoofAtticMode(enabled: boolean) { pendingRoofAttic = enabled; }
+  // Botão "Ajustar altura" do gizmo (DEC-116) — arma a alça de altura
+  // do cômodo SÓ pra esta parede, só até o próximo ajuste/seleção. Sem
+  // isso, a alça nem existe na cena (ver renderSelectionHandles em
+  // Scene3DRenderer.ts) — nada pra agarrar por engano.
+  export function armHeightAdjust(wallId: string) { heightAdjustArmedWallId = wallId; render(); }
 
 // Namespace de compatibilidade — mesma razão de Core.ts/Store.ts/Catalog.ts/
 // Scene3DRenderer.ts (chamadas ViewportController.xxx no código legado).
@@ -4612,7 +4630,7 @@ export const ViewportController = {
   select, selectColumn, selectRoof, selectOpening, selectVaranda, selectFurniture, selectGlazingPanel, selectVolumeBox, selectPlanUnderlay, selectHydraulicNode, beginHydraulicRouteDraw,
   getSelectedWallId, getSelectedColumnId, getSelectedRoofId,
   getSelectedOpeningId, getSelectedVarandaId, getSelectedLajeId, getSelectedFurnitureId, getSelectedGlazingPanelId, getSelectedVolumeBoxId, getSelectedPlanUnderlay, getSelectedHydraulicNodeId, getSelectedRoomWallIds,
-  setNextRoofAtticMode, toggleDimensions,
+  setNextRoofAtticMode, armHeightAdjust, toggleDimensions,
   toggleWallDiagnostics,
   resetCamera,
   toggleTouchCameraMode,
