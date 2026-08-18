@@ -38,7 +38,7 @@ jobs:
       - name: Gerar dump do banco
         env:
           DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
-        run: pg_dump "$DATABASE_URL" -Fc -f backup.dump
+        run: /usr/lib/postgresql/17/bin/pg_dump "$DATABASE_URL" -Fc -f backup.dump
 
       # Repositório é público — o dump NUNCA pode subir sem criptografia,
       # senão dados de usuários reais ficam expostos no artifact.
