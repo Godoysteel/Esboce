@@ -1,0 +1,40 @@
+name: Backup diário do banco (Supabase)
+
+on:
+  schedule:
+    - cron: '0 3 * * *' # 03:00 UTC = 00:00 em Brasília
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Instalar cliente PostgreSQL
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Gerar dump do banco
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: pg_dump "$DATABASE_URL" -Fc -f backup.dump
+
+      # Repositório é público — o dump NUNCA pode subir sem criptografia,
+      # senão dados de usuários reais ficam expostos no artifact.
+      - name: Criptografar o dump
+        env:
+          BACKUP_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+        run: |
+          openssl enc -aes-256-cbc -pbkdf2 -salt \
+            -in backup.dump \
+            -out "backup-$(date -u +%Y-%m-%d).dump.enc" \
+            -pass env:BACKUP_KEY
+          rm backup.dump
+
+      - name: Publicar backup criptografado
+        uses: actions/upload-artifact@v4
+        with:
+          name: supabase-backup-${{ github.run_id }}
+          path: backup-*.dump.enc
+          retention-days: 90
