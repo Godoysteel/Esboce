@@ -3878,29 +3878,37 @@ import {
   function buildLogoSprite() {
     var canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 128;
     var ctx = canvas.getContext('2d')!;
+    // Fundo — sem isso, o traço fino (mesmo escuro) quase some por
+    // cima da grama verde, baixo contraste demais pra ler de longe
+    // (mesma técnica de "cartão" branco atrás do desenho já usada em
+    // hydraulicLabelSprite, Scene3DRenderer.ts).
+    ctx.fillStyle = 'rgba(255,255,255,.96)';
+    ctx.strokeStyle = 'rgba(211,209,199,.9)';
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.roundRect(4, 4, 120, 120, 26); ctx.fill(); ctx.stroke();
     ctx.save();
-    ctx.scale(1.28, 1.28); // viewBox do SVG original é 0 0 100 100
-    ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.lineWidth = 6;
-    ctx.strokeStyle = '#2C2C2A';
+    ctx.translate(14, 14);
+    ctx.scale(1.0, 1.0); // viewBox do SVG original é 0 0 100 100, canvas útil ~100x100 após a margem acima
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.lineWidth = 8;
+    ctx.strokeStyle = '#1B1C1E'; // mais escuro que o #2C2C2A original — precisa de mais peso pra não sumir a distância
+    ctx.globalAlpha = 1;
     [
-      ['M12,94 L11,59 L50,14 L89,58 L88,95', 0.85],
-      ['M14,93 L13,60 L51,17 L90,59 L86,93', 0.7],
-      ['M50,14 L55,9', 0.8],
-      ['M12,58 L5,55', 0.8],
-      ['M89,58 L96,54', 0.8],
-      ['M12,94 L4,96', 0.7],
-      ['M88,95 L96,97', 0.7],
-    ].forEach(function (entry) {
-      ctx.globalAlpha = entry[1] as number;
-      ctx.stroke(new Path2D(entry[0] as string));
+      'M12,94 L11,59 L50,14 L89,58 L88,95',
+      'M14,93 L13,60 L51,17 L90,59 L86,93',
+      'M50,14 L55,9',
+      'M12,58 L5,55',
+      'M89,58 L96,54',
+      'M12,94 L4,96',
+      'M88,95 L96,97',
+    ].forEach(function (d) {
+      ctx.stroke(new Path2D(d));
     });
-    ctx.globalAlpha = 0.9;
     ctx.strokeStyle = '#C1673F';
     ctx.stroke(new Path2D('M41,94 L40,72 L60,72 L61,94'));
     ctx.restore();
     var texture = new THREE.CanvasTexture(canvas);
     var sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, depthTest: false, transparent: true }));
-    sprite.scale.set(0.34, 0.34, 1);
+    sprite.scale.set(0.46, 0.46, 1);
     sprite.renderOrder = 1000;
     return sprite;
   }

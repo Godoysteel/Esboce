@@ -48,6 +48,20 @@ test('cor da porta (terracota) preservada — mesma cor exata do SVG original', 
   assert.match(body, /#C1673F/);
 });
 
+// Correção pós-lançamento: primeira versão ficava "apagada" (traço
+// fino e claro direto sobre a grama verde, baixo contraste) — ganhou
+// um fundo branco arredondado atrás (mesma técnica de hydraulicLabelSprite)
+// e traço mais grosso/escuro.
+test('logo tem fundo branco arredondado atrás (contraste contra a grama) — correção do "ficou apagado"', () => {
+  const start = viewportControllerSource.indexOf('function buildLogoSprite() {');
+  const end = viewportControllerSource.indexOf('\n  }', start);
+  const body = viewportControllerSource.slice(start, end);
+  assert.match(body, /ctx\.fillStyle = 'rgba\(255,255,255,\.96\)';/);
+  assert.match(body, /ctx\.roundRect\(/);
+  assert.match(body, /ctx\.lineWidth = 8;/); // mais grosso que a v1 (era 6)
+  assert.match(body, /#1B1C1E/); // mais escuro que a v1 (era #2C2C2A)
+});
+
 test('buildHoverMarker() usa buildLogoSprite() no lugar do cubo verde antigo — pole/tip/ring (haste, ponta, anel no chão) continuam do mesmo jeito', () => {
   const start = viewportControllerSource.indexOf('function buildHoverMarker() {');
   const end = viewportControllerSource.indexOf('\n  }', start);
