@@ -60,6 +60,18 @@
   .brand-header h1 { margin: 0; line-height: 1; font-size: 16px; white-space: nowrap; }
   .brand-logo { flex-shrink: 0; }
 
+  /* Aviso de versão beta/teste (pedido do Product Owner, dia do
+     lançamento) — pill próprio, IRMÃO de .brand-header (não filho):
+     .brand-header some inteiro no breakpoint mobile pra economizar
+     espaço (ver @media max-width:700px abaixo), mas o aviso de beta
+     precisa continuar visível em qualquer largura de tela. */
+  .beta-badge {
+    display: flex; align-items: center; flex-shrink: 0;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.03em;
+    color: #8A4B00; background: rgba(255,196,102,0.55);
+    border: 1px solid #D89A3E; padding: 4px 8px;
+  }
+
   .panel-card {
     background: transparent;
     border: none;
@@ -1076,6 +1088,13 @@
     <path d="M41,94 L40,72 L60,72 L61,94" fill="none" stroke="#C1673F" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
   </svg>
 </div>
+
+<!-- Aviso de versão beta/teste — pedido do Product Owner no dia do
+     lançamento: deixar claro que essa versão está em teste, pra
+     calibrar a expectativa de quem usa. Pill própria (ver CSS
+     .beta-badge), não filha de .brand-header, pra continuar visível
+     mesmo no breakpoint mobile onde a marca some. -->
+<div class="tb-pill beta-badge" title="Esta versão do Esboce está em fase de testes — dados e funcionalidades podem mudar.">BETA · EM TESTES</div>
 
 <!-- Menu "Arquivo" — igual ao File menu do SketchUp: um botão só,
      empilha as ações do CICLO DE VIDA DO PROJETO (novo, salvar,
