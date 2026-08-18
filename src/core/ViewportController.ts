@@ -2189,7 +2189,22 @@ import {
   function finalizeDraw() {
     var p = drawPreview;
     if (currentTool === 'room') {
-      Store.commands.createRoom(p.x1, p.y1, p.x2, p.y2);
+      // Um cômodo novo encostado num já existente nasce com uma parede
+      // DUPLICADA e sobreposta na fronteira (Store.commands.createRoom
+      // sempre cria 4 paredes novas, nunca reaproveita uma que já
+      // exista ali) — sem fundir, ficam DOIS segmentos coincidentes no
+      // mesmo eixo, e o algoritmo de mitre de canto (Core.
+      // computeWallFootprints) não sabe lidar com esse cruzamento de 4
+      // vias, produzindo um canto mal calculado. Sintoma reportado:
+      // laje "confusa"/com brecha exatamente na junção da parede
+      // compartilhada. fuseAllOverlaps já resolve isso pro cômodo
+      // arrastado até encostar (commitRoomGroupIfNeeded) — só faltava
+      // chamar aqui também, mesma ordem (funde antes de dividir em T)
+      // já usada no fim do arraste de ponta de parede.
+      var newRoomWalls = Store.commands.createRoom(p.x1, p.y1, p.x2, p.y2);
+      if (newRoomWalls && newRoomWalls.length) {
+        fuseAllOverlaps(newRoomWalls.map(function (w: any) { return w.id; }));
+      }
       Store.commands.splitWallsAtTJunctions();
     } else if (currentTool === 'wall') {
       // gruda no corpo de outra parede se estiver perto — fecha uma
