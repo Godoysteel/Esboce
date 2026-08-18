@@ -1,5 +1,7 @@
 # Changelog
 
+> Corrigido: painéis flutuantes do telhado (mover/girar, tipo de água, cor da telha) ficavam sobrepostos ao selecionar um telhado — agora se empilham lado a lado, encostados sem sobrepor, usando a largura real de cada painel. Ver DEC-104.
+
 > Adicionado: link de WhatsApp pra parceiros comerciais entrarem em contato, no menu Arquivo ("🤝 Seja um parceiro"). Ver DEC-103.
 
 > Corrigido: logo do marcador de hover (ver abaixo) ficava apagada sobre a grama — ganhou fundo branco, traço mais grosso e mais escuro. Ver DEC-102 (correção pós-lançamento).

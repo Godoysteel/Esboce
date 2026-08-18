@@ -846,6 +846,24 @@ import {
     el.style.top = sy + 'px';
   }
 
+  // Encosta "el" imediatamente à ESQUERDA de "refEl" (ambos já visíveis
+  // e posicionados), com "gapPx" de respiro entre os dois — usa a
+  // LARGURA REAL renderizada de cada um (getBoundingClientRect), não
+  // um número fixo de pixel chutado. Painel de telhado (tipo de água),
+  // gizmo de mover/girar e paleta de cor ficam em fila, um encostado
+  // no outro sem sobrepor, não importa quantos botões cada um tenha
+  // hoje ou ganhe no futuro — resolve a raiz do problema de overlap
+  // (offsets fixos como -60/-100 não sabiam a largura de cada painel,
+  // então painéis largos invadiam o vizinho).
+  function stackLeftOf(el: any, refEl: any, gapPx: any) {
+    var refRect = refEl.getBoundingClientRect();
+    var elRect = el.getBoundingClientRect();
+    // style.left é o CENTRO do elemento (o CSS usa transform:
+    // translate(-50%, ...) pra centralizar) — por isso soma metade da
+    // própria largura na conta, não só a do vizinho.
+    el.style.left = (refRect.left - gapPx - elRect.width / 2) + 'px';
+  }
+
   // ---- Cotas de parede (largura na base + altura), vermelhas,
   // ligar/desligar ----
   function clearDimensionCotas() {
@@ -1190,6 +1208,7 @@ import {
       gizmoEl.classList.add('visible');
       positionFloatingPanel(roofTypePanelEl, mid2.x, topY2, mid2.z, -60);
       roofTypePanelEl.classList.add('visible');
+      stackLeftOf(roofTypePanelEl, gizmoEl, 8);
       roofTypePanelEl.querySelectorAll('.rt').forEach(function (btn: any) { btn.classList.toggle('active', btn.dataset.rooftype === r!.type); });
       return;
     }
@@ -1262,6 +1281,7 @@ import {
         positionFloatingPanel(finishPanelEl, mid2.x, topY2, mid2.z, -100);
         renderFinishSwatches('roof_tile', r.finishProductId);
         finishPanelEl.classList.add('visible');
+        stackLeftOf(finishPanelEl, roofTypePanelEl, 8);
         return;
       }
     }
