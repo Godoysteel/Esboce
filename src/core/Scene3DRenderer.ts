@@ -847,7 +847,7 @@ export function hashColorHex(key: string): number {
 
   function wallSupportsRoofGable(wall: any, roofs: any[]) {
     return (roofs || []).some(function (roof: any) {
-      if (roof.type !== 'duasAguas') return false;
+      if (roof.type !== 'duasAguas' && roof.type !== 'umaAgua') return false;
       var minX = Math.min(roof.x1, roof.x2), maxX = Math.max(roof.x1, roof.x2);
       var minY = Math.min(roof.y1, roof.y2), maxY = Math.max(roof.y1, roof.y2);
       var wallMinX = Math.min(wall.x1, wall.x2), wallMaxX = Math.max(wall.x1, wall.x2);
@@ -1285,11 +1285,29 @@ export function hashColorHex(key: string): number {
   // lado alto (também com um pouco de beiral). Sem cumeeira nem vale —
   // por isso não tem o problema de "duas pontas que precisam se
   // encontrar" que duas/quatro águas têm.
-  function buildRoofUmaAgua(topBounds: any, topY: any, roofColor: any, pitchDeg: any, ridgeAxis: any, tabeiraColor: any) {
+  // Fechamento lateral do uma-água — mesmo problema que o oitão resolve
+  // no duas-águas (Product Owner: "está aberto, tem que fazer os
+  // fechamentos laterais assim como funcionam no duas aguas"), mas o
+  // formato é diferente: uma-água tem UMA água só, sem cumeeira central,
+  // então o vão entre o topo da parede (altura única, reta) e o
+  // caimento do telhado cresce em linha reta do lado baixo pro lado
+  // alto — um triângulo/trapézio reto, não o pentágono simétrico do
+  // duas-águas. Mesma técnica de "faixa baixa reta + diagonal" da
+  // DEC-31/duasAguas (gableBaseRise): no lado baixo, o beiral
+  // (ROOF_OVERHANG) já eleva o telhado um pouco acima do topo da
+  // parede antes da diagonal começar — sem essa correção, a diagonal
+  // do fechamento não bate com a inclinação real do telhado, fica mais
+  // íngreme.
+  function buildRoofUmaAgua(topBounds: any, topY: any, roofColor: any, gableColors: any, pitchDeg: any, ridgeAxis: any, tabeiraColor: any) {
     var pitchRad = pitchDeg * Math.PI / 180;
     var verticalDrop = ROOF_THICKNESS / Math.cos(pitchRad);
     var slopeAlongZ = ridgeAxis === 'x';
     var meshes: any[] = [];
+    function addGable(mesh: any, side: string) { mesh.userData.gableSide = side; meshes.push(mesh); }
+    var gableBaseRise = ROOF_OVERHANG * Math.tan(pitchRad);
+    var gableRoofClearance = verticalDrop + 0.006;
+    var gMinX = topBounds.minX - GABLE_WALL_EXTEND, gMaxX = topBounds.maxX + GABLE_WALL_EXTEND;
+    var gMinZ = topBounds.minZ - GABLE_WALL_EXTEND, gMaxZ = topBounds.maxZ + GABLE_WALL_EXTEND;
     if (slopeAlongZ) {
       var eMinX = topBounds.minX - RAKE_OVERHANG, eMaxX = topBounds.maxX + RAKE_OVERHANG;
       var eMinZ = topBounds.minZ - ROOF_OVERHANG, eMaxZ = topBounds.maxZ + ROOF_OVERHANG;
@@ -1298,6 +1316,16 @@ export function hashColorHex(key: string): number {
         { x: eMinX, y: topY, z: eMinZ }, { x: eMaxX, y: topY, z: eMinZ },
         { x: eMaxX, y: highY, z: eMaxZ }, { x: eMinX, y: highY, z: eMaxZ }
       ], verticalDrop, roofColor, tabeiraColor));
+      var gLowUnderY = topY + gableBaseRise - gableRoofClearance;
+      var gHighUnderY = highY - gableBaseRise - gableRoofClearance;
+      addGable(buildGableMesh([
+        { x: gMinX, y: topY, z: gMinZ }, { x: gMinX, y: topY, z: gMaxZ },
+        { x: gMinX, y: gHighUnderY, z: gMaxZ }, { x: gMinX, y: gLowUnderY, z: gMinZ }
+      ], gableColors.a), 'a');
+      addGable(buildGableMesh([
+        { x: gMaxX, y: topY, z: gMaxZ }, { x: gMaxX, y: topY, z: gMinZ },
+        { x: gMaxX, y: gLowUnderY, z: gMinZ }, { x: gMaxX, y: gHighUnderY, z: gMaxZ }
+      ], gableColors.b), 'b');
     } else {
       var eMinZ2 = topBounds.minZ - RAKE_OVERHANG, eMaxZ2 = topBounds.maxZ + RAKE_OVERHANG;
       var eMinX2 = topBounds.minX - ROOF_OVERHANG, eMaxX2 = topBounds.maxX + ROOF_OVERHANG;
@@ -1306,6 +1334,16 @@ export function hashColorHex(key: string): number {
         { x: eMinX2, y: topY, z: eMinZ2 }, { x: eMinX2, y: topY, z: eMaxZ2 },
         { x: eMaxX2, y: highY2, z: eMaxZ2 }, { x: eMaxX2, y: highY2, z: eMinZ2 }
       ], verticalDrop, roofColor, tabeiraColor));
+      var gLowUnderY2 = topY + gableBaseRise - gableRoofClearance;
+      var gHighUnderY2 = highY2 - gableBaseRise - gableRoofClearance;
+      addGable(buildGableMesh([
+        { x: gMinX, y: topY, z: gMinZ }, { x: gMaxX, y: topY, z: gMinZ },
+        { x: gMaxX, y: gHighUnderY2, z: gMinZ }, { x: gMinX, y: gLowUnderY2, z: gMinZ }
+      ], gableColors.a), 'a');
+      addGable(buildGableMesh([
+        { x: gMaxX, y: topY, z: gMaxZ }, { x: gMinX, y: topY, z: gMaxZ },
+        { x: gMinX, y: gLowUnderY2, z: gMaxZ }, { x: gMaxX, y: gHighUnderY2, z: gMaxZ }
+      ], gableColors.b), 'b');
     }
     return meshes;
   }
@@ -1613,7 +1651,7 @@ export function hashColorHex(key: string): number {
     var ridgeAxis = roof.ridgeAxis === 'y' ? 'y' : 'x';
 
     if (roof.type === 'quatroAguas') return buildRoofQuatroAguas(bounds, floorTopY, roofColor, pitchDeg, ridgeAxis, tabeiraColor);
-    if (roof.type === 'umaAgua') return buildRoofUmaAgua(bounds, floorTopY, roofColor, pitchDeg, ridgeAxis, tabeiraColor);
+    if (roof.type === 'umaAgua') return buildRoofUmaAgua(bounds, floorTopY, roofColor, gableColors, pitchDeg, ridgeAxis, tabeiraColor);
     if (roof.type === 'platibanda') {
       var parapetColor = pickColor(wallMatchColor != null ? wallMatchColor : GABLE_COLOR, 'telhado', viewState);
       return buildRoofPlatibanda(bounds, floorTopY, roofColor, ridgeAxis, roof.parapetHeight, parapetColor);

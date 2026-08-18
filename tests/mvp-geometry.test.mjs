@@ -53,6 +53,28 @@ test('oitão de duas águas entra como área de parede derivada da cobertura', (
   assert.equal(gableAreaMeters({ ...roof, type: 'quatroAguas' }, roofConfig), 0);
 });
 
+// Pedido do Product Owner: "está aberto, tem que fazer os fechamentos
+// laterais assim como funcionam no duas aguas" — uma-água ganhou o
+// mesmo fechamento lateral (ver buildRoofUmaAgua, Scene3DRenderer.ts),
+// mas sem cumeeira central o triângulo sobe reto pela largura INTEIRA,
+// não a metade como no duas-águas simétrico — por isso o dobro do termo
+// triangular pro mesmo pitch/largura.
+test('fechamento lateral de uma água entra como área de parede — triângulo de largura inteira, sem cumeeira', () => {
+  const roof = createRoofEntity(0, 0, 80, 60, 'umaAgua', 30, 'x', 'roof');
+  const widthM = 3;
+  const pitch = Math.PI / 6;
+  const expected = widthM * roofConfig.roofOverhang * Math.tan(pitch) +
+    widthM * (widthM * Math.tan(pitch)) / 2;
+  assert.ok(Math.abs(gableAreaMeters(roof, roofConfig) - expected) < 1e-9);
+  // Exatamente o dobro do termo triangular do duas-águas (DEC-31),
+  // mesmo pitch e largura — confirma que é largura inteira, não metade.
+  const duasAguasArea = gableAreaMeters({ ...roof, type: 'duasAguas' }, roofConfig);
+  const baseRiseTerm = widthM * roofConfig.roofOverhang * Math.tan(pitch);
+  const duasAguasTriangle = duasAguasArea - baseRiseTerm;
+  const umaAguaTriangle = expected - baseRiseTerm;
+  assert.ok(Math.abs(umaAguaTriangle - duasAguasTriangle * 2) < 1e-9);
+});
+
 test('telhados sobrepostos não perdem área antes do engaste', () => {
   const roofA = createRoofEntity(0, 0, 80, 60, 'duasAguas', 30, 'x', 'roof-a');
   const roofB = createRoofEntity(40, 20, 100, 60, 'duasAguas', 30, 'y', 'roof-b');

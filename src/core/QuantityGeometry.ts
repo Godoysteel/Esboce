@@ -94,11 +94,24 @@ export function roofNetAreas(roofs: Roof[], config: RoofQuantityConfig): Record<
   return result;
 }
 
+// Área de UM fechamento lateral (oitão do duas-águas, ou o
+// fechamento reto do uma-água — ver buildRoofUmaAgua em
+// Scene3DRenderer.ts) — mesma simplificação nos dois casos: ignora o
+// offset de folga contra o telhado (poucos cm, irrelevante pra área) e
+// o overhang do lado "alto" no uma-água (efeito de borda pequeno,
+// mesmo nível de aproximação que o duas-águas já aceita pro overhang
+// perto da cumeeira).
 export function gableAreaMeters(roof: Roof, config: RoofQuantityConfig): number {
-  if (roof.type !== 'duasAguas') return 0;
+  if (roof.type !== 'duasAguas' && roof.type !== 'umaAgua') return 0;
   const widthM = (roof.ridgeAxis === 'x' ? Math.abs(roof.y2 - roof.y1) : Math.abs(roof.x2 - roof.x1)) / config.grid;
   const pitchRad = (roof.pitchDeg || 0) * Math.PI / 180;
   const baseRise = config.roofOverhang * Math.tan(pitchRad);
+  if (roof.type === 'umaAgua') {
+    // Sem cumeeira central — o triângulo sobe reto pela largura INTEIRA
+    // (não a metade, como no duas-águas simétrico).
+    const fullRise = widthM * Math.tan(pitchRad);
+    return widthM * baseRise + widthM * fullRise / 2;
+  }
   const triangleRise = widthM / 2 * Math.tan(pitchRad);
   return widthM * baseRise + widthM * triangleRise / 2;
 }

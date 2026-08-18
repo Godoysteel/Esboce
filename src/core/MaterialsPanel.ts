@@ -462,10 +462,12 @@ export function compute(): ComputeResult {
       // — platibanda usa eternit/fibrocimento (telhado embutido atrás do
       // parapeito), os demais usam cerâmica comum.
       addTo(roofTile, roof.finishProductId || (roof.type === 'platibanda' ? DEFAULT_ETERNIT_PRODUCT_ID : DEFAULT_CERAMIC_TILE_PRODUCT_ID), areaM2);
-      // O oitão é alvenaria derivada do telhado: entra como parede, mas
-      // não participa do contorno dos cômodos. Duas águas possui duas
-      // faces triangulares/retangulares iguais, uma em cada empena.
-      if (roof.type === 'duasAguas' && roof.atticMode !== 'generated') {
+      // O oitão/fechamento lateral é alvenaria derivada do telhado: entra
+      // como parede, mas não participa do contorno dos cômodos. Duas
+      // águas possui duas faces triangulares/retangulares iguais, uma em
+      // cada empena — uma água também tem duas (o fechamento reto dos
+      // dois lados do caimento único, ver buildRoofUmaAgua).
+      if ((roof.type === 'duasAguas' || roof.type === 'umaAgua') && roof.atticMode !== 'generated') {
         const oneGableArea = gableAreaMeters(roof);
         totals.wallAreaNet += oneGableArea * 2;
         addTo(paint, roof.gableFinishA || DEFAULT_PAINT_PRODUCT_ID, oneGableArea);
