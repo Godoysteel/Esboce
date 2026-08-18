@@ -223,11 +223,14 @@ const MASONRY_REF = {
 // somar um frechal à parte duplicaria essa peça, mesmo raciocínio já
 // usado pra não somar viga própria de Laje) ficam FORA de escopo desta
 // rodada — registrado como pendência no Registro de Decisões Técnicas.
-// Preço de material (R$/m³ de madeira serrada) NÃO tem uma referência
-// de mercado confiável o bastante pra entrar em REFERENCE_PRICES por
-// ora — as linhas de madeiramento saem sem custo (`—`), mesmo
-// tratamento que qualquer item sem base de preço já recebe aqui
-// (ver productUnitCost).
+// Preço de madeira serrada (R$/m³, ripa/caibro/terça tratada) —
+// ver DEC-100 correção pós-lançamento nº2: preço médio de varejo
+// (por metro linear, convertido pra m³ pela seção de cada peça),
+// cadastrado como produto Vórtice Materiais (`woodPerM3`) — resolve
+// a "Volume total de madeira" abaixo. As linhas por peça (Ripas/
+// Caibros/Terças) continuam sem custo próprio de propósito — o
+// mesmo volume já é cobrado ali, custar as duas visões juntas
+// duplicaria.
 const ROOF_TIMBER_REF = {
   ripaSpacingM: 0.32, ripaSectionM2: 0.015 * 0.05,
   caibroSpacingM: 0.55, caibroSectionM2: 0.05 * 0.06,
@@ -635,6 +638,7 @@ export function render(): void {
     html += '<div class="materials-line"><span>Caibros</span><span>' + fmtM(q.roofTimber.caibroLinearM) + '</span></div>';
     html += '<div class="materials-line"><span>Terças</span><span>' + fmtM(q.roofTimber.tercaLinearM) + '</span></div>';
     html += '<div class="materials-line"><span>Volume total de madeira</span><span>' + q.roofTimber.volumeM3.toFixed(3).replace('.', ',') + ' m³</span></div>';
+    html += priceSourceLine('woodPerM3', '/m³');
   }
   html += groupSection('Pintura — por acabamento', q.paint);
   html += groupSection('Piso — por acabamento', q.floorTile);
@@ -692,7 +696,7 @@ export function render(): void {
 // resiliência da ADR-007 §7: preço indisponível nunca trava nada, só
 // degrada.
 interface RealPriceMatch { value: number; source: string; }
-type MaterialPriceKey = 'cementPerKg' | 'limePerKg' | 'sandPerM3' | 'concretePerM3' | 'steelPerKg' | 'brickPerUnit';
+type MaterialPriceKey = 'cementPerKg' | 'limePerKg' | 'sandPerM3' | 'concretePerM3' | 'steelPerKg' | 'brickPerUnit' | 'woodPerM3';
 let realPrices: { [K in MaterialPriceKey]?: RealPriceMatch } = {};
 let realPricesFetchStarted = false;
 let onRealPricesLoaded: (() => void) | null = null;
@@ -709,6 +713,7 @@ const VORTICE_MATERIAL_SKUS: Record<MaterialPriceKey, { sku: string; unitDivisor
   concretePerM3: { sku: 'vortice-concreto-usinado-m3', unitDivisor: 1 },
   steelPerKg: { sku: 'vortice-aco-ca50-kg', unitDivisor: 1 },
   brickPerUnit: { sku: 'vortice-tijolo-9x19x19-un', unitDivisor: 1 },
+  woodPerM3: { sku: 'vortice-madeira-telhado-m3', unitDivisor: 1 },
 };
 
 async function ensureRealPrices(): Promise<void> {
@@ -757,7 +762,8 @@ const REFERENCE_PRICES = {
   sandPerM3: 130,
   concretePerM3: 450,
   steelPerKg: 8.00,
-  brickPerUnit: 1.20
+  brickPerUnit: 1.20,
+  woodPerM3: 5000.00
 };
 // Rendimento de referência pra converter área de parede em latas de
 // tinta (o Catalog vende tinta por lata, não por m² — não existe ainda
@@ -915,7 +921,7 @@ export function buildRows(): (string | number)[][] {
     push(tLabel, 'Ripas', q.roofTimber.ripaLinearM, 'm', null);
     push(tLabel, 'Caibros', q.roofTimber.caibroLinearM, 'm', null);
     push(tLabel, 'Terças', q.roofTimber.tercaLinearM, 'm', null);
-    push(tLabel, 'Volume total de madeira', q.roofTimber.volumeM3, 'm³', null);
+    push(tLabel, 'Volume total de madeira', q.roofTimber.volumeM3, 'm³', q.roofTimber.volumeM3 * materialPrice('woodPerM3'));
   }
   function addProductRows(category: string, map: Record<string, number>) {
     Object.keys(map).forEach(function (id) {

@@ -40,7 +40,7 @@ test('todo material do quantitativo (cimento/cal/areia/concreto/aço/tijolo) tem
   const start = materialsSource.indexOf('const VORTICE_MATERIAL_SKUS');
   const end = materialsSource.indexOf('};', start);
   const body = materialsSource.slice(start, end);
-  for (const key of ['cementPerKg', 'limePerKg', 'sandPerM3', 'concretePerM3', 'steelPerKg', 'brickPerUnit']) {
+  for (const key of ['cementPerKg', 'limePerKg', 'sandPerM3', 'concretePerM3', 'steelPerKg', 'brickPerUnit', 'woodPerM3']) {
     assert.match(body, new RegExp(key + ":\\s*\\{\\s*sku:"), `falta SKU de fallback pra ${key}`);
   }
 });
@@ -86,9 +86,20 @@ test('preço de catálogo aparece de forma visível (não escondido em tooltip) 
   assert.doesNotMatch(body, /title=/); // nada de tooltip escondido
 });
 
-test('painel resumido mostra a linha de fonte pros 4 materiais visíveis ali (bloco, cimento, cal, areia)', () => {
+test('painel resumido mostra a linha de fonte pros 5 materiais visíveis ali (bloco, cimento, cal, areia, madeira)', () => {
   assert.match(materialsSource, /priceSourceLine\('brickPerUnit', '\/un'\)/);
   assert.match(materialsSource, /priceSourceLine\('cementPerKg', '\/kg'\)/);
   assert.match(materialsSource, /priceSourceLine\('limePerKg', '\/kg'\)/);
   assert.match(materialsSource, /priceSourceLine\('sandPerM3', '\/m³'\)/);
+  assert.match(materialsSource, /priceSourceLine\('woodPerM3', '\/m³'\)/);
+});
+
+test('volume de madeira ganha custo próprio (woodPerM3); ripas/caibros/terças continuam sem custo individual, pra não duplicar o mesmo volume', () => {
+  const start = materialsSource.indexOf("const tLabel = 'Madeiramento (ref. SINAPI 92539)';");
+  const end = materialsSource.indexOf('\n  }', start);
+  const body = materialsSource.slice(start, end);
+  assert.match(body, /push\(tLabel, 'Ripas', q\.roofTimber\.ripaLinearM, 'm', null\)/);
+  assert.match(body, /push\(tLabel, 'Caibros', q\.roofTimber\.caibroLinearM, 'm', null\)/);
+  assert.match(body, /push\(tLabel, 'Terças', q\.roofTimber\.tercaLinearM, 'm', null\)/);
+  assert.match(body, /push\(tLabel, 'Volume total de madeira', q\.roofTimber\.volumeM3, 'm³', q\.roofTimber\.volumeM3 \* materialPrice\('woodPerM3'\)\)/);
 });
