@@ -13,6 +13,7 @@ import {
   gableAreaMeters as calculateGableAreaMeters,
   roofAreaMeters as calculateRoofAreaMeters,
   roofNetAreas as calculateRoofNetAreas,
+  umaAguaBackWallAreaMeters as calculateUmaAguaBackWallAreaMeters,
 } from './QuantityGeometry.js';
 import type { FoundationQuantity } from './QuantityGeometry.js';
 import type { Point, Wall, Roof, Column, Laje, Project } from './types.js';
@@ -87,6 +88,10 @@ function roofQuantityConfig() {
 
 function gableAreaMeters(roof: Roof): number {
   return calculateGableAreaMeters(roof, roofQuantityConfig());
+}
+
+function umaAguaBackWallAreaMeters(roof: Roof): number {
+  return calculateUmaAguaBackWallAreaMeters(roof, roofQuantityConfig());
 }
 
 // Volume estruturral de uma coluna (pilar), em m³ — lado/diâmetro fixo
@@ -472,6 +477,15 @@ export function compute(): ComputeResult {
         totals.wallAreaNet += oneGableArea * 2;
         addTo(paint, roof.gableFinishA || DEFAULT_PAINT_PRODUCT_ID, oneGableArea);
         addTo(paint, roof.gableFinishB || DEFAULT_PAINT_PRODUCT_ID, oneGableArea);
+      }
+      // Painel de trás do uma-água (lado alto do caimento, ver
+      // buildRoofUmaAgua) — parede de verdade se estendendo pra fechar o
+      // vão, não um oitão decorativo; entra com o mesmo padrão de tinta
+      // das demais paredes sem acabamento escolhido (DEFAULT_PAINT_PRODUCT_ID).
+      if (roof.type === 'umaAgua' && roof.atticMode !== 'generated') {
+        const backWallArea = umaAguaBackWallAreaMeters(roof);
+        totals.wallAreaNet += backWallArea;
+        addTo(paint, DEFAULT_PAINT_PRODUCT_ID, backWallArea);
       }
     });
 

@@ -9,26 +9,46 @@ const source = readFileSync(new URL('../src/core/Scene3DRenderer.ts', import.met
 const materialsSource = readFileSync(new URL('../src/core/MaterialsPanel.ts', import.meta.url), 'utf8');
 
 // Pedido do Product Owner, com print: telhado uma-água ficava aberto —
-// sem fechamento lateral (ao contrário do duas-águas, que já fecha os
-// dois oitões). buildRoofUmaAgua ganhou o mesmo tratamento de
-// buildRoofDuasAguas: dois addGable(), reaproveitando buildGableMesh e
-// as cores gableColors.a/b já existentes (Roof.gableFinishA/B).
+// sem fechamento nenhum (ao contrário do duas-águas, que já fecha os
+// dois oitões). buildRoofUmaAgua ganhou os DOIS fechamentos laterais
+// (triângulo/trapézio reto, reaproveitando gableColors.a/b) igual ao
+// duas-águas.
 test('buildRoofUmaAgua recebe gableColors e constrói os dois fechamentos laterais (addGable a/b)', () => {
   const start = source.indexOf('function buildRoofUmaAgua(');
   const end = source.indexOf('\n  }', start);
   const body = source.slice(start, end);
-  assert.match(body, /function buildRoofUmaAgua\(topBounds: any, topY: any, roofColor: any, gableColors: any/);
+  assert.match(body, /function buildRoofUmaAgua\(topBounds: any, topY: any, roofColor: any, gableColors: any, backWallColor: any/);
   assert.match(body, /function addGable\(mesh: any, side: string\)/);
   assert.match(body, /addGable\(buildGableMesh\(\[[\s\S]*?\], gableColors\.a\), 'a'\);/);
   assert.match(body, /addGable\(buildGableMesh\(\[[\s\S]*?\], gableColors\.b\), 'b'\);/);
   // Dois branches (slopeAlongZ e o else) — cada um com seu par de
-  // fechamentos, não só um dos dois casos.
+  // fechamentos laterais, não só um dos dois casos.
   const gableCallCount = (body.match(/addGable\(buildGableMesh\(/g) || []).length;
-  assert.equal(gableCallCount, 4, 'esperava 4 chamadas addGable (2 fechamentos × 2 branches de ridgeAxis)');
+  assert.equal(gableCallCount, 4, 'esperava 4 chamadas addGable (2 fechamentos laterais × 2 branches de ridgeAxis)');
 });
 
-test('a chamada de buildRoofUmaAgua passa gableColors (antes não passava nada)', () => {
-  assert.match(source, /buildRoofUmaAgua\(bounds, floorTopY, roofColor, gableColors, pitchDeg, ridgeAxis, tabeiraColor\)/);
+// Segundo relato, depois do primeiro: os fechamentos LATERAIS ficaram
+// certos, mas faltava um terceiro painel — retangular, na parede do
+// lado ALTO do caimento ("não fechou a parte de trás, a parede deve
+// subir"). Painel novo usa a cor da PAREDE de verdade (wallMatchColor,
+// mesma técnica do parapeito da platibanda), não a cor de fechamento
+// lateral — e vai como DoubleSide de propósito, já que não há como
+// verificar visualmente o sentido de enrolamento dos vértices neste
+// ambiente.
+test('buildRoofUmaAgua também fecha o painel de trás (lado alto), com a cor da parede de verdade, DoubleSide', () => {
+  const start = source.indexOf('function buildRoofUmaAgua(');
+  const end = source.indexOf('\n  }', start);
+  const body = source.slice(start, end);
+  assert.match(body, /function addBackWall\(mesh: any\) \{/);
+  assert.match(body, /m\.side = THREE\.DoubleSide/);
+  const backWallCallCount = (body.match(/addBackWall\(buildGableMesh\(/g) || []).length;
+  assert.equal(backWallCallCount, 2, 'esperava 2 chamadas addBackWall (1 painel de trás × 2 branches de ridgeAxis)');
+  assert.match(body, /addBackWall\(buildGableMesh\(\[[\s\S]*?\], backWallColor\)\);/);
+});
+
+test('a chamada de buildRoofUmaAgua passa gableColors e backWallColor (cor da parede real, mesma técnica do parapeito)', () => {
+  assert.match(source, /var backWallColor = pickColor\(wallMatchColor != null \? wallMatchColor : GABLE_COLOR, 'telhado', viewState\);/);
+  assert.match(source, /buildRoofUmaAgua\(bounds, floorTopY, roofColor, gableColors, backWallColor, pitchDeg, ridgeAxis, tabeiraColor\)/);
 });
 
 test('wallSupportsRoofGable também reconhece uma-água (suprime contorno duplicado igual já fazia pro duas-águas)', () => {
@@ -40,4 +60,11 @@ test('orçamento soma o fechamento lateral do uma-água como parede (mesmo trata
     materialsSource,
     /if \(\(roof\.type === 'duasAguas' \|\| roof\.type === 'umaAgua'\) && roof\.atticMode !== 'generated'\) \{/,
   );
+});
+
+test('orçamento também soma o painel de trás do uma-água (área própria, umaAguaBackWallAreaMeters)', () => {
+  assert.match(materialsSource, /function umaAguaBackWallAreaMeters\(roof: Roof\): number \{/);
+  assert.match(materialsSource, /if \(roof\.type === 'umaAgua' && roof\.atticMode !== 'generated'\) \{/);
+  assert.match(materialsSource, /const backWallArea = umaAguaBackWallAreaMeters\(roof\);/);
+  assert.match(materialsSource, /totals\.wallAreaNet \+= backWallArea;/);
 });

@@ -116,6 +116,23 @@ export function gableAreaMeters(roof: Roof, config: RoofQuantityConfig): number 
   return widthM * baseRise + widthM * triangleRise / 2;
 }
 
+// Painel retangular que fecha o vão na parede do lado ALTO do uma-água
+// (Product Owner: "não fechou a parte de trás, a parede deve subir") —
+// diferente dos dois fechamentos laterais (gableAreaMeters), que fecham
+// o vão triangular dos lados PARALELOS à água. Aqui a largura é o eixo
+// PERPENDICULAR à água (a mesma direção da parede de trás em si), e a
+// altura é o quanto o telhado sobe acima do topo da parede no ponto
+// mais alto — mesma simplificação de gableAreaMeters (ignora a folga
+// de poucos cm contra o telhado).
+export function umaAguaBackWallAreaMeters(roof: Roof, config: RoofQuantityConfig): number {
+  if (roof.type !== 'umaAgua') return 0;
+  const slopeSpanM = (roof.ridgeAxis === 'x' ? Math.abs(roof.y2 - roof.y1) : Math.abs(roof.x2 - roof.x1)) / config.grid;
+  const backWidthM = (roof.ridgeAxis === 'x' ? Math.abs(roof.x2 - roof.x1) : Math.abs(roof.y2 - roof.y1)) / config.grid;
+  const pitchRad = (roof.pitchDeg || 0) * Math.PI / 180;
+  const riseM = (slopeSpanM + config.roofOverhang) * Math.tan(pitchRad);
+  return backWidthM * riseM;
+}
+
 export function computeFoundationQuantity(
   type: FoundationType,
   wallLength: number,

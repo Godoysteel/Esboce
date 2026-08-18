@@ -7,6 +7,7 @@ import {
   gableAreaMeters,
   roofAreaMeters,
   roofNetAreas,
+  umaAguaBackWallAreaMeters,
 } from '../src/core/QuantityGeometry.ts';
 
 const roofConfig = { grid: 20, roofOverhang: 0.4, rakeOverhang: 0.2 };
@@ -73,6 +74,22 @@ test('fechamento lateral de uma água entra como área de parede — triângulo 
   const duasAguasTriangle = duasAguasArea - baseRiseTerm;
   const umaAguaTriangle = expected - baseRiseTerm;
   assert.ok(Math.abs(umaAguaTriangle - duasAguasTriangle * 2) < 1e-9);
+});
+
+// Segundo relato do Product Owner: os fechamentos laterais fecharam,
+// mas faltava a parede de trás (lado alto) subir. umaAguaBackWallAreaMeters
+// é um painel RETANGULAR (largura = eixo perpendicular à água), não
+// triangular como o fechamento lateral — dimensão diferente de propósito.
+test('painel de trás (lado alto) do uma-água tem área própria, retangular — largura no eixo perpendicular à água', () => {
+  const roof = createRoofEntity(0, 0, 80, 60, 'umaAgua', 30, 'x', 'roof');
+  const slopeSpanM = 3; // eixo Y/Z (mesmo widthM do fechamento lateral) — direção da água
+  const backWidthM = 4; // eixo X — direção perpendicular, a própria largura da parede de trás
+  const pitch = Math.PI / 6;
+  const riseM = (slopeSpanM + roofConfig.roofOverhang) * Math.tan(pitch);
+  const expected = backWidthM * riseM;
+  assert.ok(Math.abs(umaAguaBackWallAreaMeters(roof, roofConfig) - expected) < 1e-9);
+  assert.equal(umaAguaBackWallAreaMeters({ ...roof, type: 'duasAguas' }, roofConfig), 0, 'duas-águas não tem painel de trás — as duas águas já se encontram na cumeeira');
+  assert.equal(umaAguaBackWallAreaMeters({ ...roof, type: 'quatroAguas' }, roofConfig), 0);
 });
 
 test('telhados sobrepostos não perdem área antes do engaste', () => {

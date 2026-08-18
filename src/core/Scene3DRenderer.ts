@@ -1298,12 +1298,23 @@ export function hashColorHex(key: string): number {
   // parede antes da diagonal começar — sem essa correção, a diagonal
   // do fechamento não bate com a inclinação real do telhado, fica mais
   // íngreme.
-  function buildRoofUmaAgua(topBounds: any, topY: any, roofColor: any, gableColors: any, pitchDeg: any, ridgeAxis: any, tabeiraColor: any) {
+  function buildRoofUmaAgua(topBounds: any, topY: any, roofColor: any, gableColors: any, backWallColor: any, pitchDeg: any, ridgeAxis: any, tabeiraColor: any) {
     var pitchRad = pitchDeg * Math.PI / 180;
     var verticalDrop = ROOF_THICKNESS / Math.cos(pitchRad);
     var slopeAlongZ = ridgeAxis === 'x';
     var meshes: any[] = [];
     function addGable(mesh: any, side: string) { mesh.userData.gableSide = side; meshes.push(mesh); }
+    // Painel de trás: DoubleSide de propósito — é uma parede plana
+    // vertical simples (não uma água inclinada como o resto da função),
+    // e sem verificação visual disponível neste ambiente pra confirmar o
+    // sentido de enrolamento dos vértices, DoubleSide garante que o
+    // painel nunca fica invisível de um dos lados por normal invertida
+    // (o pior caso vira sombreamento levemente diferente, não sumiço).
+    function addBackWall(mesh: any) {
+      var mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      mats.forEach(function (m: any) { if (m) m.side = THREE.DoubleSide; });
+      addGable(mesh, 'back');
+    }
     var gableBaseRise = ROOF_OVERHANG * Math.tan(pitchRad);
     var gableRoofClearance = verticalDrop + 0.006;
     var gMinX = topBounds.minX - GABLE_WALL_EXTEND, gMaxX = topBounds.maxX + GABLE_WALL_EXTEND;
@@ -1326,6 +1337,13 @@ export function hashColorHex(key: string): number {
         { x: gMaxX, y: topY, z: gMaxZ }, { x: gMaxX, y: topY, z: gMinZ },
         { x: gMaxX, y: gLowUnderY, z: gMinZ }, { x: gMaxX, y: gHighUnderY, z: gMaxZ }
       ], gableColors.b), 'b');
+      // Painel de trás (lado alto) — fecha o vão retangular que sobra
+      // entre o topo da parede (altura única) e o telhado no ponto mais
+      // alto (Product Owner: "a parede deve subir").
+      addBackWall(buildGableMesh([
+        { x: gMinX, y: topY, z: gMaxZ }, { x: gMaxX, y: topY, z: gMaxZ },
+        { x: gMaxX, y: gHighUnderY, z: gMaxZ }, { x: gMinX, y: gHighUnderY, z: gMaxZ }
+      ], backWallColor));
     } else {
       var eMinZ2 = topBounds.minZ - RAKE_OVERHANG, eMaxZ2 = topBounds.maxZ + RAKE_OVERHANG;
       var eMinX2 = topBounds.minX - ROOF_OVERHANG, eMaxX2 = topBounds.maxX + ROOF_OVERHANG;
@@ -1344,6 +1362,12 @@ export function hashColorHex(key: string): number {
         { x: gMaxX, y: topY, z: gMaxZ }, { x: gMinX, y: topY, z: gMaxZ },
         { x: gMinX, y: gLowUnderY2, z: gMaxZ }, { x: gMaxX, y: gHighUnderY2, z: gMaxZ }
       ], gableColors.b), 'b');
+      // Painel de trás (lado alto) — mesmo fechamento do branch acima,
+      // só que a parede de trás corre em X (slope corre em X aqui).
+      addBackWall(buildGableMesh([
+        { x: gMaxX, y: topY, z: gMinZ }, { x: gMaxX, y: topY, z: gMaxZ },
+        { x: gMaxX, y: gHighUnderY2, z: gMaxZ }, { x: gMaxX, y: gHighUnderY2, z: gMinZ }
+      ], backWallColor));
     }
     return meshes;
   }
@@ -1651,7 +1675,15 @@ export function hashColorHex(key: string): number {
     var ridgeAxis = roof.ridgeAxis === 'y' ? 'y' : 'x';
 
     if (roof.type === 'quatroAguas') return buildRoofQuatroAguas(bounds, floorTopY, roofColor, pitchDeg, ridgeAxis, tabeiraColor);
-    if (roof.type === 'umaAgua') return buildRoofUmaAgua(bounds, floorTopY, roofColor, gableColors, pitchDeg, ridgeAxis, tabeiraColor);
+    if (roof.type === 'umaAgua') {
+      // Painel de trás (lado alto do caimento) usa a cor da PAREDE de
+      // verdade, não a cor de fechamento lateral (gableColors) — Product
+      // Owner: "a parede deve subir", ou seja, é a parede se estendendo
+      // pra fechar o vão, não um oitão decorativo à parte. Mesma técnica
+      // já usada pro parapeito da platibanda (wallMatchColor).
+      var backWallColor = pickColor(wallMatchColor != null ? wallMatchColor : GABLE_COLOR, 'telhado', viewState);
+      return buildRoofUmaAgua(bounds, floorTopY, roofColor, gableColors, backWallColor, pitchDeg, ridgeAxis, tabeiraColor);
+    }
     if (roof.type === 'platibanda') {
       var parapetColor = pickColor(wallMatchColor != null ? wallMatchColor : GABLE_COLOR, 'telhado', viewState);
       return buildRoofPlatibanda(bounds, floorTopY, roofColor, ridgeAxis, roof.parapetHeight, parapetColor);
