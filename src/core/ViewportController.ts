@@ -3867,9 +3867,47 @@ import {
   var hoverMarker: any;
   var wallGridOverlay: any; // grade sobre as paredes do pavimento, só na ferramenta Telhado
 
-  // O mesmo indicador do Sims: um cubo verde no alto de uma haste, com
-  // uma seta apontando pro chão — mostra exatamente em qual interseção
-  // da grade o desenho vai começar, antes mesmo de clicar.
+  // Mesmo desenho da logo do Esboce (index.html, .brand-logo — casinha
+  // em contorno, com a "portinha" terracota) — reaproveitado aqui como
+  // textura de canvas, igual a técnica já usada pros rótulos de
+  // hidráulica (hydraulicLabelSprite, Scene3DRenderer.ts). Path2D cria
+  // o desenho direto a partir do MESMO atributo "d" do SVG original —
+  // não é um redesenho à mão, garante que fica idêntico à marca. Vira
+  // Sprite (sempre de frente pra câmera, como um rótulo), não um plano
+  // fixo — assim continua legível de qualquer ângulo de câmera.
+  function buildLogoSprite() {
+    var canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 128;
+    var ctx = canvas.getContext('2d')!;
+    ctx.save();
+    ctx.scale(1.28, 1.28); // viewBox do SVG original é 0 0 100 100
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.lineWidth = 6;
+    ctx.strokeStyle = '#2C2C2A';
+    [
+      ['M12,94 L11,59 L50,14 L89,58 L88,95', 0.85],
+      ['M14,93 L13,60 L51,17 L90,59 L86,93', 0.7],
+      ['M50,14 L55,9', 0.8],
+      ['M12,58 L5,55', 0.8],
+      ['M89,58 L96,54', 0.8],
+      ['M12,94 L4,96', 0.7],
+      ['M88,95 L96,97', 0.7],
+    ].forEach(function (entry) {
+      ctx.globalAlpha = entry[1] as number;
+      ctx.stroke(new Path2D(entry[0] as string));
+    });
+    ctx.globalAlpha = 0.9;
+    ctx.strokeStyle = '#C1673F';
+    ctx.stroke(new Path2D('M41,94 L40,72 L60,72 L61,94'));
+    ctx.restore();
+    var texture = new THREE.CanvasTexture(canvas);
+    var sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, depthTest: false, transparent: true }));
+    sprite.scale.set(0.34, 0.34, 1);
+    sprite.renderOrder = 1000;
+    return sprite;
+  }
+
+  // O mesmo indicador do Sims: a logo do Esboce no alto de uma haste,
+  // com uma seta apontando pro chão — mostra exatamente em qual
+  // interseção da grade o desenho vai começar, antes mesmo de clicar.
   function buildHoverMarker() {
     var group = new THREE.Group();
     var poleHeight = 1.3;
@@ -3880,10 +3918,7 @@ import {
     pole.position.y = poleHeight / 2 + 0.1;
     group.add(pole);
 
-    var cap = new THREE.Mesh(
-      new THREE.BoxGeometry(0.13, 0.13, 0.13),
-      new THREE.MeshBasicMaterial({ color: 0x4CD137 })
-    );
+    var cap = buildLogoSprite();
     cap.position.y = poleHeight + 0.1;
     group.add(cap);
 

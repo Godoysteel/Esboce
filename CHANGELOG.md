@@ -1,5 +1,6 @@
 # Changelog
 
+> Alterado: marcador de "onde o desenho vai começar" (a haste que aparece ao passar o mouse com uma ferramenta ativa) — o cubo verde no topo virou a logo do Esboce. Ver DEC-102.
 > Adicionado: botão de exportar o orçamento em PDF, no painel de quantitativo (📄) — lista organizada por seção de categoria, total destacado, aviso de responsabilidade técnica e rodapé "Orçamento gerado por esboce.com.br". Ver DEC-101.
 > Corrigido: quantitativo de orçamento — madeira do madeiramento de telhado (ripas/caibros/terças) ficava sem preço nenhum, era o único material que não tinha nem estimativa genérica. Passa a usar preço médio de mercado (varejo, R$/m³ sobre o volume total já calculado). Ver DEC-100 (correção pós-lançamento nº2).
 > Alterado: quantitativo de orçamento (painel de materiais) — nenhum material fica mais sem preço de catálogo. Cimento usa o preço real do fornecedor "O Mercador"; cal, areia, concreto, aço e tijolo passam a usar preço médio de mercado pesquisado, cadastrado como produto de catálogo (fabricante "Vórtice Materiais") em vez de valor fixo escondido no código. Ver DEC-100 (correção pós-lançamento).
