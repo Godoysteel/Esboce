@@ -3773,22 +3773,47 @@ export function hashColorHex(key: string): number {
         });
         shape.closePath();
         // Contorno EXTERNO (DEC-90) — mesmo raciocínio de insetPoints
-        // acima (mesma parede real por trecho, `insetWallIds[i]`), só que
-        // pega a face mais LONGE do centro em vez da mais perto. Usado só
-        // pela laje (que deve cobrir o cômodo inteiro rente à parede,
-        // como uma laje de verdade apoiada em cima dela) — piso, rodapé e
-        // contorno do piso continuam na face interna (insetPoints).
+        // acima (mesma parede real por trecho), só que pega a face mais
+        // LONGE do centro em vez da mais perto. Usado só pela laje (que
+        // deve cobrir o cômodo inteiro rente à parede, como uma laje de
+        // verdade apoiada em cima dela) — piso, rodapé e contorno do piso
+        // continuam na face interna (insetPoints).
+        //
+        // Cada vértice do contorno é encontro de DUAS paredes (a que
+        // termina ali e a que começa) — considerar só a parede que
+        // COMEÇA nesse vértice (como insetPoints faz, sem problema pro
+        // piso) quebra a laje numa junção em T: a parede "tronco" do T é
+        // desenhada ESTENDIDA pra fechar o encontro (computeWallFootprints
+        // — ver comentário "T disfarçada"), a outra fica rente; usar só
+        // uma delas ora pega a face errada (do lado de DENTRO da junção,
+        // não de fora), ora não estende o bastante — o resultado é uma
+        // aresta da laje na diagonal atravessando a parede inteira em vez
+        // de ficar reta, rente à face real (relatado pelo Product Owner:
+        // "a laje fica confusa em paredes compartilhadas"). Corrigido
+        // calculando a face de fora pelas DUAS paredes do vértice e
+        // ficando com a que cai mais longe do centro — a parede cuja
+        // própria face plana já é a mais externa nesse ponto vence, sem
+        // herdar a extensão/retração da parede vizinha.
+        function outsetCandidate(wallId: any, p1: any) {
+          var w = wallId && floorData.walls.find(function (item: any) { return item.id === wallId; });
+          var fp = w && wallFootprints[w.id];
+          if (!w || !fp) return null;
+          var d1 = Math.hypot(w.x1 - p1.x, w.y1 - p1.y);
+          var d2 = Math.hypot(w.x2 - p1.x, w.y2 - p1.y);
+          var face = (d1 <= d2) ? { a: fp.p1a, b: fp.p1b } : { a: fp.p2a, b: fp.p2b };
+          var distA = Math.hypot(face.a.x - cx, face.a.y - cy);
+          var distB = Math.hypot(face.b.x - cx, face.b.y - cy);
+          return distA >= distB ? face.a : face.b;
+        }
+        var vertexCount = room.points.length;
         var outsetPoints = room.points.map(function (p1: any, i: any) {
-          var outWallId = insetWallIds[i];
-          var outWall = outWallId && floorData.walls.find(function (w: any) { return w.id === outWallId; });
-          var outFp = outWall && wallFootprints[outWall.id];
-          if (!outWall || !outFp) return p1;
-          var od1 = Math.hypot(outWall.x1 - p1.x, outWall.y1 - p1.y);
-          var od2 = Math.hypot(outWall.x2 - p1.x, outWall.y2 - p1.y);
-          var outFace = (od1 <= od2) ? { a: outFp.p1a, b: outFp.p1b } : { a: outFp.p2a, b: outFp.p2b };
-          var outDistA = Math.hypot(outFace.a.x - cx, outFace.a.y - cy);
-          var outDistB = Math.hypot(outFace.b.x - cx, outFace.b.y - cy);
-          return outDistA >= outDistB ? outFace.a : outFace.b;
+          var outgoing = outsetCandidate(insetWallIds[i], p1);
+          var incoming = outsetCandidate(insetWallIds[(i - 1 + vertexCount) % vertexCount], p1);
+          if (!outgoing) return incoming || p1;
+          if (!incoming) return outgoing;
+          var distOut = Math.hypot(outgoing.x - cx, outgoing.y - cy);
+          var distIn = Math.hypot(incoming.x - cx, incoming.y - cy);
+          return distOut >= distIn ? outgoing : incoming;
         });
         // Espessura fina (3cm) e base sempre no mesmo nível da base da
         // parede (yOffset — o mesmo y0 usado em buildWallMeshFromFootprint),
