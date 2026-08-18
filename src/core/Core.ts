@@ -16,9 +16,13 @@ import type {
 
 export const GRID = 20; // unidade de grade do modelo (1 unidade = 1 metro)
 // O snap bate na mesma malha que a grade PRINCIPAL desenhada no chão
-// (0,5 m por célula) — senão a "seta" de posição cai no meio de um
-// quadrado em vez de pular exatamente de cruzamento em cruzamento.
-export const SNAP_UNIT = GRID / 2;
+// (0,25 m por célula — reduzido de 0,5m a pedido do Product Owner, ver
+// Registro de Decisões Técnicas) — senão a "seta" de posição cai no
+// meio de um quadrado em vez de pular exatamente de cruzamento em
+// cruzamento. O GridHelper principal (EsboceApplication.ts) calcula
+// suas divisões A PARTIR deste valor, não um número fixo — muda os
+// dois juntos automaticamente.
+export const SNAP_UNIT = GRID / 4;
 export const WALL_THICK = 0.12; // espessura da parede em metros
 // Distância abaixo da qual dois pontos contam como "o mesmo lugar" —
 // usada em TODO lugar do código que precisa decidir se duas pontas de

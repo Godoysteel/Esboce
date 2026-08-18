@@ -419,13 +419,16 @@ test('parede transversal para antes da esquadria mesmo quando o ponteiro salta o
   const moving = { id: 'moving', x1: 20, y1: -20, x2: 20, y2: 20 };
   const opening = { id: 'window', wallId: 'owner', kind: 'window', offset: 2.5, width: 0.8, height: 1.2, sillHeight: 1 };
 
+  // SNAP_UNIT = 5 (250mm, ver Core.ts) — a varredura anda em passos
+  // menores agora, então chega mais perto do vão de verdade antes de
+  // detectar a sobreposição (15, não mais 10 do passo antigo de 0,5m).
   assert.deepEqual(
     resolveWallOffsetAgainstOpenings(moving, 60, 1, 0, ['moving'], [opening], [owner, moving]),
-    { offset: 10, limited: true },
+    { offset: 15, limited: true },
   );
   assert.deepEqual(
     resolveWallOffsetAgainstOpenings({ ...moving, x1: 80, x2: 80 }, -60, 1, 0, ['moving'], [opening], [owner, moving]),
-    { offset: -10, limited: true },
+    { offset: -15, limited: true },
   );
 });
 
@@ -583,7 +586,12 @@ test('arrasto de duas linhas de grid nao pula por cima de obstaculo no meio do c
 
   const resolved = resolveWallGroupGridDelta(moving, obstacleAtIntermediateStep, 0, -20, 0, 0);
 
-  assert.deepEqual(resolved, { x: 0, y: 0 });
+  // SNAP_UNIT = 5 (250mm, ver Core.ts) — a varredura agora tem um passo
+  // seguro intermediário (y=5, na borda do obstáculo, delta -5) antes
+  // do próximo passo (y=0) invadir o obstáculo de verdade. Passo mais
+  // fino chega mais perto do alvo sem NUNCA pular por cima — mesmo
+  // espírito do teste, resultado mais preciso.
+  assert.deepEqual(resolved, { x: 0, y: -5 });
 });
 
 test('arrasto de duas linhas de grid avanca ate o passo valido mais proximo do alvo', () => {

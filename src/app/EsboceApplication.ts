@@ -225,7 +225,12 @@ export class EsboceApplication {
     ground.position.y = -0.01;
     this.scene.add(ground);
 
-    const majorGrid = new THREE.GridHelper(30, 60, 0xffffff, 0xffffff);
+    // Divisões calculadas a partir de Core.SNAP_UNIT (não um número fixo)
+    // de propósito — assim a grade DESENHADA nunca desalinha do snap de
+    // verdade se SNAP_UNIT mudar de novo no futuro (ver comentário em
+    // Core.ts).
+    const majorGridDivisions = 30 / (Core.SNAP_UNIT / Core.GRID);
+    const majorGrid = new THREE.GridHelper(30, majorGridDivisions, 0xffffff, 0xffffff);
     const majorMaterial = majorGrid.material as THREE.LineBasicMaterial;
     majorMaterial.transparent = true;
     majorMaterial.opacity = 0.55;

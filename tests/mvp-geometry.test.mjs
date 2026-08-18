@@ -169,7 +169,9 @@ test('snapCoordinateToWalls: gruda exatamente no eixo de uma parede próxima, me
 
 test('snapCoordinateToWalls: longe de qualquer parede, cai no snap comum do grid', () => {
   const walls = [createWallEntity(0, 0, 200, 0)];
-  assert.equal(snapCoordinateToWalls(45, walls, 'x', 5), 50); // Core.snap(45) = 50, nenhuma parede por perto
+  // SNAP_UNIT = 5 (250mm, ver Core.ts) — 45 já é múltiplo exato de 5,
+  // então Core.snap(45) = 45 (sem arredondar), nenhuma parede por perto.
+  assert.equal(snapCoordinateToWalls(45, walls, 'x', 5), 45);
 });
 
 test('snapCoordinateToWalls: ignora paredes fora da tolerância', () => {
