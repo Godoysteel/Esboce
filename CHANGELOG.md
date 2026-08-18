@@ -1,5 +1,7 @@
 # Changelog
 
+> Alterado: quantitativo de orçamento (painel de materiais) — nenhum material fica mais sem preço de catálogo. Cimento usa o preço real do fornecedor "O Mercador"; cal, areia, concreto, aço e tijolo passam a usar preço médio de mercado pesquisado, cadastrado como produto de catálogo (fabricante "Vórtice Materiais") em vez de valor fixo escondido no código. Ver DEC-100 (correção pós-lançamento).
+> Alterado: quantitativo de orçamento (painel de materiais) passa a usar o preço real do cimento do catálogo do fornecedor "O Mercador" (R$/kg calculado a partir do saco de 50kg à venda), em vez da referência genérica de mercado nacional — quando disponível, aparece rotulado como preço real, com o nome do produto de origem. Demais materiais estruturais (cal, areia, concreto, aço, bloco) continuam na referência genérica por ora — nenhum produto do catálogo hoje representa a mesma coisa que o quantitativo assume com segurança suficiente. Ver DEC-100.
 > Alterado: reflexo do vidro das esquadrias (porta/janela) reduzido — ficava espelhado demais numa folha pequena, com a mesma calibração usada na fachada de vidro grande (Envidraçamento). O vidro da fachada continua igual. Ver DEC-99.
 
 > Adicionado: parede (e oitão) agora também pode usar textura real (foto + relevo + rugosidade) — mesma melhoria do piso (ver abaixo), agora na ferramenta Pintar > Paredes. Primeiro produto disponível: pedra empilhada (teste). Ver DEC-98.

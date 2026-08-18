@@ -18,6 +18,7 @@ import type { FoundationQuantity } from './QuantityGeometry.js';
 import type { Point, Wall, Roof, Column, Laje, Project } from './types.js';
 import { constructionSystemDefinition, hasCeramicMasonryEstimate } from './ConstructionSystem.js';
 import { floorWallHeight } from './Attic.js';
+import { listCatalogProducts, listManufacturers } from './SupabaseClient.js';
 
 let bodyEl: HTMLElement | null, panelEl: HTMLElement | null;
 
@@ -550,6 +551,14 @@ function groupSection(title: string, map: Record<string, number>): string {
 
 export function render(): void {
   if (!bodyEl) return;
+  // Dispara a busca do preço real na primeira vez que o painel
+  // renderiza (não bloqueia: usa a referência genérica enquanto isso).
+  // Quando a busca voltar (achou ou não), re-renderiza uma vez pra
+  // atualizar os números — só se o painel ainda estiver aberto.
+  if (!realPricesFetchStarted) {
+    onRealPricesLoaded = function () { if (bodyEl) render(); };
+    ensureRealPrices();
+  }
   const q = compute();
   let html = '';
   const system = constructionSystemDefinition(q.constructionSystem);
@@ -611,10 +620,14 @@ export function render(): void {
   if (hasCeramicMasonryEstimate(q.constructionSystem) && q.totals.wallAreaNet > 0) {
     html += '<div class="object-panel-section-label">Alvenaria (ref. SINAPI — bloco 9x19x19, traço 1:2:8, com 10% de perda)</div>';
     html += '<div class="materials-line"><span>Blocos/tijolos</span><span>' + q.masonry.blocks + ' un.</span></div>';
+    html += priceSourceLine('brickPerUnit', '/un');
     html += '<div class="materials-line"><span>Argamassa de assentamento</span><span>' + q.masonry.mortarM3.toFixed(3).replace('.', ',') + ' m³</span></div>';
     html += '<div class="materials-line"><span>Cimento</span><span>' + q.masonry.cementKg.toFixed(1).replace('.', ',') + ' kg (~' + Math.ceil(q.masonry.cementKg / 50) + ' sacos 50kg)</span></div>';
+    html += priceSourceLine('cementPerKg', '/kg');
     html += '<div class="materials-line"><span>Cal hidratada</span><span>' + q.masonry.calKg.toFixed(1).replace('.', ',') + ' kg (~' + Math.ceil(q.masonry.calKg / 20) + ' sacos 20kg)</span></div>';
+    html += priceSourceLine('limePerKg', '/kg');
     html += '<div class="materials-line"><span>Areia média</span><span>' + q.masonry.sandM3.toFixed(2).replace('.', ',') + ' m³</span></div>';
+    html += priceSourceLine('sandPerM3', '/m³');
   }
   if (q.roofTimber.areaM2 > 0) {
     html += '<div class="object-panel-section-label">Madeiramento (ref. SINAPI 92539 — ripa/caibro/terça, telha cerâmica/concreto, com 10% de perda)</div>';
@@ -633,7 +646,12 @@ export function render(): void {
   const totalRow = allRows.length && allRows[allRows.length - 1]![0] === 'TOTAL' ? allRows[allRows.length - 1]! : null;
   if (totalRow) {
     html += '<div class="object-panel-section-label">Custo</div>';
-    html += '<div class="materials-line"><span>Estimado (preço médio de referência)</span><span>' + totalRow[5] + '</span></div>';
+    const resolvedCount = (Object.keys(VORTICE_MATERIAL_SKUS) as MaterialPriceKey[]).filter(function (k) { return !!realPrices[k]; }).length;
+    const totalMaterials = (Object.keys(VORTICE_MATERIAL_SKUS) as MaterialPriceKey[]).length;
+    const custoLabel = resolvedCount === totalMaterials ? 'Estimado (todo material com preço de catálogo — real ou média de mercado)'
+      : resolvedCount > 0 ? 'Estimado (parte dos materiais com preço de catálogo; restante em referência de emergência)'
+      : 'Estimado (referência de emergência — catálogo ainda não carregou)';
+    html += '<div class="materials-line"><span>' + custoLabel + '</span><span>' + totalRow[5] + '</span></div>';
   }
   bodyEl.innerHTML = html;
 }
@@ -646,13 +664,100 @@ export function render(): void {
 // produto no Catalog (tinta, piso, telha), o preço vem do próprio
 // produto (commercial.price) — essa referência genérica só cobre o que
 // ainda não é produto (cimento, cal, areia, bloco, concreto, aço).
+// ---------------------------------------------------------------
+// PREÇO REAL DO CATÁLOGO (Supabase) — substitui a referência genérica
+// fixa no código por um produto de verdade, sempre visível/rastreável
+// (ver DEC-88, e DEC-100/101: "nenhum material sem preço" — todo
+// material estrutural tem um produto de catálogo garantido, mesmo
+// quando nenhum fornecedor real (O Mercador) tem o item certo).
+//
+// Dois níveis de prioridade por material:
+//   1) FORNECEDOR REAL (O Mercador) — quando existe um produto que
+//      representa a MESMA coisa que o quantitativo assume (mesma
+//      unidade de referência), com confiança suficiente pra não estar
+//      comparando coisa diferente disfarçada de "preço real". Hoje só
+//      cimento tem esse match limpo (saco de 50kg) — bloco/aço/areia/
+//      cal/concreto do Mercador ou não existem no catálogo, ou são
+//      produto de tamanho/unidade incompatível (ver DEC-88 e DEC-100).
+//   2) MÉDIA DE MERCADO (Vórtice Materiais, origem 'generico') — um
+//      produto próprio, cadastrado com preço médio nacional pesquisado
+//      (fontes: Calculobra, SINAPI, Lar Pontual Engenharia, Reforma &
+//      Construção, ago/2026 — ver migration correspondente), garante
+//      que TODO material sempre resolve pra um produto real do
+//      catálogo, mesmo sem fornecedor específico pra ele ainda.
+//
+// Busca uma vez só (cacheada), silenciosa se falhar — nesse caso o
+// REFERENCE_PRICES abaixo (agora só um fallback de EMERGÊNCIA, pra
+// quando nem o Supabase responde) continua valendo, mesmo espírito de
+// resiliência da ADR-007 §7: preço indisponível nunca trava nada, só
+// degrada.
+interface RealPriceMatch { value: number; source: string; }
+type MaterialPriceKey = 'cementPerKg' | 'limePerKg' | 'sandPerM3' | 'concretePerM3' | 'steelPerKg' | 'brickPerUnit';
+let realPrices: { [K in MaterialPriceKey]?: RealPriceMatch } = {};
+let realPricesFetchStarted = false;
+let onRealPricesLoaded: (() => void) | null = null;
+
+// SKUs fixos dos produtos "Vórtice Materiais" (preço médio de mercado)
+// — combinam com os cadastrados na migration; busca exata por SKU, sem
+// depender de casar texto de nome de produto (ao contrário do Mercador,
+// aqui o próprio Esboce controla os dois lados, então não tem risco de
+// desalinhar se o cadastro mudar de nome).
+const VORTICE_MATERIAL_SKUS: Record<MaterialPriceKey, { sku: string; unitDivisor: number }> = {
+  cementPerKg: { sku: 'vortice-cimento-50kg', unitDivisor: 50 },
+  limePerKg: { sku: 'vortice-cal-20kg', unitDivisor: 20 },
+  sandPerM3: { sku: 'vortice-areia-m3', unitDivisor: 1 },
+  concretePerM3: { sku: 'vortice-concreto-usinado-m3', unitDivisor: 1 },
+  steelPerKg: { sku: 'vortice-aco-ca50-kg', unitDivisor: 1 },
+  brickPerUnit: { sku: 'vortice-tijolo-9x19x19-un', unitDivisor: 1 },
+};
+
+async function ensureRealPrices(): Promise<void> {
+  if (realPricesFetchStarted) return;
+  realPricesFetchStarted = true;
+  try {
+    const [manufacturers, products] = await Promise.all([listManufacturers(), listCatalogProducts()]);
+    const mercador = manufacturers.find(function (m) { return m.nome === 'O Mercador'; });
+    const vortice = manufacturers.find(function (m) { return m.nome === 'Vórtice Materiais'; });
+
+    // Nível 1 — fornecedor real: só cimento, por enquanto (ver DEC-88
+    // pra o motivo dos demais não terem match seguro no Mercador).
+    if (mercador) {
+      const cimento = products.find(function (p) {
+        return p.manufacturer_id === mercador.id && p.categoria === 'Cimento e Argamassa' &&
+          /^CIMENTO\b/i.test(p.nome) && !/BRANCO/i.test(p.nome) &&
+          p.unidade === 'SC' && /50\s*KG/i.test(p.nome);
+      });
+      if (cimento) realPrices.cementPerKg = { value: cimento.preco / 50, source: cimento.nome + ' — O Mercador' };
+    }
+
+    // Nível 2 — média de mercado (Vórtice): preenche qualquer material
+    // que o nível 1 não resolveu, SEMPRE (garante que nenhum material
+    // fica sem preço de catálogo).
+    if (vortice) {
+      (Object.keys(VORTICE_MATERIAL_SKUS) as MaterialPriceKey[]).forEach(function (key) {
+        if (realPrices[key]) return; // já resolvido por fornecedor real
+        const cfg = VORTICE_MATERIAL_SKUS[key];
+        const product = products.find(function (p) { return p.manufacturer_id === vortice.id && p.sku === cfg.sku; });
+        if (product) realPrices[key] = { value: product.preco / cfg.unitDivisor, source: product.nome + ' — preço médio de mercado' };
+      });
+    }
+  } catch (err) {
+    console.error('Falha ao buscar preço de material no catálogo (segue com a referência de emergência):', err);
+  } finally {
+    if (onRealPricesLoaded) onRealPricesLoaded();
+  }
+}
+
+// Fallback de EMERGÊNCIA — só usado se nem o Supabase responder (rede
+// fora do ar). Em uso normal, todo material sempre resolve por um
+// produto de catálogo (nível 1 ou 2 acima), nunca por este valor fixo.
 const REFERENCE_PRICES = {
-  cementPerKg: 0.75,     // saco 50kg ~R$35-40 média nacional
-  limePerKg: 0.95,       // saco 20kg ~R$16-22
-  sandPerM3: 130,        // areia média ~R$100-160/m³
-  concretePerM3: 450,    // concreto usinado, fck 20-25MPa, ~R$330-680/m³
-  steelPerKg: 8.00,      // aço CA-50, referência de mercado
-  brickPerUnit: 1.20     // bloco cerâmico 9x19x19, referência de mercado
+  cementPerKg: 0.75,
+  limePerKg: 0.95,
+  sandPerM3: 130,
+  concretePerM3: 450,
+  steelPerKg: 8.00,
+  brickPerUnit: 1.20
 };
 // Rendimento de referência pra converter área de parede em latas de
 // tinta (o Catalog vende tinta por lata, não por m² — não existe ainda
@@ -660,6 +765,25 @@ const REFERENCE_PRICES = {
 // típica: ~11 m²/L por demão, 2 demãos).
 const PAINT_COATS = 2;
 const PAINT_YIELD_M2_PER_CAN_PER_COAT = 200;
+
+// Preço de um material por kg/m³/unidade — do catálogo (fornecedor
+// real ou média Vórtice, o que tiver resolvido) ou o fallback de
+// emergência, se nem isso carregou ainda/falhou.
+function materialPrice(key: MaterialPriceKey): number {
+  return realPrices[key] ? realPrices[key]!.value : REFERENCE_PRICES[key];
+}
+
+// Linha "↳ ..." mostrando de onde veio o preço em uso — só aparece
+// quando já resolveu por um produto de catálogo (fornecedor real OU
+// Vórtice); enquanto isso não chegou (ou se falhou de vez), não mostra
+// nada, e o valor usado no cálculo já é o REFERENCE_PRICES de
+// emergência silenciosamente (ver ADR-006 §12/17, rastreabilidade —
+// "de onde veio esse número" — e §15, não esconder atrás de tooltip).
+function priceSourceLine(key: MaterialPriceKey, unitSuffix: string): string {
+  const match = realPrices[key];
+  if (!match) return '';
+  return '<div class="materials-line" style="color:#77746C; font-size:11px;"><span>↳ R$ ' + match.value.toFixed(2).replace('.', ',') + unitSuffix + '</span><span>' + match.source + '</span></div>';
+}
 
 // Custo de um produto do Catalog pra uma área/quantidade — lê o preço e
 // a unidade comercial DO PRÓPRIO PRODUTO (commercial.price/unit), nunca
@@ -752,39 +876,39 @@ export function buildRows(): (string | number)[][] {
     const fLabel = 'Fundação (' + f.type + ')';
     if (f.type === 'baldrame') push(fLabel, 'Viga baldrame (comprimento)', f.length, 'm', null);
     else push(fLabel, 'Área da laje', f.areaM2, 'm²', null);
-    push(fLabel, 'Concreto', f.concreteVolume, 'm³', f.concreteVolume * REFERENCE_PRICES.concretePerM3);
-    push(fLabel, 'Aço (estimado)', f.steelKg, 'kg', f.steelKg * REFERENCE_PRICES.steelPerKg);
+    push(fLabel, 'Concreto', f.concreteVolume, 'm³', f.concreteVolume * materialPrice('concretePerM3'));
+    push(fLabel, 'Aço (estimado)', f.steelKg, 'kg', f.steelKg * materialPrice('steelPerKg'));
   }
   if (q.totals.columnCount > 0) {
     push('Estrutura', 'Colunas (posicionadas)', q.totals.columnCount, 'un', null);
-    push('Estrutura', 'Volume de colunas', q.totals.columnVolume, 'm³', q.totals.columnVolume * REFERENCE_PRICES.concretePerM3);
+    push('Estrutura', 'Volume de colunas', q.totals.columnVolume, 'm³', q.totals.columnVolume * materialPrice('concretePerM3'));
   }
   if (hasCeramicMasonryEstimate(q.constructionSystem) && q.structure.pilareteCount > 0) {
     push('Estrutura', 'Pilaretes em parede (estimado)', q.structure.pilareteCount, 'un', null);
-    push('Estrutura', 'Concreto — pilaretes', q.structure.pilareteVolume, 'm³', q.structure.pilareteVolume * REFERENCE_PRICES.concretePerM3);
-    push('Estrutura', 'Aço — pilaretes', q.structure.pilareteSteelKg, 'kg', q.structure.pilareteSteelKg * REFERENCE_PRICES.steelPerKg);
+    push('Estrutura', 'Concreto — pilaretes', q.structure.pilareteVolume, 'm³', q.structure.pilareteVolume * materialPrice('concretePerM3'));
+    push('Estrutura', 'Aço — pilaretes', q.structure.pilareteSteelKg, 'kg', q.structure.pilareteSteelKg * materialPrice('steelPerKg'));
     push('Estrutura', 'Viga de cinta/amarração (comprimento)', q.structure.beamLength, 'm', null);
-    push('Estrutura', 'Concreto — cinta', q.structure.beamVolume, 'm³', q.structure.beamVolume * REFERENCE_PRICES.concretePerM3);
-    push('Estrutura', 'Aço — cinta', q.structure.beamSteelKg, 'kg', q.structure.beamSteelKg * REFERENCE_PRICES.steelPerKg);
+    push('Estrutura', 'Concreto — cinta', q.structure.beamVolume, 'm³', q.structure.beamVolume * materialPrice('concretePerM3'));
+    push('Estrutura', 'Aço — cinta', q.structure.beamSteelKg, 'kg', q.structure.beamSteelKg * materialPrice('steelPerKg'));
   }
   if (hasCeramicMasonryEstimate(q.constructionSystem) && q.structure.vergaCount > 0) {
     push('Estrutura', 'Vergas acima de vãos (estimado)', q.structure.vergaCount, 'un', null);
-    push('Estrutura', 'Concreto — vergas', q.structure.vergaVolume, 'm³', q.structure.vergaVolume * REFERENCE_PRICES.concretePerM3);
-    push('Estrutura', 'Aço — vergas', q.structure.vergaSteelKg, 'kg', q.structure.vergaSteelKg * REFERENCE_PRICES.steelPerKg);
+    push('Estrutura', 'Concreto — vergas', q.structure.vergaVolume, 'm³', q.structure.vergaVolume * materialPrice('concretePerM3'));
+    push('Estrutura', 'Aço — vergas', q.structure.vergaSteelKg, 'kg', q.structure.vergaSteelKg * materialPrice('steelPerKg'));
   }
   if (q.laje.count > 0) {
     const lLabel = 'Laje (ref. taxa de aço 90 kg/m³)';
     push(lLabel, 'Lajes (posicionadas)', q.laje.count, 'un', null);
     push(lLabel, 'Área', q.laje.areaM2, 'm²', null);
-    push(lLabel, 'Concreto', q.laje.volumeM3, 'm³', q.laje.volumeM3 * REFERENCE_PRICES.concretePerM3);
-    push(lLabel, 'Aço (estimado)', q.laje.steelKg, 'kg', q.laje.steelKg * REFERENCE_PRICES.steelPerKg);
+    push(lLabel, 'Concreto', q.laje.volumeM3, 'm³', q.laje.volumeM3 * materialPrice('concretePerM3'));
+    push(lLabel, 'Aço (estimado)', q.laje.steelKg, 'kg', q.laje.steelKg * materialPrice('steelPerKg'));
   }
   if (hasCeramicMasonryEstimate(q.constructionSystem) && q.totals.wallAreaNet > 0) {
-    push('Alvenaria (ref. SINAPI)', 'Blocos/tijolos', q.masonry.blocks, 'un', q.masonry.blocks * REFERENCE_PRICES.brickPerUnit);
+    push('Alvenaria (ref. SINAPI)', 'Blocos/tijolos', q.masonry.blocks, 'un', q.masonry.blocks * materialPrice('brickPerUnit'));
     push('Alvenaria (ref. SINAPI)', 'Argamassa de assentamento', q.masonry.mortarM3, 'm³', null);
-    push('Alvenaria (ref. SINAPI)', 'Cimento', q.masonry.cementKg, 'kg', q.masonry.cementKg * REFERENCE_PRICES.cementPerKg);
-    push('Alvenaria (ref. SINAPI)', 'Cal hidratada', q.masonry.calKg, 'kg', q.masonry.calKg * REFERENCE_PRICES.limePerKg);
-    push('Alvenaria (ref. SINAPI)', 'Areia média', q.masonry.sandM3, 'm³', q.masonry.sandM3 * REFERENCE_PRICES.sandPerM3);
+    push('Alvenaria (ref. SINAPI)', 'Cimento', q.masonry.cementKg, 'kg', q.masonry.cementKg * materialPrice('cementPerKg'));
+    push('Alvenaria (ref. SINAPI)', 'Cal hidratada', q.masonry.calKg, 'kg', q.masonry.calKg * materialPrice('limePerKg'));
+    push('Alvenaria (ref. SINAPI)', 'Areia média', q.masonry.sandM3, 'm³', q.masonry.sandM3 * materialPrice('sandPerM3'));
   }
   if (q.roofTimber.areaM2 > 0) {
     const tLabel = 'Madeiramento (ref. SINAPI 92539)';
