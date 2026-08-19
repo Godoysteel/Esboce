@@ -1463,11 +1463,36 @@ test('Scene3DRenderer.applyRoomBoxClipping: injeta discard por pixel via onBefor
 test('Scene3DRenderer: cada telhado calcula a caixa dos cômodos ESTRITAMENTE mais altos que ele (nunca a própria) e aplica applyRoomBoxClipping em toda peça', () => {
   const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
   assert.notEqual(roofsStart, -1);
-  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 3600);
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 5200);
   assert.match(roofsBlock, /var roomHeightBoxes = rooms\.map\(function \(room: any\) \{/);
   assert.match(roofsBlock, /topY: yOffset \+ ownHeightM,/);
-  assert.match(roofsBlock, /var clipBoxesForThisRoof = roomHeightBoxes\.filter\(function \(b: any\) \{ return b\.topY > pieceBaseY \+ 1e-4; \}\);/);
+  assert.match(roofsBlock, /var roomClipBoxes = roomHeightBoxes\.filter\(function \(b: any\) \{ return b\.topY > pieceBaseY \+ 1e-4; \}\);/);
+  assert.match(roofsBlock, /var clipBoxesForThisRoof = roomClipBoxes\.concat\(tallerRoofClipBoxes\);/);
   assert.match(roofsBlock, /applyRoomBoxClipping\(material, clipBoxesForThisRoof\)/);
+});
+
+// DEC-125 — mesma ideia do DEC-124, agora telhado-vs-telhado: quando um
+// telhado fica embaixo de OUTRO (não de um cômodo), o de cumeeira mais
+// alta vence — o mais baixo some por baixo dele, por pixel, sem cortar
+// malha nenhuma (reaproveita applyRoomBoxClipping, só alimentando mais
+// caixas).
+test('Scene3DRenderer.roofPeakHeightAboveBase: mesma matemática já usada pra posicionar a alça roofRidge/roofParapetHeight (cumeeira por inclinação, parapeito por parapetHeight)', () => {
+  const fnStart = scene3DRendererSource.indexOf('function roofPeakHeightAboveBase(');
+  assert.notEqual(fnStart, -1, 'roofPeakHeightAboveBase não encontrada');
+  const fnBlock = scene3DRendererSource.slice(fnStart, fnStart + 500);
+  assert.match(fnBlock, /if \(roof\.type === 'platibanda'\) return roof\.parapetHeight != null \? roof\.parapetHeight : 0\.5;/);
+  assert.match(fnBlock, /var run = \(roof\.type === 'umaAgua'\) \? Math\.abs\(eaveSpan\) : Math\.abs\(eaveSpan\) \/ 2;/);
+  assert.match(fnBlock, /return run \* Math\.tan\(pitchRad\);/);
+});
+
+test('Scene3DRenderer: caixa de telhado-vs-telhado compara PICO×PICO (nunca pico×base) — garante que só um lado do par esconde o outro, nunca os dois ao mesmo tempo', () => {
+  const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
+  assert.notEqual(roofsStart, -1);
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 4900);
+  assert.match(roofsBlock, /var roofPeakBoxes = floorData\.roofs\.map\(function \(r: any\) \{/);
+  assert.match(roofsBlock, /peakY: yOffset \+ rOwnHeight \+ roofPeakHeightAboveBase\(r, scale\),/);
+  assert.match(roofsBlock, /var ownPeakY = pieceBaseY \+ roofPeakHeightAboveBase\(roof, scale\);/);
+  assert.match(roofsBlock, /var tallerRoofClipBoxes = roofPeakBoxes\.filter\(function \(b: any\) \{ return b\.id !== roof\.id && b\.peakY > ownPeakY \+ 1e-4; \}\)/);
 });
 
 // DEC-90 — botão "Gerar Laje": cômodo nasce sem laje visível/contabilizada;

@@ -265,6 +265,20 @@ export function hashColorHex(key: string): number {
     };
   }
 
+  // Altura do ponto mais alto do telhado ACIMA da própria base (cumeeira,
+  // ou topo do parapeito pra platibanda) — mesma matemática já usada pra
+  // posicionar a alça 'roofRidge'/'roofParapetHeight' (ver
+  // renderSelectionHandles), extraída aqui pra ser reaproveitada também
+  // no cálculo da caixa de telhado-vs-telhado (DEC-125).
+  function roofPeakHeightAboveBase(roof: any, scale: number): number {
+    if (roof.type === 'platibanda') return roof.parapetHeight != null ? roof.parapetHeight : 0.5;
+    var pitchRad = roof.pitchDeg * Math.PI / 180;
+    var spanX = (roof.x2 - roof.x1) * scale, spanZ = (roof.y2 - roof.y1) * scale;
+    var eaveSpan = roof.ridgeAxis === 'x' ? spanZ : spanX;
+    var run = (roof.type === 'umaAgua') ? Math.abs(eaveSpan) : Math.abs(eaveSpan) / 2;
+    return run * Math.tan(pitchRad);
+  }
+
   function rectsOverlapArea(a: any, b: any) {
     return Math.max(0, Math.min(a.maxX, b.maxX) - Math.max(a.minX, b.minX)) *
       Math.max(0, Math.min(a.maxZ, b.maxZ) - Math.max(a.minZ, b.minZ));
@@ -3750,6 +3764,24 @@ export function hashColorHex(key: string): number {
             topY: yOffset + ownHeightM,
           };
         });
+        // Mesma ideia, mas telhado-vs-telhado (DEC-125): pegada × altura
+        // de PICO (cumeeira, ou topo do parapeito) de cada telhado do
+        // pavimento — quando um telhado fica embaixo de OUTRO (não de um
+        // cômodo), o de cumeeira mais alta vence, o mais baixo some por
+        // baixo dele. Comparação é sempre PICO×PICO (nunca pico×base) —
+        // garante que só um lado do par esconde o outro; comparar com a
+        // base deixaria os dois tentando esconder um ao outro ao mesmo
+        // tempo sempre que as bases se sobrepõem, abrindo um buraco onde
+        // nenhum dos dois desenha nada.
+        var roofPeakBoxes = floorData.roofs.map(function (r: any) {
+          var rOwnHeight = r.atticMode ? (r.baseHeightM || 1.2) : Core.roofHeightAtRect(floorData.walls, r.x1, r.y1, r.x2, r.y2, currentWallHeight);
+          var rFootprint = roofWorldFootprint(r, scale, offsetX, offsetY);
+          return {
+            id: r.id,
+            minX: rFootprint.minX, maxX: rFootprint.maxX, minZ: rFootprint.minZ, maxZ: rFootprint.maxZ,
+            peakY: yOffset + rOwnHeight + roofPeakHeightAboveBase(r, scale),
+          };
+        });
         floorData.roofs.forEach(function (roof) {
           // Acompanha a altura PRÓPRIA do cômodo embaixo do centro do
           // telhado (Core.roofHeightAtRect, mesma regra da laje/DEC-88) —
@@ -3771,7 +3803,14 @@ export function hashColorHex(key: string): number {
           // Só cômodos ESTRITAMENTE mais altos que este telhado entram —
           // o próprio cômodo do telhado tem topY == pieceBaseY (não >),
           // então nunca se auto-esconde.
-          var clipBoxesForThisRoof = roomHeightBoxes.filter(function (b: any) { return b.topY > pieceBaseY + 1e-4; });
+          var roomClipBoxes = roomHeightBoxes.filter(function (b: any) { return b.topY > pieceBaseY + 1e-4; });
+          // E só telhados ESTRITAMENTE de cumeeira mais alta que a PRÓPRIA
+          // cumeeira deste (não a base) — ver comentário acima de
+          // roofPeakBoxes.
+          var ownPeakY = pieceBaseY + roofPeakHeightAboveBase(roof, scale);
+          var tallerRoofClipBoxes = roofPeakBoxes.filter(function (b: any) { return b.id !== roof.id && b.peakY > ownPeakY + 1e-4; })
+            .map(function (b: any) { return { minX: b.minX, maxX: b.maxX, minZ: b.minZ, maxZ: b.maxZ, topY: b.peakY }; });
+          var clipBoxesForThisRoof = roomClipBoxes.concat(tallerRoofClipBoxes);
           if (clipBoxesForThisRoof.length) pieces.forEach(function (piece) {
             var materials = Array.isArray(piece.material) ? piece.material : [piece.material];
             materials.forEach(function (material: any) { applyRoomBoxClipping(material, clipBoxesForThisRoof); });
