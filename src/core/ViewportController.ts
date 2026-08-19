@@ -3264,7 +3264,11 @@ import {
         // retângulo (Core.roofHeightAtRect, mesma regra da laje) — arrastar
         // o fantasma pra cima de um cômodo mais alto sobe o telhado junto,
         // em vez de ficar preso na altura padrão do pavimento inteiro.
-        var roofHeightT = Core.roofHeightAtRect(Store.currentWalls(), rectT.x1, rectT.y1, rectT.x2, rectT.y2, Scene3DRenderer.WALL_HEIGHT_GETTER());
+        // Telhados JÁ colocados no pavimento entram como otherRoofRects
+        // (DEC-122) — se um deles já cobre a parede compartilhada que o
+        // fantasma esbarra, o fantasma não precisa subir pra compensar.
+        var otherRoofRectsT = Store.currentRoofs().map(function (r: any) { return { x1: r.x1, y1: r.y1, x2: r.x2, y2: r.y2 }; });
+        var roofHeightT = Core.roofHeightAtRect(Store.currentWalls(), rectT.x1, rectT.y1, rectT.x2, rectT.y2, Scene3DRenderer.WALL_HEIGHT_GETTER(), otherRoofRectsT);
         drawPreview = { tool: 'telhado', x1: rectT.x1, y1: rectT.y1, x2: rectT.x2, y2: rectT.y2, yOffset: currentFloorYOffset(), roofType: pendingRoofType, pitchDeg: 28, roofBaseHeightM: roofHeightT };
       } else {
         drawPreview = null; // fora de qualquer grid — não mostra prévia, não dá pra colocar ali

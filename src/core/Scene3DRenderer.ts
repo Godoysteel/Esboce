@@ -3681,7 +3681,8 @@ export function hashColorHex(key: string): number {
           // espírito de Core.resolvedWallHeights). Cai pro padrão do
           // pavimento quando não há cômodo fechado sob o telhado. Ático
           // continua usando `baseHeightM` — campo próprio, deliberado.
-          var roofOwnHeight = roof.atticMode ? (roof.baseHeightM || 1.2) : Core.roofHeightAtRect(floorData.walls, roof.x1, roof.y1, roof.x2, roof.y2, currentWallHeight);
+          var otherRoofRects = floorData.roofs.filter(function (r: any) { return r.id !== roof.id; }).map(function (r: any) { return { x1: r.x1, y1: r.y1, x2: r.x2, y2: r.y2 }; });
+          var roofOwnHeight = roof.atticMode ? (roof.baseHeightM || 1.2) : Core.roofHeightAtRect(floorData.walls, roof.x1, roof.y1, roof.x2, roof.y2, currentWallHeight, otherRoofRects);
           var pieceBaseY = yOffset + roofOwnHeight;
           var pieces = buildRoofPiece(roof, scale, offsetX, offsetY, pieceBaseY, viewState, wallMatchColor);
           if (roof.atticMode === 'preview') pieces.forEach(function (piece) {

@@ -1056,7 +1056,19 @@ export function roomAtPoint(wallList: Wall[], x: number, y: number): Room | null
 // cujas PONTAS caem dentro do retângulo — mesma regra "nunca mais baixo
 // que a parede compartilhada mais alta" já usada em toda a cadeia
 // DEC-88/92/94, agora também pro telhado.
-export function roofHeightAtRect(wallList: Wall[], x1: number, y1: number, x2: number, y2: number, floorDefaultHeightM: number): number {
+// otherRoofRects (opcional, DEC-122): retângulos dos DEMAIS telhados já
+// colocados no pavimento (o chamador exclui o próprio, quando existir).
+// Antes de forçar ESTE telhado a subir por causa de uma parede
+// compartilhada mais alta que ele toca, checa se algum outro telhado já
+// cobre essa mesma parede numa altura suficiente — se cobre, a parede já
+// está fechada por cima por outro telhado (dois cômodos de verdade, cada
+// um com o telhado pretendido, não o mesmo telhado cobrindo os dois — ver
+// DEC-95 pro cenário original, de UM telhado só, onde essa parede ficava
+// sem cobertura nenhuma), e este aqui não precisa mais compensar.
+export function roofHeightAtRect(
+  wallList: Wall[], x1: number, y1: number, x2: number, y2: number, floorDefaultHeightM: number,
+  otherRoofRects?: { x1: number; y1: number; x2: number; y2: number }[],
+): number {
   const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
   const room = roomAtPoint(wallList, cx, cy);
   let height = floorDefaultHeightM;
@@ -1064,16 +1076,32 @@ export function roofHeightAtRect(wallList: Wall[], x1: number, y1: number, x2: n
     const roomWallIds = findRoomWallIds(wallList, room);
     height = roomOwnHeightM(wallList, roomWallIds, floorDefaultHeightM);
   }
-  const minX = Math.min(x1, x2), maxX = Math.max(x1, x2);
-  const minY = Math.min(y1, y2), maxY = Math.max(y1, y2);
-  const resolved = resolvedWallHeights(wallList, floorDefaultHeightM);
-  const inRect = (px: number, py: number) => (
+  const inRectBounds = (px: number, py: number, minX: number, minY: number, maxX: number, maxY: number) => (
     px >= minX - COINCIDENCE_TOL && px <= maxX + COINCIDENCE_TOL && py >= minY - COINCIDENCE_TOL && py <= maxY + COINCIDENCE_TOL
   );
+  const minX = Math.min(x1, x2), maxX = Math.max(x1, x2);
+  const minY = Math.min(y1, y2), maxY = Math.max(y1, y2);
+  const inRect = (px: number, py: number) => inRectBounds(px, py, minX, minY, maxX, maxY);
+  const resolved = resolvedWallHeights(wallList, floorDefaultHeightM);
+  const coveredByOtherRoof = (wall: Wall, wallHeight: number): boolean => {
+    if (!otherRoofRects || !otherRoofRects.length) return false;
+    return otherRoofRects.some((other) => {
+      const oMinX = Math.min(other.x1, other.x2), oMaxX = Math.max(other.x1, other.x2);
+      const oMinY = Math.min(other.y1, other.y2), oMaxY = Math.max(other.y1, other.y2);
+      const otherTouches = inRectBounds(wall.x1, wall.y1, oMinX, oMinY, oMaxX, oMaxY) || inRectBounds(wall.x2, wall.y2, oMinX, oMinY, oMaxX, oMaxY);
+      if (!otherTouches) return false;
+      const otherRoom = roomAtPoint(wallList, (other.x1 + other.x2) / 2, (other.y1 + other.y2) / 2);
+      if (!otherRoom) return false;
+      const otherHeight = roomOwnHeightM(wallList, findRoomWallIds(wallList, otherRoom), floorDefaultHeightM);
+      return otherHeight >= wallHeight - 1e-6;
+    });
+  };
   wallList.forEach((wall) => {
     if (!inRect(wall.x1, wall.y1) && !inRect(wall.x2, wall.y2)) return;
     const wallHeight = resolved[wall.id];
-    if (wallHeight != null && wallHeight > height) height = wallHeight;
+    if (wallHeight == null || wallHeight <= height) return;
+    if (coveredByOtherRoof(wall, wallHeight)) return;
+    height = wallHeight;
   });
   return height;
 }

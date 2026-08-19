@@ -1419,11 +1419,52 @@ test('roofHeightAtRect: nunca fica mais baixo que a parede COMPARTILHADA mais al
   assert.equal(rectNotTouchingShared, 2.7, 'sem tocar a parede compartilhada, cai só na altura do cômodo do centro');
 });
 
+// Product Owner, com print de dois cômodos de alturas diferentes lado a
+// lado: "eu tento colocar telhado no cômodo mais baixo e ele sobe
+// automaticamente para o nível do cômodo superior... devemos criar um
+// sistema para que ele exclua a parte do telhado que invadiu o cômodo
+// superior e que ele permaneça no nível pretendido." Diferente do
+// cenário da DEC-95 (UM telhado só, cobrindo um formato em L, com a
+// parede compartilhada sem teto NENHUM por cima) — aqui são DOIS
+// cômodos de verdade, cada um com o telhado pretendido, e o cômodo alto
+// já tem telhado próprio cobrindo a parede compartilhada. Forçar o
+// telhado baixo a subir pra "consertar" isso destrói a própria intenção
+// de ter alturas diferentes.
+test('roofHeightAtRect: telhado do cômodo baixo NÃO sobe por causa da parede compartilhada se outro telhado já colocado cobre essa parede (DEC-122)', () => {
+  const walls = twoRoomsSharingWall();
+  // Cômodo B levantado pra 4,5m — a parede compartilhada segue junto.
+  ['b1', 'b2', 'b3', 'shared'].forEach((id) => { walls.find((w) => w.id === id).heightM = 4.5; });
+
+  // Sem nenhum outro telhado: comportamento de antes (DEC-95) preservado
+  // — a parede compartilhada mais alta ainda puxa o telhado do cômodo A
+  // (baixo) pra cima, porque não há garantia de que ela esteja coberta
+  // por outro lugar.
+  const withoutOtherRoof = roofHeightAtRect(walls, 0, 0, 60, 60, 2.7);
+  assert.equal(withoutOtherRoof, 4.5);
+
+  // Com um telhado já colocado sobre o cômodo B (cobrindo a parede
+  // compartilhada na altura certa): o telhado do cômodo A fica na altura
+  // PRÓPRIA dele (2,7m) — a parede compartilhada aparece exposta acima
+  // dele na fronteira, visual de ampliação mais baixa encostada na parte
+  // alta da casa, em vez de inflar o cômodo A inteiro.
+  const otherRoofOverB = [{ x1: 60, y1: 0, x2: 120, y2: 60 }];
+  const withOtherRoofOverB = roofHeightAtRect(walls, 0, 0, 60, 60, 2.7, otherRoofOverB);
+  assert.equal(withOtherRoofOverB, 2.7);
+
+  // Controle: um "outro telhado" que existe mas NÃO cobre a parede
+  // compartilhada (longe dali) não muda nada — a parede continua sem
+  // cobertura garantida, então a regra da DEC-95 ainda vale.
+  const otherRoofElsewhere = [{ x1: 500, y1: 500, x2: 600, y2: 600 }];
+  const withOtherRoofElsewhere = roofHeightAtRect(walls, 0, 0, 60, 60, 2.7, otherRoofElsewhere);
+  assert.equal(withOtherRoofElsewhere, 4.5);
+});
+
 test('ViewportController: hover da ferramenta Telhado calcula Core.roofHeightAtRect e grava em drawPreview.roofBaseHeightM', () => {
   const hoverStart = viewportControllerSource.indexOf("if (currentTool === 'telhado' && !placingDraw && !selectedRoofId) {");
   assert.notEqual(hoverStart, -1);
-  const hoverBlock = viewportControllerSource.slice(hoverStart, hoverStart + 1200);
-  assert.match(hoverBlock, /var roofHeightT = Core\.roofHeightAtRect\(Store\.currentWalls\(\), rectT\.x1, rectT\.y1, rectT\.x2, rectT\.y2, Scene3DRenderer\.WALL_HEIGHT_GETTER\(\)\);/);
+  const hoverBlock = viewportControllerSource.slice(hoverStart, hoverStart + 1600);
+  assert.match(hoverBlock, /var otherRoofRectsT = Store\.currentRoofs\(\)\.map\(/);
+  assert.match(hoverBlock, /var roofHeightT = Core\.roofHeightAtRect\(Store\.currentWalls\(\), rectT\.x1, rectT\.y1, rectT\.x2, rectT\.y2, Scene3DRenderer\.WALL_HEIGHT_GETTER\(\), otherRoofRectsT\);/);
   assert.match(hoverBlock, /roofBaseHeightM: roofHeightT/);
 });
 
@@ -1437,9 +1478,10 @@ test('Scene3DRenderer: prévia (ghost) do telhado usa drawPreview.roofBaseHeight
   assert.match(ghostBlock, /p\.yOffset \+ ghostRoofHeight \+ 0\.01/);
   assert.match(ghostBlock, /p\.yOffset \+ ghostRoofHeight, viewState/);
 
+  assert.match(scene3DRendererSource, /var otherRoofRects = floorData\.roofs\.filter\(function \(r: any\) \{ return r\.id !== roof\.id; \}\)\.map\(/);
   assert.match(
     scene3DRendererSource,
-    /var roofOwnHeight = roof\.atticMode \? \(roof\.baseHeightM \|\| 1\.2\) : Core\.roofHeightAtRect\(floorData\.walls, roof\.x1, roof\.y1, roof\.x2, roof\.y2, currentWallHeight\);/
+    /var roofOwnHeight = roof\.atticMode \? \(roof\.baseHeightM \|\| 1\.2\) : Core\.roofHeightAtRect\(floorData\.walls, roof\.x1, roof\.y1, roof\.x2, roof\.y2, currentWallHeight, otherRoofRects\);/
   );
 });
 
