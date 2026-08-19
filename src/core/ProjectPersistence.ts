@@ -21,13 +21,7 @@ import type {
 // painéis já salvos antes desta versão (DEC-118). Documentos v9 e anteriores
 // abrem normalmente; sem o campo, o painel usa o sinal padrão (+1) até ser
 // reanexado a uma parede, quando passa a gravar o lado correto.
-// v11: `baseHeightM` do Roof comum (não-ático) passa a ser lido/gravado —
-// antes só existia pra `atticMode` (DEC-123). Ausente continua significando
-// "vivo" (recalculado a cada render); presente = altura congelada pela seta
-// de ajuste manual ou por um arrasto de alça. Documentos v10 e anteriores
-// nunca têm o campo aqui e continuam abrindo "vivos", sem mudança de
-// comportamento.
-export const CURRENT_PROJECT_SCHEMA_VERSION = 11;
+export const CURRENT_PROJECT_SCHEMA_VERSION = 10;
 
 export interface StoredProjectDocument {
   schemaVersion: number;
@@ -208,15 +202,6 @@ function parseRoof(value: unknown, path: string): Roof {
   if (roof.atticMode) {
     roof.baseHeightM = number(v.baseHeightM, `${path}.baseHeightM`, 1.2);
     roof.atticWallIds = array(v.atticWallIds, `${path}.atticWallIds`, true).map((id, index) => string(id, `${path}.atticWallIds[${index}]`));
-  } else {
-    // Telhado comum (DEC-123): baseHeightM AUSENTE (não o default 1.2 do
-    // ático acima) significa "vivo" — recalculado a cada render. Só
-    // grava se o documento realmente trouxe o campo (congelado pela seta
-    // de ajuste manual ou por um arrasto de alça antes de salvar);
-    // documentos v10 e anteriores nunca têm esse campo aqui, e continuam
-    // abrindo "vivos" normalmente.
-    const manualBaseHeightM = optionalNumber(v.baseHeightM, `${path}.baseHeightM`);
-    if (manualBaseHeightM !== undefined) roof.baseHeightM = manualBaseHeightM;
   }
   return roof;
 }

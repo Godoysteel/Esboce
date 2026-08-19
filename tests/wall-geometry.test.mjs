@@ -30,7 +30,6 @@ import {
   resolvedWallHeights,
   roomAtPoint,
   roofHeightAtRect,
-  roofCandidateHeightsAtRect,
   wallOBB,
   wallsCanFuse,
   wallsMeetAtEndpoint,
@@ -1420,15 +1419,56 @@ test('roofHeightAtRect: nunca fica mais baixo que a parede COMPARTILHADA mais al
   assert.equal(rectNotTouchingShared, 2.7, 'sem tocar a parede compartilhada, cai só na altura do cômodo do centro');
 });
 
+// Product Owner, com print de dois cômodos de alturas diferentes lado a
+// lado: "eu tento colocar telhado no cômodo mais baixo e ele sobe
+// automaticamente para o nível do cômodo superior... devemos criar um
+// sistema para que ele exclua a parte do telhado que invadiu o cômodo
+// superior e que ele permaneça no nível pretendido." Diferente do
+// cenário da DEC-95 (UM telhado só, cobrindo um formato em L, com a
+// parede compartilhada sem teto NENHUM por cima) — aqui são DOIS
+// cômodos de verdade, cada um com o telhado pretendido, e o cômodo alto
+// já tem telhado próprio cobrindo a parede compartilhada. Forçar o
+// telhado baixo a subir pra "consertar" isso destrói a própria intenção
+// de ter alturas diferentes.
+test('roofHeightAtRect: telhado do cômodo baixo NÃO sobe por causa da parede compartilhada se outro telhado já colocado cobre essa parede (DEC-122)', () => {
+  const walls = twoRoomsSharingWall();
+  // Cômodo B levantado pra 4,5m — a parede compartilhada segue junto.
+  ['b1', 'b2', 'b3', 'shared'].forEach((id) => { walls.find((w) => w.id === id).heightM = 4.5; });
+
+  // Sem nenhum outro telhado: comportamento de antes (DEC-95) preservado
+  // — a parede compartilhada mais alta ainda puxa o telhado do cômodo A
+  // (baixo) pra cima, porque não há garantia de que ela esteja coberta
+  // por outro lugar.
+  const withoutOtherRoof = roofHeightAtRect(walls, 0, 0, 60, 60, 2.7);
+  assert.equal(withoutOtherRoof, 4.5);
+
+  // Com um telhado já colocado sobre o cômodo B (cobrindo a parede
+  // compartilhada na altura certa): o telhado do cômodo A fica na altura
+  // PRÓPRIA dele (2,7m) — a parede compartilhada aparece exposta acima
+  // dele na fronteira, visual de ampliação mais baixa encostada na parte
+  // alta da casa, em vez de inflar o cômodo A inteiro.
+  const otherRoofOverB = [{ x1: 60, y1: 0, x2: 120, y2: 60 }];
+  const withOtherRoofOverB = roofHeightAtRect(walls, 0, 0, 60, 60, 2.7, otherRoofOverB);
+  assert.equal(withOtherRoofOverB, 2.7);
+
+  // Controle: um "outro telhado" que existe mas NÃO cobre a parede
+  // compartilhada (longe dali) não muda nada — a parede continua sem
+  // cobertura garantida, então a regra da DEC-95 ainda vale.
+  const otherRoofElsewhere = [{ x1: 500, y1: 500, x2: 600, y2: 600 }];
+  const withOtherRoofElsewhere = roofHeightAtRect(walls, 0, 0, 60, 60, 2.7, otherRoofElsewhere);
+  assert.equal(withOtherRoofElsewhere, 4.5);
+});
+
 test('ViewportController: hover da ferramenta Telhado calcula Core.roofHeightAtRect e grava em drawPreview.roofBaseHeightM', () => {
   const hoverStart = viewportControllerSource.indexOf("if (currentTool === 'telhado' && !placingDraw && !selectedRoofId) {");
   assert.notEqual(hoverStart, -1);
   const hoverBlock = viewportControllerSource.slice(hoverStart, hoverStart + 1600);
-  assert.match(hoverBlock, /var roofHeightT = Core\.roofHeightAtRect\(Store\.currentWalls\(\), rectT\.x1, rectT\.y1, rectT\.x2, rectT\.y2, Scene3DRenderer\.WALL_HEIGHT_GETTER\(\)\);/);
+  assert.match(hoverBlock, /var otherRoofRectsT = Store\.currentRoofs\(\)\.map\(/);
+  assert.match(hoverBlock, /var roofHeightT = Core\.roofHeightAtRect\(Store\.currentWalls\(\), rectT\.x1, rectT\.y1, rectT\.x2, rectT\.y2, Scene3DRenderer\.WALL_HEIGHT_GETTER\(\), otherRoofRectsT\);/);
   assert.match(hoverBlock, /roofBaseHeightM: roofHeightT/);
 });
 
-test('Scene3DRenderer: prévia (ghost) do telhado usa drawPreview.roofBaseHeightM, e o telhado já colocado usa Core.roofHeightAtRect (vivo) ou Roof.baseHeightM (congelado)', () => {
+test('Scene3DRenderer: prévia (ghost) do telhado usa drawPreview.roofBaseHeightM, e o telhado já colocado usa Core.roofHeightAtRect por cômodo (DEC-94)', () => {
   const ghostStart = scene3DRendererSource.indexOf("} else if (p.tool === 'telhado') {");
   assert.notEqual(ghostStart, -1);
   const ghostEndMatch = scene3DRendererSource.slice(ghostStart).match(/\r?\n {4}\}\r?\n {2}\}/);
@@ -1438,82 +1478,11 @@ test('Scene3DRenderer: prévia (ghost) do telhado usa drawPreview.roofBaseHeight
   assert.match(ghostBlock, /p\.yOffset \+ ghostRoofHeight \+ 0\.01/);
   assert.match(ghostBlock, /p\.yOffset \+ ghostRoofHeight, viewState/);
 
+  assert.match(scene3DRendererSource, /var otherRoofRects = floorData\.roofs\.filter\(function \(r: any\) \{ return r\.id !== roof\.id; \}\)\.map\(/);
   assert.match(
     scene3DRendererSource,
-    /var roofOwnHeight = roof\.atticMode \? \(roof\.baseHeightM \|\| 1\.2\)\r?\n\s*: \(roof\.baseHeightM != null \? roof\.baseHeightM : Core\.roofHeightAtRect\(floorData\.walls, roof\.x1, roof\.y1, roof\.x2, roof\.y2, currentWallHeight\)\);/
+    /var roofOwnHeight = roof\.atticMode \? \(roof\.baseHeightM \|\| 1\.2\) : Core\.roofHeightAtRect\(floorData\.walls, roof\.x1, roof\.y1, roof\.x2, roof\.y2, currentWallHeight, otherRoofRects\);/
   );
-});
-
-// Product Owner, com print de dois cômodos de alturas diferentes lado a
-// lado: "quando gera o telhado ele aparece no nível mais alto, sempre,
-// nesse mesmo momento aparece uma seta grande visivel apontando para
-// baixo, se clicar na seta ele desce para o nivel seguinte
-// progressivamente, se clicar fora ou arrastar ela pelas alças, então a
-// seta esconde e mantem no mesmo nível. Toda parte do telhado que
-// sobrepor uma parede deve ser excluida." Substitui a tentativa anterior
-// (DEC-122, automática — telhado descia sozinho se um outro já cobrisse
-// a parede) por um controle manual explícito.
-test('Core.roofCandidateHeightsAtRect devolve todos os degraus, do mais alto pro mais baixo — roofHeightAtRect é sempre o primeiro', () => {
-  const walls = twoRoomsSharingWall();
-  ['b1', 'b2', 'b3', 'shared'].forEach((id) => { walls.find((w) => w.id === id).heightM = 4.5; });
-
-  const candidatesOverA = roofCandidateHeightsAtRect(walls, 0, 0, 60, 60, 2.7);
-  assert.deepEqual(candidatesOverA, [4.5, 2.7]);
-  assert.equal(roofHeightAtRect(walls, 0, 0, 60, 60, 2.7), candidatesOverA[0]);
-
-  // Sem tocar a parede compartilhada: só o degrau da altura própria.
-  const candidatesOverB = roofCandidateHeightsAtRect(walls, 65, 5, 115, 55, 2.7);
-  assert.deepEqual(candidatesOverB, [4.5]);
-});
-
-test('Store.commands.stepRoofHeightDown desce um degrau por clique e grava em Roof.baseHeightM (congela); parado no degrau mais baixo não faz nada', () => {
-  const start = storeSource.indexOf('stepRoofHeightDown(roofId: string): boolean {');
-  const end = storeSource.indexOf('\n  },', start);
-  const body = storeSource.slice(start, end);
-  assert.match(body, /if \(!r \|\| r\.atticMode\) return false;/);
-  assert.match(body, /const candidates = Core\.roofCandidateHeightsAtRect\(walls, r\.x1, r\.y1, r\.x2, r\.y2, Core\.WALL_HEIGHT\);/);
-  assert.match(body, /const next = candidates\.find\(\(h\) => h < currentHeight - 1e-6\);/);
-  assert.match(body, /if \(next == null\) return false;/);
-  assert.match(body, /r\.baseHeightM = next;/);
-});
-
-test('Store.commands.freezeRoofHeight congela a altura VIVA atual — não mexe se já tiver Roof.baseHeightM ou for ático, e não empilha undo', () => {
-  const start = storeSource.indexOf('freezeRoofHeight(roofId: string): void {');
-  const end = storeSource.indexOf('\n  },', start);
-  const body = storeSource.slice(start, end);
-  assert.match(body, /if \(!r \|\| r\.atticMode \|\| r\.baseHeightM != null\) return;/);
-  assert.match(body, /r\.baseHeightM = Core\.roofHeightAtRect\(walls, r\.x1, r\.y1, r\.x2, r\.y2, Core\.WALL_HEIGHT\);/);
-  assert.doesNotMatch(body, /pushUndoSnapshot\(\)/);
-});
-
-test('ViewportController: telhado comum nasce armado (heightAdjustArmedRoofId), ático não; a seta desarma sozinha ao trocar de seleção (render()) e ao soltar arrasto pelas alças', () => {
-  assert.match(viewportControllerSource, /if \(!newRoof\.atticMode\) heightAdjustArmedRoofId = newRoof\.id;/);
-  assert.match(viewportControllerSource, /function freezeArmedRoofHeightAdjust\(\) \{/);
-  assert.match(viewportControllerSource, /if \(heightAdjustArmedRoofId && heightAdjustArmedRoofId !== selectedRoofId\) freezeArmedRoofHeightAdjust\(\);/);
-  // desarma nos 3 pontos de soltar arrasto pelas alças (borda, cumeeira/parapeito, conjunto conectado)
-  const freezeCallCount = (viewportControllerSource.match(/freezeArmedRoofHeightAdjust\(\)/g) || []).length;
-  assert.ok(freezeCallCount >= 4, 'esperava a função + pelo menos 3 pontos de desarme no soltar do arrasto');
-  assert.match(viewportControllerSource, /if \(handle === 'roofHeightStepDown'\) \{/);
-  assert.match(viewportControllerSource, /Store\.commands\.stepRoofHeightDown\(selectedRoofId\);/);
-});
-
-test('pickHandle reconhece THREE.Sprite (não só Mesh) — a seta de ajuste é um Sprite, sem isso nunca seria clicável', () => {
-  const start = viewportControllerSource.indexOf('function pickHandle(clientX: any, clientY: any) {');
-  const end = viewportControllerSource.indexOf('\n  }', start);
-  const body = viewportControllerSource.slice(start, end);
-  assert.match(body, /\(o\.isMesh \|\| o\.isSprite\) && o\.userData && o\.userData\.handle/);
-});
-
-test('Scene3DRenderer: telhado comum sobrepondo uma parede mais alta recorta a fatia que passa por dentro dela — regra geral, qualquer parede', () => {
-  const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
-  assert.notEqual(roofsStart, -1);
-  const roofsEnd = scene3DRendererSource.indexOf('if (layers.varanda && floorData.varandas) {', roofsStart);
-  assert.notEqual(roofsEnd, -1);
-  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsEnd);
-  assert.match(roofsBlock, /var wallTopHeights = Core\.resolvedWallHeights\(floorData\.walls, currentWallHeight\);/);
-  assert.match(roofsBlock, /plane: \{ ax: 0, az: 0, c: wallTopY \}/);
-  assert.match(roofsBlock, /var roofWallClipRects = wallClipRects\.filter\(function \(rect: any\) \{ return rectsOverlapArea\(ownFootprint, rect\) > 1e-6; \}\);/);
-  assert.match(roofsBlock, /trimRects = trimRects\.concat\(roofWallClipRects\);/);
 });
 
 // DEC-90 — botão "Gerar Laje": cômodo nasce sem laje visível/contabilizada;

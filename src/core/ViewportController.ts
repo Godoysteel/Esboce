@@ -72,24 +72,6 @@ import {
   // ao trocar seleção — nunca fica "ligada" à toa esperando um agarrão
   // acidental.
   var heightAdjustArmedWallId: any = null;
-  // Seta de ajuste manual da altura do telhado comum (DEC-123) — mesmo
-  // espírito de heightAdjustArmedWallId acima, mas armada automaticamente
-  // ao criar o telhado (não precisa de um botão dedicado pra armar,
-  // diferente da parede) e desarmada (com congelamento — ver
-  // freezeArmedRoofHeightAdjust) ao trocar de seleção ou soltar um
-  // arrasto pelas alças de redimensionar do próprio telhado.
-  var heightAdjustArmedRoofId: any = null;
-  // Congela a altura viva do telhado armado (Roof.baseHeightM passa a
-  // existir) e desarma a seta — usado quando o usuário solta um arrasto
-  // pelas alças de redimensionar do próprio telhado enquanto ele ainda
-  // estava armado (a troca de seleção, o outro gatilho de desarmar, é
-  // pega de graça dentro de render() — ver lá).
-  function freezeArmedRoofHeightAdjust() {
-    if (!heightAdjustArmedRoofId) return;
-    var frozenRoofId = heightAdjustArmedRoofId;
-    heightAdjustArmedRoofId = null;
-    Store.commands.freezeRoofHeight(frozenRoofId);
-  }
   // Planta baixa importada: singular por pavimento (não tem ID de
   // lista pra selecionar), então a "seleção" é só um flag — true
   // quando existe planUnderlay no pavimento atual E o usuário clicou
@@ -697,12 +679,7 @@ import {
     var rect = container.getBoundingClientRect();
     var mouse = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
     raycaster.setFromCamera(mouse, camera);
-    // (o.isMesh || o.isSprite): a seta de ajuste de altura do telhado
-    // (DEC-123) é um THREE.Sprite, não um Mesh — sem o `isSprite` aqui
-    // ela nunca seria encontrada pelo raycast, mesmo visível na cena
-    // (mesma classe de bug já corrigida em pickMesh pro THREE.Group da
-    // caixa d'água, ver DEC-117).
-    var targets = scene.children.filter(function (o: any) { return (o.isMesh || o.isSprite) && o.userData && o.userData.handle; });
+    var targets = scene.children.filter(function (o: any) { return o.isMesh && o.userData && o.userData.handle; });
     var hits = raycaster.intersectObjects(targets, false);
     return hits.length ? hits[0]!.object.userData.handle : null;
   }
@@ -1389,16 +1366,6 @@ import {
 
   function render() {
     if (selectedHydraulicNodeId && (selectedWallId || selectedColumnId || selectedRoofId || selectedOpeningId || selectedVarandaId || selectedLajeId || selectedFurnitureId || selectedGlazingPanelId || selectedVolumeBoxId || selectedRoomWallIds)) selectedHydraulicNodeId = null;
-    // Seta de ajuste manual do telhado (DEC-123): se o telhado armado não
-    // é mais o selecionado (usuário clicou em outra coisa, ou deselecionou
-    // — toda função select*/deselect() já zera selectedRoofId ou troca
-    // pra outro id), congela a altura viva atual e desarma — checagem
-    // preguiçosa aqui (chamada única, cobre QUALQUER caminho de seleção,
-    // sem precisar duplicar a checagem em cada select* função). Seguro
-    // chamar Store.commands aqui: Store.onChange (EsboceApplication.ts)
-    // agenda o refresh via requestAnimationFrame, não re-renderiza na
-    // hora — sem risco de reentrância.
-    if (heightAdjustArmedRoofId && heightAdjustArmedRoofId !== selectedRoofId) freezeArmedRoofHeightAdjust();
     var project = Store.getProject();
     var selectedWall = selectedWallId ? Store.findWall(selectedWallId) : null;
     var selectedColumn = selectedColumnId ? Store.findColumn(selectedColumnId) : null;
@@ -1421,7 +1388,6 @@ import {
       roomGroupWallIds: selectedRoomWallIds,
       resizeWallId: resizeWallId,
       heightAdjustArmedWallId: heightAdjustArmedWallId,
-      heightAdjustArmedRoofId: heightAdjustArmedRoofId,
       drawPreview: drawPreview,
       terrenoToolActive: currentTool === 'terreno'
     });
@@ -2332,11 +2298,6 @@ import {
     // colocado (ou coloca um novo em cima do cômodo sob o cursor).
     if (currentTool === 'telhado') {
       var handleT = pickHandle(e.clientX, e.clientY);
-      if (handleT === 'roofHeightStepDown') {
-        Store.commands.stepRoofHeightDown(selectedRoofId);
-        render();
-        return;
-      }
       if (handleT && (handleT === 'roofRidge' || handleT === 'roofBaseHeight' || handleT === 'roofParapetHeight' || handleT.indexOf('roofEdge') === 0)) {
         dragMode = handleT;
         var rrT = Store.findRoof(selectedRoofId);
@@ -2373,13 +2334,6 @@ import {
       var rectClick = clampRectToRegion(cx - half, cy - half, cx + half, cy + half, regionClick);
       var newRoof = Store.commands.createRoof(rectClick.x1, rectClick.y1, rectClick.x2, rectClick.y2, pendingRoofType as any, pendingRoofAttic);
       if (newRoof) {
-        // Arma a seta de ajuste manual (DEC-123) já nascendo com o
-        // telhado — não precisa de um botão dedicado pra armar, diferente
-        // da altura de parede (DEC-116). Só telhado comum: ático já tem
-        // sua própria alça de arrasto (roofBaseHeight), não precisa da
-        // seta. Setado ANTES de selectRoof (que já chama render()) pra
-        // não precisar de um segundo render só pra mostrar a seta.
-        if (!newRoof.atticMode) heightAdjustArmedRoofId = newRoof.id;
         selectRoof(newRoof.id);
         // Botão "de pulso": Telhado não fica armado depois de colocar
         // um — a ferramenta desativa sozinha (volta pro modo seleção
@@ -2410,16 +2364,6 @@ import {
         // cima/baixo pra aumentar/diminuir a altura do CÔMODO inteiro,
         // não só desta parede.
         startRoomHeightDrag(selectedWallId, e.clientY);
-        return;
-      }
-      if (handle === 'roofHeightStepDown') {
-        // Seta de ajuste manual da altura do telhado (DEC-123) — ação
-        // imediata de UM clique (não é arrasto): desce um degrau e já
-        // grava, sem dragMode nenhum. Continua armada pra próximos
-        // cliques — só desarma ao deselecionar ou soltar um arrasto
-        // pelas alças de verdade (ver render()/pointerup).
-        Store.commands.stepRoofHeightDown(selectedRoofId);
-        render();
         return;
       }
       dragMode = handle; // 'endpoint1' | 'endpoint2' | 'roofRidge' | 'roofParapetHeight' | 'roofEdge*' | 'varandaEdge*' | 'lajeEdge*'
@@ -3320,10 +3264,11 @@ import {
         // retângulo (Core.roofHeightAtRect, mesma regra da laje) — arrastar
         // o fantasma pra cima de um cômodo mais alto sobe o telhado junto,
         // em vez de ficar preso na altura padrão do pavimento inteiro.
-        // Sempre o degrau mais alto (DEC-95/123) — a seta de ajuste manual
-        // só existe DEPOIS do telhado colocado (Store.commands.createRoof),
-        // não durante o fantasma.
-        var roofHeightT = Core.roofHeightAtRect(Store.currentWalls(), rectT.x1, rectT.y1, rectT.x2, rectT.y2, Scene3DRenderer.WALL_HEIGHT_GETTER());
+        // Telhados JÁ colocados no pavimento entram como otherRoofRects
+        // (DEC-122) — se um deles já cobre a parede compartilhada que o
+        // fantasma esbarra, o fantasma não precisa subir pra compensar.
+        var otherRoofRectsT = Store.currentRoofs().map(function (r: any) { return { x1: r.x1, y1: r.y1, x2: r.x2, y2: r.y2 }; });
+        var roofHeightT = Core.roofHeightAtRect(Store.currentWalls(), rectT.x1, rectT.y1, rectT.x2, rectT.y2, Scene3DRenderer.WALL_HEIGHT_GETTER(), otherRoofRectsT);
         drawPreview = { tool: 'telhado', x1: rectT.x1, y1: rectT.y1, x2: rectT.x2, y2: rectT.y2, yOffset: currentFloorYOffset(), roofType: pendingRoofType, pitchDeg: 28, roofBaseHeightM: roofHeightT };
       } else {
         drawPreview = null; // fora de qualquer grid — não mostra prévia, não dá pra colocar ali
@@ -3539,10 +3484,6 @@ import {
         );
       }
       roofGroupDragObjects = [];
-      // Arrastar pelas alças desarma a seta de ajuste (DEC-123) — o
-      // usuário já está mexendo na posição/altura manualmente, o "nível
-      // mais alto automático" deixa de fazer sentido.
-      if (dragElementStart && dragElementStart.snapshots && dragElementStart.snapshots.some(function (s: any) { return s.id === heightAdjustArmedRoofId; })) freezeArmedRoofHeightAdjust();
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       hintEl.textContent = 'Cobertura conectada movida como um conjunto.';
       return;
@@ -3566,10 +3507,6 @@ import {
         hintEl.textContent = 'Telhados fundidos — a cumeeira agora é uma só.';
         onModelChanged();
       }
-      // Depois do redimensionamento aplicado (bounds novos já valem pro
-      // cálculo da altura congelada) — arrastar pela borda desarma a
-      // seta de ajuste (DEC-123).
-      if (heightAdjustArmedRoofId === selectedRoofId) freezeArmedRoofHeightAdjust();
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }
@@ -3588,8 +3525,6 @@ import {
         hintEl.textContent = 'Telhados fundidos — a cumeeira agora é uma só.';
         onModelChanged();
       }
-      // Arrastar a cumeeira/parapeito desarma a seta de ajuste (DEC-123).
-      if (heightAdjustArmedRoofId === selectedRoofId) freezeArmedRoofHeightAdjust();
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }

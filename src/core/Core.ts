@@ -1037,43 +1037,73 @@ export function roomAtPoint(wallList: Wall[], x: number, y: number): Room | null
   return rooms.find((room) => pointInPolygon(x, y, room.points)) || null;
 }
 
-// Todas as alturas CANDIDATAS de apoio do TELHADO no retângulo
-// (x1,y1)-(x2,y2), da mais alta pra mais baixa — a primeira (índice 0) é
-// sempre o que Core.roofHeightAtRect devolve. A base é a altura PRÓPRIA
-// do cômodo embaixo do CENTRO (mesma regra já usada pra laje,
-// Core.roomOwnHeightM), caindo pro padrão do pavimento quando não há
-// cômodo fechado ali. Cada parede cujas PONTAS caem dentro do retângulo e
-// cuja Core.resolvedWallHeights supera essa base vira mais um degrau na
-// lista — normalmente a parede COMPARTILHADA com um cômodo vizinho mais
-// alto (DEC-95: sem isso, essa parede "furava" o telhado por cima).
-// Recalculada do zero a cada chamada — mesmo espírito de
+// Altura de apoio do TELHADO no retângulo (x1,y1)-(x2,y2) — parte do
+// cômodo embaixo do CENTRO (mesma regra de "altura própria" já usada pra
+// laje, Core.roomOwnHeightM), caindo pro padrão do pavimento quando não
+// há cômodo fechado ali (ex.: área externa, ou vão ainda sem paredes
+// fechando). Recalculada do zero a cada chamada — mesmo espírito de
 // Core.resolvedWallHeights: não guarda um valor que possa ficar
-// desatualizado se o cômodo mudar de altura depois. Usada tanto por
-// Core.roofHeightAtRect (nasce sempre no degrau mais alto) quanto pela
-// seta de ajuste manual (DEC-123 — cada clique desce um degrau).
-export function roofCandidateHeightsAtRect(wallList: Wall[], x1: number, y1: number, x2: number, y2: number, floorDefaultHeightM: number): number[] {
+// desatualizado se o cômodo mudar de altura depois.
+//
+// Correção pós-lançamento: um único retângulo de telhado pode tocar
+// paredes de MAIS de um cômodo (o centro cai num cômodo baixo, mas uma
+// borda do retângulo esbarra numa parede COMPARTILHADA com um cômodo
+// mais alto) — só olhar o cômodo do centro deixava essa parede
+// compartilhada "furando" o telhado por cima (a mesma parede, resolvida
+// certo pra 3,97m via Core.resolvedWallHeights, ficava mais alta que o
+// telhado apoiado nos 2,7m do cômodo do centro). Por isso o resultado
+// nunca fica abaixo da maior Core.resolvedWallHeights entre as paredes
+// cujas PONTAS caem dentro do retângulo — mesma regra "nunca mais baixo
+// que a parede compartilhada mais alta" já usada em toda a cadeia
+// DEC-88/92/94, agora também pro telhado.
+// otherRoofRects (opcional, DEC-122): retângulos dos DEMAIS telhados já
+// colocados no pavimento (o chamador exclui o próprio, quando existir).
+// Antes de forçar ESTE telhado a subir por causa de uma parede
+// compartilhada mais alta que ele toca, checa se algum outro telhado já
+// cobre essa mesma parede numa altura suficiente — se cobre, a parede já
+// está fechada por cima por outro telhado (dois cômodos de verdade, cada
+// um com o telhado pretendido, não o mesmo telhado cobrindo os dois — ver
+// DEC-95 pro cenário original, de UM telhado só, onde essa parede ficava
+// sem cobertura nenhuma), e este aqui não precisa mais compensar.
+export function roofHeightAtRect(
+  wallList: Wall[], x1: number, y1: number, x2: number, y2: number, floorDefaultHeightM: number,
+  otherRoofRects?: { x1: number; y1: number; x2: number; y2: number }[],
+): number {
   const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
   const room = roomAtPoint(wallList, cx, cy);
-  const baseHeight = room ? roomOwnHeightM(wallList, findRoomWallIds(wallList, room), floorDefaultHeightM) : floorDefaultHeightM;
-  const minX = Math.min(x1, x2), maxX = Math.max(x1, x2);
-  const minY = Math.min(y1, y2), maxY = Math.max(y1, y2);
-  const inRect = (px: number, py: number) => (
+  let height = floorDefaultHeightM;
+  if (room) {
+    const roomWallIds = findRoomWallIds(wallList, room);
+    height = roomOwnHeightM(wallList, roomWallIds, floorDefaultHeightM);
+  }
+  const inRectBounds = (px: number, py: number, minX: number, minY: number, maxX: number, maxY: number) => (
     px >= minX - COINCIDENCE_TOL && px <= maxX + COINCIDENCE_TOL && py >= minY - COINCIDENCE_TOL && py <= maxY + COINCIDENCE_TOL
   );
+  const minX = Math.min(x1, x2), maxX = Math.max(x1, x2);
+  const minY = Math.min(y1, y2), maxY = Math.max(y1, y2);
+  const inRect = (px: number, py: number) => inRectBounds(px, py, minX, minY, maxX, maxY);
   const resolved = resolvedWallHeights(wallList, floorDefaultHeightM);
-  const heights = new Set<number>([baseHeight]);
+  const coveredByOtherRoof = (wall: Wall, wallHeight: number): boolean => {
+    if (!otherRoofRects || !otherRoofRects.length) return false;
+    return otherRoofRects.some((other) => {
+      const oMinX = Math.min(other.x1, other.x2), oMaxX = Math.max(other.x1, other.x2);
+      const oMinY = Math.min(other.y1, other.y2), oMaxY = Math.max(other.y1, other.y2);
+      const otherTouches = inRectBounds(wall.x1, wall.y1, oMinX, oMinY, oMaxX, oMaxY) || inRectBounds(wall.x2, wall.y2, oMinX, oMinY, oMaxX, oMaxY);
+      if (!otherTouches) return false;
+      const otherRoom = roomAtPoint(wallList, (other.x1 + other.x2) / 2, (other.y1 + other.y2) / 2);
+      if (!otherRoom) return false;
+      const otherHeight = roomOwnHeightM(wallList, findRoomWallIds(wallList, otherRoom), floorDefaultHeightM);
+      return otherHeight >= wallHeight - 1e-6;
+    });
+  };
   wallList.forEach((wall) => {
     if (!inRect(wall.x1, wall.y1) && !inRect(wall.x2, wall.y2)) return;
     const wallHeight = resolved[wall.id];
-    if (wallHeight != null && wallHeight > baseHeight) heights.add(wallHeight);
+    if (wallHeight == null || wallHeight <= height) return;
+    if (coveredByOtherRoof(wall, wallHeight)) return;
+    height = wallHeight;
   });
-  return Array.from(heights).sort((a, b) => b - a);
-}
-
-// Altura de apoio do TELHADO — sempre o degrau mais alto de
-// Core.roofCandidateHeightsAtRect (ver lá pro raciocínio completo).
-export function roofHeightAtRect(wallList: Wall[], x1: number, y1: number, x2: number, y2: number, floorDefaultHeightM: number): number {
-  return roofCandidateHeightsAtRect(wallList, x1, y1, x2, y2, floorDefaultHeightM)[0]!;
+  return height;
 }
 
 // Devolve o contorno inteiro apenas quando a parede clicada pertence a um
@@ -1791,7 +1821,7 @@ export const Core = {
   rectPoints, lajeBounds,
   rectsNearby, pointInPolygon, roomModelBounds, findRoomWallIds, findIsolatedRoomWallIds, wallResizeTopology, resolveWallResizeOffset, computeWallFootprints,
   roomsContainingWall, roomHeightM, roomOwnHeightM, resolveRoomHeightUpdate, resolvedWallHeights,
-  roomAtPoint, roofHeightAtRect, roofCandidateHeightsAtRect,
+  roomAtPoint, roofHeightAtRect,
   wallResizeEndpointNeedsBridge,
   distPointToLine, wallOBB, furnitureOBB, openingOBB, obbOverlapMTV, wallOverlapsForeignOpening, resolveWallOffsetAgainstOpenings, wallsCanFuse, wallsMeetAtEndpoint, resolveWallGroupGridDelta,
   findWallTJunctionSplits,
