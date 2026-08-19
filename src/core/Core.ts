@@ -10,7 +10,7 @@
 import type {
   Point, Wall, Column, ColumnShape, Roof, RoofType, RidgeAxis,
   Varanda, VarandaFrontSide, Laje, Opening, OpeningKind, Floor, Project,
-  Room, WallFootprint, WallOBB, MTV, Interval, Furniture, GlazingPanel, VolumeBox, PlanUnderlay,
+  Room, WallFootprint, WallOBB, MTV, Interval, Furniture, GlazingPanel, BalconyRailing, VolumeBox, PlanUnderlay,
   Terreno, TerrenoMuroSide
 } from './types.js';
 
@@ -249,6 +249,120 @@ export function createGlazingPanelEntity(
   };
 }
 
+// Sacada de vidro (guarda-corpo procedural, categoria Aberturas) —
+// mesmo espírito de peça solta de GlazingPanel, mas SEM máquina de
+// estados preview/attached: nunca encosta em parede (confirmado com o
+// Product Owner — instalação real é na borda de laje/varanda), sempre
+// livre nas 4 direções. Altura fixa nesta versão (só a largura tem
+// alça de arraste, "arrastar pros lados" como a Pele de vidro).
+// Proporções calibradas no modelo de referência enviado pelo Product
+// Owner (Sacada de vidro.glb): módulo de vidro ~1m, altura fixa
+// assumida em 1,10m (norma ABNT NBR 14718 pede mínimo ~1,05-1,10m pra
+// guarda-corpo — o modelo de referência em si tem ~0,93m).
+export const BALCONY_DEFAULT_WIDTH_M = 2.0;
+export const BALCONY_DEFAULT_HEIGHT_M = 1.1;
+export const BALCONY_DEFAULT_MODULE_TARGET_M = 1.0;
+
+export function createBalconyRailingEntity(
+  x: number, y: number, rotationDeg?: number,
+  widthM?: number, heightM?: number, moduleTargetM?: number, id?: string
+): BalconyRailing {
+  return {
+    id: id || nextId('balcony'),
+    widthM: widthM != null ? widthM : BALCONY_DEFAULT_WIDTH_M,
+    heightM: heightM != null ? heightM : BALCONY_DEFAULT_HEIGHT_M,
+    moduleTargetM: moduleTargetM != null ? moduleTargetM : BALCONY_DEFAULT_MODULE_TARGET_M,
+    x, y, rotationDeg: rotationDeg || 0,
+  };
+}
+
+// Tolerância pra detectar duas sacadas se encontrando num canto — mais
+// generosa que COINCIDENCE_TOL (paredes se tocam por construção; aqui é
+// o Product Owner arrastando à mão até "quase" encostar).
+export const RAILING_JOIN_TOL_MODEL = 6; // 0,3m em unidades de grade
+
+export interface BalconyRailingJoint {
+  /** Ponto de encontro em unidades de grade — interseção das duas linhas de centro. */
+  point: Point;
+  /** true = esta ponta desenha o montante de canto; false = só estende a travessa/vidro até `point`, sem montante próprio. */
+  ownsPost: boolean;
+}
+
+export interface BalconyRailingJoints {
+  start?: BalconyRailingJoint;
+  end?: BalconyRailingJoint;
+}
+
+// Resolve o "canto perfeito" entre sacadas de vidro que se encontram —
+// mesmo princípio geométrico de computeWallFootprints (interseção de
+// retas pra achar o ponto de encontro exato), mas bem mais simples: só
+// pares de 2 vias (sem T-junction, sem paredes de espessura variável),
+// e o ponto buscado é a interseção das LINHAS DE CENTRO das duas
+// sacadas (não das faces deslocadas) — como as duas sacadas nascem
+// centradas na mesma altura/profundidade, a linha de centro já é o
+// eixo que tanto o perfil quanto o vidro seguem, então um único ponto
+// de interseção serve pros dois elementos.
+export function computeBalconyRailingJoints(railings: BalconyRailing[]): Record<string, BalconyRailingJoints> {
+  function tip(r: BalconyRailing, end: 1 | 2): Point {
+    const rad = (r.rotationDeg || 0) * Math.PI / 180;
+    const ux = Math.cos(rad), uy = Math.sin(rad);
+    const halfLen = (r.widthM * GRID) / 2;
+    return end === 1
+      ? { x: r.x - ux * halfLen, y: r.y - uy * halfLen }
+      : { x: r.x + ux * halfLen, y: r.y + uy * halfLen };
+  }
+  function leaveDir(r: BalconyRailing, end: 1 | 2): Point {
+    const rad = (r.rotationDeg || 0) * Math.PI / 180;
+    const ux = Math.cos(rad), uy = Math.sin(rad);
+    return end === 1 ? { x: ux, y: uy } : { x: -ux, y: -uy };
+  }
+  function cross(ax: number, ay: number, bx: number, by: number): number {
+    return ax * by - ay * bx;
+  }
+  function intersectLines(p1: Point, d1: Point, p2: Point, d2: Point): Point | null {
+    const denom = cross(d1.x, d1.y, d2.x, d2.y);
+    if (Math.abs(denom) < 1e-9) return null;
+    const t = cross(p2.x - p1.x, p2.y - p1.y, d2.x, d2.y) / denom;
+    return { x: p1.x + d1.x * t, y: p1.y + d1.y * t };
+  }
+
+  const tips: { railing: BalconyRailing; end: 1 | 2; pt: Point }[] = [];
+  railings.forEach((r) => {
+    tips.push({ railing: r, end: 1, pt: tip(r, 1) });
+    tips.push({ railing: r, end: 2, pt: tip(r, 2) });
+  });
+
+  const result: Record<string, BalconyRailingJoints> = {};
+  railings.forEach((r) => { result[r.id] = {}; });
+
+  const consumed = new Set<string>();
+  tips.forEach((t) => {
+    const key = `${t.railing.id}:${t.end}`;
+    if (consumed.has(key)) return;
+    const partner = tips.find((o) =>
+      o.railing.id !== t.railing.id &&
+      !consumed.has(`${o.railing.id}:${o.end}`) &&
+      Math.hypot(o.pt.x - t.pt.x, o.pt.y - t.pt.y) <= RAILING_JOIN_TOL_MODEL
+    );
+    if (!partner) return;
+    const d1 = leaveDir(t.railing, t.end), d2 = leaveDir(partner.railing, partner.end);
+    // Mesmo "limite de mitre" de computeWallFootprints — ângulo raso
+    // demais entre as duas sacadas => sem quina, cada ponta fica livre
+    // (evita canto degenerado/espinho em quase-retas).
+    const joinAngleSin = Math.abs(cross(d1.x, d1.y, d2.x, d2.y));
+    consumed.add(key);
+    consumed.add(`${partner.railing.id}:${partner.end}`);
+    if (joinAngleSin <= 0.5) return;
+    const corner = intersectLines(t.pt, d1, partner.pt, d2);
+    if (!corner) return;
+    const tOwns = t.railing.id < partner.railing.id;
+    result[t.railing.id]![t.end === 1 ? 'start' : 'end'] = { point: corner, ownsPost: tOwns };
+    result[partner.railing.id]![partner.end === 1 ? 'start' : 'end'] = { point: corner, ownsPost: !tOwns };
+  });
+
+  return result;
+}
+
 // Bloco de Volumetria (fachada procedural) — nasce em 'preview', solto
 // na viewport, mesmo padrão do painel de Envidraçamento (GlazingPanel)
 // acima. Tamanho padrão pequeno (1x1x0,3m) — ponto de partida neutro,
@@ -330,7 +444,7 @@ export function lajeBounds(laje: Laje): { minX: number; maxX: number; minY: numb
 }
 
 export function createFloorEntity(name: string, kind: Floor['kind'] = 'standard'): Floor {
-  return { id: nextId('floor'), name, kind, walls: [], columns: [], roofs: [], openings: [], varandas: [], lajes: [], furniture: [], glazingPanels: [], volumeBoxes: [], roomFinishes: {}, roomFinishSettings: {} };
+  return { id: nextId('floor'), name, kind, walls: [], columns: [], roofs: [], openings: [], varandas: [], lajes: [], furniture: [], glazingPanels: [], balconyRailings: [], volumeBoxes: [], roomFinishes: {}, roomFinishSettings: {} };
 }
 
 // x,y: posição do "pé" do móvel no plano do pavimento. rotationDeg: passos
@@ -1786,6 +1900,8 @@ export const Core = {
   createWallEntity, createColumnEntity, createRoofEntity, wallIntersectsRoofFootprint, roofHeightAtModelPoint, atticOpeningMaxTopMeters, openingFitsAtticRoof, atticWallExtensionAreaMeters, createVarandaEntity, createLajeEntity, createFloorEntity,
   createFurnitureEntity,
   createGlazingPanelEntity, GLAZING_DEFAULT_WIDTH_M, GLAZING_DEFAULT_HEIGHT_M, GLAZING_DEFAULT_MODULE_TARGET_M,
+  createBalconyRailingEntity, BALCONY_DEFAULT_WIDTH_M, BALCONY_DEFAULT_HEIGHT_M, BALCONY_DEFAULT_MODULE_TARGET_M,
+  computeBalconyRailingJoints, RAILING_JOIN_TOL_MODEL,
   createVolumeBoxEntity, VOLUME_BOX_DEFAULT_WIDTH_M, VOLUME_BOX_DEFAULT_HEIGHT_M, VOLUME_BOX_DEFAULT_DEPTH_M, VOLUME_BOX_DEFAULT_COLOR,
   createPlanUnderlayEntity, PLAN_UNDERLAY_DEFAULT_WIDTH_M, PLAN_UNDERLAY_DEFAULT_OPACITY,
   createProject, distToSegment, projectOnSegment, detectRooms,

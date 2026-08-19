@@ -1,5 +1,5 @@
 import type {
-  Column, Floor, Furniture, GlazingPanel, VolumeBox, PlanUnderlay, HydraulicNode, HydraulicSegment, Laje, Opening, Project, ProjectLayers, Roof, Terreno, Varanda, Wall,
+  Column, Floor, Furniture, GlazingPanel, BalconyRailing, VolumeBox, PlanUnderlay, HydraulicNode, HydraulicSegment, Laje, Opening, Project, ProjectLayers, Roof, Terreno, Varanda, Wall,
 } from './types.js';
 
 // v6: adiciona `project.terreno` (opcional) — tamanho do lote e muros de
@@ -21,7 +21,12 @@ import type {
 // painéis já salvos antes desta versão (DEC-118). Documentos v9 e anteriores
 // abrem normalmente; sem o campo, o painel usa o sinal padrão (+1) até ser
 // reanexado a uma parede, quando passa a gravar o lado correto.
-export const CURRENT_PROJECT_SCHEMA_VERSION = 10;
+// v11: adiciona `floor.balconyRailings` (Sacada de vidro, categoria
+// Aberturas) — mesmo espírito de GlazingPanel, mas sem máquina de
+// estados preview/attached (nunca encosta em parede, ver Core.ts).
+// Documentos v10 e anteriores abrem normalmente, sem nenhuma sacada
+// (lista vazia).
+export const CURRENT_PROJECT_SCHEMA_VERSION = 11;
 
 export interface StoredProjectDocument {
   schemaVersion: number;
@@ -278,6 +283,32 @@ function parseGlazingPanel(value: unknown, path: string): GlazingPanel {
   return panel;
 }
 
+function parseBalconyRailing(value: unknown, path: string): BalconyRailing {
+  const v = record(value, path);
+  const railing: BalconyRailing = {
+    id: string(v.id, `${path}.id`),
+    x: number(v.x, `${path}.x`),
+    y: number(v.y, `${path}.y`),
+    rotationDeg: number(v.rotationDeg, `${path}.rotationDeg`, 0),
+    widthM: number(v.widthM, `${path}.widthM`),
+    heightM: number(v.heightM, `${path}.heightM`),
+    moduleTargetM: number(v.moduleTargetM, `${path}.moduleTargetM`, 1.0),
+  };
+  if (v.glassMaterial != null) {
+    const material = record(v.glassMaterial, `${path}.glassMaterial`);
+    const color = string(material.color, `${path}.glassMaterial.color`);
+    if (!/^#[0-9a-f]{6}$/i.test(color)) fail(`${path}.glassMaterial.color`, 'cor deve estar no formato #RRGGBB');
+    railing.glassMaterial = {
+      color,
+      opacity: number(material.opacity, `${path}.glassMaterial.opacity`, 0.116),
+      roughness: number(material.roughness, `${path}.glassMaterial.roughness`, 0.2),
+      metalness: number(material.metalness, `${path}.glassMaterial.metalness`, 0),
+      reflectionIntensity: number(material.reflectionIntensity, `${path}.glassMaterial.reflectionIntensity`, 1),
+    };
+  }
+  return railing;
+}
+
 function parseVolumeBox(value: unknown, path: string): VolumeBox {
   const v = record(value, path);
   const box: VolumeBox = {
@@ -385,6 +416,7 @@ function parseFloor(value: unknown, path: string): Floor {
     lajes: array(v.lajes, `${path}.lajes`, true).map((item, i) => parseLaje(item, `${path}.lajes[${i}]`)),
     furniture: array(v.furniture, `${path}.furniture`, true).map((item, i) => parseFurniture(item, `${path}.furniture[${i}]`)),
     glazingPanels: array(v.glazingPanels, `${path}.glazingPanels`, true).map((item, i) => parseGlazingPanel(item, `${path}.glazingPanels[${i}]`)),
+    balconyRailings: array(v.balconyRailings, `${path}.balconyRailings`, true).map((item, i) => parseBalconyRailing(item, `${path}.balconyRailings[${i}]`)),
     volumeBoxes: array(v.volumeBoxes, `${path}.volumeBoxes`, true).map((item, i) => parseVolumeBox(item, `${path}.volumeBoxes[${i}]`)),
     roomFinishes: stringMap(v.roomFinishes, `${path}.roomFinishes`),
     roomFinishSettings: settingsMap(v.roomFinishSettings, `${path}.roomFinishSettings`),
@@ -407,7 +439,7 @@ function parseFloor(value: unknown, path: string): Floor {
   floor.volumeBoxes.forEach((box, index) => {
     if (box.wallId && !wallIds.has(box.wallId)) fail(`${path}.volumeBoxes[${index}].wallId`, 'parede hospedeira não existe');
   });
-  const ids = [...floor.walls, ...floor.columns, ...floor.roofs, ...floor.openings, ...floor.varandas, ...floor.lajes, ...floor.furniture, ...floor.glazingPanels, ...floor.volumeBoxes].map((item) => item.id);
+  const ids = [...floor.walls, ...floor.columns, ...floor.roofs, ...floor.openings, ...floor.varandas, ...floor.lajes, ...floor.furniture, ...floor.glazingPanels, ...floor.balconyRailings, ...floor.volumeBoxes].map((item) => item.id);
   if (new Set(ids).size !== ids.length) fail(path, 'há identificadores de entidades duplicados');
   return floor;
 }

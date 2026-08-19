@@ -9,7 +9,7 @@ import { buildColdWaterKitchenPrototype, buildColdWaterNetworkFromFixtures, buil
 import type {
   Project, Floor, Wall, Column, Roof, Opening, OpeningKind, Varanda, Laje, Furniture, ColumnShape, RoofType,
   RidgeAxis, VarandaFrontSide, FoundationType, StoreEvent, StoreListener,
-  WallSnapshot, LinkedWallUpdate, GlazingPanel, GlazingGlassMaterial, VolumeBox, PlanUnderlay, Terreno, TerrenoMuroSide
+  WallSnapshot, LinkedWallUpdate, GlazingPanel, GlazingGlassMaterial, BalconyRailing, VolumeBox, PlanUnderlay, Terreno, TerrenoMuroSide
 } from './types.js';
 
 let project: Project = Core.createProject();
@@ -116,6 +116,21 @@ export function findLaje(id: string): Laje | null {
 export function findGlazingPanel(id: string): GlazingPanel | null {
   const panels = currentGlazingPanels();
   for (let i = 0; i < panels.length; i++) if (panels[i]!.id === id) return panels[i]!;
+  return null;
+}
+
+export function currentBalconyRailings(): BalconyRailing[] {
+  const f = currentFloor();
+  if (!f.balconyRailings) f.balconyRailings = [];
+  return f.balconyRailings;
+}
+export function balconyRailingsOfFloor(floor: Floor): BalconyRailing[] {
+  if (!floor.balconyRailings) floor.balconyRailings = [];
+  return floor.balconyRailings;
+}
+export function findBalconyRailing(id: string): BalconyRailing | null {
+  const list = currentBalconyRailings();
+  for (let i = 0; i < list.length; i++) if (list[i]!.id === id) return list[i]!;
   return null;
 }
 
@@ -1305,6 +1320,80 @@ export const commands = {
     emit({ type: 'GlazingPanelDeleted', glazingPanelId });
   },
 
+  // Sacada de vidro (guarda-corpo procedural, categoria Aberturas) —
+  // mesmo espírito de peça solta do painel de Envidraçamento acima, mas
+  // sem máquina de estados preview/attached: nunca encosta em parede
+  // (confirmado com o Product Owner — "sim solta, pode ser deslocada
+  // para as quatro direções"), sempre livre. Altura fixa nesta versão;
+  // só a largura tem alça de arraste (esquerda/direita).
+  createBalconyRailing(x: number, y: number): BalconyRailing | null {
+    pushUndoSnapshot();
+    const r = Core.createBalconyRailingEntity(x, y);
+    currentBalconyRailings().push(r);
+    emit({ type: 'BalconyRailingCreated', floorIndex: project.currentFloorIndex, balconyRailingId: r.id });
+    return r;
+  },
+
+  // Arrasta o corpo livremente nas 4 direções — mesmo padrão "Live" de
+  // updateGlazingPanelBodyLive, sem a etapa de ímã de parede (a sacada
+  // nunca encosta).
+  updateBalconyRailingBodyLive(balconyRailingId: string, x: number, y: number): void {
+    const r = findBalconyRailing(balconyRailingId); if (!r) return;
+    r.x = x; r.y = y;
+    emit({ type: 'BalconyRailingMoved', balconyRailingId, live: true });
+  },
+
+  // Confirma o redimensionamento da largura ao soltar a alça (mesmo
+  // padrão de updateGlazingPanelSizeLive) — sem parede pra limitar a
+  // largura máxima, teto generoso de 30m; altura ignora o parâmetro
+  // recebido e fica sempre travada no valor atual (sem alça de altura
+  // nesta versão).
+  updateBalconyRailingSizeLive(balconyRailingId: string, widthM: number, centerDeltaM = 0): void {
+    const r = findBalconyRailing(balconyRailingId); if (!r) return;
+    const finalWidthM = Math.max(0.5, Math.min(30, widthM));
+    if (centerDeltaM) {
+      const angle = (r.rotationDeg || 0) * Math.PI / 180;
+      r.x = (r.x || 0) + Math.cos(angle) * centerDeltaM * Core.GRID;
+      r.y = (r.y || 0) + Math.sin(angle) * centerDeltaM * Core.GRID;
+    }
+    r.widthM = finalWidthM;
+    emit({ type: 'BalconyRailingResized', balconyRailingId, live: true });
+  },
+
+  // Gira em passos fixos — cópia exata de rotateFurniture (mesmo botão
+  // de girar dos móveis, "igual aos móveis" pedido pelo Product Owner).
+  rotateBalconyRailing(balconyRailingId: string, stepDeg?: number): void {
+    const r = findBalconyRailing(balconyRailingId); if (!r) return;
+    pushUndoSnapshot();
+    const step = stepDeg || 90;
+    r.rotationDeg = (r.rotationDeg + step + 360) % 360;
+    emit({ type: 'BalconyRailingRotated', balconyRailingId });
+  },
+
+  setBalconyRailingGlassMaterial(balconyRailingId: string, material: GlazingGlassMaterial | null): void {
+    const r = findBalconyRailing(balconyRailingId); if (!r) return;
+    pushUndoSnapshot();
+    if (material) r.glassMaterial = { ...material };
+    else delete r.glassMaterial;
+    emit({ type: 'BalconyRailingMaterialChanged', balconyRailingId });
+  },
+
+  updateBalconyRailingGlassMaterialLive(balconyRailingId: string, material: GlazingGlassMaterial): void {
+    const r = findBalconyRailing(balconyRailingId); if (!r) return;
+    r.glassMaterial = { ...material };
+    emit({ type: 'BalconyRailingMaterialChanged', balconyRailingId, live: true });
+  },
+
+  deleteBalconyRailing(balconyRailingId: string): void {
+    const list = currentBalconyRailings();
+    let idx = -1;
+    for (let i = 0; i < list.length; i++) if (list[i]!.id === balconyRailingId) { idx = i; break; }
+    if (idx < 0) return;
+    pushUndoSnapshot();
+    list.splice(idx, 1);
+    emit({ type: 'BalconyRailingDeleted', balconyRailingId });
+  },
+
   // Bloco de Volumetria (fachada procedural) — mesmo ciclo de vida do
   // painel de Envidraçamento (createGlazingPanel/attachGlazingPanelToWall
   // acima): nasce solto (state 'preview'), arrasta livre, e ao soltar
@@ -1666,6 +1755,7 @@ export const Store = {
   currentVarandas,
   currentLajes,
   currentGlazingPanels,
+  currentBalconyRailings,
   currentVolumeBoxes,
   currentPlanUnderlay,
   currentFurniture,
@@ -1676,6 +1766,7 @@ export const Store = {
   findVaranda,
   findLaje,
   findGlazingPanel,
+  findBalconyRailing,
   findVolumeBox,
   findFurniture,
   findHydraulicNode,

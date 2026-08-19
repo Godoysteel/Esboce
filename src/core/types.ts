@@ -199,6 +199,31 @@ export interface GlazingPanel {
   normalSign?: 1 | -1;
 }
 
+// Sacada de vidro (guarda-corpo procedural, categoria Aberturas) —
+// SEM máquina de estados preview/attached: ao contrário de GlazingPanel,
+// nunca encosta numa parede (instalação real é na borda de laje/varanda,
+// não num vão de parede) — confirmado com o Product Owner ("sim solta,
+// pode ser deslocada para as quatro direções"). Sempre livre no plano;
+// arraste do corpo em qualquer direção, redimensiona só a largura
+// (alças esquerda/direita, mesmo padrão de GlazingPanel), gira em
+// passos de 90° pelo mesmo botão dos móveis (rotateFurniture).
+export interface BalconyRailing {
+  id: string;
+  /** Posição do centro, mesma unidade de grade de Wall.x1/Furniture.x (20 = 1m). */
+  x: number;
+  y: number;
+  /** Passos de 90°, mesmo espírito de Furniture.rotationDeg. */
+  rotationDeg: number;
+  /** Comprimento do trecho, em metros — alça de arraste esquerda/direita. */
+  widthM: number;
+  /** Altura, em metros — fixa nesta versão (sem alça de altura). */
+  heightM: number;
+  /** Largura-alvo do módulo de vidro, mesmo espírito de GlazingPanel.moduleTargetM. */
+  moduleTargetM: number;
+  /** Ajuste visual próprio; ausente significa usar o padrão oficial. */
+  glassMaterial?: GlazingGlassMaterial;
+}
+
 // Bloco de Volumetria (fachada procedural) — box sólido que nasce
 // solto ("preview") e pode ser arrastado até encostar numa parede
 // ("attached"), mesmo espírito de state machine do GlazingPanel acima.
@@ -271,6 +296,7 @@ export interface Floor {
   lajes: Laje[];
   furniture: Furniture[];
   glazingPanels: GlazingPanel[];
+  balconyRailings: BalconyRailing[];
   volumeBoxes: VolumeBox[];
   planUnderlay?: PlanUnderlay | null;
   roomFinishes: Record<string, string>;

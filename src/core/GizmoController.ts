@@ -129,6 +129,22 @@ function handleFurnitureAction(furnitureId: string, action: string): void {
   }
 }
 
+// Sacada de vidro: mesmo padrão do móvel acima — girar (90° por
+// clique, "igual aos móveis" pedido pelo Product Owner) e excluir.
+// Mover é arrasto livre direto na peça (dragMode 'balconyRailingBody');
+// sem duplicar/trocar de propósito (nasce um de cada vez pelo botão da
+// barra lateral, sem produto de catálogo trocável).
+function handleBalconyRailingAction(balconyRailingId: string, action: string): void {
+  const r = Store.findBalconyRailing(balconyRailingId);
+  if (!r) return;
+  if (action === 'close') { ViewportController.deselect(); return; }
+  if (action === 'delete') { Store.commands.deleteBalconyRailing(balconyRailingId); ViewportController.deselect(); return; }
+  if (action === 'rotateCw' || action === 'rotateCcw') {
+    Store.commands.rotateBalconyRailing(balconyRailingId, action === 'rotateCw' ? 90 : -90);
+    return;
+  }
+}
+
 export function init(): void {
   const gizmoEl = document.getElementById('wallGizmo');
   gizmoEl?.addEventListener('click', function (e: any) {
@@ -147,6 +163,9 @@ export function init(): void {
 
     const furnitureId = ViewportController.getSelectedFurnitureId();
     if (furnitureId) { handleFurnitureAction(furnitureId, action); return; }
+
+    const balconyRailingId = ViewportController.getSelectedBalconyRailingId();
+    if (balconyRailingId) { handleBalconyRailingAction(balconyRailingId, action); return; }
 
     const wallId = ViewportController.getSelectedWallId();
     if (!wallId) return;

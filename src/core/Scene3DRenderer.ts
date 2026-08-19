@@ -21,6 +21,7 @@ import { Core } from './Core.js';
 import { Catalog } from './Catalog.js';
 import { computeOpeningAssemblyLayout, wallBandSideParameters, wallTopTriangleVertices } from './Scene3DGeometry.js';
 import { computeGlazingLayout, netGlassSizeM, MULLION_VERTICAL_WIDTH_M, MULLION_HORIZONTAL_WIDTH_M, FRAME_WIDTH_M, PROFILE_DEPTH_M, DEFAULT_GLAZING_GLASS_MATERIAL } from './Glazing.js';
+import { RAILING_FRAME_DEPTH_M, RAILING_POST_WIDTH_M, RAILING_TOP_RAIL_HEIGHT_M, DEFAULT_RAILING_GLASS_MATERIAL, RAILING_FRAME_COLOR, RAILING_FRAME_ROUGHNESS, RAILING_FRAME_METALNESS } from './BalconyRailing.js';
 import type { Project, Wall, Column, Roof, Varanda, Laje, Opening } from './types.js';
 import { floorWallHeight } from './Attic.js';
 import { hydraulicFixtureVisualPosition } from './Hydraulics.js';
@@ -2116,6 +2117,145 @@ export function hashColorHex(key: string): number {
     return hitMesh;
   }
 
+  // Sacada de vidro (guarda-corpo procedural, categoria Aberturas) —
+  // mesmo espírito de buildGlazingPanelGroup/PreviewMesh acima, mas
+  // formato "П" (travessa superior + montantes, sem moldura inferior —
+  // o vidro é preso direto na borda da laje) e sem linha horizontal de
+  // travessas (altura fixa, uma fileira só de módulos). Recebe
+  // `startJoin`/`endJoin` (ver Core.computeBalconyRailingJoints) pra
+  // formar o "canto perfeito" pedido pelo Product Owner: quando duas
+  // sacadas se encontram, a travessa/vidro de cada uma estende até o
+  // ponto de encontro exato, e só UMA delas (a "dona" do canto,
+  // determinística por id) desenha o montante ali — evita gap e evita
+  // dois montantes colados formando canto duplo.
+  function buildBalconyFrameMaterial() {
+    return new THREE.MeshStandardMaterial({
+      color: new THREE.Color(RAILING_FRAME_COLOR),
+      metalness: RAILING_FRAME_METALNESS,
+      roughness: RAILING_FRAME_ROUGHNESS,
+    });
+  }
+
+  function buildBalconyGlassMaterial(settings: any) {
+    var resolved = settings || DEFAULT_RAILING_GLASS_MATERIAL;
+    var opacity = Math.max(0.05, Math.min(1, Number(resolved.opacity)));
+    return new THREE.MeshPhysicalMaterial({
+      color: new THREE.Color(resolved.color),
+      metalness: Math.max(0, Math.min(1, Number(resolved.metalness))),
+      roughness: Math.max(0, Math.min(1, Number(resolved.roughness))),
+      envMap: getGlazingEnvMap(), envMapIntensity: Math.max(0, Math.min(3, Number(resolved.reflectionIntensity))),
+      transparent: true, opacity: opacity,
+      side: THREE.DoubleSide,
+      depthWrite: opacity >= 0.999,
+    });
+  }
+
+  // `startJoin`/`endJoin`, quando presentes, são `{ extendM, ownsPost }`
+  // já resolvidos em ESPAÇO LOCAL do painel (ver balconyLocalJoinInfo) —
+  // esta função não sabe nada de coordenadas de mundo/rotação.
+  function buildBalconyRailingGroup(widthM: any, heightM: any, moduleTargetM: any, glassMaterial: any, startJoin: any, endJoin: any) {
+    var group = new THREE.Group();
+    var layout = computeGlazingLayout(widthM, heightM, moduleTargetM);
+    var frameMat = buildBalconyFrameMaterial();
+    var glassMat = buildBalconyGlassMaterial(glassMaterial);
+
+    var extendStartM = (startJoin && startJoin.extendM) || 0;
+    var extendEndM = (endJoin && endJoin.extendM) || 0;
+    var leftX = -widthM / 2 - extendStartM;
+    var rightX = widthM / 2 + extendEndM;
+    var postHeight = heightM - RAILING_TOP_RAIL_HEIGHT_M;
+
+    function addBar(cx: any, cyBottom: any, w: any, h: any) {
+      var geo = new THREE.BoxGeometry(Math.max(w, 0.001), Math.max(h, 0.001), RAILING_FRAME_DEPTH_M);
+      var m = new THREE.Mesh(geo, frameMat);
+      m.position.set(cx, cyBottom + h / 2, 0);
+      group.add(m);
+    }
+
+    // Travessa superior — de ponta a ponta, já estendida até o ponto de
+    // canto quando houver junção.
+    addBar((leftX + rightX) / 2, heightM - RAILING_TOP_RAIL_HEIGHT_M, rightX - leftX, RAILING_TOP_RAIL_HEIGHT_M);
+
+    // Montantes das pontas — só desenha se a ponta for livre OU se esta
+    // sacada for a "dona" do montante compartilhado do canto (a outra,
+    // nesse caso, já estendeu a travessa/vidro até aqui sem desenhar o
+    // próprio montante).
+    var drawStartPost = !startJoin || startJoin.ownsPost;
+    if (drawStartPost) addBar(-widthM / 2 + RAILING_POST_WIDTH_M / 2, 0, RAILING_POST_WIDTH_M, postHeight);
+    var drawEndPost = !endJoin || endJoin.ownsPost;
+    if (drawEndPost) addBar(widthM / 2 - RAILING_POST_WIDTH_M / 2, 0, RAILING_POST_WIDTH_M, postHeight);
+
+    // Montantes internos, um por fronteira entre módulos de vidro.
+    var colX = -widthM / 2;
+    for (var c = 0; c < layout.columns.count - 1; c++) {
+      colX += layout.columns.moduleSizeM;
+      addBar(colX, 0, RAILING_POST_WIDTH_M, postHeight);
+    }
+
+    // Vidro — uma fileira só (altura fixa). Cada módulo é uma instância
+    // com largura própria (via matriz, sem geometria duplicada): os
+    // módulos das pontas esticam a borda externa até o ponto de canto
+    // quando houver junção, pra não sobrar vão entre o vidro e o
+    // montante compartilhado.
+    var cw = layout.columns.moduleSizeM;
+    var glassH = netGlassSizeM(postHeight);
+    var glassDepth = 0.01;
+    var glassZ = RAILING_FRAME_DEPTH_M / 2 + glassDepth / 2;
+    var glassGeo = new THREE.BoxGeometry(1, Math.max(glassH, 0.001), glassDepth);
+    var glassCount = layout.columns.count;
+    var glassInstances = new THREE.InstancedMesh(glassGeo, glassMat, glassCount);
+    var dummy = new THREE.Object3D();
+    var boundsLeft = -widthM / 2;
+    for (var ci = 0; ci < layout.columns.count; ci++) {
+      var boundsRight = boundsLeft + cw;
+      var effLeft = ci === 0 ? leftX : boundsLeft;
+      var effRight = ci === layout.columns.count - 1 ? rightX : boundsRight;
+      var netW = netGlassSizeM(effRight - effLeft);
+      dummy.position.set((effLeft + effRight) / 2, glassH / 2, glassZ);
+      dummy.scale.set(Math.max(netW, 0.001), 1, 1);
+      dummy.updateMatrix();
+      glassInstances.setMatrixAt(ci, dummy.matrix);
+      boundsLeft = boundsRight;
+    }
+    glassInstances.instanceMatrix.needsUpdate = true;
+    glassInstances.renderOrder = 1;
+    group.add(glassInstances);
+
+    return group;
+  }
+
+  // Resolve `startJoin`/`endJoin` (pontos de canto em unidades de
+  // grade, ver Core.computeBalconyRailingJoints) pra deslocamento LOCAL
+  // (metros, ao longo do próprio eixo da sacada) — única conversão de
+  // coordenadas de mundo pra local desta peça inteira.
+  function balconyLocalJoinInfo(railing: any, joint: any, end: 1 | 2) {
+    if (!joint) return null;
+    var rad = (railing.rotationDeg || 0) * Math.PI / 180;
+    var ux = Math.cos(rad), uy = Math.sin(rad);
+    var halfLen = (railing.widthM * Core.GRID) / 2;
+    var tipX = railing.x + (end === 1 ? -ux * halfLen : ux * halfLen);
+    var tipY = railing.y + (end === 1 ? -uy * halfLen : uy * halfLen);
+    var dx = joint.point.x - tipX, dy = joint.point.y - tipY;
+    var sign = end === 1 ? -1 : 1;
+    var alongM = ((dx * ux + dy * uy) / Core.GRID) * sign;
+    return { extendM: alongM, ownsPost: joint.ownsPost };
+  }
+
+  function buildBalconyRailingMesh(railing: any, scale: any, offsetX: any, offsetY: any, yOffset: any, joints: any) {
+    var hitGeo = new THREE.BoxGeometry(railing.widthM, railing.heightM, RAILING_FRAME_DEPTH_M);
+    var hitMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 });
+    var hitMesh = new THREE.Mesh(hitGeo, hitMat);
+    var startInfo = balconyLocalJoinInfo(railing, joints && joints.start, 1);
+    var endInfo = balconyLocalJoinInfo(railing, joints && joints.end, 2);
+    var group = buildBalconyRailingGroup(railing.widthM, railing.heightM, railing.moduleTargetM, railing.glassMaterial, startInfo, endInfo);
+    group.position.set(0, -railing.heightM / 2, 0);
+    hitMesh.add(group);
+    var px = ((railing.x || 0) - offsetX) * scale, pz = ((railing.y || 0) - offsetY) * scale;
+    hitMesh.position.set(px, yOffset + railing.heightM / 2, pz);
+    hitMesh.rotation.y = -((railing.rotationDeg || 0) * Math.PI / 180);
+    return hitMesh;
+  }
+
   // Bloco de Volumetria (fachada procedural) — box sólido simples.
   // Diferente do painel de Envidraçamento, não recorta nenhuma banda
   // da parede: é um volume que só se ENCOSTA e protrai pra fora,
@@ -3274,6 +3414,25 @@ export function hashColorHex(key: string): number {
       scene.add(heightHandle); registry.handleMeshes.push(heightHandle);
     }
 
+    if (viewState.selectedBalconyRailing) {
+      // Mesmo par de alças esquerda/direita da Pele de vidro acima —
+      // sem alça de altura (fixa nesta versão) e sem caso de "encostada
+      // em parede" (a sacada nunca encosta, ver Core.ts).
+      var brSel = viewState.selectedBalconyRailing;
+      var brYOffset = viewState.editingYOffset;
+      var brCx = brSel.x || 0, brCy = brSel.y || 0, brAngle = (brSel.rotationDeg || 0) * Math.PI / 180;
+      var brAxisX = Math.cos(brAngle), brAxisY = Math.sin(brAngle);
+      var brCenterWorldX = (brCx - offsetX) * scale, brCenterWorldZ = (brCy - offsetY) * scale;
+      var brHandleY = brYOffset + brSel.heightM / 2;
+      [-1, 1].forEach(function (side) {
+        var modelOffset = brSel.widthM * Core.GRID / 2 * side;
+        var handle = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 12), new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false }));
+        handle.position.set(brCenterWorldX + brAxisX * modelOffset * scale, brHandleY, brCenterWorldZ + brAxisY * modelOffset * scale);
+        handle.userData.handle = side < 0 ? 'balconyWidthLeft' : 'balconyWidthRight';
+        handle.renderOrder = 999; scene.add(handle); registry.handleMeshes.push(handle);
+      });
+    }
+
     if (viewState.selectedVaranda) {
       var vSel = viewState.selectedVaranda, vYOffset = viewState.editingYOffset;
       var vMidX = (vSel.x1 + vSel.x2) / 2, vMidY = (vSel.y1 + vSel.y2) / 2;
@@ -3435,6 +3594,20 @@ export function hashColorHex(key: string): number {
         mesh.userData.glazingPanelId = panel.id; mesh.userData.floorIndex = floorIdx;
         scene.add(mesh);
         registry.furnitureMeshes.push(mesh);
+      });
+
+      // Sacada de vidro (guarda-corpo procedural) — mesmo registro em
+      // furnitureMeshes (Group com filhos, precisa de disposeObject3DTree
+      // recursivo, ver comentário do painel de Envidraçamento acima).
+      // Junções de canto resolvidas UMA VEZ pra todas as sacadas do
+      // pavimento (ver Core.computeBalconyRailingJoints).
+      var balconyJoints = Core.computeBalconyRailingJoints(floorData.balconyRailings || []);
+      (floorData.balconyRailings || []).forEach(function (railing) {
+        var bmesh = buildBalconyRailingMesh(railing, scale, offsetX, offsetY, yOffset, balconyJoints[railing.id]);
+        tagCategory(bmesh, 'balconyRailing');
+        bmesh.userData.balconyRailingId = railing.id; bmesh.userData.floorIndex = floorIdx;
+        scene.add(bmesh);
+        registry.furnitureMeshes.push(bmesh);
       });
 
       if (floorData.planUnderlay && floorData.planUnderlay.visible && floorIdx === editingIdx) {
