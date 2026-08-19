@@ -253,19 +253,23 @@ export function createGlazingPanelEntity(
 // mesmo espírito de peça solta de GlazingPanel, mas SEM máquina de
 // estados preview/attached: nunca encosta em parede (confirmado com o
 // Product Owner — instalação real é na borda de laje/varanda), sempre
-// livre nas 4 direções. Altura fixa nesta versão (só a largura tem
-// alça de arraste, "arrastar pros lados" como a Pele de vidro).
-// Proporções calibradas no modelo de referência enviado pelo Product
-// Owner (Sacada de vidro.glb): módulo de vidro ~1m, altura fixa
-// assumida em 1,10m (norma ABNT NBR 14718 pede mínimo ~1,05-1,10m pra
-// guarda-corpo — o modelo de referência em si tem ~0,93m).
+// livre nas 4 direções, inclusive na vertical (alça embaixo sobe/desce
+// a peça inteira, alça em cima estica a altura — Product Owner pediu
+// as duas depois de ver a v1 só com largura). Proporções calibradas no
+// modelo de referência enviado pelo Product Owner (Sacada de
+// vidro.glb): módulo de vidro ~1m, altura padrão assumida em 1,10m
+// (norma ABNT NBR 14718 pede mínimo ~1,05-1,10m pra guarda-corpo — o
+// modelo de referência em si tem ~0,93m).
 export const BALCONY_DEFAULT_WIDTH_M = 2.0;
 export const BALCONY_DEFAULT_HEIGHT_M = 1.1;
 export const BALCONY_DEFAULT_MODULE_TARGET_M = 1.0;
+export const BALCONY_MIN_HEIGHT_M = 0.5;
+export const BALCONY_MAX_HEIGHT_M = 10;
+export const BALCONY_MAX_SILL_HEIGHT_M = 12;
 
 export function createBalconyRailingEntity(
   x: number, y: number, rotationDeg?: number,
-  widthM?: number, heightM?: number, moduleTargetM?: number, id?: string
+  widthM?: number, heightM?: number, moduleTargetM?: number, id?: string, sillHeightM?: number
 ): BalconyRailing {
   return {
     id: id || nextId('balcony'),
@@ -273,6 +277,7 @@ export function createBalconyRailingEntity(
     heightM: heightM != null ? heightM : BALCONY_DEFAULT_HEIGHT_M,
     moduleTargetM: moduleTargetM != null ? moduleTargetM : BALCONY_DEFAULT_MODULE_TARGET_M,
     x, y, rotationDeg: rotationDeg || 0,
+    sillHeightM: sillHeightM || 0,
   };
 }
 
@@ -1901,6 +1906,7 @@ export const Core = {
   createFurnitureEntity,
   createGlazingPanelEntity, GLAZING_DEFAULT_WIDTH_M, GLAZING_DEFAULT_HEIGHT_M, GLAZING_DEFAULT_MODULE_TARGET_M,
   createBalconyRailingEntity, BALCONY_DEFAULT_WIDTH_M, BALCONY_DEFAULT_HEIGHT_M, BALCONY_DEFAULT_MODULE_TARGET_M,
+  BALCONY_MIN_HEIGHT_M, BALCONY_MAX_HEIGHT_M, BALCONY_MAX_SILL_HEIGHT_M,
   computeBalconyRailingJoints, RAILING_JOIN_TOL_MODEL,
   createVolumeBoxEntity, VOLUME_BOX_DEFAULT_WIDTH_M, VOLUME_BOX_DEFAULT_HEIGHT_M, VOLUME_BOX_DEFAULT_DEPTH_M, VOLUME_BOX_DEFAULT_COLOR,
   createPlanUnderlayEntity, PLAN_UNDERLAY_DEFAULT_WIDTH_M, PLAN_UNDERLAY_DEFAULT_OPACITY,

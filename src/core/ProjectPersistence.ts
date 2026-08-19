@@ -26,7 +26,11 @@ import type {
 // estados preview/attached (nunca encosta em parede, ver Core.ts).
 // Documentos v10 e anteriores abrem normalmente, sem nenhuma sacada
 // (lista vazia).
-export const CURRENT_PROJECT_SCHEMA_VERSION = 11;
+// v12: adiciona `sillHeightM` opcional em BalconyRailing — Product
+// Owner pediu alça embaixo pra subir/descer a peça inteira, além da de
+// cima pra esticar a altura. Documentos v11 e anteriores abrem
+// normalmente; sem o campo, a sacada nasce no piso (sillHeightM = 0).
+export const CURRENT_PROJECT_SCHEMA_VERSION = 12;
 
 export interface StoredProjectDocument {
   schemaVersion: number;
@@ -294,6 +298,8 @@ function parseBalconyRailing(value: unknown, path: string): BalconyRailing {
     heightM: number(v.heightM, `${path}.heightM`),
     moduleTargetM: number(v.moduleTargetM, `${path}.moduleTargetM`, 1.0),
   };
+  const sillHeightM = optionalNumber(v.sillHeightM, `${path}.sillHeightM`);
+  if (sillHeightM !== undefined) railing.sillHeightM = sillHeightM;
   if (v.glassMaterial != null) {
     const material = record(v.glassMaterial, `${path}.glassMaterial`);
     const color = string(material.color, `${path}.glassMaterial.color`);

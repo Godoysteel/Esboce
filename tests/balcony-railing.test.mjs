@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import {
   createBalconyRailingEntity, computeBalconyRailingJoints, createFloorEntity,
   BALCONY_DEFAULT_WIDTH_M, BALCONY_DEFAULT_HEIGHT_M, BALCONY_DEFAULT_MODULE_TARGET_M,
+  BALCONY_MIN_HEIGHT_M, BALCONY_MAX_HEIGHT_M, BALCONY_MAX_SILL_HEIGHT_M,
   RAILING_JOIN_TOL_MODEL, GRID,
 } from '../src/core/Core.ts';
 // BalconyRailing.ts reexporta estas três de Glazing.ts (não duplica a
@@ -20,7 +21,7 @@ import { decodeProjectDocument, encodeProjectDocument, CURRENT_PROJECT_SCHEMA_VE
 
 // --- createBalconyRailingEntity: nasce solta, com os padrões certos ----
 
-test('createBalconyRailingEntity nasce com os valores padrão calibrados no modelo de referência', () => {
+test('createBalconyRailingEntity nasce com os valores padrão calibrados no modelo de referência, no piso (sillHeightM = 0)', () => {
   const r = createBalconyRailingEntity(100, 200);
   assert.equal(r.x, 100);
   assert.equal(r.y, 200);
@@ -28,15 +29,17 @@ test('createBalconyRailingEntity nasce com os valores padrão calibrados no mode
   assert.equal(r.widthM, BALCONY_DEFAULT_WIDTH_M);
   assert.equal(r.heightM, BALCONY_DEFAULT_HEIGHT_M);
   assert.equal(r.moduleTargetM, BALCONY_DEFAULT_MODULE_TARGET_M);
+  assert.equal(r.sillHeightM, 0);
   assert.ok(r.id);
 });
 
-test('createBalconyRailingEntity aceita rotação e tamanho customizados', () => {
-  const r = createBalconyRailingEntity(0, 0, 90, 3.5, 1.2, 0.8);
+test('createBalconyRailingEntity aceita rotação, tamanho e elevação customizados', () => {
+  const r = createBalconyRailingEntity(0, 0, 90, 3.5, 1.2, 0.8, undefined, 0.9);
   assert.equal(r.rotationDeg, 90);
   assert.equal(r.widthM, 3.5);
   assert.equal(r.heightM, 1.2);
   assert.equal(r.moduleTargetM, 0.8);
+  assert.equal(r.sillHeightM, 0.9);
 });
 
 // --- BalconyRailing.ts: reexporta o layout puro de Glazing.ts ----------
@@ -126,6 +129,21 @@ test('BalconyRailing: ida e volta preserva todos os campos', () => {
   assert.equal(r.heightM, 1.1);
 });
 
+test('BalconyRailing: sillHeightM (alça de baixo) sobrevive ao salvamento, e documento antigo (v11, sem o campo) continua abrindo com sillHeightM ausente', () => {
+  const floor = createFloorEntity('Térreo');
+  floor.balconyRailings.push({
+    id: 'br-sill', x: 0, y: 0, rotationDeg: 0, widthM: 2, heightM: 1.1, moduleTargetM: 1.0, sillHeightM: 0.9,
+  });
+  const project = { floors: [floor], currentFloorIndex: 0, layers: {}, foundationType: 'radier', constructionSystem: 'ceramic_masonry' };
+  const decoded = decodeProjectDocument(encodeProjectDocument(project));
+  assert.equal(decoded.project.floors[0].balconyRailings[0].sillHeightM, 0.9);
+
+  const legacyDoc = { schemaVersion: 11, project: structuredClone(project) };
+  delete legacyDoc.project.floors[0].balconyRailings[0].sillHeightM;
+  const decodedLegacy = decodeProjectDocument(legacyDoc);
+  assert.equal(decodedLegacy.project.floors[0].balconyRailings[0].sillHeightM, undefined);
+});
+
 test('BalconyRailing: ajuste visual do vidro sobrevive ao salvamento', () => {
   const floor = createFloorEntity('Térreo');
   floor.balconyRailings.push({
@@ -164,6 +182,59 @@ test('Store.createBalconyRailing/rotateBalconyRailing existem com a assinatura e
   const body = source.slice(start, end);
   // Cópia exata do padrão de rotateFurniture ("igual aos móveis").
   assert.match(body, /r\.rotationDeg = \(r\.rotationDeg \+ step \+ 360\) % 360;/);
+});
+
+// Product Owner, depois de ver a v1 só com largura: "a sacada deve ser
+// livre e ter a possibilidade de movimentar para cima com o arraste do
+// mouse, coloque uma alça na parte de cima e na parte de baixo."
+test('Store.updateBalconyRailingVerticalLive existe e trava heightM/sillHeightM nos limites certos', () => {
+  const source = readFileSync(new URL('../src/core/Store.ts', import.meta.url), 'utf8');
+  const start = source.indexOf('updateBalconyRailingVerticalLive(balconyRailingId: string, heightM: number, sillHeightM: number): void {');
+  assert.ok(start !== -1);
+  const end = source.indexOf('\n  },', start);
+  const body = source.slice(start, end);
+  assert.match(body, /r\.heightM = Math\.max\(Core\.BALCONY_MIN_HEIGHT_M, Math\.min\(Core\.BALCONY_MAX_HEIGHT_M, heightM\)\);/);
+  assert.match(body, /r\.sillHeightM = Math\.max\(0, Math\.min\(Core\.BALCONY_MAX_SILL_HEIGHT_M, sillHeightM\)\);/);
+});
+
+test('ViewportController: alça balconyHeightTop estica a altura mantendo sillHeightM fixo, mesma sensibilidade 0,02m/px da Pele de vidro', () => {
+  const source = readFileSync(new URL('../src/core/ViewportController.ts', import.meta.url), 'utf8');
+  const start = source.indexOf("if (dragMode === 'balconyHeightTop') {");
+  assert.ok(start !== -1);
+  const end = source.indexOf('\n    }', start);
+  const body = source.slice(start, end);
+  assert.match(body, /\(dragElementStart\.startScreenY - e\.clientY\) \* 0\.02/);
+  assert.match(body, /balconyResizePreview\.scale\.y = candidateBrH \/ brTopEnt\.heightM;/);
+});
+
+test('ViewportController: alça balconyHeightBottom translada sillHeightM (sobe/desce a peça inteira), heightM fica fixo', () => {
+  const source = readFileSync(new URL('../src/core/ViewportController.ts', import.meta.url), 'utf8');
+  const start = source.indexOf("if (dragMode === 'balconyHeightBottom') {");
+  assert.ok(start !== -1);
+  const end = source.indexOf('\n    }', start);
+  const body = source.slice(start, end);
+  assert.match(body, /var candidateSillM = Math\.max\(0, dragElementStart\.sillHeightM \+ deltaSillM\);/);
+  assert.doesNotMatch(body, /\.scale\.y/);
+});
+
+test('ViewportController: pointerup das duas alças verticais confirma via Store.commands.updateBalconyRailingVerticalLive', () => {
+  const source = readFileSync(new URL('../src/core/ViewportController.ts', import.meta.url), 'utf8');
+  const start = source.indexOf("if (dragMode === 'balconyHeightTop' || dragMode === 'balconyHeightBottom') {");
+  assert.ok(start !== -1);
+  const end = source.indexOf('\n    }', start);
+  const body = source.slice(start, end);
+  assert.match(body, /Store\.commands\.updateBalconyRailingVerticalLive\(selectedBalconyRailingId, finalBalconyHeight, finalBalconySill\);/);
+});
+
+test('Scene3DRenderer: sacada selecionada ganha alças balconyHeightTop/balconyHeightBottom, e as alças de largura sobem com sillHeightM', () => {
+  const source = readFileSync(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
+  const start = source.indexOf('if (viewState.selectedBalconyRailing) {');
+  assert.ok(start !== -1);
+  const end = source.indexOf('\n    }', start);
+  const body = source.slice(start, end);
+  assert.match(body, /var brHandleY = brYOffset \+ brSill \+ brSel\.heightM \/ 2;/);
+  assert.match(body, /topHandle\.userData\.handle = 'balconyHeightTop';/);
+  assert.match(body, /bottomHandle\.userData\.handle = 'balconyHeightBottom';/);
 });
 
 test('GizmoController.handleBalconyRailingAction gira em passos de 90°, igual ao móvel', () => {

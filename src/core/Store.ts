@@ -1345,9 +1345,7 @@ export const commands = {
 
   // Confirma o redimensionamento da largura ao soltar a alça (mesmo
   // padrão de updateGlazingPanelSizeLive) — sem parede pra limitar a
-  // largura máxima, teto generoso de 30m; altura ignora o parâmetro
-  // recebido e fica sempre travada no valor atual (sem alça de altura
-  // nesta versão).
+  // largura máxima, teto generoso de 30m.
   updateBalconyRailingSizeLive(balconyRailingId: string, widthM: number, centerDeltaM = 0): void {
     const r = findBalconyRailing(balconyRailingId); if (!r) return;
     const finalWidthM = Math.max(0.5, Math.min(30, widthM));
@@ -1357,6 +1355,18 @@ export const commands = {
       r.y = (r.y || 0) + Math.sin(angle) * centerDeltaM * Core.GRID;
     }
     r.widthM = finalWidthM;
+    emit({ type: 'BalconyRailingResized', balconyRailingId, live: true });
+  },
+
+  // Confirma altura/elevação ao soltar a alça de CIMA (estica heightM,
+  // sillHeightM fixo) ou a alça de BAIXO (sobe/desce sillHeightM,
+  // heightM fixo — Product Owner: "movimentar para cima com o arraste
+  // do mouse") — chamado pelas duas, cada uma só muda o valor que é
+  // "dono" do próprio arraste, mantendo o outro como estava.
+  updateBalconyRailingVerticalLive(balconyRailingId: string, heightM: number, sillHeightM: number): void {
+    const r = findBalconyRailing(balconyRailingId); if (!r) return;
+    r.heightM = Math.max(Core.BALCONY_MIN_HEIGHT_M, Math.min(Core.BALCONY_MAX_HEIGHT_M, heightM));
+    r.sillHeightM = Math.max(0, Math.min(Core.BALCONY_MAX_SILL_HEIGHT_M, sillHeightM));
     emit({ type: 'BalconyRailingResized', balconyRailingId, live: true });
   },
 

@@ -2510,6 +2510,24 @@ import {
           dragElementStart = { widthM: brWidth.widthM, heightM: brWidth.heightM, center: { x: brWidth.x || 0, y: brWidth.y || 0 }, axisX: brAxisX, axisY: brAxisY, side: brSide, maxWidthM: 30, lastWidthM: brWidth.widthM, centerDeltaM: 0 };
           beginBalconyResizePreview(brWidth.id);
         }
+      } else if (handle === 'balconyHeightTop') {
+        // Alça de CIMA — estica heightM, base (sillHeightM) fixa. Mesma
+        // técnica de dragElementStart.startScreenY da alça de altura da
+        // Pele de vidro (glazingHeight).
+        var brHeightTop = Store.findBalconyRailing(selectedBalconyRailingId);
+        if (brHeightTop) {
+          dragElementStart = { widthM: brHeightTop.widthM, heightM: brHeightTop.heightM, sillHeightM: brHeightTop.sillHeightM || 0, startScreenY: e.clientY, lastHeightM: brHeightTop.heightM, lastSillHeightM: brHeightTop.sillHeightM || 0 };
+          beginBalconyResizePreview(brHeightTop.id);
+        }
+      } else if (handle === 'balconyHeightBottom') {
+        // Alça de BAIXO — sobe/desce sillHeightM, heightM fixo (Product
+        // Owner: "possibilidade de movimentar para cima com o arraste
+        // do mouse") — translada a peça inteira na vertical.
+        var brHeightBottom = Store.findBalconyRailing(selectedBalconyRailingId);
+        if (brHeightBottom) {
+          dragElementStart = { widthM: brHeightBottom.widthM, heightM: brHeightBottom.heightM, sillHeightM: brHeightBottom.sillHeightM || 0, startScreenY: e.clientY, lastHeightM: brHeightBottom.heightM, lastSillHeightM: brHeightBottom.sillHeightM || 0 };
+          beginBalconyResizePreview(brHeightBottom.id);
+        }
       } else if (handle.indexOf('varandaEdge') === 0) {
         // Varanda não trava em região de cômodo nenhuma (decisão
         // explícita — sempre livre), então não precisa achar região
@@ -3344,6 +3362,34 @@ import {
       }
       return;
     }
+    if (dragMode === 'balconyHeightTop') {
+      // Estica a altura pra CIMA — mesma sensibilidade (0,02m/px) e
+      // mesma técnica de crescimento com base fixa da alça de altura da
+      // Pele de vidro (glazingHeight): o centro do preview sobe metade
+      // do delta, a base (sillHeightM) nunca muda aqui.
+      var brTopEnt = Store.findBalconyRailing(selectedBalconyRailingId);
+      if (brTopEnt && dragElementStart && balconyResizePreview) {
+        var candidateBrH = Math.max(0.5, dragElementStart.heightM + (dragElementStart.startScreenY - e.clientY) * 0.02);
+        dragElementStart.lastHeightM = candidateBrH;
+        balconyResizePreview.scale.y = candidateBrH / brTopEnt.heightM;
+        balconyResizePreview.position.y = balconyResizeHiddenObject.position.y + (candidateBrH - brTopEnt.heightM) / 2;
+      }
+      return;
+    }
+    if (dragMode === 'balconyHeightBottom') {
+      // Sobe/desce a base (sillHeightM) — heightM fixo, a peça inteira
+      // translada na vertical (Product Owner: "movimentar para cima
+      // com o arraste do mouse"). Sem scale nenhum: só a posição Y do
+      // preview se move, o mesmo delta de tela em metros.
+      var brBottomEnt = Store.findBalconyRailing(selectedBalconyRailingId);
+      if (brBottomEnt && dragElementStart && balconyResizePreview) {
+        var deltaSillM = (dragElementStart.startScreenY - e.clientY) * 0.02;
+        var candidateSillM = Math.max(0, dragElementStart.sillHeightM + deltaSillM);
+        dragElementStart.lastSillHeightM = candidateSillM;
+        balconyResizePreview.position.y = balconyResizeHiddenObject.position.y + (candidateSillM - dragElementStart.sillHeightM);
+      }
+      return;
+    }
     if (dragMode && dragMode.indexOf('varandaEdge') === 0) {
       var gpVE = getGroundModelPoint(e.clientX, e.clientY);
       if (gpVE && dragElementStart) {
@@ -3655,6 +3701,16 @@ import {
       clearBalconyResizePreview();
       if (selectedBalconyRailingId && finalBalconyWidth) {
         Store.commands.updateBalconyRailingSizeLive(selectedBalconyRailingId, finalBalconyWidth, dragElementStart.centerDeltaM || 0);
+      }
+      dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
+      return;
+    }
+    if (dragMode === 'balconyHeightTop' || dragMode === 'balconyHeightBottom') {
+      var finalBalconyHeight = dragElementStart && dragElementStart.lastHeightM;
+      var finalBalconySill = dragElementStart && dragElementStart.lastSillHeightM;
+      clearBalconyResizePreview();
+      if (selectedBalconyRailingId && finalBalconyHeight != null && finalBalconySill != null) {
+        Store.commands.updateBalconyRailingVerticalLive(selectedBalconyRailingId, finalBalconyHeight, finalBalconySill);
       }
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;

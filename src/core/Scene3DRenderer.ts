@@ -2242,6 +2242,7 @@ export function hashColorHex(key: string): number {
   }
 
   function buildBalconyRailingMesh(railing: any, scale: any, offsetX: any, offsetY: any, yOffset: any, joints: any) {
+    var sill = railing.sillHeightM || 0;
     var hitGeo = new THREE.BoxGeometry(railing.widthM, railing.heightM, RAILING_FRAME_DEPTH_M);
     var hitMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 });
     var hitMesh = new THREE.Mesh(hitGeo, hitMat);
@@ -2251,7 +2252,7 @@ export function hashColorHex(key: string): number {
     group.position.set(0, -railing.heightM / 2, 0);
     hitMesh.add(group);
     var px = ((railing.x || 0) - offsetX) * scale, pz = ((railing.y || 0) - offsetY) * scale;
-    hitMesh.position.set(px, yOffset + railing.heightM / 2, pz);
+    hitMesh.position.set(px, yOffset + sill + railing.heightM / 2, pz);
     hitMesh.rotation.y = -((railing.rotationDeg || 0) * Math.PI / 180);
     return hitMesh;
   }
@@ -3416,14 +3417,21 @@ export function hashColorHex(key: string): number {
 
     if (viewState.selectedBalconyRailing) {
       // Mesmo par de alças esquerda/direita da Pele de vidro acima —
-      // sem alça de altura (fixa nesta versão) e sem caso de "encostada
-      // em parede" (a sacada nunca encosta, ver Core.ts).
+      // sem caso de "encostada em parede" (a sacada nunca encosta, ver
+      // Core.ts). Duas alças verticais NOVAS (Product Owner, depois de
+      // ver a v1 só com largura: "deve ser livre e ter a possibilidade
+      // de movimentar para cima... coloque uma alça na parte de cima e
+      // na parte de baixo"): a de CIMA estica heightM (base/sillHeightM
+      // fixa, mesmo espírito da alça de altura da Pele de vidro), a de
+      // BAIXO sobe/desce sillHeightM (heightM fixo — move a peça
+      // inteira na vertical).
       var brSel = viewState.selectedBalconyRailing;
       var brYOffset = viewState.editingYOffset;
+      var brSill = brSel.sillHeightM || 0;
       var brCx = brSel.x || 0, brCy = brSel.y || 0, brAngle = (brSel.rotationDeg || 0) * Math.PI / 180;
       var brAxisX = Math.cos(brAngle), brAxisY = Math.sin(brAngle);
       var brCenterWorldX = (brCx - offsetX) * scale, brCenterWorldZ = (brCy - offsetY) * scale;
-      var brHandleY = brYOffset + brSel.heightM / 2;
+      var brHandleY = brYOffset + brSill + brSel.heightM / 2;
       [-1, 1].forEach(function (side) {
         var modelOffset = brSel.widthM * Core.GRID / 2 * side;
         var handle = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 12), new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false }));
@@ -3431,6 +3439,14 @@ export function hashColorHex(key: string): number {
         handle.userData.handle = side < 0 ? 'balconyWidthLeft' : 'balconyWidthRight';
         handle.renderOrder = 999; scene.add(handle); registry.handleMeshes.push(handle);
       });
+      var topHandle = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 12), new THREE.MeshBasicMaterial({ color: SELECTED_ACCENT, depthTest: false }));
+      topHandle.position.set(brCenterWorldX, brYOffset + brSill + brSel.heightM + 0.15, brCenterWorldZ);
+      topHandle.userData.handle = 'balconyHeightTop'; topHandle.renderOrder = 999;
+      scene.add(topHandle); registry.handleMeshes.push(topHandle);
+      var bottomHandle = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 12), new THREE.MeshBasicMaterial({ color: SELECTED_ACCENT, depthTest: false }));
+      bottomHandle.position.set(brCenterWorldX, brYOffset + Math.max(0, brSill - 0.15), brCenterWorldZ);
+      bottomHandle.userData.handle = 'balconyHeightBottom'; bottomHandle.renderOrder = 999;
+      scene.add(bottomHandle); registry.handleMeshes.push(bottomHandle);
     }
 
     if (viewState.selectedVaranda) {

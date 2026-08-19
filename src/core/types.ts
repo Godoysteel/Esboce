@@ -216,8 +216,10 @@ export interface BalconyRailing {
   rotationDeg: number;
   /** Comprimento do trecho, em metros — alça de arraste esquerda/direita. */
   widthM: number;
-  /** Altura, em metros — fixa nesta versão (sem alça de altura). */
+  /** Altura, em metros — alça de arraste no topo (estica pra cima, base fixa). */
   heightM: number;
+  /** Elevação da base acima do piso, em metros — alça de arraste embaixo (sobe/desce a peça inteira). Ausente = 0 (nasce no piso). */
+  sillHeightM?: number;
   /** Largura-alvo do módulo de vidro, mesmo espírito de GlazingPanel.moduleTargetM. */
   moduleTargetM: number;
   /** Ajuste visual próprio; ausente significa usar o padrão oficial. */
