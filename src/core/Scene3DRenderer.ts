@@ -270,13 +270,51 @@ export function hashColorHex(key: string): number {
   // posicionar a alça 'roofRidge'/'roofParapetHeight' (ver
   // renderSelectionHandles), extraída aqui pra ser reaproveitada também
   // no cálculo da caixa de telhado-vs-telhado (DEC-125).
-  function roofPeakHeightAboveBase(roof: any, scale: number): number {
-    if (roof.type === 'platibanda') return roof.parapetHeight != null ? roof.parapetHeight : 0.5;
-    var pitchRad = roof.pitchDeg * Math.PI / 180;
-    var spanX = (roof.x2 - roof.x1) * scale, spanZ = (roof.y2 - roof.y1) * scale;
-    var eaveSpan = roof.ridgeAxis === 'x' ? spanZ : spanX;
-    var run = (roof.type === 'umaAgua') ? Math.abs(eaveSpan) : Math.abs(eaveSpan) / 2;
-    return run * Math.tan(pitchRad);
+  // Descreve a superfície do telhado ACIMA da própria base como uma
+  // "tenda" (duas/quatro águas), uma rampa só (uma-água) ou um platô
+  // (platibanda) — pra DEC-125/126 conseguir esconder um telhado vizinho
+  // mais baixo seguindo a INCLINAÇÃO real da água (o "vale"/água-furtada
+  // de verdade — ver referência do Product Owner sobre como Revit/CAD
+  // fazem esse encontro), em vez de uma altura plana no pico (o que
+  // cortava um retângulo errado, não a rampa). Mesma fórmula pras 3
+  // formas: surfaceY(coord) = base + peakAboveBase - tanPitch * |coord -
+  // ridgeCoord|. tanPitch=0 (platibanda/cômodo) faz o termo de
+  // inclinação sumir e sobra só o platô plano em peakAboveBase.
+  // Coordenadas/vãos aqui JÁ incluem o beiral (ROOF_OVERHANG/RAKE_OVERHANG)
+  // — mesmo alcance da malha de verdade (buildRoofDuasAguas/UmaAgua/
+  // QuatroAguas), senão a rampa calculada não bate com a rampa desenhada.
+  function roofSlopeSurfaceParams(roof: any, scale: number, offsetX: number, offsetY: number): { axisIsZ: number; tanPitch: number; ridgeCoord: number; halfSpan: number; peakAboveBase: number } {
+    if (roof.type === 'platibanda') {
+      var parapet = roof.parapetHeight != null ? roof.parapetHeight : 0.5;
+      return { axisIsZ: 0, tanPitch: 0, ridgeCoord: 0, halfSpan: 0, peakAboveBase: parapet };
+    }
+    var ridgeAlongX = roof.ridgeAxis === 'x';
+    var tanPitch = Math.tan(roof.pitchDeg * Math.PI / 180);
+    var minXw = (Math.min(roof.x1, roof.x2) - offsetX) * scale, maxXw = (Math.max(roof.x1, roof.x2) - offsetX) * scale;
+    var minZw = (Math.min(roof.y1, roof.y2) - offsetY) * scale, maxZw = (Math.max(roof.y1, roof.y2) - offsetY) * scale;
+    if (roof.type === 'umaAgua') {
+      // Rampa única, do lado baixo (com beiral) até o lado alto (também
+      // com beiral) — "cumeeira" efetiva no próprio beiral do lado alto,
+      // ver buildRoofUmaAgua.
+      if (ridgeAlongX) {
+        var eMinZ = minZw - ROOF_OVERHANG, eMaxZ = maxZw + ROOF_OVERHANG;
+        var halfSpanU = eMaxZ - eMinZ;
+        return { axisIsZ: 1, tanPitch: tanPitch, ridgeCoord: eMaxZ, halfSpan: halfSpanU, peakAboveBase: halfSpanU * tanPitch };
+      }
+      var eMinX = minXw - ROOF_OVERHANG, eMaxX = maxXw + ROOF_OVERHANG;
+      var halfSpanU2 = eMaxX - eMinX;
+      return { axisIsZ: 0, tanPitch: tanPitch, ridgeCoord: eMaxX, halfSpan: halfSpanU2, peakAboveBase: halfSpanU2 * tanPitch };
+    }
+    // duasAguas/quatroAguas: tenda simétrica, cumeeira no meio do vão
+    // (o meio não muda com beiral, já que ele é simétrico nos dois lados).
+    if (ridgeAlongX) {
+      var eMinZ2 = minZw - ROOF_OVERHANG, eMaxZ2 = maxZw + ROOF_OVERHANG;
+      var halfSpanT = (eMaxZ2 - eMinZ2) / 2;
+      return { axisIsZ: 1, tanPitch: tanPitch, ridgeCoord: (minZw + maxZw) / 2, halfSpan: halfSpanT, peakAboveBase: halfSpanT * tanPitch };
+    }
+    var eMinX2 = minXw - ROOF_OVERHANG, eMaxX2 = maxXw + ROOF_OVERHANG;
+    var halfSpanT2 = (eMaxX2 - eMinX2) / 2;
+    return { axisIsZ: 0, tanPitch: tanPitch, ridgeCoord: (minXw + maxXw) / 2, halfSpan: halfSpanT2, peakAboveBase: halfSpanT2 * tanPitch };
   }
 
   function rectsOverlapArea(a: any, b: any) {
@@ -416,7 +454,15 @@ export function hashColorHex(key: string): number {
   // uma união de várias caixas, e o `clippingPlanes` nativo só expressa a
   // interseção de um conjunto só de planos (uma caixa por vez).
   var ROOM_CLIP_BOX_LIMIT = 12;
-  function applyRoomBoxClipping(material: any, boxes: { minX: number; maxX: number; minZ: number; maxZ: number; topY: number }[]) {
+  type RoomClipBox = {
+    minX: number; maxX: number; minZ: number; maxZ: number;
+    // Superfície escondida = base + peakAboveBase - tanPitch*|coord-ridgeCoord|
+    // (coord = Z se axisIsZ, senão X). tanPitch=0 (cômodo/platibanda) dá um
+    // platô plano em base+peakAboveBase — mesma fórmula cobre as 3 formas,
+    // ver roofSlopeSurfaceParams.
+    baseY: number; peakAboveBase: number; tanPitch: number; ridgeCoord: number; halfSpan: number; axisIsZ: number;
+  };
+  function applyRoomBoxClipping(material: any, boxes: RoomClipBox[]) {
     if (!material || !boxes.length) return;
     var capped = boxes.slice(0, ROOM_CLIP_BOX_LIMIT);
     // O array do uniform precisa ter o MESMO tamanho declarado no GLSL
@@ -425,16 +471,21 @@ export function hashColorHex(key: string): number {
     // (esse só existe pro laço do shader saber onde parar); com menos
     // elementos do que o array declarado, o upload quebra tentando ler uma
     // posição que não existe. Preenche o resto com caixa "impossível"
-    // (topY bem abaixo do chão) — nunca esconde nada, e o loop já para em
-    // uRoomClipCount de qualquer forma, essa é só uma segunda camada de
-    // segurança.
+    // (baseY bem abaixo do chão, sem inclinação) — nunca esconde nada, e o
+    // loop já para em uRoomClipCount de qualquer forma, essa é só uma
+    // segunda camada de segurança.
     var padded = capped.slice();
-    while (padded.length < ROOM_CLIP_BOX_LIMIT) padded.push({ minX: 0, maxX: 0, minZ: 0, maxZ: 0, topY: -1e6 });
+    while (padded.length < ROOM_CLIP_BOX_LIMIT) padded.push({ minX: 0, maxX: 0, minZ: 0, maxZ: 0, baseY: -1e6, peakAboveBase: 0, tanPitch: 0, ridgeCoord: 0, halfSpan: 0, axisIsZ: 0 });
     material.onBeforeCompile = function (shader: any) {
       shader.uniforms.uRoomClipCount = { value: capped.length };
       shader.uniforms.uRoomClipMin = { value: padded.map(function (b) { return new THREE.Vector2(b.minX, b.minZ); }) };
       shader.uniforms.uRoomClipMax = { value: padded.map(function (b) { return new THREE.Vector2(b.maxX, b.maxZ); }) };
-      shader.uniforms.uRoomClipTopY = { value: padded.map(function (b) { return b.topY; }) };
+      shader.uniforms.uRoomClipBaseY = { value: padded.map(function (b) { return b.baseY; }) };
+      shader.uniforms.uRoomClipPeak = { value: padded.map(function (b) { return b.peakAboveBase; }) };
+      shader.uniforms.uRoomClipTanPitch = { value: padded.map(function (b) { return b.tanPitch; }) };
+      shader.uniforms.uRoomClipRidgeCoord = { value: padded.map(function (b) { return b.ridgeCoord; }) };
+      shader.uniforms.uRoomClipHalfSpan = { value: padded.map(function (b) { return b.halfSpan; }) };
+      shader.uniforms.uRoomClipAxisIsZ = { value: padded.map(function (b) { return b.axisIsZ; }) };
       shader.vertexShader = shader.vertexShader
         .replace('#include <common>', '#include <common>\nvarying vec3 vRoomClipWorldPos;')
         // Posição mundial calculada direto (não reaproveita a `worldPosition`
@@ -445,11 +496,11 @@ export function hashColorHex(key: string): number {
       shader.fragmentShader = shader.fragmentShader
         .replace(
           '#include <common>',
-          '#include <common>\nvarying vec3 vRoomClipWorldPos;\nuniform int uRoomClipCount;\nuniform vec2 uRoomClipMin[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform vec2 uRoomClipMax[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipTopY[' + ROOM_CLIP_BOX_LIMIT + '];'
+          '#include <common>\nvarying vec3 vRoomClipWorldPos;\nuniform int uRoomClipCount;\nuniform vec2 uRoomClipMin[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform vec2 uRoomClipMax[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipBaseY[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipPeak[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipTanPitch[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipRidgeCoord[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipHalfSpan[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipAxisIsZ[' + ROOM_CLIP_BOX_LIMIT + '];'
         )
         .replace(
           '#include <clipping_planes_fragment>',
-          '#include <clipping_planes_fragment>\n  for ( int i = 0; i < ' + ROOM_CLIP_BOX_LIMIT + '; i ++ ) {\n    if ( i >= uRoomClipCount ) break;\n    if ( vRoomClipWorldPos.y < uRoomClipTopY[ i ] && vRoomClipWorldPos.x > uRoomClipMin[ i ].x && vRoomClipWorldPos.x < uRoomClipMax[ i ].x && vRoomClipWorldPos.z > uRoomClipMin[ i ].y && vRoomClipWorldPos.z < uRoomClipMax[ i ].y ) discard;\n  }'
+          '#include <clipping_planes_fragment>\n  for ( int i = 0; i < ' + ROOM_CLIP_BOX_LIMIT + '; i ++ ) {\n    if ( i >= uRoomClipCount ) break;\n    if ( vRoomClipWorldPos.x > uRoomClipMin[ i ].x && vRoomClipWorldPos.x < uRoomClipMax[ i ].x && vRoomClipWorldPos.z > uRoomClipMin[ i ].y && vRoomClipWorldPos.z < uRoomClipMax[ i ].y ) {\n      float coord = uRoomClipAxisIsZ[ i ] > 0.5 ? vRoomClipWorldPos.z : vRoomClipWorldPos.x;\n      float surfaceY = uRoomClipBaseY[ i ] + uRoomClipPeak[ i ] - uRoomClipTanPitch[ i ] * abs( coord - uRoomClipRidgeCoord[ i ] );\n      if ( vRoomClipWorldPos.y < surfaceY ) discard;\n    }\n  }'
         );
     };
     material.needsUpdate = true;
@@ -3761,25 +3812,31 @@ export function hashColorHex(key: string): number {
           return {
             minX: (Math.min.apply(null, xs) - offsetX) * scale, maxX: (Math.max.apply(null, xs) - offsetX) * scale,
             minZ: (Math.min.apply(null, ys) - offsetY) * scale, maxZ: (Math.max.apply(null, ys) - offsetY) * scale,
-            topY: yOffset + ownHeightM,
+            baseY: yOffset + ownHeightM, peakAboveBase: 0, tanPitch: 0, ridgeCoord: 0, halfSpan: 0, axisIsZ: 0,
           };
         });
-        // Mesma ideia, mas telhado-vs-telhado (DEC-125): pegada × altura
-        // de PICO (cumeeira, ou topo do parapeito) de cada telhado do
-        // pavimento — quando um telhado fica embaixo de OUTRO (não de um
-        // cômodo), o de cumeeira mais alta vence, o mais baixo some por
-        // baixo dele. Comparação é sempre PICO×PICO (nunca pico×base) —
-        // garante que só um lado do par esconde o outro; comparar com a
-        // base deixaria os dois tentando esconder um ao outro ao mesmo
-        // tempo sempre que as bases se sobrepõem, abrindo um buraco onde
-        // nenhum dos dois desenha nada.
+        // Mesma ideia, mas telhado-vs-telhado (DEC-125/126): pegada ×
+        // SUPERFÍCIE de cada telhado do pavimento (não uma altura plana no
+        // pico — isso cortava um retângulo reto em vez de seguir a
+        // inclinação da água, o "vale"/água-furtada de verdade quando dois
+        // telhados se encostam — ver roofSlopeSurfaceParams). Quando um
+        // telhado fica embaixo de OUTRO (não de um cômodo), o de cumeeira
+        // mais alta vence, o mais baixo some por baixo da RAMPA dele.
+        // Comparação de quem entra na lista de quem é sempre PICO×PICO
+        // (nunca pico×base) — garante que só um lado do par esconde o
+        // outro; comparar com a base deixaria os dois tentando esconder um
+        // ao outro ao mesmo tempo sempre que as bases se sobrepõem, abrindo
+        // um buraco onde nenhum dos dois desenha nada.
         var roofPeakBoxes = floorData.roofs.map(function (r: any) {
           var rOwnHeight = r.atticMode ? (r.baseHeightM || 1.2) : Core.roofHeightAtRect(floorData.walls, r.x1, r.y1, r.x2, r.y2, currentWallHeight);
           var rFootprint = roofWorldFootprint(r, scale, offsetX, offsetY);
+          var rSlope = roofSlopeSurfaceParams(r, scale, offsetX, offsetY);
           return {
             id: r.id,
             minX: rFootprint.minX, maxX: rFootprint.maxX, minZ: rFootprint.minZ, maxZ: rFootprint.maxZ,
-            peakY: yOffset + rOwnHeight + roofPeakHeightAboveBase(r, scale),
+            baseY: yOffset + rOwnHeight, peakAboveBase: rSlope.peakAboveBase, tanPitch: rSlope.tanPitch,
+            ridgeCoord: rSlope.ridgeCoord, halfSpan: rSlope.halfSpan, axisIsZ: rSlope.axisIsZ,
+            peakY: yOffset + rOwnHeight + rSlope.peakAboveBase,
           };
         });
         floorData.roofs.forEach(function (roof) {
@@ -3801,15 +3858,16 @@ export function hashColorHex(key: string): number {
             });
           });
           // Só cômodos ESTRITAMENTE mais altos que este telhado entram —
-          // o próprio cômodo do telhado tem topY == pieceBaseY (não >),
+          // o próprio cômodo do telhado tem baseY == pieceBaseY (não >),
           // então nunca se auto-esconde.
-          var roomClipBoxes = roomHeightBoxes.filter(function (b: any) { return b.topY > pieceBaseY + 1e-4; });
+          var roomClipBoxes = roomHeightBoxes.filter(function (b: any) { return b.baseY > pieceBaseY + 1e-4; });
           // E só telhados ESTRITAMENTE de cumeeira mais alta que a PRÓPRIA
           // cumeeira deste (não a base) — ver comentário acima de
           // roofPeakBoxes.
-          var ownPeakY = pieceBaseY + roofPeakHeightAboveBase(roof, scale);
+          var ownSlope = roofSlopeSurfaceParams(roof, scale, offsetX, offsetY);
+          var ownPeakY = pieceBaseY + ownSlope.peakAboveBase;
           var tallerRoofClipBoxes = roofPeakBoxes.filter(function (b: any) { return b.id !== roof.id && b.peakY > ownPeakY + 1e-4; })
-            .map(function (b: any) { return { minX: b.minX, maxX: b.maxX, minZ: b.minZ, maxZ: b.maxZ, topY: b.peakY }; });
+            .map(function (b: any) { return { minX: b.minX, maxX: b.maxX, minZ: b.minZ, maxZ: b.maxZ, baseY: b.baseY, peakAboveBase: b.peakAboveBase, tanPitch: b.tanPitch, ridgeCoord: b.ridgeCoord, halfSpan: b.halfSpan, axisIsZ: b.axisIsZ }; });
           var clipBoxesForThisRoof = roomClipBoxes.concat(tallerRoofClipBoxes);
           if (clipBoxesForThisRoof.length) pieces.forEach(function (piece) {
             var materials = Array.isArray(piece.material) ? piece.material : [piece.material];

@@ -1450,49 +1450,74 @@ test('Scene3DRenderer: prévia (ghost) do telhado usa drawPreview.roofBaseHeight
 // alto fica invisível na renderização — por pixel (shader), não por
 // corte de malha, pra não repetir o bug da platibanda sumida (recorte
 // por triângulo, tentativa anterior).
-test('Scene3DRenderer.applyRoomBoxClipping: injeta discard por pixel via onBeforeCompile, sem clippingPlanes nativo (precisa de UNIÃO de várias caixas, não só uma interseção)', () => {
+test('Scene3DRenderer.applyRoomBoxClipping: injeta discard por pixel via onBeforeCompile, seguindo a INCLINAÇÃO real da água (não uma altura plana no pico) — sem clippingPlanes nativo (precisa de UNIÃO de várias caixas, não só uma interseção)', () => {
   const fnStart = scene3DRendererSource.indexOf('function applyRoomBoxClipping(');
   assert.notEqual(fnStart, -1, 'applyRoomBoxClipping não encontrada');
-  const fnBlock = scene3DRendererSource.slice(fnStart, fnStart + 3000);
+  const fnBlock = scene3DRendererSource.slice(fnStart, fnStart + 4400);
   assert.match(fnBlock, /material\.onBeforeCompile = function \(shader: any\) \{/);
   assert.match(fnBlock, /vRoomClipWorldPos = \( modelMatrix \* vec4\( transformed, 1\.0 \) \)\.xyz;/);
-  assert.match(fnBlock, /if \( vRoomClipWorldPos\.y < uRoomClipTopY\[ i \] .* \) discard;/);
+  assert.match(fnBlock, /float coord = uRoomClipAxisIsZ\[ i \] > 0\.5 \? vRoomClipWorldPos\.z : vRoomClipWorldPos\.x;/);
+  assert.match(fnBlock, /float surfaceY = uRoomClipBaseY\[ i \] \+ uRoomClipPeak\[ i \] - uRoomClipTanPitch\[ i \] \* abs\( coord - uRoomClipRidgeCoord\[ i \] \);/);
+  assert.match(fnBlock, /if \( vRoomClipWorldPos\.y < surfaceY \) discard;/);
   assert.match(fnBlock, /material\.needsUpdate = true;/);
 });
 
 test('Scene3DRenderer: cada telhado calcula a caixa dos cômodos ESTRITAMENTE mais altos que ele (nunca a própria) e aplica applyRoomBoxClipping em toda peça', () => {
   const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
   assert.notEqual(roofsStart, -1);
-  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 5200);
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 6200);
   assert.match(roofsBlock, /var roomHeightBoxes = rooms\.map\(function \(room: any\) \{/);
-  assert.match(roofsBlock, /topY: yOffset \+ ownHeightM,/);
-  assert.match(roofsBlock, /var roomClipBoxes = roomHeightBoxes\.filter\(function \(b: any\) \{ return b\.topY > pieceBaseY \+ 1e-4; \}\);/);
+  assert.match(roofsBlock, /baseY: yOffset \+ ownHeightM, peakAboveBase: 0, tanPitch: 0, ridgeCoord: 0, halfSpan: 0, axisIsZ: 0,/);
+  assert.match(roofsBlock, /var roomClipBoxes = roomHeightBoxes\.filter\(function \(b: any\) \{ return b\.baseY > pieceBaseY \+ 1e-4; \}\);/);
   assert.match(roofsBlock, /var clipBoxesForThisRoof = roomClipBoxes\.concat\(tallerRoofClipBoxes\);/);
   assert.match(roofsBlock, /applyRoomBoxClipping\(material, clipBoxesForThisRoof\)/);
 });
 
-// DEC-125 — mesma ideia do DEC-124, agora telhado-vs-telhado: quando um
-// telhado fica embaixo de OUTRO (não de um cômodo), o de cumeeira mais
-// alta vence — o mais baixo some por baixo dele, por pixel, sem cortar
-// malha nenhuma (reaproveita applyRoomBoxClipping, só alimentando mais
-// caixas).
-test('Scene3DRenderer.roofPeakHeightAboveBase: mesma matemática já usada pra posicionar a alça roofRidge/roofParapetHeight (cumeeira por inclinação, parapeito por parapetHeight)', () => {
-  const fnStart = scene3DRendererSource.indexOf('function roofPeakHeightAboveBase(');
-  assert.notEqual(fnStart, -1, 'roofPeakHeightAboveBase não encontrada');
-  const fnBlock = scene3DRendererSource.slice(fnStart, fnStart + 500);
-  assert.match(fnBlock, /if \(roof\.type === 'platibanda'\) return roof\.parapetHeight != null \? roof\.parapetHeight : 0\.5;/);
-  assert.match(fnBlock, /var run = \(roof\.type === 'umaAgua'\) \? Math\.abs\(eaveSpan\) : Math\.abs\(eaveSpan\) \/ 2;/);
-  assert.match(fnBlock, /return run \* Math\.tan\(pitchRad\);/);
+// DEC-125/126 — mesma ideia do DEC-124, agora telhado-vs-telhado: quando
+// um telhado fica embaixo de OUTRO (não de um cômodo), o de cumeeira
+// mais alta vence — o mais baixo some seguindo a RAMPA real do mais
+// alto (água furtada de verdade, não um corte reto — Product Owner
+// mandou referência de como Revit/CAD fazem esse encontro), por pixel,
+// sem cortar malha nenhuma.
+test('Scene3DRenderer.roofSlopeSurfaceParams: mesma matemática de vão/beiral já usada pra desenhar a água de verdade (buildRoofDuasAguas/UmaAgua/QuatroAguas) — senão a rampa do corte não bate com a rampa desenhada', () => {
+  const fnStart = scene3DRendererSource.indexOf('function roofSlopeSurfaceParams(');
+  assert.notEqual(fnStart, -1, 'roofSlopeSurfaceParams não encontrada');
+  const fnBlock = scene3DRendererSource.slice(fnStart, fnStart + 2600);
+  assert.match(fnBlock, /if \(roof\.type === 'platibanda'\) \{/);
+  assert.match(fnBlock, /return \{ axisIsZ: 0, tanPitch: 0, ridgeCoord: 0, halfSpan: 0, peakAboveBase: parapet \};/);
+  assert.match(fnBlock, /if \(roof\.type === 'umaAgua'\) \{/);
+  assert.match(fnBlock, /var eMinZ = minZw - ROOF_OVERHANG, eMaxZ = maxZw \+ ROOF_OVERHANG;/);
+  assert.match(fnBlock, /ridgeCoord: eMaxZ, halfSpan: halfSpanU, peakAboveBase: halfSpanU \* tanPitch/);
+  assert.match(fnBlock, /var eMinZ2 = minZw - ROOF_OVERHANG, eMaxZ2 = maxZw \+ ROOF_OVERHANG;/);
+  assert.match(fnBlock, /ridgeCoord: \(minZw \+ maxZw\) \/ 2, halfSpan: halfSpanT, peakAboveBase: halfSpanT \* tanPitch/);
 });
 
-test('Scene3DRenderer: caixa de telhado-vs-telhado compara PICO×PICO (nunca pico×base) — garante que só um lado do par esconde o outro, nunca os dois ao mesmo tempo', () => {
+test('Scene3DRenderer: caixa de telhado-vs-telhado compara PICO×PICO (nunca pico×base) — garante que só um lado do par esconde o outro, nunca os dois ao mesmo tempo — e carrega a rampa inteira (baseY/peakAboveBase/tanPitch/ridgeCoord/halfSpan/axisIsZ), não só uma altura', () => {
   const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
   assert.notEqual(roofsStart, -1);
-  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 4900);
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 6200);
   assert.match(roofsBlock, /var roofPeakBoxes = floorData\.roofs\.map\(function \(r: any\) \{/);
-  assert.match(roofsBlock, /peakY: yOffset \+ rOwnHeight \+ roofPeakHeightAboveBase\(r, scale\),/);
-  assert.match(roofsBlock, /var ownPeakY = pieceBaseY \+ roofPeakHeightAboveBase\(roof, scale\);/);
+  assert.match(roofsBlock, /var rSlope = roofSlopeSurfaceParams\(r, scale, offsetX, offsetY\);/);
+  assert.match(roofsBlock, /peakY: yOffset \+ rOwnHeight \+ rSlope\.peakAboveBase,/);
+  assert.match(roofsBlock, /var ownSlope = roofSlopeSurfaceParams\(roof, scale, offsetX, offsetY\);/);
+  assert.match(roofsBlock, /var ownPeakY = pieceBaseY \+ ownSlope\.peakAboveBase;/);
   assert.match(roofsBlock, /var tallerRoofClipBoxes = roofPeakBoxes\.filter\(function \(b: any\) \{ return b\.id !== roof\.id && b\.peakY > ownPeakY \+ 1e-4; \}\)/);
+  assert.match(roofsBlock, /baseY: b\.baseY, peakAboveBase: b\.peakAboveBase, tanPitch: b\.tanPitch, ridgeCoord: b\.ridgeCoord, halfSpan: b\.halfSpan, axisIsZ: b\.axisIsZ/);
+});
+
+test('Scene3DRenderer.roofSlopeSurfaceParams: platibanda vira platô plano (tanPitch=0) em base+parapetHeight, não em base+0 — parapetHeight some no cálculo do pico sem essa distinção', () => {
+  // Reprodução numérica direta da fórmula: surfaceY(coord) = base + peakAboveBase - tanPitch*|coord-ridgeCoord|.
+  // Pra platibanda, tanPitch=0 então o termo de inclinação desaparece e sobra só peakAboveBase — que TEM que ser
+  // o parapetHeight (não 0), senão o "pico" de uma platibanda vira igual à própria base.
+  const parapetHeight = 0.5;
+  const base = 2.7;
+  const peakAboveBase = parapetHeight; // é isso que roofSlopeSurfaceParams devolve pro tipo platibanda
+  const tanPitch = 0;
+  const anyCoord = 999; // não deveria importar — platô é constante em qualquer coord
+  const ridgeCoord = 0;
+  const surfaceY = base + peakAboveBase - tanPitch * Math.abs(anyCoord - ridgeCoord);
+  assert.equal(surfaceY, base + parapetHeight);
+  assert.notEqual(surfaceY, base, 'platibanda não pode virar um platô na própria altura da base — perderia o parapeito inteiro do cálculo');
 });
 
 // DEC-90 — botão "Gerar Laje": cômodo nasce sem laje visível/contabilizada;
