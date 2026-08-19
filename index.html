@@ -945,37 +945,49 @@
   .category-panel {
     display: none; position: fixed; left: 104px; top: calc(var(--top-overlay-h) + 10px);
     z-index: 9; width: 244px; max-height: calc(100vh - var(--top-overlay-h) - 20px);
-    padding: 12px; overflow-y: auto; border: 1px solid #D3D1C7; border-radius: 12px;
+    padding: 10px; overflow-y: auto; border: 1px solid #D3D1C7; border-radius: 12px;
     background: rgba(255,255,255,.98); box-shadow: 0 10px 30px rgba(33,31,27,.18);
-    flex-direction: column; gap: 10px;
+    flex-direction: column; gap: 6px;
   }
   .category-panel.visible { display: flex; }
   .cp-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
-  .cp-title { font-size: 14px; font-weight: 800; color: #2C2C2A; }
-  .cp-desc { font-size: 10.5px; color: #9C9A92; margin-top: 2px; }
+  .cp-title { font-size: 13px; font-weight: 800; color: #2C2C2A; }
+  .cp-desc { font-size: 10px; color: #9C9A92; margin-top: 1px; }
   .cp-close {
     border: 0; background: transparent; cursor: pointer; font-size: 18px; line-height: 1;
     color: #9C9A92; padding: 2px 4px; flex-shrink: 0;
   }
   .cp-close:hover { color: #2C2C2A; }
   .cp-group-grid {
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px;
   }
   .cp-action-row {
     display: flex; align-items: center; gap: 8px;
-    padding: 9px 10px;
+    padding: 7px 9px;
     border: 1.5px solid #D3D1C7;
     border-radius: 10px;
     background: #FFFFFF;
     cursor: pointer;
-    font-size: 11px;
+    font-size: 10.5px;
     font-weight: 600;
     color: #2C2C2A;
   }
   .cp-action-row:hover { background: #F1EFE8; border-color: #B9B6AA; }
   .cp-action-row.ts-disabled { cursor: not-allowed; opacity: .45; }
   .cp-action-row.ts-disabled:hover { background: #FFFFFF; border-color: #D3D1C7; }
-  .cp-action-row .ts-icon { width: 20px; height: 20px; color: #6b6398; flex-shrink: 0; }
+  .cp-action-row .ts-icon { width: 18px; height: 18px; color: #6b6398; flex-shrink: 0; }
+  /* Botões dentro dos painéis de categoria (`.cp-group-grid`) usam a
+     mesma `.ts-btn`, mas mais compactos que a versão "solta" (usada em
+     modais como Ático/Sistema construtivo) — 5 das 8 categorias
+     estouravam a altura do painel, escondendo item sem indicação
+     (mesmo bug do rail, DEC-129) até essa compactação. */
+  .category-panel .cp-group-grid .ts-btn {
+    padding: 5px 3px 4px;
+    gap: 2px;
+    font-size: 9px;
+  }
+  .category-panel .cp-group-grid .ts-btn .ts-icon { width: 21px; height: 21px; }
+  .category-panel .ts-group-label { margin-top: 1px; }
   @media (max-width: 700px) {
     .category-rail {
       left: 6px; top: calc(var(--top-overlay-h) + 6px); bottom: 58px;
@@ -1611,12 +1623,12 @@
         </svg>
         <span>Arco</span>
       </button>
-      <button class="ts-btn" id="addGlazingPanelBtn" data-room-preset="glazing" title="Envidraçamento — clique pra criar um painel de vidro solto, arraste pra posicionar e encostar numa parede">
+      <button class="ts-btn" id="addGlazingPanelBtn" data-room-preset="glazing" title="Pele de vidro — clique pra criar um painel de vidro solto, arraste pra posicionar e encostar numa parede">
         <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="6" y="6" width="28" height="28" rx="1"/>
           <path d="M20 6v28M6 20h28"/>
         </svg>
-        <span>Vitrô</span>
+        <span>Pele de vidro</span>
       </button>
       <button class="ts-btn ts-disabled" data-disabled-label="Escada" title="Escada — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 32h6v-6h6v-6h6v-6h6v-6"/></svg><span>Vão</span><span class="ts-badge-soon">em breve</span></button>
       <button class="ts-btn ts-disabled" data-disabled-label="Shaft" title="Shaft — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Shaft</span><span class="ts-badge-soon">em breve</span></button>

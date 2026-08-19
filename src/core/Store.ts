@@ -1216,13 +1216,19 @@ export const commands = {
   updateGlazingPanelSizeLive(glazingPanelId: string, widthM: number, heightM: number, centerDeltaM = 0): void {
     const p = findGlazingPanel(glazingPanelId); if (!p) return;
     let maxWidthM = 20;
-    let maxHeightM = 10;
+    // Pele de vidro (Product Owner) é um painel independente que só usa
+    // a parede pra POSIÇÃO/ângulo, não um vão recortado dentro dela —
+    // por isso a altura não trava mais em `Core.WALL_HEIGHT -
+    // sillHeightM` (isso limitava a uns 2,7-2,8m qualquer painel
+    // encostado, mesmo pedido explícito de "altura contínua, maior que
+    // a parede"). Mesmo teto generoso (10m) do painel solto, pros dois
+    // casos — segurança de faixa, não recorte físico da parede.
+    const maxHeightM = 10;
     if (p.state === 'attached' && p.wallId) {
       const wall = findWall(p.wallId);
       if (!wall) return;
       const wallLenM = Core.wallLengthMeters(wall);
       maxWidthM = Math.max(0.5, wallLenM);
-      maxHeightM = Math.max(0.5, Core.WALL_HEIGHT - (p.sillHeightM || 0));
     }
     const finalWidthM = Math.max(0.5, Math.min(maxWidthM, widthM));
     if (p.state === 'attached' && p.wallId) {

@@ -162,6 +162,29 @@ test('Scene3DRenderer aplica +180° na rotação do painel encostado quando norm
   assert.match(body, /hitMesh\.rotation\.y = -Math\.atan2\(uy, ux\) \+ \(sign === -1 \? Math\.PI : 0\);/);
 });
 
+// DEC-130 — Product Owner: "pele de vidro" (Vitrô renomeado) precisa
+// alcançar alturas MAIORES que a parede em que encosta (fachada de
+// vidro contínua, não um vão recortado dentro da parede). Antes,
+// updateGlazingPanelSizeLive travava a altura máxima em
+// `Core.WALL_HEIGHT - sillHeightM` sempre que o painel estava
+// encostado — ~2,7-2,8m na prática, o teto de "uns 3 metros" relatado.
+test('Store.updateGlazingPanelSizeLive: altura máxima do painel encostado NÃO trava mais em Core.WALL_HEIGHT — mesmo teto generoso (10m) do painel solto (DEC-130)', () => {
+  const source = readFileSync(new URL('../src/core/Store.ts', import.meta.url), 'utf8');
+  const start = source.indexOf('updateGlazingPanelSizeLive(glazingPanelId: string, widthM: number, heightM: number, centerDeltaM = 0): void {');
+  const end = source.indexOf('\n  },', start);
+  const body = source.slice(start, end);
+  assert.match(body, /const maxHeightM = 10;/);
+  assert.doesNotMatch(body, /maxHeightM = Math\.max\(0\.5, Core\.WALL_HEIGHT/);
+});
+
+test('ViewportController: arrasto da alça de altura da pele de vidro usa 0,02m\\/px (dobro do padrão de 0,01m\\/px), pra caber num arrasto de tela o novo teto de 10m', () => {
+  const source = readFileSync(new URL('../src/core/ViewportController.ts', import.meta.url), 'utf8');
+  const start = source.indexOf("if (dragMode === 'glazingHeight') {");
+  const end = source.indexOf('\n    }', start);
+  const body = source.slice(start, end);
+  assert.match(body, /\(dragElementStart\.startScreenY - e\.clientY\) \* 0\.02/);
+});
+
 test('GlazingPanel: attached sem wallId é rejeitado', () => {
   const floor = createFloorEntity('Térreo');
   floor.glazingPanels.push({ id: 'gp1', state: 'attached', widthM: 2.0, heightM: 2.0, moduleTargetM: 1.2 });

@@ -3205,9 +3205,18 @@ import {
     if (dragMode === 'glazingHeight') {
       var gpResizeH = Store.findGlazingPanel(selectedGlazingPanelId);
       if (gpResizeH && dragElementStart && glazingResizePreview) {
-        var candidateH = Math.max(0.5, dragElementStart.heightM + (dragElementStart.startScreenY - e.clientY) * 0.01);
+        // 0,02m/px (não os 0,01m/px padrão de altura de cômodo/telhado) —
+        // com o teto de altura da pele de vidro liberado até 10m (Store.
+        // updateGlazingPanelSizeLive), o padrão exigiria arrastar quase
+        // 800px pra alcançar o topo da faixa; dobrado pra caber num
+        // arrasto de tela confortável.
+        var candidateH = Math.max(0.5, dragElementStart.heightM + (dragElementStart.startScreenY - e.clientY) * 0.02);
         dragElementStart.lastHeightM = candidateH;
         glazingResizePreview.scale.y = candidateH / gpResizeH.heightM;
+        // Ponto fixo é a base (sillHeightM, nunca muda aqui) — cresce só
+        // pra CIMA: o centro do preview sobe metade do delta de altura
+        // (base = centro - altura/2 permanece igual; topo = centro +
+        // altura/2 sobe o delta inteiro).
         glazingResizePreview.position.y = glazingResizeHiddenObject.position.y + (candidateH - gpResizeH.heightM) / 2;
       }
       return;
