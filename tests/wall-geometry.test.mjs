@@ -1393,78 +1393,38 @@ test('roofHeightAtRect: acompanha a altura PRÓPRIA do cômodo sob o centro do r
   assert.equal(rectOutside, 2.7, 'fora de qualquer cômodo fechado cai pro padrão do pavimento');
 });
 
-// Correção pós-lançamento da DEC-94: um retângulo de telhado real
-// (projeto reportado, link "?p=a34kapj2") tinha o CENTRO dentro do
-// cômodo baixo (B, sem override), mas as BORDAS do retângulo tocavam a
-// parede compartilhada com o cômodo alto (A) — e essa parede compartilhada
-// (corretamente resolvida pra altura de A via Core.resolvedWallHeights)
-// ficava mais alta que o telhado apoiado só na altura do cômodo do
-// centro, furando o parapeito por cima. Confirmado ao vivo por ray
-// casting: telhado a 2,7m-based, parede compartilhada a 3,97m — depois
-// da correção, telhado sobe pra acompanhar a parede mais alta que toca.
-test('roofHeightAtRect: nunca fica mais baixo que a parede COMPARTILHADA mais alta cujas pontas o retângulo toca, mesmo com o centro caindo no cômodo baixo', () => {
+// DEC-124 — as versões anteriores desta função (DEC-95, depois DEC-122)
+// faziam o telhado SUBIR pra nunca ficar mais baixo que uma parede
+// compartilhada mais alta que o retângulo tocasse — com uma exceção pra
+// quando outro telhado já cobria essa parede. As duas tentativas de
+// consertar visualmente esse "furo" (uma seta de ajuste manual, depois
+// um recorte da malha por parede) quebraram ao vivo (seta não clicável,
+// corte comendo pedaço de platibanda por engano — ver Registro de
+// Decisões Técnicas). A função agora NUNCA sobe: sempre a altura própria
+// do cômodo embaixo do centro, mesmo tocando uma parede mais alta. O
+// "furo" visual é resolvido só na renderização, por pixel, não aqui —
+// ver Scene3DRenderer.applyRoomBoxClipping.
+test('roofHeightAtRect: fica na altura PRÓPRIA do cômodo mesmo quando o retângulo toca uma parede compartilhada mais alta (DEC-124)', () => {
   const walls = twoRoomsSharingWall();
-  // Cômodo A levantado pra 4,5 m — a parede compartilhada ('shared') segue junto.
-  ['a1', 'a3', 'a4', 'shared'].forEach((id) => { walls.find((w) => w.id === id).heightM = 4.5; });
-
-  // Retângulo com centro em (35,30) — dentro do cômodo B, NÃO alterado —
-  // mas que se estende até x=65, tocando as duas pontas de 'shared' (x=60).
-  const rectTouchingShared = roofHeightAtRect(walls, 5, -5, 65, 65, 2.7);
-  assert.equal(rectTouchingShared, 4.5, 'a parede compartilhada mais alta não pode furar o telhado por cima');
-
-  // Controle: um retângulo do lado de B (não alterado), que não chega a
-  // tocar 'shared' (x=60), continua só na altura do cômodo do centro —
-  // comportamento de antes, inalterado.
-  const rectNotTouchingShared = roofHeightAtRect(walls, 65, 5, 115, 55, 2.7);
-  assert.equal(rectNotTouchingShared, 2.7, 'sem tocar a parede compartilhada, cai só na altura do cômodo do centro');
-});
-
-// Product Owner, com print de dois cômodos de alturas diferentes lado a
-// lado: "eu tento colocar telhado no cômodo mais baixo e ele sobe
-// automaticamente para o nível do cômodo superior... devemos criar um
-// sistema para que ele exclua a parte do telhado que invadiu o cômodo
-// superior e que ele permaneça no nível pretendido." Diferente do
-// cenário da DEC-95 (UM telhado só, cobrindo um formato em L, com a
-// parede compartilhada sem teto NENHUM por cima) — aqui são DOIS
-// cômodos de verdade, cada um com o telhado pretendido, e o cômodo alto
-// já tem telhado próprio cobrindo a parede compartilhada. Forçar o
-// telhado baixo a subir pra "consertar" isso destrói a própria intenção
-// de ter alturas diferentes.
-test('roofHeightAtRect: telhado do cômodo baixo NÃO sobe por causa da parede compartilhada se outro telhado já colocado cobre essa parede (DEC-122)', () => {
-  const walls = twoRoomsSharingWall();
-  // Cômodo B levantado pra 4,5m — a parede compartilhada segue junto.
+  // Cômodo B levantado pra 4,5 m — a parede compartilhada ('shared') segue junto.
   ['b1', 'b2', 'b3', 'shared'].forEach((id) => { walls.find((w) => w.id === id).heightM = 4.5; });
 
-  // Sem nenhum outro telhado: comportamento de antes (DEC-95) preservado
-  // — a parede compartilhada mais alta ainda puxa o telhado do cômodo A
-  // (baixo) pra cima, porque não há garantia de que ela esteja coberta
-  // por outro lugar.
-  const withoutOtherRoof = roofHeightAtRect(walls, 0, 0, 60, 60, 2.7);
-  assert.equal(withoutOtherRoof, 4.5);
+  // Retângulo com centro em (30,30) — dentro do cômodo A, NÃO alterado —
+  // mas que se estende até x=65, tocando as duas pontas de 'shared' (x=60).
+  const rectTouchingShared = roofHeightAtRect(walls, 5, 5, 65, 55, 2.7);
+  assert.equal(rectTouchingShared, 2.7, 'tocar a parede compartilhada mais alta não sobe mais o telhado');
 
-  // Com um telhado já colocado sobre o cômodo B (cobrindo a parede
-  // compartilhada na altura certa): o telhado do cômodo A fica na altura
-  // PRÓPRIA dele (2,7m) — a parede compartilhada aparece exposta acima
-  // dele na fronteira, visual de ampliação mais baixa encostada na parte
-  // alta da casa, em vez de inflar o cômodo A inteiro.
-  const otherRoofOverB = [{ x1: 60, y1: 0, x2: 120, y2: 60 }];
-  const withOtherRoofOverB = roofHeightAtRect(walls, 0, 0, 60, 60, 2.7, otherRoofOverB);
-  assert.equal(withOtherRoofOverB, 2.7);
-
-  // Controle: um "outro telhado" que existe mas NÃO cobre a parede
-  // compartilhada (longe dali) não muda nada — a parede continua sem
-  // cobertura garantida, então a regra da DEC-95 ainda vale.
-  const otherRoofElsewhere = [{ x1: 500, y1: 500, x2: 600, y2: 600 }];
-  const withOtherRoofElsewhere = roofHeightAtRect(walls, 0, 0, 60, 60, 2.7, otherRoofElsewhere);
-  assert.equal(withOtherRoofElsewhere, 4.5);
+  // Controle: um retângulo do lado de B (elevado), que não chega a tocar
+  // nenhuma parede de A, acompanha só a própria altura de B.
+  const rectOverB = roofHeightAtRect(walls, 65, 5, 115, 55, 2.7);
+  assert.equal(rectOverB, 4.5, 'cômodo B continua acompanhando a própria altura');
 });
 
 test('ViewportController: hover da ferramenta Telhado calcula Core.roofHeightAtRect e grava em drawPreview.roofBaseHeightM', () => {
   const hoverStart = viewportControllerSource.indexOf("if (currentTool === 'telhado' && !placingDraw && !selectedRoofId) {");
   assert.notEqual(hoverStart, -1);
   const hoverBlock = viewportControllerSource.slice(hoverStart, hoverStart + 1600);
-  assert.match(hoverBlock, /var otherRoofRectsT = Store\.currentRoofs\(\)\.map\(/);
-  assert.match(hoverBlock, /var roofHeightT = Core\.roofHeightAtRect\(Store\.currentWalls\(\), rectT\.x1, rectT\.y1, rectT\.x2, rectT\.y2, Scene3DRenderer\.WALL_HEIGHT_GETTER\(\), otherRoofRectsT\);/);
+  assert.match(hoverBlock, /var roofHeightT = Core\.roofHeightAtRect\(Store\.currentWalls\(\), rectT\.x1, rectT\.y1, rectT\.x2, rectT\.y2, Scene3DRenderer\.WALL_HEIGHT_GETTER\(\)\);/);
   assert.match(hoverBlock, /roofBaseHeightM: roofHeightT/);
 });
 
@@ -1478,11 +1438,36 @@ test('Scene3DRenderer: prévia (ghost) do telhado usa drawPreview.roofBaseHeight
   assert.match(ghostBlock, /p\.yOffset \+ ghostRoofHeight \+ 0\.01/);
   assert.match(ghostBlock, /p\.yOffset \+ ghostRoofHeight, viewState/);
 
-  assert.match(scene3DRendererSource, /var otherRoofRects = floorData\.roofs\.filter\(function \(r: any\) \{ return r\.id !== roof\.id; \}\)\.map\(/);
   assert.match(
     scene3DRendererSource,
-    /var roofOwnHeight = roof\.atticMode \? \(roof\.baseHeightM \|\| 1\.2\) : Core\.roofHeightAtRect\(floorData\.walls, roof\.x1, roof\.y1, roof\.x2, roof\.y2, currentWallHeight, otherRoofRects\);/
+    /var roofOwnHeight = roof\.atticMode \? \(roof\.baseHeightM \|\| 1\.2\) : Core\.roofHeightAtRect\(floorData\.walls, roof\.x1, roof\.y1, roof\.x2, roof\.y2, currentWallHeight\);/
   );
+});
+
+// DEC-124 — em vez do telhado subir pra nunca ficar mais baixo que uma
+// parede vizinha, ele fica sempre na própria altura, e o pedaço que
+// sobrepõe a caixa (pegada × altura própria) de um cômodo vizinho mais
+// alto fica invisível na renderização — por pixel (shader), não por
+// corte de malha, pra não repetir o bug da platibanda sumida (recorte
+// por triângulo, tentativa anterior).
+test('Scene3DRenderer.applyRoomBoxClipping: injeta discard por pixel via onBeforeCompile, sem clippingPlanes nativo (precisa de UNIÃO de várias caixas, não só uma interseção)', () => {
+  const fnStart = scene3DRendererSource.indexOf('function applyRoomBoxClipping(');
+  assert.notEqual(fnStart, -1, 'applyRoomBoxClipping não encontrada');
+  const fnBlock = scene3DRendererSource.slice(fnStart, fnStart + 3000);
+  assert.match(fnBlock, /material\.onBeforeCompile = function \(shader: any\) \{/);
+  assert.match(fnBlock, /vRoomClipWorldPos = \( modelMatrix \* vec4\( transformed, 1\.0 \) \)\.xyz;/);
+  assert.match(fnBlock, /if \( vRoomClipWorldPos\.y < uRoomClipTopY\[ i \] .* \) discard;/);
+  assert.match(fnBlock, /material\.needsUpdate = true;/);
+});
+
+test('Scene3DRenderer: cada telhado calcula a caixa dos cômodos ESTRITAMENTE mais altos que ele (nunca a própria) e aplica applyRoomBoxClipping em toda peça', () => {
+  const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
+  assert.notEqual(roofsStart, -1);
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 3600);
+  assert.match(roofsBlock, /var roomHeightBoxes = rooms\.map\(function \(room: any\) \{/);
+  assert.match(roofsBlock, /topY: yOffset \+ ownHeightM,/);
+  assert.match(roofsBlock, /var clipBoxesForThisRoof = roomHeightBoxes\.filter\(function \(b: any\) \{ return b\.topY > pieceBaseY \+ 1e-4; \}\);/);
+  assert.match(roofsBlock, /applyRoomBoxClipping\(material, clipBoxesForThisRoof\)/);
 });
 
 // DEC-90 — botão "Gerar Laje": cômodo nasce sem laje visível/contabilizada;

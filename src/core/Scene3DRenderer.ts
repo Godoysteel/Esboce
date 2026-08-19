@@ -383,6 +383,64 @@ export function hashColorHex(key: string): number {
     return mesh;
   }
 
+  // Esconde, por PIXEL (não por malha), a parte do telhado que cai dentro
+  // da caixa retangular de um cômodo vizinho mais alto — telhado do
+  // cômodo baixo fica na PRÓPRIA altura (Core.roofHeightAtRect não sobe
+  // mais pra acompanhar parede vizinha), e o pedaço que sobrepõe a parede
+  // alta simplesmente não é desenhado ali, sem cortar nenhum vértice/
+  // triângulo da malha. Substitui a tentativa anterior de recortar a
+  // malha de verdade (`clipMeshOutsideRects` aplicado por parede, ver
+  // histórico) — aquilo cortava também pedaço de platibanda por engano
+  // (a malha do telhado é uma peça só, corte por triângulo não distingue
+  // "água" de "platibanda"). Aqui a malha nunca muda; só o pixel decide,
+  // então não tem como sumir pedaço nem sobrar corte torto.
+  //
+  // Implementado via injeção de shader (`onBeforeCompile`) em vez do
+  // `clippingPlanes` nativo do THREE porque um cômodo vizinho é só UMA
+  // caixa, mas um telhado pode encostar em VÁRIOS cômodos altos ao mesmo
+  // tempo — precisa "invisível dentro de QUALQUER uma das caixas", que é
+  // uma união de várias caixas, e o `clippingPlanes` nativo só expressa a
+  // interseção de um conjunto só de planos (uma caixa por vez).
+  var ROOM_CLIP_BOX_LIMIT = 12;
+  function applyRoomBoxClipping(material: any, boxes: { minX: number; maxX: number; minZ: number; maxZ: number; topY: number }[]) {
+    if (!material || !boxes.length) return;
+    var capped = boxes.slice(0, ROOM_CLIP_BOX_LIMIT);
+    // O array do uniform precisa ter o MESMO tamanho declarado no GLSL
+    // (ROOM_CLIP_BOX_LIMIT) sempre — o THREE lê `value.length` pra fazer o
+    // upload do array inteiro pra placa de vídeo, sem olhar uRoomClipCount
+    // (esse só existe pro laço do shader saber onde parar); com menos
+    // elementos do que o array declarado, o upload quebra tentando ler uma
+    // posição que não existe. Preenche o resto com caixa "impossível"
+    // (topY bem abaixo do chão) — nunca esconde nada, e o loop já para em
+    // uRoomClipCount de qualquer forma, essa é só uma segunda camada de
+    // segurança.
+    var padded = capped.slice();
+    while (padded.length < ROOM_CLIP_BOX_LIMIT) padded.push({ minX: 0, maxX: 0, minZ: 0, maxZ: 0, topY: -1e6 });
+    material.onBeforeCompile = function (shader: any) {
+      shader.uniforms.uRoomClipCount = { value: capped.length };
+      shader.uniforms.uRoomClipMin = { value: padded.map(function (b) { return new THREE.Vector2(b.minX, b.minZ); }) };
+      shader.uniforms.uRoomClipMax = { value: padded.map(function (b) { return new THREE.Vector2(b.maxX, b.maxZ); }) };
+      shader.uniforms.uRoomClipTopY = { value: padded.map(function (b) { return b.topY; }) };
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nvarying vec3 vRoomClipWorldPos;')
+        // Posição mundial calculada direto (não reaproveita a `worldPosition`
+        // de <worldpos_vertex> porque aquela só existe dentro de um #if de
+        // envmap/sombra/transmissão — não dá pra confiar que vai estar
+        // declarada pro material do telhado).
+        .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\n  vRoomClipWorldPos = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;');
+      shader.fragmentShader = shader.fragmentShader
+        .replace(
+          '#include <common>',
+          '#include <common>\nvarying vec3 vRoomClipWorldPos;\nuniform int uRoomClipCount;\nuniform vec2 uRoomClipMin[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform vec2 uRoomClipMax[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipTopY[' + ROOM_CLIP_BOX_LIMIT + '];'
+        )
+        .replace(
+          '#include <clipping_planes_fragment>',
+          '#include <clipping_planes_fragment>\n  for ( int i = 0; i < ' + ROOM_CLIP_BOX_LIMIT + '; i ++ ) {\n    if ( i >= uRoomClipCount ) break;\n    if ( vRoomClipWorldPos.y < uRoomClipTopY[ i ] && vRoomClipWorldPos.x > uRoomClipMin[ i ].x && vRoomClipWorldPos.x < uRoomClipMax[ i ].x && vRoomClipWorldPos.z > uRoomClipMin[ i ].y && vRoomClipWorldPos.z < uRoomClipMax[ i ].y ) discard;\n  }'
+        );
+    };
+    material.needsUpdate = true;
+  }
+
   // colorOrMat aceita OU cor OU um THREE.Material pronto (ver
   // extrudeSlopeDown pra explicação completa da UV em metros reais).
   function facePlaneUV(points: any) {
@@ -3673,6 +3731,25 @@ export function hashColorHex(key: string): number {
       if (layers.telhado && floorData.roofs) {
         var roofTopY = yOffset + currentWallHeight;
         var wallMatchColor = computeWallMatchColor(floorData.walls);
+        // Caixa (pegada retangular × altura própria) de cada cômodo
+        // fechado do pavimento — usada logo abaixo pra esconder, por
+        // pixel, o pedaço de qualquer telhado que cair dentro da caixa de
+        // um cômodo vizinho mais alto (ver applyRoomBoxClipping). Pegada
+        // é o RETÂNGULO ENVOLVENTE do contorno do cômodo (não o contorno
+        // exato) — mais simples e robusto pro shader; a única contrapartida
+        // é um cômodo em L "emprestar" seu corte pro canto que não existe
+        // de verdade, um exagero de recorte, nunca falta de recorte.
+        var roomHeightBoxes = rooms.map(function (room: any) {
+          var wallIdsForRoom = Core.findRoomWallIds(floorData.walls, room);
+          var ownHeightM = Core.roomOwnHeightM(floorData.walls, wallIdsForRoom, currentWallHeight);
+          var xs = room.points.map(function (p: any) { return p.x; });
+          var ys = room.points.map(function (p: any) { return p.y; });
+          return {
+            minX: (Math.min.apply(null, xs) - offsetX) * scale, maxX: (Math.max.apply(null, xs) - offsetX) * scale,
+            minZ: (Math.min.apply(null, ys) - offsetY) * scale, maxZ: (Math.max.apply(null, ys) - offsetY) * scale,
+            topY: yOffset + ownHeightM,
+          };
+        });
         floorData.roofs.forEach(function (roof) {
           // Acompanha a altura PRÓPRIA do cômodo embaixo do centro do
           // telhado (Core.roofHeightAtRect, mesma regra da laje/DEC-88) —
@@ -3681,8 +3758,7 @@ export function hashColorHex(key: string): number {
           // espírito de Core.resolvedWallHeights). Cai pro padrão do
           // pavimento quando não há cômodo fechado sob o telhado. Ático
           // continua usando `baseHeightM` — campo próprio, deliberado.
-          var otherRoofRects = floorData.roofs.filter(function (r: any) { return r.id !== roof.id; }).map(function (r: any) { return { x1: r.x1, y1: r.y1, x2: r.x2, y2: r.y2 }; });
-          var roofOwnHeight = roof.atticMode ? (roof.baseHeightM || 1.2) : Core.roofHeightAtRect(floorData.walls, roof.x1, roof.y1, roof.x2, roof.y2, currentWallHeight, otherRoofRects);
+          var roofOwnHeight = roof.atticMode ? (roof.baseHeightM || 1.2) : Core.roofHeightAtRect(floorData.walls, roof.x1, roof.y1, roof.x2, roof.y2, currentWallHeight);
           var pieceBaseY = yOffset + roofOwnHeight;
           var pieces = buildRoofPiece(roof, scale, offsetX, offsetY, pieceBaseY, viewState, wallMatchColor);
           if (roof.atticMode === 'preview') pieces.forEach(function (piece) {
@@ -3691,6 +3767,14 @@ export function hashColorHex(key: string): number {
               if (!material) return;
               material.transparent = true; material.opacity = 0.32; material.depthWrite = false;
             });
+          });
+          // Só cômodos ESTRITAMENTE mais altos que este telhado entram —
+          // o próprio cômodo do telhado tem topY == pieceBaseY (não >),
+          // então nunca se auto-esconde.
+          var clipBoxesForThisRoof = roomHeightBoxes.filter(function (b: any) { return b.topY > pieceBaseY + 1e-4; });
+          if (clipBoxesForThisRoof.length) pieces.forEach(function (piece) {
+            var materials = Array.isArray(piece.material) ? piece.material : [piece.material];
+            materials.forEach(function (material: any) { applyRoomBoxClipping(material, clipBoxesForThisRoof); });
           });
           var ownFootprint = roofWorldFootprint(roof, scale, offsetX, offsetY);
           var trimRects = floorData.roofs.filter(function (other) {
