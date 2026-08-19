@@ -226,38 +226,34 @@ export interface BalconyRailing {
   glassMaterial?: GlazingGlassMaterial;
 }
 
-// Bloco de Volumetria (fachada procedural) — box sólido que nasce
-// solto ("preview") e pode ser arrastado até encostar numa parede
-// ("attached"), mesmo espírito de state machine do GlazingPanel acima.
-// Diferença chave: em vez de recortar a parede como um vão (a técnica
-// de banda usada por Opening/GlazingPanel), o volume PROTRAI pra fora
-// da face externa da parede — normalSign guarda de qual lado do eixo
-// da parede ele nasceu, decidido uma única vez no momento do encosto
-// (attachVolumeBoxToWall), pra saber pra que lado protrair depois.
-export type VolumeBoxState = 'preview' | 'attached';
-
+// Bloco de Volumetria (massa procedural — sacada, marquise, qualquer
+// volume solto) — box sólido, SEMPRE livre nas 3 dimensões (posição,
+// altura/elevação, profundidade), sem ímã de parede nenhum: Product
+// Owner pediu explicitamente pra tirar o encosto automático ("tirar o
+// imã e fazer as alças em todas as direções, para que ele possa
+// formar sacadas, marquises, volumetria, etc") depois de perceber que
+// o antigo ímã (encostar e protrair a até 1,5m de uma parede) grudava
+// sem querer ao tentar só posicionar livremente perto de uma parede.
+// Pintável com o mesmo catálogo de acabamento de parede
+// (finishProductId, categoria "paint") — "deve poder ser pintado como
+// as paredes".
 export interface VolumeBox {
   id: string;
-  state: VolumeBoxState;
+  /** Posição do centro, mesma unidade de grade de Wall.x1/Furniture.x (20 = 1m). */
+  x: number;
+  y: number;
+  /** Passos de 90°, mesmo espírito de Furniture.rotationDeg — útil pra alinhar o volume com uma parede em ângulo. */
+  rotationDeg: number;
   widthM: number;
   heightM: number;
-  /** Profundidade da protrusão a partir da face da parede, em metros. */
+  /** Profundidade, em metros — alça de arraste frente/trás. */
   depthM: number;
-  colorHex?: string;
-  // Posição/orientação enquanto solto (state === 'preview') — mesma
-  // unidade de grade de Wall.x1/y1 (20 = 1 metro). Deixam de ser
-  // usados assim que vira 'attached'.
-  x?: number;
-  y?: number;
-  rotationDeg?: number;
-  // Só existem quando state === 'attached':
-  wallId?: string;
-  /** Distância ao longo da parede, mesma convenção de Opening.offset. */
-  offsetM?: number;
-  /** Altura da base do volume em relação ao piso — 0 = nível do chão. */
+  /** Elevação da base acima do piso, em metros — alça de arraste embaixo. Ausente = 0 (nasce no piso). */
   sillHeightM?: number;
-  /** De qual lado do eixo da parede o volume protrai (+1 ou -1). */
-  normalSign?: 1 | -1;
+  /** Cor sólida — usada só quando não há finishProductId. */
+  colorHex?: string;
+  /** Acabamento tipo parede aplicado pela ferramenta Lata de tinta (mesmo catálogo de "paint" usado em Wall.finishA/B). Presente = sobrescreve colorHex. */
+  finishProductId?: string;
 }
 
 // Planta baixa importada (imagem, ou primeira página de um PDF já

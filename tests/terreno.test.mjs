@@ -117,8 +117,8 @@ test('setTerreno (lógica): redefinir tamanho preserva os lados que já tinham m
   );
 });
 
-test('persistência: schemaVersion atual é 12 e projeto v5 sem terreno migra sem quebrar', () => {
-  assert.equal(CURRENT_PROJECT_SCHEMA_VERSION, 12);
+test('persistência: schemaVersion atual é 13 e projeto v5 sem terreno migra sem quebrar', () => {
+  assert.equal(CURRENT_PROJECT_SCHEMA_VERSION, 13);
   const legacy = {
     schemaVersion: 5,
     project: {

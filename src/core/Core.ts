@@ -368,28 +368,32 @@ export function computeBalconyRailingJoints(railings: BalconyRailing[]): Record<
   return result;
 }
 
-// Bloco de Volumetria (fachada procedural) — nasce em 'preview', solto
-// na viewport, mesmo padrão do painel de Envidraçamento (GlazingPanel)
-// acima. Tamanho padrão pequeno (1x1x0,3m) — ponto de partida neutro,
-// ajustável depois puxando as bordas (quando esse redimensionamento for
-// implementado; por ora nasce só com esse tamanho fixo).
+// Bloco de Volumetria — nasce solto, sempre livre (sem ímã de parede —
+// ver comentário completo em types.ts). Tamanho padrão pequeno
+// (1x1x0,3m) — ponto de partida neutro, ajustável em qualquer direção
+// pelas alças de arraste (largura/profundidade/altura/elevação).
 export const VOLUME_BOX_DEFAULT_WIDTH_M = 1.0;
 export const VOLUME_BOX_DEFAULT_HEIGHT_M = 1.0;
 export const VOLUME_BOX_DEFAULT_DEPTH_M = 0.3;
 export const VOLUME_BOX_DEFAULT_COLOR = '#C9C4B8';
+export const VOLUME_BOX_MIN_SIZE_M = 0.2;
+export const VOLUME_BOX_MAX_SIZE_M = 30;
+export const VOLUME_BOX_MIN_HEIGHT_M = 0.2;
+export const VOLUME_BOX_MAX_HEIGHT_M = 10;
+export const VOLUME_BOX_MAX_SILL_HEIGHT_M = 12;
 
 export function createVolumeBoxEntity(
   x: number, y: number, rotationDeg?: number,
-  widthM?: number, heightM?: number, depthM?: number, id?: string
+  widthM?: number, heightM?: number, depthM?: number, id?: string, sillHeightM?: number
 ): VolumeBox {
   return {
     id: id || nextId('volumebox'),
-    state: 'preview',
     widthM: widthM != null ? widthM : VOLUME_BOX_DEFAULT_WIDTH_M,
     heightM: heightM != null ? heightM : VOLUME_BOX_DEFAULT_HEIGHT_M,
     depthM: depthM != null ? depthM : VOLUME_BOX_DEFAULT_DEPTH_M,
     colorHex: VOLUME_BOX_DEFAULT_COLOR,
     x, y, rotationDeg: rotationDeg || 0,
+    sillHeightM: sillHeightM || 0,
   };
 }
 
@@ -1909,6 +1913,7 @@ export const Core = {
   BALCONY_MIN_HEIGHT_M, BALCONY_MAX_HEIGHT_M, BALCONY_MAX_SILL_HEIGHT_M,
   computeBalconyRailingJoints, RAILING_JOIN_TOL_MODEL,
   createVolumeBoxEntity, VOLUME_BOX_DEFAULT_WIDTH_M, VOLUME_BOX_DEFAULT_HEIGHT_M, VOLUME_BOX_DEFAULT_DEPTH_M, VOLUME_BOX_DEFAULT_COLOR,
+  VOLUME_BOX_MIN_SIZE_M, VOLUME_BOX_MAX_SIZE_M, VOLUME_BOX_MIN_HEIGHT_M, VOLUME_BOX_MAX_HEIGHT_M, VOLUME_BOX_MAX_SILL_HEIGHT_M,
   createPlanUnderlayEntity, PLAN_UNDERLAY_DEFAULT_WIDTH_M, PLAN_UNDERLAY_DEFAULT_OPACITY,
   createProject, distToSegment, projectOnSegment, detectRooms,
   TERRENO_MURO_HEIGHT_M, terrenoMuroId, terrenoMuroSegment, createTerrenoEntity, createTerrenoMuroEntity

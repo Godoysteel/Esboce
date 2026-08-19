@@ -1293,7 +1293,7 @@ export const commands = {
     const offsetM = Math.max(widthM / 2, Math.min(wallLenM - widthM / 2, rawOffsetM));
     // Lado do eixo da parede em que o painel estava ao soltar — mesmo
     // teste de sinal (produto vetorial 2D) usado em
-    // attachVolumeBoxToWall. Sem isso, o vidro (que fica só na face da
+    // findRoomsAdjacentToOpening. Sem isso, o vidro (que fica só na face da
     // FRENTE do painel, não centralizado no Z local — ver
     // buildGlazingPanelGroup) virava pro lado que a parede por acaso
     // tinha sido desenhada (x1→x2), não pro lado que o Product Owner
@@ -1404,14 +1404,11 @@ export const commands = {
     emit({ type: 'BalconyRailingDeleted', balconyRailingId });
   },
 
-  // Bloco de Volumetria (fachada procedural) — mesmo ciclo de vida do
-  // painel de Envidraçamento (createGlazingPanel/attachGlazingPanelToWall
-  // acima): nasce solto (state 'preview'), arrasta livre, e ao soltar
-  // perto o bastante de uma parede vira 'attached' (wallId + offsetM).
-  // Diferença: em vez de recortar a parede como um vão, o volume
-  // PROTRAI pra fora da face dela — por isso guarda normalSign (de que
-  // lado do eixo da parede protrair), decidido uma única vez aqui, a
-  // partir de que lado o centro do volume estava ao soltar o arraste.
+  // Bloco de Volumetria — sempre livre nas 3 dimensões, sem ímã de
+  // parede (Product Owner: "tirar o imã e fazer as alças em todas as
+  // direções, para que ele possa formar sacadas, marquises, volumetria,
+  // etc") — mesmo espírito de BalconyRailing (sem máquina de estados
+  // preview/attached), aplicado a um box sólido e pintável.
   createVolumeBox(x: number, y: number): VolumeBox | null {
     pushUndoSnapshot();
     const b = Core.createVolumeBoxEntity(x, y);
@@ -1420,35 +1417,12 @@ export const commands = {
     return b;
   },
 
+  // Arrasta o corpo livremente nas 4 direções do plano — mesma técnica
+  // "Live" de updateBalconyRailingBodyLive.
   updateVolumeBoxBodyLive(volumeBoxId: string, x: number, y: number): void {
-    const b = findVolumeBox(volumeBoxId); if (!b || b.state !== 'preview') return;
+    const b = findVolumeBox(volumeBoxId); if (!b) return;
     b.x = x; b.y = y;
     emit({ type: 'VolumeBoxMoved', volumeBoxId, live: true });
-  },
-
-  attachVolumeBoxToWall(volumeBoxId: string, wallId: string): void {
-    const b = findVolumeBox(volumeBoxId); if (!b || b.state !== 'preview') return;
-    const w = findWall(wallId); if (!w) return;
-    const wallLenM = Core.wallLengthMeters(w);
-    if (wallLenM < 1e-6) return;
-    pushUndoSnapshot();
-    const widthM = Math.min(b.widthM, wallLenM);
-    const ux = (w.x2 - w.x1) / (wallLenM * Core.GRID), uy = (w.y2 - w.y1) / (wallLenM * Core.GRID);
-    const rawOffsetM = (((b.x ?? w.x1) - w.x1) * ux + ((b.y ?? w.y1) - w.y1) * uy) / Core.GRID;
-    const offsetM = Math.max(widthM / 2, Math.min(wallLenM - widthM / 2, rawOffsetM));
-    // Lado do eixo da parede em que o volume estava ao soltar — mesmo
-    // teste de sinal (produto vetorial 2D) usado em
-    // findRoomsAdjacentToOpening pra decidir de que lado de uma parede
-    // um cômodo fica.
-    const nx = -uy, ny = ux;
-    const projX = w.x1 + ux * rawOffsetM * Core.GRID, projY = w.y1 + uy * rawOffsetM * Core.GRID;
-    const side = ((b.x ?? projX) - projX) * nx + ((b.y ?? projY) - projY) * ny;
-    b.state = 'attached';
-    b.widthM = widthM;
-    b.wallId = wallId; b.offsetM = offsetM; b.sillHeightM = 0;
-    b.normalSign = side < 0 ? -1 : 1;
-    delete b.x; delete b.y; delete b.rotationDeg;
-    emit({ type: 'VolumeBoxAttached', volumeBoxId, wallId });
   },
 
   deleteVolumeBox(volumeBoxId: string): void {
@@ -1461,48 +1435,64 @@ export const commands = {
     emit({ type: 'VolumeBoxDeleted', volumeBoxId });
   },
 
-  // Ajustes finos pós-encosto (etapa seguinte à Etapa 1 acima) — sem
-  // arraste de borda ainda (essa é a próxima etapa, se pedida); por
-  // ora dá controle real de altura e forma por passo fixo, puxado
-  // pelos botões do gizmo dedicado (ver GizmoController.
-  // handleVolumeBoxAction / #volumeBoxGizmo em index.html).
-  nudgeVolumeBoxHeight(volumeBoxId: string, deltaM: number): void {
-    const b = findVolumeBox(volumeBoxId); if (!b || b.state !== 'attached') return;
-    pushUndoSnapshot();
-    b.sillHeightM = Math.max(0, (b.sillHeightM || 0) + deltaM);
-    emit({ type: 'VolumeBoxResized', volumeBoxId });
-  },
-
-  resizeVolumeBoxWidth(volumeBoxId: string, deltaM: number): void {
+  // Gira em passos fixos — cópia exata de rotateFurniture/rotateBalconyRailing.
+  rotateVolumeBox(volumeBoxId: string, stepDeg?: number): void {
     const b = findVolumeBox(volumeBoxId); if (!b) return;
     pushUndoSnapshot();
-    let newWidthM = Math.max(0.2, b.widthM + deltaM);
-    if (b.state === 'attached' && b.wallId) {
-      const w = findWall(b.wallId);
-      if (w) {
-        const wallLenM = Core.wallLengthMeters(w);
-        newWidthM = Math.min(newWidthM, wallLenM);
-        // Recentra o offset (mesmo espírito de attachVolumeBoxToWall)
-        // pra caber dentro do trecho de parede, mesmo depois de crescer.
-        b.offsetM = Math.max(newWidthM / 2, Math.min(wallLenM - newWidthM / 2, b.offsetM || 0));
-      }
+    const step = stepDeg || 90;
+    b.rotationDeg = (b.rotationDeg + step + 360) % 360;
+    emit({ type: 'VolumeBoxRotated', volumeBoxId });
+  },
+
+  // Confirma o redimensionamento da largura ao soltar a alça esquerda/
+  // direita — mesmo padrão de updateBalconyRailingSizeLive.
+  updateVolumeBoxSizeLive(volumeBoxId: string, widthM: number, centerDeltaM = 0): void {
+    const b = findVolumeBox(volumeBoxId); if (!b) return;
+    const finalWidthM = Math.max(Core.VOLUME_BOX_MIN_SIZE_M, Math.min(Core.VOLUME_BOX_MAX_SIZE_M, widthM));
+    if (centerDeltaM) {
+      const angle = (b.rotationDeg || 0) * Math.PI / 180;
+      b.x = (b.x || 0) + Math.cos(angle) * centerDeltaM * Core.GRID;
+      b.y = (b.y || 0) + Math.sin(angle) * centerDeltaM * Core.GRID;
     }
-    b.widthM = newWidthM;
-    emit({ type: 'VolumeBoxResized', volumeBoxId });
+    b.widthM = finalWidthM;
+    emit({ type: 'VolumeBoxResized', volumeBoxId, live: true });
   },
 
-  resizeVolumeBoxHeight(volumeBoxId: string, deltaM: number): void {
+  // Mesma ideia da largura, mas ao longo do eixo PERPENDICULAR
+  // (profundidade) — alça de arraste frente/trás.
+  updateVolumeBoxDepthLive(volumeBoxId: string, depthM: number, centerDeltaM = 0): void {
     const b = findVolumeBox(volumeBoxId); if (!b) return;
-    pushUndoSnapshot();
-    b.heightM = Math.max(0.2, b.heightM + deltaM);
-    emit({ type: 'VolumeBoxResized', volumeBoxId });
+    const finalDepthM = Math.max(Core.VOLUME_BOX_MIN_SIZE_M, Math.min(Core.VOLUME_BOX_MAX_SIZE_M, depthM));
+    if (centerDeltaM) {
+      const angle = (b.rotationDeg || 0) * Math.PI / 180;
+      // Eixo perpendicular ao de largura (mesma convenção nx=-uy,ny=ux
+      // já usada em vários lugares do projeto pra normal de parede).
+      const nx = -Math.sin(angle), ny = Math.cos(angle);
+      b.x = (b.x || 0) + nx * centerDeltaM * Core.GRID;
+      b.y = (b.y || 0) + ny * centerDeltaM * Core.GRID;
+    }
+    b.depthM = finalDepthM;
+    emit({ type: 'VolumeBoxResized', volumeBoxId, live: true });
   },
 
-  resizeVolumeBoxDepth(volumeBoxId: string, deltaM: number): void {
+  // Confirma altura/elevação ao soltar a alça de CIMA (estica heightM,
+  // sillHeightM fixo) ou a de BAIXO (sobe/desce sillHeightM, heightM
+  // fixo) — mesmo comando único de updateBalconyRailingVerticalLive.
+  updateVolumeBoxVerticalLive(volumeBoxId: string, heightM: number, sillHeightM: number): void {
+    const b = findVolumeBox(volumeBoxId); if (!b) return;
+    b.heightM = Math.max(Core.VOLUME_BOX_MIN_HEIGHT_M, Math.min(Core.VOLUME_BOX_MAX_HEIGHT_M, heightM));
+    b.sillHeightM = Math.max(0, Math.min(Core.VOLUME_BOX_MAX_SILL_HEIGHT_M, sillHeightM));
+    emit({ type: 'VolumeBoxResized', volumeBoxId, live: true });
+  },
+
+  // Acabamento tipo parede aplicado pela ferramenta Lata de tinta —
+  // mesmo padrão de setWallFinishFace/setRoofFinish, mas sem distinção
+  // de face (o box inteiro usa o mesmo acabamento nas 6 faces).
+  setVolumeBoxFinish(volumeBoxId: string, productId: string): void {
     const b = findVolumeBox(volumeBoxId); if (!b) return;
     pushUndoSnapshot();
-    b.depthM = Math.max(0.05, b.depthM + deltaM);
-    emit({ type: 'VolumeBoxResized', volumeBoxId });
+    b.finishProductId = productId;
+    emit({ type: 'VolumeBoxFinishSet', volumeBoxId, productId });
   },
 
   // Planta baixa importada (referência visual no chão) — uma por

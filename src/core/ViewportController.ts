@@ -101,6 +101,8 @@ import {
   var glazingResizeHiddenObject: any = null;
   var balconyResizePreview: any = null;
   var balconyResizeHiddenObject: any = null;
+  var volumeBoxResizePreview: any = null;
+  var volumeBoxResizeHiddenObject: any = null;
   // Prévia incremental do arraste de um cômodo isolado. Guardamos os
   // objetos 3D recém-reconstruídos pela seleção e movemos somente suas
   // transforms durante o pointermove. A geometria persistida continua
@@ -341,6 +343,43 @@ import {
     scene.add(balconyResizePreview);
   }
 
+  function clearVolumeBoxResizePreview() {
+    if (volumeBoxResizePreview) {
+      scene.remove(volumeBoxResizePreview);
+      volumeBoxResizePreview.traverse(function (object: any) {
+        if (object.geometry && object.geometry.dispose) object.geometry.dispose();
+        var materials = object.material ? (Array.isArray(object.material) ? object.material : [object.material]) : [];
+        materials.forEach(function (material: any) { if (material && material.dispose) material.dispose(); });
+      });
+    }
+    volumeBoxResizePreview = null;
+    if (volumeBoxResizeHiddenObject) volumeBoxResizeHiddenObject.visible = true;
+    volumeBoxResizeHiddenObject = null;
+  }
+
+  function beginVolumeBoxResizePreview(volumeBoxId: string) {
+    clearVolumeBoxResizePreview();
+    var source: any = findVolumeBoxSceneObject(volumeBoxId);
+    if (!source) return;
+    volumeBoxResizeHiddenObject = source;
+    source.visible = false;
+    var box = Store.findVolumeBox(volumeBoxId);
+    if (!box) { source.visible = true; volumeBoxResizeHiddenObject = null; return; }
+    // Mesma técnica de "volume fantasma" da Sacada de vidro
+    // (beginBalconyResizePreview) — sem reconstruir a malha/material de
+    // verdade (com textura PBR, mais custoso) a cada frame do arraste.
+    var previewGeometry = new THREE.BoxGeometry(box.widthM, box.heightM, box.depthM);
+    var previewMaterial = new THREE.MeshBasicMaterial({
+      color: 0x79c8ee, transparent: true, opacity: 0.28,
+      depthWrite: false, side: THREE.DoubleSide,
+    });
+    volumeBoxResizePreview = new THREE.Mesh(previewGeometry, previewMaterial);
+    volumeBoxResizePreview.position.copy(source.position);
+    volumeBoxResizePreview.rotation.copy(source.rotation);
+    volumeBoxResizePreview.renderOrder = 998;
+    scene.add(volumeBoxResizePreview);
+  }
+
   function findFurnitureSceneObject(id: string) {
     return scene.children.find(function (object: any) {
       return object.userData && object.userData.furnitureId === id;
@@ -513,25 +552,9 @@ import {
     return { x: panel.x || 0, y: panel.y || 0 };
   }
 
-  // Mesma matemática de glazingPanelModelCenter, mas a posição final
-  // (attached) já inclui o deslocamento pra fora da face da parede
-  // (mesmo cálculo de buildVolumeBoxAttachedMesh) — usado pra
-  // posicionar o gizmo de fechar/excluir bem em cima do volume.
+  // Bloco de Volumetria sempre livre agora (sem ímã de parede, ver
+  // types.ts) — posição do modelo é sempre x/y direto.
   function volumeBoxModelCenter(box: any) {
-    if (box.state === 'attached' && box.wallId) {
-      var w = Store.findWall(box.wallId);
-      if (w) {
-        var dxW = w.x2 - w.x1, dyW = w.y2 - w.y1;
-        var lenW = Math.hypot(dxW, dyW) || 1e-6;
-        var uxW = dxW / lenW, uyW = dyW / lenW;
-        var nxW = -uyW, nyW = uxW;
-        var signW = box.normalSign === -1 ? -1 : 1;
-        var offsetModel = (box.offsetM || 0) * Core.GRID;
-        var alongX = w.x1 + uxW * offsetModel, alongY = w.y1 + uyW * offsetModel;
-        var faceDistM = (Core.WALL_THICK / 2) + (box.depthM / 2);
-        return { x: alongX + nxW * signW * faceDistM * Core.GRID, y: alongY + nyW * signW * faceDistM * Core.GRID };
-      }
-    }
     return { x: box.x || 0, y: box.y || 0 };
   }
   function worldToModel(wx: any, wz: any) { return { x: wx / scale + offsetX, y: wz / scale + offsetY }; }
@@ -1448,6 +1471,7 @@ import {
       selectedLaje: selectedLaje,
       selectedGlazingPanel: selectedGlazingPanelId ? Store.findGlazingPanel(selectedGlazingPanelId) : null,
       selectedBalconyRailing: selectedBalconyRailingId ? Store.findBalconyRailing(selectedBalconyRailingId) : null,
+      selectedVolumeBox: selectedVolumeBoxId ? Store.findVolumeBox(selectedVolumeBoxId) : null,
       selectedHydraulicNode: selectedHydraulicNodeId ? Store.findHydraulicNode(selectedHydraulicNodeId) : null,
       roomGroupWallIds: selectedRoomWallIds,
       resizeWallId: resizeWallId,
@@ -2528,6 +2552,41 @@ import {
           dragElementStart = { widthM: brHeightBottom.widthM, heightM: brHeightBottom.heightM, sillHeightM: brHeightBottom.sillHeightM || 0, startScreenY: e.clientY, lastHeightM: brHeightBottom.heightM, lastSillHeightM: brHeightBottom.sillHeightM || 0 };
           beginBalconyResizePreview(brHeightBottom.id);
         }
+      } else if (handle.indexOf('volumeBoxWidth') === 0) {
+        // Bloco de Volumetria — largura (eixo local X, mesma técnica de
+        // balconyWidth).
+        var vbWidth = Store.findVolumeBox(selectedVolumeBoxId);
+        if (vbWidth) {
+          var vbAngle = (vbWidth.rotationDeg || 0) * Math.PI / 180;
+          var vbAxisX = Math.cos(vbAngle), vbAxisY = Math.sin(vbAngle);
+          var vbSide = handle === 'volumeBoxWidthRight' ? 1 : -1;
+          dragElementStart = { widthM: vbWidth.widthM, center: { x: vbWidth.x || 0, y: vbWidth.y || 0 }, axisX: vbAxisX, axisY: vbAxisY, side: vbSide, maxWidthM: Core.VOLUME_BOX_MAX_SIZE_M, lastWidthM: vbWidth.widthM, centerDeltaM: 0 };
+          beginVolumeBoxResizePreview(vbWidth.id);
+        }
+      } else if (handle.indexOf('volumeBoxDepth') === 0) {
+        // Profundidade — mesma técnica, só que no eixo PERPENDICULAR ao
+        // de largura (mesma convenção nx=-uy,ny=ux já usada pra normal
+        // de parede em vários lugares do projeto).
+        var vbDepth = Store.findVolumeBox(selectedVolumeBoxId);
+        if (vbDepth) {
+          var vbDAngle = (vbDepth.rotationDeg || 0) * Math.PI / 180;
+          var vbDAxisX = -Math.sin(vbDAngle), vbDAxisY = Math.cos(vbDAngle);
+          var vbDSide = handle === 'volumeBoxDepthBack' ? 1 : -1;
+          dragElementStart = { widthM: vbDepth.depthM, center: { x: vbDepth.x || 0, y: vbDepth.y || 0 }, axisX: vbDAxisX, axisY: vbDAxisY, side: vbDSide, maxWidthM: Core.VOLUME_BOX_MAX_SIZE_M, lastWidthM: vbDepth.depthM, centerDeltaM: 0 };
+          beginVolumeBoxResizePreview(vbDepth.id);
+        }
+      } else if (handle === 'volumeBoxHeightTop') {
+        var vbHeightTop = Store.findVolumeBox(selectedVolumeBoxId);
+        if (vbHeightTop) {
+          dragElementStart = { heightM: vbHeightTop.heightM, sillHeightM: vbHeightTop.sillHeightM || 0, startScreenY: e.clientY, lastHeightM: vbHeightTop.heightM, lastSillHeightM: vbHeightTop.sillHeightM || 0 };
+          beginVolumeBoxResizePreview(vbHeightTop.id);
+        }
+      } else if (handle === 'volumeBoxHeightBottom') {
+        var vbHeightBottom = Store.findVolumeBox(selectedVolumeBoxId);
+        if (vbHeightBottom) {
+          dragElementStart = { heightM: vbHeightBottom.heightM, sillHeightM: vbHeightBottom.sillHeightM || 0, startScreenY: e.clientY, lastHeightM: vbHeightBottom.heightM, lastSillHeightM: vbHeightBottom.sillHeightM || 0 };
+          beginVolumeBoxResizePreview(vbHeightBottom.id);
+        }
       } else if (handle.indexOf('varandaEdge') === 0) {
         // Varanda não trava em região de cômodo nenhuma (decisão
         // explícita — sempre livre), então não precisa achar região
@@ -2610,6 +2669,15 @@ import {
       if (currentPaintSurface === 'walls' && paintHit && paintHit.object.userData.gableSide && paintHit.object.userData.roofId && currentPaintProductId) {
         Store.commands.setRoofGableFinish(paintHit.object.userData.roofId, paintHit.object.userData.gableSide, currentPaintProductId);
         hintEl.textContent = 'Acabamento aplicado somente à face clicada do oitão.';
+        return;
+      }
+      // Bloco de Volumetria: mesmo catálogo de acabamento de parede
+      // (Product Owner: "ele deve poder ser pintado como as paredes")
+      // — o box inteiro usa o mesmo acabamento nas 6 faces, sem
+      // distinção de lado A/B como a parede tem.
+      if (currentPaintSurface === 'walls' && paintHit && paintHit.object.userData.volumeBoxId && currentPaintProductId) {
+        Store.commands.setVolumeBoxFinish(paintHit.object.userData.volumeBoxId, currentPaintProductId);
+        hintEl.textContent = 'Bloco pintado. Clique em outro pra continuar.';
         return;
       }
       if (currentPaintSurface === 'floors' && paintHit && paintHit.object.userData.roomKey) {
@@ -2774,20 +2842,16 @@ import {
           balconyRailingDragMesh = findBalconyRailingSceneObject(balconyRailingId);
           Store.commands.beginTransaction();
         } else if (mesh.userData.volumeBoxId) {
-          // Bloco de Volumetria: mesmo raciocínio do painel de
-          // Envidraçamento acima — solto (preview) arrasta livre, já
-          // anexado (attached) só seleciona (pra dar acesso ao gizmo
-          // de excluir; reposicionar ao longo da parede fica pra depois).
+          // Bloco de Volumetria: sempre livre, arrasta o corpo direto
+          // (sem ímã de parede — ver types.ts).
           var volumeBoxId = mesh.userData.volumeBoxId;
           var vbEnt = Store.findVolumeBox(volumeBoxId)!;
           selectVolumeBox(volumeBoxId);
-          if (vbEnt.state === 'preview') {
-            dragMode = 'volumeBoxBody';
-            dragElementStart = { x: vbEnt.x || 0, y: vbEnt.y || 0 };
-            dragGroundStart = getGroundModelPoint(e.clientX, e.clientY);
-            volumeBoxDragMesh = findVolumeBoxSceneObject(volumeBoxId);
-            Store.commands.beginTransaction();
-          }
+          dragMode = 'volumeBoxBody';
+          dragElementStart = { x: vbEnt.x || 0, y: vbEnt.y || 0 };
+          dragGroundStart = getGroundModelPoint(e.clientX, e.clientY);
+          volumeBoxDragMesh = findVolumeBoxSceneObject(volumeBoxId);
+          Store.commands.beginTransaction();
         } else if (mesh.userData.openingId) {
           // Esquadria: arrasta livre (sem "segundo clique pra abrir
           // menu") desliza ao longo do EIXO da própria parede — mesma
@@ -2918,40 +2982,12 @@ import {
   // tolerância de "perto o bastante"; fora dela, o painel só fica onde
   // foi solto (continua 'preview', tenta de novo depois).
   var GLAZING_ATTACH_TOLERANCE_MODEL = 1 * Core.GRID; // 1 metro
-  // Tolerância própria do Bloco de Volumetria — um pouco mais generosa
-  // que a do painel de Envidraçamento (1,5m em vez de 1m). O volume
-  // nasce longe de qualquer parede (canto oposto do que já existe +
-  // 1m de vão) e só é RECONHECIDO como "perto o bastante" a partir do
-  // CENTRO do volume até o EIXO da parede — dar um pouco mais de
-  // margem reduz a frustração de arrastar e o encosto não acontecer.
-  var VOLUME_BOX_ATTACH_TOLERANCE_MODEL = 1.5 * Core.GRID; // 1,5 metro
   function nearestWallForGlazingAttach(glazingPanelId: any): string | null {
     var p = Store.findGlazingPanel(glazingPanelId);
     if (!p || p.state !== 'preview') return null;
     var px = p.x || 0, py = p.y || 0;
     var walls = Store.currentWalls();
     var bestId: string | null = null, bestDist = GLAZING_ATTACH_TOLERANCE_MODEL;
-    walls.forEach(function (w: any) {
-      var dx = w.x2 - w.x1, dy = w.y2 - w.y1;
-      var lenSq = dx * dx + dy * dy;
-      if (lenSq < 1e-9) return;
-      var t = Math.max(0, Math.min(1, ((px - w.x1) * dx + (py - w.y1) * dy) / lenSq));
-      var projX = w.x1 + dx * t, projY = w.y1 + dy * t;
-      var dist = Math.hypot(px - projX, py - projY);
-      if (dist < bestDist) { bestDist = dist; bestId = w.id; }
-    });
-    return bestId;
-  }
-
-  // Mesmo ímã de encosto, reaproveitado pro Bloco de Volumetria — a
-  // mesma tolerância e a mesma matemática de menor distância perpendicular
-  // até o segmento da parede.
-  function nearestWallForVolumeBoxAttach(volumeBoxId: any): string | null {
-    var b = Store.findVolumeBox(volumeBoxId);
-    if (!b || b.state !== 'preview') return null;
-    var px = b.x || 0, py = b.y || 0;
-    var walls = Store.currentWalls();
-    var bestId: string | null = null, bestDist = VOLUME_BOX_ATTACH_TOLERANCE_MODEL;
     walls.forEach(function (w: any) {
       var dx = w.x2 - w.x1, dy = w.y2 - w.y1;
       var lenSq = dx * dx + dy * dy;
@@ -3390,6 +3426,70 @@ import {
       }
       return;
     }
+    if (dragMode && dragMode.indexOf('volumeBoxWidth') === 0) {
+      // Cópia direta do redimensionamento de largura da Sacada de vidro
+      // (handle.indexOf('balconyWidth')) — mesma matemática, eixo local X.
+      var vbResizeW = Store.findVolumeBox(selectedVolumeBoxId);
+      var groundResizeVb = getGroundModelPoint(e.clientX, e.clientY);
+      if (vbResizeW && groundResizeVb && dragElementStart) {
+        var alongVb = ((groundResizeVb.x - dragElementStart.center.x) * dragElementStart.axisX + (groundResizeVb.y - dragElementStart.center.y) * dragElementStart.axisY) / Core.GRID;
+        var candidateVbW = Math.max(Core.VOLUME_BOX_MIN_SIZE_M, Math.min(dragElementStart.maxWidthM, dragElementStart.widthM / 2 + alongVb * dragElementStart.side));
+        var centerDeltaVb = dragElementStart.side * (candidateVbW - dragElementStart.widthM) / 2;
+        dragElementStart.lastWidthM = candidateVbW;
+        dragElementStart.centerDeltaM = centerDeltaVb;
+        if (volumeBoxResizePreview) {
+          volumeBoxResizePreview.scale.x = candidateVbW / vbResizeW.widthM;
+          var worldDeltaVb = centerDeltaVb * Core.GRID * scale;
+          volumeBoxResizePreview.position.x = volumeBoxResizeHiddenObject.position.x + dragElementStart.axisX * worldDeltaVb;
+          volumeBoxResizePreview.position.z = volumeBoxResizeHiddenObject.position.z + dragElementStart.axisY * worldDeltaVb;
+        }
+      }
+      return;
+    }
+    if (dragMode && dragMode.indexOf('volumeBoxDepth') === 0) {
+      // Mesma técnica da largura, mas escalando o eixo Z local do
+      // preview (profundidade) em vez do X.
+      var vbResizeD = Store.findVolumeBox(selectedVolumeBoxId);
+      var groundResizeVbD = getGroundModelPoint(e.clientX, e.clientY);
+      if (vbResizeD && groundResizeVbD && dragElementStart) {
+        var alongVbD = ((groundResizeVbD.x - dragElementStart.center.x) * dragElementStart.axisX + (groundResizeVbD.y - dragElementStart.center.y) * dragElementStart.axisY) / Core.GRID;
+        var candidateVbD = Math.max(Core.VOLUME_BOX_MIN_SIZE_M, Math.min(dragElementStart.maxWidthM, dragElementStart.widthM / 2 + alongVbD * dragElementStart.side));
+        var centerDeltaVbD = dragElementStart.side * (candidateVbD - dragElementStart.widthM) / 2;
+        dragElementStart.lastWidthM = candidateVbD;
+        dragElementStart.centerDeltaM = centerDeltaVbD;
+        if (volumeBoxResizePreview) {
+          volumeBoxResizePreview.scale.z = candidateVbD / vbResizeD.depthM;
+          var worldDeltaVbD = centerDeltaVbD * Core.GRID * scale;
+          volumeBoxResizePreview.position.x = volumeBoxResizeHiddenObject.position.x + dragElementStart.axisX * worldDeltaVbD;
+          volumeBoxResizePreview.position.z = volumeBoxResizeHiddenObject.position.z + dragElementStart.axisY * worldDeltaVbD;
+        }
+      }
+      return;
+    }
+    if (dragMode === 'volumeBoxHeightTop') {
+      // Estica a altura pra CIMA — mesma técnica da alça de cima da
+      // Sacada de vidro (balconyHeightTop).
+      var vbTopEnt = Store.findVolumeBox(selectedVolumeBoxId);
+      if (vbTopEnt && dragElementStart && volumeBoxResizePreview) {
+        var candidateVbH = Math.max(Core.VOLUME_BOX_MIN_HEIGHT_M, dragElementStart.heightM + (dragElementStart.startScreenY - e.clientY) * 0.02);
+        dragElementStart.lastHeightM = candidateVbH;
+        volumeBoxResizePreview.scale.y = candidateVbH / vbTopEnt.heightM;
+        volumeBoxResizePreview.position.y = volumeBoxResizeHiddenObject.position.y + (candidateVbH - vbTopEnt.heightM) / 2;
+      }
+      return;
+    }
+    if (dragMode === 'volumeBoxHeightBottom') {
+      // Sobe/desce a base (sillHeightM) — heightM fixo, mesma técnica
+      // da alça de baixo da Sacada de vidro (balconyHeightBottom).
+      var vbBottomEnt = Store.findVolumeBox(selectedVolumeBoxId);
+      if (vbBottomEnt && dragElementStart && volumeBoxResizePreview) {
+        var deltaVbSillM = (dragElementStart.startScreenY - e.clientY) * 0.02;
+        var candidateVbSillM = Math.max(0, dragElementStart.sillHeightM + deltaVbSillM);
+        dragElementStart.lastSillHeightM = candidateVbSillM;
+        volumeBoxResizePreview.position.y = volumeBoxResizeHiddenObject.position.y + (candidateVbSillM - dragElementStart.sillHeightM);
+      }
+      return;
+    }
     if (dragMode && dragMode.indexOf('varandaEdge') === 0) {
       var gpVE = getGroundModelPoint(e.clientX, e.clientY);
       if (gpVE && dragElementStart) {
@@ -3715,6 +3815,34 @@ import {
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }
+    if (dragMode && dragMode.indexOf('volumeBoxWidth') === 0) {
+      var finalVbWidth = dragElementStart && dragElementStart.lastWidthM;
+      clearVolumeBoxResizePreview();
+      if (selectedVolumeBoxId && finalVbWidth) {
+        Store.commands.updateVolumeBoxSizeLive(selectedVolumeBoxId, finalVbWidth, dragElementStart.centerDeltaM || 0);
+      }
+      dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
+      return;
+    }
+    if (dragMode && dragMode.indexOf('volumeBoxDepth') === 0) {
+      var finalVbDepth = dragElementStart && dragElementStart.lastWidthM;
+      clearVolumeBoxResizePreview();
+      if (selectedVolumeBoxId && finalVbDepth) {
+        Store.commands.updateVolumeBoxDepthLive(selectedVolumeBoxId, finalVbDepth, dragElementStart.centerDeltaM || 0);
+      }
+      dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
+      return;
+    }
+    if (dragMode === 'volumeBoxHeightTop' || dragMode === 'volumeBoxHeightBottom') {
+      var finalVbHeight = dragElementStart && dragElementStart.lastHeightM;
+      var finalVbSill = dragElementStart && dragElementStart.lastSillHeightM;
+      clearVolumeBoxResizePreview();
+      if (selectedVolumeBoxId && finalVbHeight != null && finalVbSill != null) {
+        Store.commands.updateVolumeBoxVerticalLive(selectedVolumeBoxId, finalVbHeight, finalVbSill);
+      }
+      dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
+      return;
+    }
     if (dragMode === 'roofRidge' || dragMode === 'roofParapetHeight') {
       if (selectedRoofId && fuseRoofsIfTouching(selectedRoofId)) {
         hintEl.textContent = 'Telhados fundidos — a cumeeira agora é uma só.';
@@ -3755,8 +3883,10 @@ import {
       return;
     }
     if (dragMode === 'volumeBoxBody') {
-      // Mesmo padrão do painel de Envidraçamento — uma única
-      // atualização de Store, com o ímã de encosto rodando por último.
+      // Mesmo padrão do painel de Envidraçamento — única atualização de
+      // Store no fim do arraste. Sem ímã de parede (Product Owner
+      // pediu bloco sempre livre — "tirar o imã e fazer as alças em
+      // todas as direções").
       var vbId = selectedVolumeBoxId;
       if (vbId && dragElementStart && dragGroundStart) {
         var vbUp = getGroundModelPoint(e.clientX, e.clientY);
@@ -3767,15 +3897,6 @@ import {
       }
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       volumeBoxDragMesh = null;
-      if (vbId) {
-        var nearWallIdVb = nearestWallForVolumeBoxAttach(vbId);
-        if (nearWallIdVb) {
-          Store.commands.attachVolumeBoxToWall(vbId, nearWallIdVb);
-          hintEl.textContent = 'Volume encostado na parede. Use os botões ↑/↓ e ⇔/⇕ no menu dele pra ajustar altura e forma.';
-        } else {
-          hintEl.textContent = 'Volume ainda solto — precisa estar a até 1,5m de uma parede pra encostar. Arraste de novo.';
-        }
-      }
       return;
     }
     if (dragMode === 'balconyRailingBody') {
@@ -4584,13 +4705,11 @@ import {
       return;
     }
     if (key === 'volumetria') {
-      // Bloco de Volumetria — mesmo padrão de nascimento solto do
-      // painel de Envidraçamento acima (perto do que já existe, com
-      // 1m de vão). Arraste até perto de uma parede pra encostar
-      // (ímã automático) — ver nearestWallForVolumeBoxAttach/
-      // attachVolumeBoxToWall. Diferente do painel, não recorta a
-      // parede: protrai pra fora dela (ver
-      // Scene3DRenderer.buildVolumeBoxAttachedMesh).
+      // Bloco de Volumetria — sempre livre nas 3 dimensões, sem ímã de
+      // parede (Product Owner: "tirar o imã e fazer as alças em todas
+      // as direções, para que ele possa formar sacadas, marquises,
+      // volumetria, etc") — nasce perto do que já existe (mesmo espírito
+      // de vão de 1m da Pele de vidro/Sacada de vidro).
       var wallsV = Store.currentWalls();
       var minXv = Infinity, maxXv = -Infinity, minYv = Infinity;
       wallsV.forEach(function (w) {
@@ -4605,7 +4724,7 @@ import {
       deselect();
       var newBox = Store.commands.createVolumeBox(gxV, gyV);
       hintEl.textContent = newBox
-        ? 'Volume criado — arraste o corpo dele até no máximo 1,5m de uma parede pra encostar (o encosto acontece ao soltar o mouse).'
+        ? 'Volume criado — arraste o corpo pra posicionar e as alças nas bordas pra ajustar largura, profundidade e altura. Pinte com a Lata de tinta, igual uma parede.'
         : 'Não foi possível criar o volume.';
       return;
     }

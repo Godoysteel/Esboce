@@ -10,14 +10,26 @@ const rendererSource = readFileSync(new URL('../src/core/Scene3DRenderer.ts', im
 const storeSource = readFileSync(new URL('../src/core/Store.ts', import.meta.url), 'utf8');
 const gizmoSource = readFileSync(new URL('../src/core/GizmoController.ts', import.meta.url), 'utf8');
 
-test('createVolumeBoxEntity nasce solto (preview), com o tamanho padrão de 1x1x0,3m', () => {
+// DEC-134 — Product Owner: "quero ter um bloco que eu possa arrastar e
+// movimentar ela para todos os lados, será usado para fazer volumetria,
+// ele deve poder ser pintado como as paredes, pode ser arrastado para
+// qualquer distancia ou altura." Perguntado sobre o ímã de encosto em
+// parede que existia antes, confirmou: "tirar o imã e fazer as alças em
+// todas as direções, para que ele possa formar sacadas, marquises,
+// volumetria, etc". VolumeBox deixou de ter máquina de estados
+// preview/attached — sempre livre, com alças de arraste nas 6 direções
+// e acabamento tipo parede.
+
+test('createVolumeBoxEntity nasce solto, sempre livre (sem state), com o tamanho padrão de 1x1x0,3m e no piso (sillHeightM = 0)', () => {
   const box = createVolumeBoxEntity(100, 200);
-  assert.equal(box.state, 'preview');
+  assert.equal(box.state, undefined);
   assert.equal(box.widthM, Core.VOLUME_BOX_DEFAULT_WIDTH_M);
   assert.equal(box.heightM, Core.VOLUME_BOX_DEFAULT_HEIGHT_M);
   assert.equal(box.depthM, Core.VOLUME_BOX_DEFAULT_DEPTH_M);
+  assert.equal(box.sillHeightM, 0);
   assert.equal(box.x, 100);
   assert.equal(box.y, 200);
+  assert.equal(box.rotationDeg, 0);
 });
 
 // Reforma da navegação (rail de categorias + painel, ver Registro de
@@ -32,14 +44,15 @@ test('index.html: Envidraçamento/Volumetria continuam existindo (dentro de Aber
   assert.match(html, /data-disabled-label="Brises"/);
 });
 
-test('index.html tem o gizmo dedicado do volume, com altura/largura/subir/descer', () => {
+test('index.html: gizmo do volume tem girar/excluir/fechar — sem mais os botões de passo fixo de largura/altura/subir/descer', () => {
   assert.match(html, /id="volumeBoxGizmo"/);
-  assert.match(html, /id="volumeBoxGizmo"[\s\S]*?data-action="heightUp"/);
-  assert.match(html, /id="volumeBoxGizmo"[\s\S]*?data-action="heightDown"/);
-  assert.match(html, /id="volumeBoxGizmo"[\s\S]*?data-action="widthUp"/);
-  assert.match(html, /id="volumeBoxGizmo"[\s\S]*?data-action="widthDown"/);
-  assert.match(html, /id="volumeBoxGizmo"[\s\S]*?data-action="up"/);
-  assert.match(html, /id="volumeBoxGizmo"[\s\S]*?data-action="down"/);
+  assert.match(html, /id="volumeBoxGizmo"[\s\S]*?data-action="rotateCcw"/);
+  assert.match(html, /id="volumeBoxGizmo"[\s\S]*?data-action="rotateCw"/);
+  assert.match(html, /id="volumeBoxGizmo"[\s\S]*?data-action="delete"/);
+  const gizmoBlock = html.slice(html.indexOf('id="volumeBoxGizmo"'), html.indexOf('</div>', html.indexOf('id="volumeBoxGizmo"')));
+  assert.doesNotMatch(gizmoBlock, /data-action="heightUp"/);
+  assert.doesNotMatch(gizmoBlock, /data-action="widthUp"/);
+  assert.doesNotMatch(gizmoBlock, /data-action="up"/);
 });
 
 test('placeRoomPreset cria um Bloco de Volumetria solto pra key "volumetria"', () => {
@@ -47,36 +60,72 @@ test('placeRoomPreset cria um Bloco de Volumetria solto pra key "volumetria"', (
   assert.match(viewportSource, /Store\.commands\.createVolumeBox\(/);
 });
 
-test('a tolerância de encosto do volume é própria (mais generosa que a do vidro) e o pointerup avisa se encostou ou não', () => {
-  assert.match(viewportSource, /VOLUME_BOX_ATTACH_TOLERANCE_MODEL = 1\.5 \* Core\.GRID/);
-  assert.match(viewportSource, /Volume encostado na parede/);
-  assert.match(viewportSource, /Volume ainda solto/);
+test('sem ímã de parede nenhum: nearestWallForVolumeBoxAttach/attachVolumeBoxToWall não existem mais', () => {
+  assert.doesNotMatch(viewportSource, /nearestWallForVolumeBoxAttach/);
+  assert.doesNotMatch(viewportSource, /attachVolumeBoxToWall/);
+  assert.doesNotMatch(viewportSource, /VOLUME_BOX_ATTACH_TOLERANCE_MODEL/);
 });
 
-test('Scene3DRenderer sabe montar o volume solto e o anexado à parede', () => {
-  assert.match(rendererSource, /function buildVolumeBoxPreviewMesh/);
-  assert.match(rendererSource, /function buildVolumeBoxAttachedMesh/);
+test('Scene3DRenderer tem um único builder pro volume (sempre livre) e as 6 alças de arraste', () => {
+  assert.match(rendererSource, /function buildVolumeBoxHitMesh/);
+  assert.doesNotMatch(rendererSource, /function buildVolumeBoxPreviewMesh/);
+  assert.doesNotMatch(rendererSource, /function buildVolumeBoxAttachedMesh/);
   assert.match(rendererSource, /floorData\.volumeBoxes/);
+  const start = rendererSource.indexOf('if (viewState.selectedVolumeBox) {');
+  assert.ok(start !== -1);
+  const end = rendererSource.indexOf('\n    }', start);
+  const body = rendererSource.slice(start, end);
+  assert.match(body, /'volumeBoxWidthLeft'/);
+  assert.match(body, /'volumeBoxWidthRight'/);
+  assert.match(body, /'volumeBoxDepthFront'/);
+  assert.match(body, /'volumeBoxDepthBack'/);
+  assert.match(body, /volumeBoxHeightTop'; vbTopHandle\.renderOrder/);
+  assert.match(body, /volumeBoxHeightBottom'; vbBottomHandle\.renderOrder/);
 });
 
-test('Store tem os comandos de altura/forma do volume, com os limites certos', () => {
-  assert.match(storeSource, /nudgeVolumeBoxHeight\(volumeBoxId: string, deltaM: number\)/);
-  assert.match(storeSource, /resizeVolumeBoxWidth\(volumeBoxId: string, deltaM: number\)/);
-  assert.match(storeSource, /resizeVolumeBoxHeight\(volumeBoxId: string, deltaM: number\)/);
-  // sillHeightM nunca fica negativo (não pode "descer" abaixo do chão)
-  assert.match(storeSource, /b\.sillHeightM = Math\.max\(0, \(b\.sillHeightM \|\| 0\) \+ deltaM\)/);
-  // largura/altura têm um piso mínimo (não fica menor que 0,2m)
-  assert.match(storeSource, /Math\.max\(0\.2, b\.widthM \+ deltaM\)/);
-  assert.match(storeSource, /b\.heightM = Math\.max\(0\.2, b\.heightM \+ deltaM\)/);
-  // altura em relação ao chão só se aplica depois de encostado
-  assert.match(storeSource, /if \(!b \|\| b\.state !== 'attached'\) return;\s*\n\s*pushUndoSnapshot\(\);\s*\n\s*b\.sillHeightM/);
+test('Scene3DRenderer: bloco pintável reaproveita a mesma regra de textura real vs. cor lisa da face de parede (categoria floor_tile x paint)', () => {
+  const start = rendererSource.indexOf('function buildVolumeBoxMaterial(box: any) {');
+  assert.ok(start !== -1);
+  const end = rendererSource.indexOf('\n  }', start);
+  const body = rendererSource.slice(start, end);
+  assert.match(body, /product && product\.category === 'floor_tile' && product\.assets\.textures/);
+  assert.match(body, /buildWallFaceMaterial\(product\)/);
+  assert.match(body, /box\.finishProductId/);
 });
 
-test('GizmoController liga os botões do volumeBoxGizmo aos comandos certos do Store', () => {
-  assert.match(gizmoSource, /volumeBoxGizmoEl/);
-  assert.match(gizmoSource, /Store\.commands\.nudgeVolumeBoxHeight\(volumeBoxId, VOLUME_BOX_STEP_M\)/);
-  assert.match(gizmoSource, /Store\.commands\.nudgeVolumeBoxHeight\(volumeBoxId, -VOLUME_BOX_STEP_M\)/);
-  assert.match(gizmoSource, /Store\.commands\.resizeVolumeBoxWidth\(volumeBoxId, VOLUME_BOX_STEP_M\)/);
-  assert.match(gizmoSource, /Store\.commands\.resizeVolumeBoxHeight\(volumeBoxId, VOLUME_BOX_STEP_M\)/);
+test('Store: comandos de largura/profundidade/altura/elevação são arraste de verdade (Live), com os limites certos, sem mais os de passo fixo', () => {
+  assert.match(storeSource, /updateVolumeBoxSizeLive\(volumeBoxId: string, widthM: number, centerDeltaM = 0\): void \{/);
+  assert.match(storeSource, /updateVolumeBoxDepthLive\(volumeBoxId: string, depthM: number, centerDeltaM = 0\): void \{/);
+  assert.match(storeSource, /updateVolumeBoxVerticalLive\(volumeBoxId: string, heightM: number, sillHeightM: number\): void \{/);
+  assert.match(storeSource, /rotateVolumeBox\(volumeBoxId: string, stepDeg\?: number\): void \{/);
+  assert.match(storeSource, /setVolumeBoxFinish\(volumeBoxId: string, productId: string\): void \{/);
+  assert.doesNotMatch(storeSource, /nudgeVolumeBoxHeight/);
+  assert.doesNotMatch(storeSource, /resizeVolumeBoxWidth\(/);
+  assert.doesNotMatch(storeSource, /resizeVolumeBoxHeight\(/);
+  assert.doesNotMatch(storeSource, /resizeVolumeBoxDepth\(/);
 });
 
+test('Store.updateVolumeBoxVerticalLive trava heightM/sillHeightM nos limites certos (mesmo padrão de updateBalconyRailingVerticalLive)', () => {
+  const start = storeSource.indexOf('updateVolumeBoxVerticalLive(volumeBoxId: string, heightM: number, sillHeightM: number): void {');
+  const end = storeSource.indexOf('\n  },', start);
+  const body = storeSource.slice(start, end);
+  assert.match(body, /b\.heightM = Math\.max\(Core\.VOLUME_BOX_MIN_HEIGHT_M, Math\.min\(Core\.VOLUME_BOX_MAX_HEIGHT_M, heightM\)\);/);
+  assert.match(body, /b\.sillHeightM = Math\.max\(0, Math\.min\(Core\.VOLUME_BOX_MAX_SILL_HEIGHT_M, sillHeightM\)\);/);
+});
+
+test('GizmoController liga o volumeBoxGizmo a girar (90°)/excluir/fechar — nada mais', () => {
+  const start = gizmoSource.indexOf('function handleVolumeBoxAction(');
+  const end = gizmoSource.indexOf('\n}', start);
+  const body = gizmoSource.slice(start, end);
+  assert.match(body, /Store\.commands\.rotateVolumeBox\(volumeBoxId, action === 'rotateCw' \? 90 : -90\);/);
+  assert.match(body, /Store\.commands\.deleteVolumeBox\(volumeBoxId\)/);
+  assert.doesNotMatch(body, /nudgeVolumeBoxHeight|resizeVolumeBoxWidth|resizeVolumeBoxHeight/);
+});
+
+test('ViewportController: ferramenta Lata de tinta aplica acabamento tipo parede num volume clicado (Product Owner: "pintado como as paredes")', () => {
+  const start = viewportSource.indexOf("if (currentPaintSurface === 'walls' && paintHit && paintHit.object.userData.volumeBoxId && currentPaintProductId) {");
+  assert.ok(start !== -1);
+  const end = viewportSource.indexOf('\n      }', start);
+  const body = viewportSource.slice(start, end);
+  assert.match(body, /Store\.commands\.setVolumeBoxFinish\(paintHit\.object\.userData\.volumeBoxId, currentPaintProductId\);/);
+});

@@ -30,7 +30,13 @@ import type {
 // Owner pediu alça embaixo pra subir/descer a peça inteira, além da de
 // cima pra esticar a altura. Documentos v11 e anteriores abrem
 // normalmente; sem o campo, a sacada nasce no piso (sillHeightM = 0).
-export const CURRENT_PROJECT_SCHEMA_VERSION = 12;
+// v13: VolumeBox perde a máquina de estados preview/attached (campos
+// state/wallId/offsetM/normalSign) — Product Owner pediu bloco sempre
+// livre, sem ímã de parede, com alças em todas as direções, mais
+// `finishProductId` novo (acabamento tipo parede, categoria "paint").
+// Documentos v12 e anteriores abrem normalmente; um volume que estava
+// 'attached' abre solto na origem (0,0) — reposicionar é rápido.
+export const CURRENT_PROJECT_SCHEMA_VERSION = 13;
 
 export interface StoredProjectDocument {
   schemaVersion: number;
@@ -319,28 +325,26 @@ function parseVolumeBox(value: unknown, path: string): VolumeBox {
   const v = record(value, path);
   const box: VolumeBox = {
     id: string(v.id, `${path}.id`),
-    state: enumValue(v.state, ['preview', 'attached'], `${path}.state`, 'preview'),
+    // v13: campos de encosto em parede (state/wallId/offsetM/normalSign)
+    // removidos — Product Owner pediu bloco sempre livre ("tirar o imã
+    // e fazer as alças em todas as direções"). Documentos salvos antes
+    // desta versão com um volume 'attached' (sem x/y próprios, só
+    // wallId+offsetM) abrem soltos na origem — reposicionar é rápido, e
+    // reconstituir a posição exata exigiria reabrir a parede hospedeira
+    // aqui, fora do escopo deste parser.
+    x: optionalNumber(v.x, `${path}.x`) ?? 0,
+    y: optionalNumber(v.y, `${path}.y`) ?? 0,
+    rotationDeg: number(v.rotationDeg, `${path}.rotationDeg`, 0),
     widthM: number(v.widthM, `${path}.widthM`),
     heightM: number(v.heightM, `${path}.heightM`),
     depthM: number(v.depthM, `${path}.depthM`, 0.3),
   };
   const colorHex = optionalString(v.colorHex, `${path}.colorHex`);
-  const wallId = optionalString(v.wallId, `${path}.wallId`);
-  const offsetM = optionalNumber(v.offsetM, `${path}.offsetM`);
   const sillHeightM = optionalNumber(v.sillHeightM, `${path}.sillHeightM`);
-  const x = optionalNumber(v.x, `${path}.x`);
-  const y = optionalNumber(v.y, `${path}.y`);
-  const rotationDeg = optionalNumber(v.rotationDeg, `${path}.rotationDeg`);
-  const normalSign = optionalNumber(v.normalSign, `${path}.normalSign`);
+  const finishProductId = optionalString(v.finishProductId, `${path}.finishProductId`);
   if (colorHex !== undefined) box.colorHex = colorHex;
-  if (wallId !== undefined) box.wallId = wallId;
-  if (offsetM !== undefined) box.offsetM = offsetM;
   if (sillHeightM !== undefined) box.sillHeightM = sillHeightM;
-  if (x !== undefined) box.x = x;
-  if (y !== undefined) box.y = y;
-  if (rotationDeg !== undefined) box.rotationDeg = rotationDeg;
-  if (normalSign !== undefined) box.normalSign = normalSign < 0 ? -1 : 1;
-  if (box.state === 'attached' && !box.wallId) fail(`${path}.wallId`, 'volume anexado precisa de parede hospedeira');
+  if (finishProductId !== undefined) box.finishProductId = finishProductId;
   return box;
 }
 
@@ -441,9 +445,6 @@ function parseFloor(value: unknown, path: string): Floor {
   });
   floor.glazingPanels.forEach((panel, index) => {
     if (panel.wallId && !wallIds.has(panel.wallId)) fail(`${path}.glazingPanels[${index}].wallId`, 'parede hospedeira não existe');
-  });
-  floor.volumeBoxes.forEach((box, index) => {
-    if (box.wallId && !wallIds.has(box.wallId)) fail(`${path}.volumeBoxes[${index}].wallId`, 'parede hospedeira não existe');
   });
   const ids = [...floor.walls, ...floor.columns, ...floor.roofs, ...floor.openings, ...floor.varandas, ...floor.lajes, ...floor.furniture, ...floor.glazingPanels, ...floor.balconyRailings, ...floor.volumeBoxes].map((item) => item.id);
   if (new Set(ids).size !== ids.length) fail(path, 'há identificadores de entidades duplicados');

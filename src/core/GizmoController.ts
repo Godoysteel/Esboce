@@ -75,24 +75,22 @@ function handleGlazingPanelAction(glazingPanelId: string, action: string): void 
   if (action === 'delete') { Store.commands.deleteGlazingPanel(glazingPanelId); ViewportController.deselect(); return; }
 }
 
-// Bloco de Volumetria — mesmo espírito do painel de Envidraçamento
-// acima: close/delete continuam aqui; os ajustes de forma/altura (ver
-// #volumeBoxGizmo/index.html) são passo fixo de 0,1m por clique —
-// ainda não é arrastar a borda de verdade (isso fica pra uma próxima
-// etapa, se pedida), mas já dá controle real sem precisar de um painel
-// numérico à parte.
-const VOLUME_BOX_STEP_M = 0.1;
+// Bloco de Volumetria — girar (90° por clique, mesmo padrão de
+// rotateFurniture/rotateBalconyRailing — útil pra alinhar o volume com
+// uma parede em ângulo) e excluir. Largura/profundidade/altura/
+// elevação passaram a ser arraste de verdade nas alças 3D (ver
+// Scene3DRenderer renderSelectionHandles + ViewportController
+// dragMode volumeBoxWidth*/volumeBoxDepth*/volumeBoxHeight*) — sem
+// mais os botões de passo fixo de 0,1m que existiam antes aqui.
 function handleVolumeBoxAction(volumeBoxId: string, action: string): void {
   const b = Store.findVolumeBox(volumeBoxId);
   if (!b) return;
   if (action === 'close') { ViewportController.deselect(); return; }
   if (action === 'delete') { Store.commands.deleteVolumeBox(volumeBoxId); ViewportController.deselect(); return; }
-  if (action === 'up') { Store.commands.nudgeVolumeBoxHeight(volumeBoxId, VOLUME_BOX_STEP_M); return; }
-  if (action === 'down') { Store.commands.nudgeVolumeBoxHeight(volumeBoxId, -VOLUME_BOX_STEP_M); return; }
-  if (action === 'widthUp') { Store.commands.resizeVolumeBoxWidth(volumeBoxId, VOLUME_BOX_STEP_M); return; }
-  if (action === 'widthDown') { Store.commands.resizeVolumeBoxWidth(volumeBoxId, -VOLUME_BOX_STEP_M); return; }
-  if (action === 'heightUp') { Store.commands.resizeVolumeBoxHeight(volumeBoxId, VOLUME_BOX_STEP_M); return; }
-  if (action === 'heightDown') { Store.commands.resizeVolumeBoxHeight(volumeBoxId, -VOLUME_BOX_STEP_M); return; }
+  if (action === 'rotateCw' || action === 'rotateCcw') {
+    Store.commands.rotateVolumeBox(volumeBoxId, action === 'rotateCw' ? 90 : -90);
+    return;
+  }
 }
 
 // Móvel: girar (90° por clique)/duplicar/excluir. Mover é só arrasto

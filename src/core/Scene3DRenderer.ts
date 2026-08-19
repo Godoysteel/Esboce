@@ -2303,16 +2303,42 @@ export function hashColorHex(key: string): number {
     return mesh;
   }
 
-  // Bloco de Volumetria (fachada procedural) — box sólido simples.
-  // Diferente do painel de Envidraçamento, não recorta nenhuma banda
-  // da parede: é um volume que só se ENCOSTA e protrai pra fora,
-  // igual um caixilho saliente/bay window/ornamento de massa. Mesma
-  // técnica de hitMesh invisível + malha de verdade como filho (pick/
-  // arraste enxergam o hitMesh, a malha visual acompanha sozinha).
+  // Bloco de Volumetria — box sólido, sempre livre (sem ímã de parede,
+  // ver comentário completo em types.ts), pintável com o mesmo
+  // catálogo de acabamento de parede (finishProductId). Mesma técnica
+  // de hitMesh invisível + malha de verdade como filho (pick/arraste
+  // enxergam o hitMesh, a malha visual acompanha sozinha).
+  //
+  // Reaproveita exatamente a mesma regra de textura real vs. cor lisa
+  // já usada pela face da parede (ver o loop de w.finishA/finishB mais
+  // abaixo): produtos "floor_tile" com texturas de verdade usam
+  // buildWallFaceMaterial (PBR completo); qualquer outro produto
+  // (categoria "paint", sempre sem textura) usa só a cor sólida do
+  // Catálogo. Uma única textura/material pras 6 faces — sem escala de
+  // repetição proporcional por face (simplificação aceitável pra um
+  // bloco de estudo volumétrico, diferente da parede que tem só 2
+  // faces de tamanho fixo).
+  function buildVolumeBoxMaterial(box: any) {
+    var product = box.finishProductId ? Catalog.getProduct(box.finishProductId) : null;
+    var hasRealTexture = !!(product && product.category === 'floor_tile' && product.assets.textures);
+    var isCeramic = !!(product && product.category === 'floor_tile' && !hasRealTexture);
+    var ceramicMap = isCeramic ? buildCeramicTexture(product!.assets.colorHex, 1, 0) : null;
+    var wallPbrMaps = hasRealTexture ? buildWallFaceMaterial(product) : null;
+    var colorHex = product ? product.assets.colorHex : (box.colorHex || Core.VOLUME_BOX_DEFAULT_COLOR);
+    return new THREE.MeshStandardMaterial({
+      color: new THREE.Color((isCeramic || hasRealTexture) ? '#ffffff' : colorHex),
+      map: hasRealTexture ? wallPbrMaps!.map : ceramicMap,
+      normalMap: hasRealTexture ? wallPbrMaps!.normalMap : null,
+      roughnessMap: hasRealTexture ? wallPbrMaps!.roughnessMap : null,
+      aoMap: hasRealTexture ? wallPbrMaps!.aoMap : null,
+      roughness: hasRealTexture ? 1 : 0.85,
+      metalness: 0.05,
+    });
+  }
+
   function buildVolumeBoxMesh(box: any) {
     var geo = new THREE.BoxGeometry(box.widthM, box.heightM, box.depthM);
-    var color = box.colorHex || Core.VOLUME_BOX_DEFAULT_COLOR;
-    var mat = new THREE.MeshStandardMaterial({ color: new THREE.Color(color), roughness: 0.85, metalness: 0.05 });
+    var mat = buildVolumeBoxMaterial(box);
     var mesh = new THREE.Mesh(geo, mat);
     var edges = new THREE.EdgesGeometry(geo);
     var edgeLines = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x1B1C1E }));
@@ -2321,47 +2347,16 @@ export function hashColorHex(key: string): number {
     return group;
   }
 
-  function buildVolumeBoxPreviewMesh(box: any, scale: any, offsetX: any, offsetY: any, yOffset: any) {
+  function buildVolumeBoxHitMesh(box: any, scale: any, offsetX: any, offsetY: any, yOffset: any) {
+    var sill = box.sillHeightM || 0;
     var hitGeo = new THREE.BoxGeometry(box.widthM, box.heightM, box.depthM);
     var hitMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 });
     var hitMesh = new THREE.Mesh(hitGeo, hitMat);
     var group = buildVolumeBoxMesh(box);
     hitMesh.add(group);
     var px = ((box.x || 0) - offsetX) * scale, pz = ((box.y || 0) - offsetY) * scale;
-    hitMesh.position.set(px, yOffset + box.heightM / 2, pz);
-    hitMesh.rotation.y = -((box.rotationDeg || 0) * Math.PI / 180);
-    return hitMesh;
-  }
-
-  // Volume já encostado (state 'attached') — nasce na face da parede
-  // (metade da espessura dela a partir do eixo) e protrai depthM pra
-  // fora, no lado indicado por normalSign (decidido uma vez no
-  // momento do encosto — ver Store.commands.attachVolumeBoxToWall).
-  function buildVolumeBoxAttachedMesh(box: any, wall: any, scale: any, offsetX: any, offsetY: any, yOffset: any) {
-    var dx = wall.x2 - wall.x1, dy = wall.y2 - wall.y1;
-    var lenModel = Math.hypot(dx, dy) || 1e-6;
-    var ux = dx / lenModel, uy = dy / lenModel;
-    var nx = -uy, ny = ux; // normal unitária, perpendicular ao eixo da parede
-    var sign = box.normalSign === -1 ? -1 : 1;
-    var offsetModel = (box.offsetM || 0) * Core.GRID;
-    var alongX = wall.x1 + ux * offsetModel, alongY = wall.y1 + uy * offsetModel;
-    var faceDistM = (Core.WALL_THICK / 2) + (box.depthM / 2);
-    var cxModel = alongX + nx * sign * faceDistM * Core.GRID;
-    var cyModel = alongY + ny * sign * faceDistM * Core.GRID;
-    var hitGeo = new THREE.BoxGeometry(box.widthM, box.heightM, box.depthM);
-    var hitMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 });
-    var hitMesh = new THREE.Mesh(hitGeo, hitMat);
-    var group = buildVolumeBoxMesh(box);
-    hitMesh.add(group);
-    var px = (cxModel - offsetX) * scale, pz = (cyModel - offsetY) * scale;
-    var sill = box.sillHeightM || 0;
     hitMesh.position.set(px, yOffset + sill + box.heightM / 2, pz);
-    // A caixa (BoxGeometry) é simétrica no eixo local Z (profundidade)
-    // — quem decide pra que lado ela protrai é só a translação acima
-    // (cxModel/cyModel já deslocados por normalSign), não a rotação.
-    // A rotação só precisa alinhar a largura da caixa com o eixo da
-    // parede, mesma fórmula do painel de Envidraçamento.
-    hitMesh.rotation.y = -Math.atan2(uy, ux);
+    hitMesh.rotation.y = -((box.rotationDeg || 0) * Math.PI / 180);
     return hitMesh;
   }
 
@@ -3449,6 +3444,44 @@ export function hashColorHex(key: string): number {
       scene.add(bottomHandle); registry.handleMeshes.push(bottomHandle);
     }
 
+    if (viewState.selectedVolumeBox) {
+      // Bloco de Volumetria — 6 alças, uma por direção (Product Owner:
+      // "tirar o imã e fazer as alças em todas as direções"): esquerda/
+      // direita (largura, eixo local X), frente/trás (profundidade,
+      // eixo local Z — perpendicular ao de largura) e cima/baixo
+      // (altura/elevação, mesmo par da Sacada de vidro).
+      var vbSel = viewState.selectedVolumeBox;
+      var vbYOffset = viewState.editingYOffset;
+      var vbSill = vbSel.sillHeightM || 0;
+      var vbCx = vbSel.x || 0, vbCy = vbSel.y || 0, vbAngle = (vbSel.rotationDeg || 0) * Math.PI / 180;
+      var vbAxisX = Math.cos(vbAngle), vbAxisY = Math.sin(vbAngle);
+      var vbDepthAxisX = -Math.sin(vbAngle), vbDepthAxisY = Math.cos(vbAngle);
+      var vbCenterWorldX = (vbCx - offsetX) * scale, vbCenterWorldZ = (vbCy - offsetY) * scale;
+      var vbHandleY = vbYOffset + vbSill + vbSel.heightM / 2;
+      [-1, 1].forEach(function (side) {
+        var modelOffset = vbSel.widthM * Core.GRID / 2 * side;
+        var handle = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 12), new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false }));
+        handle.position.set(vbCenterWorldX + vbAxisX * modelOffset * scale, vbHandleY, vbCenterWorldZ + vbAxisY * modelOffset * scale);
+        handle.userData.handle = side < 0 ? 'volumeBoxWidthLeft' : 'volumeBoxWidthRight';
+        handle.renderOrder = 999; scene.add(handle); registry.handleMeshes.push(handle);
+      });
+      [-1, 1].forEach(function (side) {
+        var modelOffset = vbSel.depthM * Core.GRID / 2 * side;
+        var handle = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 12), new THREE.MeshBasicMaterial({ color: 0xffd166, depthTest: false }));
+        handle.position.set(vbCenterWorldX + vbDepthAxisX * modelOffset * scale, vbHandleY, vbCenterWorldZ + vbDepthAxisY * modelOffset * scale);
+        handle.userData.handle = side < 0 ? 'volumeBoxDepthFront' : 'volumeBoxDepthBack';
+        handle.renderOrder = 999; scene.add(handle); registry.handleMeshes.push(handle);
+      });
+      var vbTopHandle = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 12), new THREE.MeshBasicMaterial({ color: SELECTED_ACCENT, depthTest: false }));
+      vbTopHandle.position.set(vbCenterWorldX, vbYOffset + vbSill + vbSel.heightM + 0.15, vbCenterWorldZ);
+      vbTopHandle.userData.handle = 'volumeBoxHeightTop'; vbTopHandle.renderOrder = 999;
+      scene.add(vbTopHandle); registry.handleMeshes.push(vbTopHandle);
+      var vbBottomHandle = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 12), new THREE.MeshBasicMaterial({ color: SELECTED_ACCENT, depthTest: false }));
+      vbBottomHandle.position.set(vbCenterWorldX, vbYOffset + Math.max(0, vbSill - 0.15), vbCenterWorldZ);
+      vbBottomHandle.userData.handle = 'volumeBoxHeightBottom'; vbBottomHandle.renderOrder = 999;
+      scene.add(vbBottomHandle); registry.handleMeshes.push(vbBottomHandle);
+    }
+
     if (viewState.selectedVaranda) {
       var vSel = viewState.selectedVaranda, vYOffset = viewState.editingYOffset;
       var vMidX = (vSel.x1 + vSel.x2) / 2, vMidY = (vSel.y1 + vSel.y2) / 2;
@@ -3636,17 +3669,10 @@ export function hashColorHex(key: string): number {
         // Mesmo raciocínio de registro do painel de Envidraçamento
         // acima: furnitureMeshes (não structureMeshes) porque o volume
         // também é um Group com filhos (malha + arestas) dentro do
-        // hitMesh — precisa da limpeza recursiva.
-        var vmesh;
-        if (box.state === 'attached' && box.wallId) {
-          var hostWallV = (floorData.walls || []).find(function (w) { return w.id === box.wallId; });
-          if (!hostWallV) return;
-          vmesh = buildVolumeBoxAttachedMesh(box, hostWallV, scale, offsetX, offsetY, yOffset);
-        } else if (box.state === 'preview') {
-          vmesh = buildVolumeBoxPreviewMesh(box, scale, offsetX, offsetY, yOffset);
-        } else {
-          return;
-        }
+        // hitMesh — precisa da limpeza recursiva. Sempre livre agora
+        // (sem ímã de parede, ver types.ts) — um único builder, sem
+        // ramificação de estado.
+        var vmesh = buildVolumeBoxHitMesh(box, scale, offsetX, offsetY, yOffset);
         tagCategory(vmesh, 'volumeBox');
         vmesh.userData.volumeBoxId = box.id; vmesh.userData.floorIndex = floorIdx;
         scene.add(vmesh);
