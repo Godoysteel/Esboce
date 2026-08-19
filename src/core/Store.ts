@@ -1538,6 +1538,42 @@ export const commands = {
     emit({ type: 'RoofBaseHeightChanged', roofId, live: true });
   },
 
+  // Seta de ajuste manual (DEC-123) — só telhado comum (não-ático, que já
+  // tem sua própria alça de arrasto). Desce um degrau por clique, entre os
+  // valores de Core.roofCandidateHeightsAtRect (do mais alto — onde o
+  // telhado sempre nasce — até a altura própria do cômodo, o mais baixo).
+  // Já grava em Roof.baseHeightM na hora — a partir daqui o telhado para
+  // de recalcular sozinho a cada render (ver Scene3DRenderer.ts).
+  stepRoofHeightDown(roofId: string): boolean {
+    const r = findRoof(roofId);
+    if (!r || r.atticMode) return false;
+    const walls = currentWalls();
+    const candidates = Core.roofCandidateHeightsAtRect(walls, r.x1, r.y1, r.x2, r.y2, Core.WALL_HEIGHT);
+    const currentHeight = r.baseHeightM != null ? r.baseHeightM : candidates[0]!;
+    const next = candidates.find((h) => h < currentHeight - 1e-6);
+    if (next == null) return false; // já no degrau mais baixo (altura própria do cômodo)
+    pushUndoSnapshot();
+    r.baseHeightM = next;
+    emit({ type: 'RoofHeightStepped', roofId });
+    return true;
+  },
+
+  // Congela a altura VIVA atual (Core.roofHeightAtRect) em Roof.baseHeightM
+  // — chamado quando o usuário deselecionar o telhado ou soltar um arrasto
+  // pelas alças enquanto a seta de ajuste ainda estava armada (ver
+  // ViewportController.ts, heightAdjustArmedRoofId). Sem pushUndoSnapshot
+  // de propósito: o telhado já estava visualmente nessa altura — congelar
+  // só impede que ela volte a subir sozinha depois, não é uma ação que o
+  // usuário precise desfazer separadamente. Não-op se já estiver congelado
+  // (baseHeightM já definido) ou se for ático (tem seu próprio campo).
+  freezeRoofHeight(roofId: string): void {
+    const r = findRoof(roofId);
+    if (!r || r.atticMode || r.baseHeightM != null) return;
+    const walls = currentWalls();
+    r.baseHeightM = Core.roofHeightAtRect(walls, r.x1, r.y1, r.x2, r.y2, Core.WALL_HEIGHT);
+    emit({ type: 'RoofHeightFrozen', roofId });
+  },
+
   generateAttic(roofId: string): void {
     const r = findRoof(roofId); if (!r || r.atticMode !== 'preview') return;
     pushUndoSnapshot();

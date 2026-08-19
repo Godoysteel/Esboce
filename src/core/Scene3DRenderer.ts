@@ -41,6 +41,13 @@ export interface ViewState {
   // aparece, não é pickável, mesma proteção de "comando separado" já
   // pedida.
   heightAdjustArmedWallId?: string | null;
+  // Seta de ajuste manual da altura do telhado comum (DEC-123) — só
+  // aparece enquanto este telhado está "armado": logo depois de criado,
+  // até o usuário clicar fora (deselecionar) ou soltar um arrasto pelas
+  // alças de redimensionar. Cada clique na seta desce um degrau (ver
+  // Core.roofCandidateHeightsAtRect) e grava em Roof.baseHeightM —
+  // dali em diante o telhado para de subir sozinho.
+  heightAdjustArmedRoofId?: string | null;
   roomGroupWallIds?: string[] | null;
   selectedColumn?: Column | null;
   selectedOpening?: Opening | null;
@@ -3028,8 +3035,45 @@ export function hashColorHex(key: string): number {
     }
     if (viewState.selectedRoof) {
       var r = viewState.selectedRoof, roofYOffset = viewState.editingYOffset;
-      var topY = roofYOffset + (r.atticMode ? (r.baseHeightM || 1.2) : wallHeight);
+      // Mesma regra do loop principal de render (DEC-95/123): telhado
+      // comum usa a altura VIVA (Core.roofHeightAtRect) até ficar
+      // congelado em Roof.baseHeightM — sem isso, as alças (cumeeira,
+      // bordas, e agora a seta de ajuste) nasciam sempre em wallHeight, a
+      // altura padrão do PAVIMENTO, errado pra qualquer cômodo com
+      // altura própria diferente.
+      var roofOwnHeightForHandles = r.atticMode ? (r.baseHeightM || 1.2)
+        : (r.baseHeightM != null ? r.baseHeightM : Core.roofHeightAtRect(walls, r.x1, r.y1, r.x2, r.y2, wallHeight));
+      var topY = roofYOffset + roofOwnHeightForHandles;
       var midX = (r.x1 + r.x2) / 2, midY = (r.y1 + r.y2) / 2;
+
+      // Seta de ajuste manual da altura (DEC-123) — só telhado comum
+      // (não-ático, que já tem sua própria alça de arrasto), e só
+      // enquanto armada (ver comentário completo em ViewState acima):
+      // logo depois de criado, até deselecionar ou soltar um arrasto
+      // pelas alças. Grande e sempre de frente pra câmera (Sprite, mesma
+      // técnica da logo — DEC anterior), impossível de confundir com as
+      // alças pequenas de redimensionar.
+      if (!r.atticMode && viewState.heightAdjustArmedRoofId === r.id) {
+        var arrowX = (midX - offsetX) * scale, arrowZ = (midY - offsetY) * scale;
+        var arrowY = topY + 1.6;
+        var arrowCanvas = document.createElement('canvas');
+        arrowCanvas.width = 128; arrowCanvas.height = 128;
+        var arrowCtx = arrowCanvas.getContext('2d')!;
+        arrowCtx.fillStyle = '#F4A340';
+        arrowCtx.beginPath();
+        arrowCtx.moveTo(24, 16); arrowCtx.lineTo(104, 16); arrowCtx.lineTo(104, 64); arrowCtx.lineTo(128, 64);
+        arrowCtx.lineTo(64, 120); arrowCtx.lineTo(0, 64); arrowCtx.lineTo(24, 64); arrowCtx.closePath();
+        arrowCtx.fill();
+        var arrowTexture = new THREE.CanvasTexture(arrowCanvas);
+        var arrowSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: arrowTexture, depthTest: false, transparent: true }));
+        arrowSprite.scale.set(0.6, 0.6, 1);
+        arrowSprite.position.set(arrowX, arrowY, arrowZ);
+        arrowSprite.renderOrder = 1000;
+        arrowSprite.userData.handle = 'roofHeightStepDown';
+        arrowSprite.userData.roofHandleForId = r.id;
+        scene.add(arrowSprite);
+        registry.handleMeshes.push(arrowSprite);
+      }
 
       // 4 alças nas bordas — arrastar uma estica/encolhe só aquele lado
       [
@@ -3673,6 +3717,39 @@ export function hashColorHex(key: string): number {
       if (layers.telhado && floorData.roofs) {
         var roofTopY = yOffset + currentWallHeight;
         var wallMatchColor = computeWallMatchColor(floorData.walls);
+        // Regra geral (Product Owner: "toda parte do telhado que
+        // sobrepor uma parede deve ser excluída"): onde a superfície do
+        // telhado passa POR DENTRO de uma parede (parede mais alta que o
+        // telhado ali), essa fatia é recortada — reaproveita a mesma
+        // técnica de plano de corte já usada pra separar as duas águas
+        // de um telhado composto (roofCutRegions/clipMeshOutsideRects,
+        // logo abaixo), só que com um plano HORIZONTAL na altura real de
+        // CADA parede (Core.resolvedWallHeights) em vez do plano
+        // inclinado da água vizinha. Auto-limitado: onde a parede já é
+        // mais baixa que o telhado (o caso normal), o corte não remove
+        // nada — só faz efeito exatamente onde uma parede realmente
+        // ultrapassa a superfície (ex.: a parede compartilhada de um
+        // cômodo vizinho mais alto, telhado ainda no degrau de baixo).
+        // Calculado uma vez pra todo o pavimento (não depende do telhado
+        // em si), reaproveitado por todos.
+        var wallTopHeights = Core.resolvedWallHeights(floorData.walls, currentWallHeight);
+        // Margem folgada (não só a meia-espessura da parede, ~6cm): o
+        // corte por retângulo+plano só têm efeito DENTRO do retângulo —
+        // um triângulo grande do telhado (água, beiral) que só passa de
+        // raspão por uma faixa fina de 12cm nunca chega a ser cortado,
+        // porque a maior parte dele já é descartada como "fora do
+        // retângulo" antes mesmo do teste de altura rodar. A margem usa
+        // o mesmo alcance do beiral (ROOF_OVERHANG) pra garantir que
+        // qualquer parte do telhado que fisicamente possa chegar perto
+        // da parede é testada contra a altura dela.
+        var wallClipMarginM = ROOF_OVERHANG;
+        var wallClipRects = floorData.walls.map(function (w) {
+          var wMinX = (Math.min(w.x1, w.x2) - offsetX) * scale, wMaxX = (Math.max(w.x1, w.x2) - offsetX) * scale;
+          var wMinZ = (Math.min(w.y1, w.y2) - offsetY) * scale, wMaxZ = (Math.max(w.y1, w.y2) - offsetY) * scale;
+          var resolvedWallTop = wallTopHeights[w.id];
+          var wallTopY = yOffset + (resolvedWallTop != null ? resolvedWallTop : currentWallHeight);
+          return { minX: wMinX - wallClipMarginM, maxX: wMaxX + wallClipMarginM, minZ: wMinZ - wallClipMarginM, maxZ: wMaxZ + wallClipMarginM, plane: { ax: 0, az: 0, c: wallTopY } };
+        });
         floorData.roofs.forEach(function (roof) {
           // Acompanha a altura PRÓPRIA do cômodo embaixo do centro do
           // telhado (Core.roofHeightAtRect, mesma regra da laje/DEC-88) —
@@ -3681,8 +3758,12 @@ export function hashColorHex(key: string): number {
           // espírito de Core.resolvedWallHeights). Cai pro padrão do
           // pavimento quando não há cômodo fechado sob o telhado. Ático
           // continua usando `baseHeightM` — campo próprio, deliberado.
-          var otherRoofRects = floorData.roofs.filter(function (r: any) { return r.id !== roof.id; }).map(function (r: any) { return { x1: r.x1, y1: r.y1, x2: r.x2, y2: r.y2 }; });
-          var roofOwnHeight = roof.atticMode ? (roof.baseHeightM || 1.2) : Core.roofHeightAtRect(floorData.walls, roof.x1, roof.y1, roof.x2, roof.y2, currentWallHeight, otherRoofRects);
+          // Telhado comum: nasce sempre no degrau mais alto (DEC-95), mas
+          // uma vez que o usuário mexe na seta de ajuste manual (DEC-123)
+          // ou solta o arrasto pelas alças, `baseHeightM` fica gravado —
+          // congelado, para de recalcular sozinho a partir daí.
+          var roofOwnHeight = roof.atticMode ? (roof.baseHeightM || 1.2)
+            : (roof.baseHeightM != null ? roof.baseHeightM : Core.roofHeightAtRect(floorData.walls, roof.x1, roof.y1, roof.x2, roof.y2, currentWallHeight));
           var pieceBaseY = yOffset + roofOwnHeight;
           var pieces = buildRoofPiece(roof, scale, offsetX, offsetY, pieceBaseY, viewState, wallMatchColor);
           if (roof.atticMode === 'preview') pieces.forEach(function (piece) {
@@ -3700,6 +3781,8 @@ export function hashColorHex(key: string): number {
           }).reduce(function (regions: any[], other) {
             return regions.concat(roofCutRegions(other, scale, offsetX, offsetY, roofTopY));
           }, []);
+          var roofWallClipRects = wallClipRects.filter(function (rect: any) { return rectsOverlapArea(ownFootprint, rect) > 1e-6; });
+          trimRects = trimRects.concat(roofWallClipRects);
           pieces.forEach(function (m) {
             if (roof.atticMode === 'generated' && m.userData.gableSide) return;
             clipMeshOutsideRects(m, trimRects);

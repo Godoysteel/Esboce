@@ -59,7 +59,16 @@ export interface Roof {
   parapetHeight?: number;
   /** Fluxo paramétrico do ático: prévia transparente ou recorte confirmado. */
   atticMode?: 'preview' | 'generated';
-  /** Altura do beiral em relação ao piso do pavimento, em metros. */
+  /**
+   * Altura do beiral em relação ao piso do pavimento, em metros.
+   * Ático (`atticMode`): campo próprio, ajustado pela alça de arrasto dedicada.
+   * Telhado comum (DEC-123): ausente = "vivo", recalculado a cada render
+   * via `Core.roofHeightAtRect` (sempre o degrau mais alto entre o cômodo
+   * e as paredes que o retângulo toca). Presente = "congelado" nesse
+   * valor, gravado pela seta de ajuste manual (cada clique desce um
+   * degrau) ou ao soltar o telhado depois de arrastado pelas alças —
+   * dali em diante não volta a subir sozinho.
+   */
   baseHeightM?: number;
   /** Paredes controladas por este ático após a confirmação. */
   atticWallIds?: string[];
