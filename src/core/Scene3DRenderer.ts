@@ -254,6 +254,25 @@ export function hashColorHex(key: string): number {
   }
 
   function roofWorldFootprint(roof: any, scale: number, offsetX: number, offsetY: number) {
+    // Platibanda não tem beiral de verdade — o parapeito (buildParapetWalls)
+    // fica rente ao próprio contorno do telhado, só abrindo a meia
+    // espessura da parede do parapeito (PARAPET_THICK/2) pra fechar o
+    // canto, bem menor que o beiral de uma água inclinada (ROOF_OVERHANG/
+    // RAKE_OVERHANG). Usar a margem das águas aqui fazia essa função
+    // devolver uma pegada BEM maior que a malha real da platibanda —
+    // quem usa essa pegada pra decidir onde outro telhado deve ficar
+    // invisível (DEC-125/126) então escondia uma faixa fantasma onde a
+    // platibanda vizinha nem chega a desenhar nada, abrindo uma fresta
+    // visível (fundo aparecendo) bem na junção de dois telhados platibanda.
+    if (roof.type === 'platibanda') {
+      var pMargin = PARAPET_THICK / 2;
+      return {
+        minX: (Math.min(roof.x1, roof.x2) - offsetX) * scale - pMargin,
+        maxX: (Math.max(roof.x1, roof.x2) - offsetX) * scale + pMargin,
+        minZ: (Math.min(roof.y1, roof.y2) - offsetY) * scale - pMargin,
+        maxZ: (Math.max(roof.y1, roof.y2) - offsetY) * scale + pMargin
+      };
+    }
     var ridgeAlongX = roof.ridgeAxis === 'x';
     var marginX = roof.type === 'quatroAguas' ? ROOF_OVERHANG : (ridgeAlongX ? RAKE_OVERHANG : ROOF_OVERHANG);
     var marginZ = roof.type === 'quatroAguas' ? ROOF_OVERHANG : (ridgeAlongX ? ROOF_OVERHANG : RAKE_OVERHANG);

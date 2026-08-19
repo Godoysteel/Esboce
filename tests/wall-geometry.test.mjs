@@ -1520,6 +1520,26 @@ test('Scene3DRenderer.roofSlopeSurfaceParams: platibanda vira platô plano (tanP
   assert.notEqual(surfaceY, base, 'platibanda não pode virar um platô na própria altura da base — perderia o parapeito inteiro do cálculo');
 });
 
+// DEC-127 — Product Owner reportou, ao vivo, uma fresta (fundo visível)
+// bem na junção de dois telhados platibanda encostados um no outro.
+// Causa raiz: roofWorldFootprint (usada pra montar a caixa de recorte
+// telhado-vs-telhado, DEC-125/126) sempre usava a margem de beiral das
+// águas inclinadas (ROOF_OVERHANG/RAKE_OVERHANG, ~0,2-0,4m) — mas
+// buildParapetWalls, a malha REAL da platibanda, só abre a meia
+// espessura da parede do parapeito (PARAPET_THICK/2 = 0,05m) além do
+// contorno do telhado, sem beiral nenhum. A caixa de recorte ficava bem
+// maior que a malha de verdade — o telhado vizinho mais baixo era
+// escondido numa faixa "fantasma" onde a platibanda mais alta nem
+// chega a desenhar nada, abrindo a fresta.
+test('Scene3DRenderer.roofWorldFootprint: platibanda usa a margem REAL do parapeito (PARAPET_THICK/2), não o beiral das águas inclinadas (ROOF_OVERHANG/RAKE_OVERHANG) — senão a caixa de recorte fica maior que a malha de verdade e abre fresta na junção (DEC-127)', () => {
+  const fnStart = scene3DRendererSource.indexOf('function roofWorldFootprint(');
+  assert.notEqual(fnStart, -1, 'roofWorldFootprint não encontrada');
+  const fnBlock = scene3DRendererSource.slice(fnStart, fnStart + 1300);
+  assert.match(fnBlock, /if \(roof\.type === 'platibanda'\) \{/);
+  assert.match(fnBlock, /var pMargin = PARAPET_THICK \/ 2;/);
+  assert.match(fnBlock, /minX: \(Math\.min\(roof\.x1, roof\.x2\) - offsetX\) \* scale - pMargin,/);
+});
+
 // DEC-90 — botão "Gerar Laje": cômodo nasce sem laje visível/contabilizada;
 // um clique marca TODOS os cômodos fechados do pavimento atual de uma vez
 // (cada um com seu próprio roomKey, não uma peça única fundida).
