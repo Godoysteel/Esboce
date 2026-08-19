@@ -20,9 +20,12 @@ test('createVolumeBoxEntity nasce solto (preview), com o tamanho padrão de 1x1x
   assert.equal(box.y, 200);
 });
 
-test('index.html tem o botão-mestre Fachada com o flyout de Envidraçamento/Volumetria/Ornamentos/Brises', () => {
-  assert.match(html, /id="fachadaToggleBtn"/);
-  assert.match(html, /id="fachadaFlyout"/);
+// Reforma da navegação (rail de categorias + painel, ver Registro de
+// Decisões Técnicas) moveu Envidraçamento/Volumetria/Ornamentos/Brises
+// pra dentro das categorias Aberturas/Paredes — não existe mais um
+// botão-mestre "Fachada" com flyout próprio, mas os 4 itens continuam
+// existindo (2 ativos, 2 travados), só noutro lugar da barra.
+test('index.html: Envidraçamento/Volumetria continuam existindo (dentro de Aberturas/Paredes agora), Ornamentos/Brises continuam travados', () => {
   assert.match(html, /id="addGlazingPanelBtn"[^>]*data-room-preset="glazing"/);
   assert.match(html, /id="addVolumeBoxBtn"[^>]*data-room-preset="volumetria"/);
   assert.match(html, /data-disabled-label="Ornamentos"/);

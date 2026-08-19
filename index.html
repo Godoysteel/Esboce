@@ -793,20 +793,6 @@
   .tb-viewmode-btn:disabled { opacity: .4; cursor: not-allowed; }
   .tb-viewmode-btn:disabled:hover { background: #FFFFFF; }
 
-  .tool-sidebar {
-    position: absolute;
-    left: 10px; top: calc(var(--top-overlay-h) + 10px); bottom: 10px;
-    z-index: 5;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    background: rgba(255,255,255,0.97);
-    border: 1px solid #D3D1C7;
-    border-radius: 12px;
-    padding: 10px 8px;
-    overflow-y: auto;
-    width: 84px;
-  }
   @media (max-width: 700px) {
     :root { --top-overlay-h: 54px; }
     .top-overlay { flex-wrap: nowrap; gap: 6px; padding: 8px; }
@@ -823,10 +809,6 @@
     .tb-viewmode-panel #viewModeMedirBtn { display: none; }
     .tb-viewmode-btn { width: 42px; height: 38px; }
 
-    .tool-sidebar {
-      left: 6px; top: calc(var(--top-overlay-h) + 6px); bottom: 58px;
-      width: 72px; padding: 8px 6px; gap: 8px; border-radius: 10px;
-    }
     .ts-btn { padding: 7px 3px 5px; font-size: 9.5px; }
     .ts-icon { width: 26px; height: 26px; }
     .ts-supergroup-label { font-size: 9px; }
@@ -897,8 +879,6 @@
   }
   .ts-divider { height: 1px; background: #EDEAE1; margin: 2px 0; }
   .ts-small-group { display: flex; flex-direction: column; gap: 4px; }
-  .fachada-flyout { display: none; padding-left: 6px; border-left: 2px solid #EDEAE1; margin-left: 4px; }
-  .fachada-flyout.visible { display: flex; }
   .hydraulic-tools {
     display: none; position: fixed; left: 104px; top: calc(var(--top-overlay-h) + 10px);
     z-index: 9; width: 176px; max-height: calc(100vh - var(--top-overlay-h) - 20px);
@@ -924,6 +904,87 @@
   .ts-small-btn:hover { background: #F1EFE8; }
   .ts-small-btn.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
   .ts-small-btn .ts-small-icon { width: 16px; height: 16px; flex-shrink: 0; }
+
+  /* Navegação em 2 níveis (rail de categorias + painel) — substitui a
+     lista única e rolável de antes. O rail reaproveita exatamente a
+     posição/tamanho do .tool-sidebar de antes (mesmo lugar na tela);
+     o painel é um flyout à direita do rail, mesma técnica já usada por
+     .hydraulic-tools (position:fixed, left:104px) — só um painel
+     visível por vez (.visible), nunca vários ao mesmo tempo. */
+  .category-rail {
+    position: absolute;
+    left: 10px; top: calc(var(--top-overlay-h) + 10px); bottom: 10px;
+    z-index: 5;
+    display: flex; flex-direction: column; gap: 6px;
+    background: rgba(255,255,255,0.97);
+    border: 1px solid #D3D1C7;
+    border-radius: 12px;
+    padding: 10px 8px;
+    overflow-y: auto;
+    width: 84px;
+  }
+  .cat-rail-btn {
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    padding: 8px 4px 6px;
+    border: 1.5px solid transparent;
+    border-radius: 10px;
+    background: transparent;
+    cursor: pointer;
+    font-size: 10px;
+    font-weight: 600;
+    color: #5F5E5A;
+    line-height: 1.15;
+    text-align: center;
+  }
+  .cat-rail-btn:hover { background: #F1EFE8; }
+  .cat-rail-btn.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
+  .cat-rail-btn .ts-icon { width: 26px; height: 26px; color: #6b6398; }
+  .cat-rail-btn.active .ts-icon { color: #FFFFFF; }
+  .cat-rail-btn .cat-rail-desc { display: none; font-size: 8.5px; font-weight: 500; opacity: .85; }
+  .cat-rail-btn.active .cat-rail-desc { display: block; }
+  .category-panel {
+    display: none; position: fixed; left: 104px; top: calc(var(--top-overlay-h) + 10px);
+    z-index: 9; width: 244px; max-height: calc(100vh - var(--top-overlay-h) - 20px);
+    padding: 12px; overflow-y: auto; border: 1px solid #D3D1C7; border-radius: 12px;
+    background: rgba(255,255,255,.98); box-shadow: 0 10px 30px rgba(33,31,27,.18);
+    flex-direction: column; gap: 10px;
+  }
+  .category-panel.visible { display: flex; }
+  .cp-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+  .cp-title { font-size: 14px; font-weight: 800; color: #2C2C2A; }
+  .cp-desc { font-size: 10.5px; color: #9C9A92; margin-top: 2px; }
+  .cp-close {
+    border: 0; background: transparent; cursor: pointer; font-size: 18px; line-height: 1;
+    color: #9C9A92; padding: 2px 4px; flex-shrink: 0;
+  }
+  .cp-close:hover { color: #2C2C2A; }
+  .cp-group-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+  }
+  .cp-action-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 9px 10px;
+    border: 1.5px solid #D3D1C7;
+    border-radius: 10px;
+    background: #FFFFFF;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 600;
+    color: #2C2C2A;
+  }
+  .cp-action-row:hover { background: #F1EFE8; border-color: #B9B6AA; }
+  .cp-action-row.ts-disabled { cursor: not-allowed; opacity: .45; }
+  .cp-action-row.ts-disabled:hover { background: #FFFFFF; border-color: #D3D1C7; }
+  .cp-action-row .ts-icon { width: 20px; height: 20px; color: #6b6398; flex-shrink: 0; }
+  @media (max-width: 700px) {
+    .category-rail {
+      left: 6px; top: calc(var(--top-overlay-h) + 6px); bottom: 58px;
+      width: 72px; padding: 8px 6px; gap: 4px; border-radius: 10px;
+    }
+    .cat-rail-btn { padding: 7px 3px 5px; font-size: 9px; }
+    .cat-rail-btn .ts-icon { width: 24px; height: 24px; }
+    .category-panel { left: 84px; top: calc(var(--top-overlay-h) + 6px); width: 200px; max-height: calc(100vh - var(--top-overlay-h) - 64px); }
+  }
   /* Modal de cadastro/login — login virou obrigatório pra salvar
      (ver EsboceApplication.requireAuth). Overlay simples, sem
      dependência nova, seguindo a mesma paleta do resto do app. */
@@ -1256,65 +1317,125 @@
     <label><input type="checkbox" id="telhadoToggle" checked> Telhado</label>
     <label hidden><input type="checkbox" id="varandaToggle" checked> Varanda (projetos antigos)</label>
   </div>
-  <div class="tool-sidebar" id="toolSidebar">
-    <div class="ts-supergroup-label">Produtos</div>
-    <!-- CTA em destaque — pedido explícito de separar "Adicionar
-         produto" dos botões de navegação abaixo (Catálogo/Materiais).
-         Leva pro MESMO painel por enquanto — ainda não existe um
-         fluxo de "adicionar ao projeto" distinto de "navegar o
-         catálogo" (ver comentário em cima de #catalogOverlay: só
-         navegação por ora), então os dois caminhos convergem pro
-         mesmo lugar; a diferença é só de destaque visual, igual na
-         referência (botão roxo cheio vs. item de lista comum). -->
+  <!-- Reforma da navegação (rail de categorias + 1 painel por vez, ver
+       Registro de Decisões Técnicas) — substitui a lista única e rolável
+       de antes. NENHUMA lógica de ferramenta mudou: todo botão que já
+       existia mantém o mesmo id/data-tool/data-room-preset de sempre,
+       só mudou o agrupamento visual. Itens sem função real por trás
+       hoje entram travados (ts-disabled + data-disabled-label — mesmo
+       padrão do seletor de sistema construtivo), nunca escondidos. -->
+  <div class="category-rail" id="categoryRail">
+    <!-- Produtos: não faz parte das 8 categorias novas (não aparece na
+         referência), mantido aqui só pra não perder Catálogo/Materiais/
+         Adicionar produto, que já funcionam de verdade hoje. -->
     <button class="ts-btn ts-btn-cta" id="addProductBtn" title="Adicionar produto ao projeto — abre o catálogo">
       <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
         <path d="M20 10v20M10 20h20"/>
       </svg>
       <span>Adicionar produto</span>
     </button>
-    <div class="ts-group-label">Catálogo</div>
-    <div class="ts-group">
-      <button class="ts-btn" id="catalogBtn" title="Ver catálogo de produtos dos parceiros">
-        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M6 16l2-8h24l2 8"/>
-          <path d="M6 16a4 4 0 0 0 8 0 4 4 0 0 0 8 0 4 4 0 0 0 8 0 4 4 0 0 0 8 0"/>
-          <path d="M8 16v14a2 2 0 0 0 2 2h20a2 2 0 0 0 2-2V16"/>
-          <rect x="16" y="24" width="8" height="8"/>
-        </svg>
-        <span>Catálogo</span>
-      </button>
-      <button class="ts-btn" id="materialsToggleBtn" title="Lista de materiais">
-        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="6" y="6" width="12" height="12" rx="2"/>
-          <rect x="22" y="6" width="12" height="12" rx="2"/>
-          <rect x="6" y="22" width="12" height="12" rx="2"/>
-          <rect x="22" y="22" width="12" height="12" rx="2"/>
-        </svg>
-        <span>Materiais</span>
-      </button>
-    </div>
+    <button class="ts-btn" id="catalogBtn" title="Ver catálogo de produtos dos parceiros">
+      <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M6 16l2-8h24l2 8"/>
+        <path d="M6 16a4 4 0 0 0 8 0 4 4 0 0 0 8 0 4 4 0 0 0 8 0 4 4 0 0 0 8 0"/>
+        <path d="M8 16v14a2 2 0 0 0 2 2h20a2 2 0 0 0 2-2V16"/>
+        <rect x="16" y="24" width="8" height="8"/>
+      </svg>
+      <span>Catálogo</span>
+    </button>
+    <button class="ts-btn" id="materialsToggleBtn" title="Lista de materiais">
+      <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="6" y="6" width="12" height="12" rx="2"/>
+        <rect x="22" y="6" width="12" height="12" rx="2"/>
+        <rect x="6" y="22" width="12" height="12" rx="2"/>
+        <rect x="22" y="22" width="12" height="12" rx="2"/>
+      </svg>
+      <span>Materiais</span>
+    </button>
+    <div class="ts-divider"></div>
 
-    <div class="ts-supergroup-label">Construir</div>
-    <div class="ts-group-label">Cômodos</div>
-    <div class="ts-group">
-      <button class="ts-btn" data-room-preset="banheiro" title="Banheiro — clique pra criar">
-        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M6 20h28v4a8 8 0 0 1-8 8H14a8 8 0 0 1-8-8v-4z"/>
-          <path d="M6 20v-6a3 3 0 0 1 3-3"/>
-          <circle cx="11" cy="12" r="1.6" fill="currentColor" stroke="none"/>
-          <path d="M14 32v2M26 32v2"/>
-        </svg>
-        <span>Banheiro</span>
-      </button>
-      <button class="ts-btn" data-room-preset="cozinha" title="Cozinha — clique pra criar">
-        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="7" y="10" width="26" height="22" rx="2"/>
-          <circle cx="14" cy="17" r="3"/>
-          <circle cx="26" cy="17" r="3"/>
-          <rect x="11" y="24" width="18" height="5" rx="1"/>
-        </svg>
-        <span>Cozinha</span>
-      </button>
+    <button class="cat-rail-btn active" data-category="ambientes" title="Ambientes — quarto, sala, cozinha...">
+      <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M7 22a3 3 0 0 1 3-3h20a3 3 0 0 1 3 3v4H7v-4z"/>
+        <path d="M8 26v6M32 26v6M7 22v-5a2 2 0 0 1 2-2h2v7M31 22v-5a2 2 0 0 0-2-2h-2v7"/>
+      </svg>
+      <span>Ambientes</span>
+      <span class="cat-rail-desc">Quarto, sala, cozinha...</span>
+    </button>
+    <button class="cat-rail-btn" data-category="paredes" title="Paredes — desenhe e edite">
+      <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="5" y="8" width="30" height="24" rx="1"/>
+        <path d="M5 20h30M20 8v24" stroke-opacity="0.4"/>
+      </svg>
+      <span>Paredes</span>
+      <span class="cat-rail-desc">Desenhe e edite</span>
+    </button>
+    <button class="cat-rail-btn" data-category="aberturas" title="Aberturas — portas e janelas">
+      <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="8" y="8" width="24" height="24" rx="1.5"/>
+        <path d="M20 8v24M8 20h24"/>
+      </svg>
+      <span>Aberturas</span>
+      <span class="cat-rail-desc">Portas e janelas</span>
+    </button>
+    <button class="cat-rail-btn" data-category="cobertura" title="Cobertura — telhados e lajes">
+      <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 22 20 8l16 14"/>
+        <path d="M9 20v12h22V20"/>
+        <path d="M17 32v-8h6v8"/>
+      </svg>
+      <span>Cobertura</span>
+      <span class="cat-rail-desc">Telhados e lajes</span>
+    </button>
+    <button class="cat-rail-btn" data-category="materiais" title="Materiais — pisos e revestimentos">
+      <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="6" y="6" width="12" height="12" rx="2"/>
+        <rect x="22" y="6" width="12" height="12" rx="2"/>
+        <rect x="6" y="22" width="12" height="12" rx="2"/>
+        <rect x="22" y="22" width="12" height="12" rx="2"/>
+      </svg>
+      <span>Materiais</span>
+      <span class="cat-rail-desc">Pisos e revestimentos</span>
+    </button>
+    <button class="cat-rail-btn" data-category="mobiliario" title="Mobiliário — móveis e objetos">
+      <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M7 22a3 3 0 0 1 3-3h20a3 3 0 0 1 3 3v4H7v-4z"/>
+        <path d="M8 26v6M32 26v6"/>
+      </svg>
+      <span>Mobiliário</span>
+      <span class="cat-rail-desc">Móveis e objetos</span>
+    </button>
+    <button class="cat-rail-btn" data-category="instalacoes" title="Instalações — elétrica e hidráulica">
+      <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M22 4 10 22h8l-2 14 14-20h-9l1-12z" stroke-linejoin="round"/>
+      </svg>
+      <span>Instalações</span>
+      <span class="cat-rail-desc">Elétrica e hidráulica</span>
+    </button>
+    <button class="cat-rail-btn" data-category="mais" title="Mais — outros recursos">
+      <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="10" cy="20" r="2.4" fill="currentColor" stroke="none"/>
+        <circle cx="20" cy="20" r="2.4" fill="currentColor" stroke="none"/>
+        <circle cx="30" cy="20" r="2.4" fill="currentColor" stroke="none"/>
+      </svg>
+      <span>Mais</span>
+      <span class="cat-rail-desc">Outros recursos</span>
+    </button>
+  </div>
+
+  <!-- Todo item travado (ts-disabled) novo desta reforma reaproveita o
+       mesmo ícone genérico (quadrado tracejado + ponto) — mantém o
+       esforço de produção de ícone controlável (dezenas de itens
+       travados); o esmaecimento + selo "em breve" já deixam claro que
+       não é uma ferramenta de verdade, o ícone não precisa ser único
+       por item pra isso ficar honesto. -->
+
+  <div class="category-panel visible" id="panelAmbientes" data-panel="ambientes">
+    <div class="cp-header">
+      <div><div class="cp-title">Ambientes</div><div class="cp-desc">Quarto, sala, cozinha...</div></div>
+      <button class="cp-close" data-close-panel title="Fechar">×</button>
+    </div>
+    <div class="cp-group-grid">
       <button class="ts-btn" data-room-preset="quarto" title="Quarto — clique pra criar">
         <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M6 22v10M34 22v10M6 22h28v-4a3 3 0 0 0-3-3H9a3 3 0 0 0-3 3v4z"/>
@@ -1330,15 +1451,25 @@
         </svg>
         <span>Sala</span>
       </button>
-      <button class="ts-btn" data-room-preset="garagem" title="Garagem — clique pra criar">
+      <button class="ts-btn" data-room-preset="cozinha" title="Cozinha — clique pra criar">
         <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M5 24l2.5-7a3 3 0 0 1 2.8-2h19.4a3 3 0 0 1 2.8 2l2.5 7"/>
-          <rect x="4" y="24" width="32" height="7" rx="2"/>
-          <circle cx="12" cy="31" r="2.4" fill="currentColor" stroke="none"/>
-          <circle cx="28" cy="31" r="2.4" fill="currentColor" stroke="none"/>
+          <rect x="7" y="10" width="26" height="22" rx="2"/>
+          <circle cx="14" cy="17" r="3"/>
+          <circle cx="26" cy="17" r="3"/>
+          <rect x="11" y="24" width="18" height="5" rx="1"/>
         </svg>
-        <span>Garagem</span>
+        <span>Cozinha</span>
       </button>
+      <button class="ts-btn" data-room-preset="banheiro" title="Banheiro — clique pra criar">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 20h28v4a8 8 0 0 1-8 8H14a8 8 0 0 1-8-8v-4z"/>
+          <path d="M6 20v-6a3 3 0 0 1 3-3"/>
+          <circle cx="11" cy="12" r="1.6" fill="currentColor" stroke="none"/>
+          <path d="M14 32v2M26 32v2"/>
+        </svg>
+        <span>Banheiro</span>
+      </button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Suíte" title="Suíte — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Suíte</span><span class="ts-badge-soon">em breve</span></button>
       <button class="ts-btn" data-room-preset="lavanderia" title="Lavanderia — clique pra criar">
         <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="8" y="6" width="24" height="28" rx="2"/>
@@ -1359,6 +1490,18 @@
         </svg>
         <span>Escritório</span>
       </button>
+      <button class="ts-btn" data-room-preset="garagem" title="Garagem — clique pra criar">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 24l2.5-7a3 3 0 0 1 2.8-2h19.4a3 3 0 0 1 2.8 2l2.5 7"/>
+          <rect x="4" y="24" width="32" height="7" rx="2"/>
+          <circle cx="12" cy="31" r="2.4" fill="currentColor" stroke="none"/>
+          <circle cx="28" cy="31" r="2.4" fill="currentColor" stroke="none"/>
+        </svg>
+        <span>Garagem</span>
+      </button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Closet" title="Closet — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Closet</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Despensa" title="Despensa — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Despensa</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Área Gourmet" title="Área Gourmet — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Área Gourmet</span><span class="ts-badge-soon">em breve</span></button>
       <button class="ts-btn" data-room-preset="circulacao" title="Área de Circulação — clique pra criar">
         <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M6 6v28M34 6v28"/>
@@ -1367,113 +1510,52 @@
         </svg>
         <span>Circulação</span>
       </button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Área de Serviço" title="Área de Serviço — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Área de Serviço</span><span class="ts-badge-soon">em breve</span></button>
     </div>
+    <button class="cp-action-row tool-btn" id="toolRoom" data-tool="room" title="Cômodo de tamanho livre (2 cliques)">
+      <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 32 30 10M24 8h8v8"/></svg>
+      Desenhar ambiente livremente
+    </button>
+  </div>
 
-    <div class="ts-divider"></div>
-    <div class="ts-group-label">Terreno</div>
-    <div class="ts-group">
-      <button class="ts-btn tool-btn" id="toolTerreno" data-tool="terreno" title="Terreno — defina o tamanho do lote e clique nos lados do retângulo pra adicionar ou remover muro">
-        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="5" y="8" width="30" height="24" rx="1"/>
-          <path d="M5 20h30M20 8v24" stroke-opacity="0.4"/>
-        </svg>
-        <span>Terreno</span>
-      </button>
+  <div class="category-panel" id="panelParedes" data-panel="paredes">
+    <div class="cp-header">
+      <div><div class="cp-title">Paredes</div><div class="cp-desc">Desenhe e edite paredes</div></div>
+      <button class="cp-close" data-close-panel title="Fechar">×</button>
     </div>
-
-    <div class="ts-divider"></div>
-    <div class="ts-group-label">Planta de Referência</div>
-    <div class="ts-group">
-      <input type="file" id="planUnderlayFileInput" accept="image/*,.pdf" style="display:none">
-      <button class="ts-btn" id="importPlanUnderlayBtn" title="Importar planta baixa (imagem ou PDF) como referência no chão do pavimento atual, pra desenhar as paredes por cima">
-        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="6" y="6" width="28" height="28" rx="1"/>
-          <path d="M12 26l6-8 5 6 4-5 5 7"/>
-          <circle cx="14" cy="14" r="2.5"/>
-        </svg>
-        <span>Importar planta</span>
+    <div class="cp-group-grid">
+      <button class="ts-btn tool-btn" id="toolWall" data-tool="wall" title="Parede livre">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 34 34 6"/></svg>
+        <span>Desenhar</span>
       </button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Editar" title="Editar — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Editar</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn tool-btn" id="toolDemolish" data-tool="demolish" title="Quebrar parede — clique numa parede pra demolir">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 10l7 7-12 12-7-7z"/><path d="M21 12.5l5-5 7 7-5 5"/><path d="M10 28l-3 3 5 5 3-3"/></svg>
+        <span>Apagar</span>
+      </button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Mover" title="Mover — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Mover</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Copiar" title="Copiar — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Copiar</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Alinhar" title="Alinhar — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Alinhar</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Dividir" title="Dividir — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Dividir</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Unir" title="Unir — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Unir</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Espelhar" title="Espelhar — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Espelhar</span><span class="ts-badge-soon">em breve</span></button>
     </div>
-
-    <div class="ts-divider"></div>
-    <div class="ts-group-label">Cobertura</div>
-    <div class="ts-group">
-      <button class="ts-btn tool-btn" id="toolTelhado" data-tool="telhado" title="Telhado">
-        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M4 22 20 8l16 14"/>
-          <path d="M9 20v12h22V20"/>
-          <path d="M17 32v-8h6v8"/>
-        </svg>
-        <span>Telhado</span>
+    <!-- Coluna e Pintar já existiam ("Avançado" na lista antiga) e
+         atuam sobre parede/estrutura — não aparecem na referência
+         nesta categoria, mas são funções reais e precisam de um lugar;
+         Paredes é o mais próximo. -->
+    <div class="cp-group-grid">
+      <button class="ts-btn tool-btn" id="toolColumnQuadrada" data-tool="columnQuadrada" title="Coluna quadrada">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="currentColor" stroke="none"><rect x="10" y="10" width="20" height="20"/></svg>
+        <span>Coluna quad.</span>
       </button>
-      <button class="ts-btn" id="addAtticBtn" style="display:none" title="O ático agora é criado pela ferramenta Telhado">
-        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M5 23 20 8l15 15"/>
-          <path d="M9 21v11h22V21"/>
-          <path d="M14 32V22h12v10"/>
-          <path d="M20 22v10"/>
-        </svg>
-        <span>Ático</span>
+      <button class="ts-btn tool-btn" id="toolColumnRedonda" data-tool="columnRedonda" title="Coluna redonda">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="currentColor" stroke="none"><circle cx="20" cy="20" r="12"/></svg>
+        <span>Coluna red.</span>
       </button>
-      <button class="ts-btn" id="generateLajeBtn" title="Gera a laje de todos os cômodos fechados do pavimento atual — sem isso, o cômodo fica sem teto/laje">
-        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="6" y="14" width="28" height="6"/>
-          <path d="M9 20v10M31 20v10M6 30h28"/>
-        </svg>
-        <span>Gerar Laje</span>
-      </button>
-    </div>
-
-    <div class="ts-divider"></div>
-    <div class="ts-group-label">Aberturas</div>
-    <div class="ts-group">
-      <button class="ts-btn tool-btn" id="toolJanela" data-tool="window" title="Janela — clique sobre uma parede">
-        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="8" y="8" width="24" height="24" rx="1.5"/>
-          <path d="M20 8v24M8 20h24"/>
-        </svg>
-        <span>Janela</span>
-      </button>
-      <button class="ts-btn tool-btn" id="toolPorta" data-tool="door" title="Porta — clique sobre uma parede">
-        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="11" y="6" width="18" height="28" rx="1"/>
-          <circle cx="25" cy="20" r="1.4" fill="currentColor" stroke="none"/>
-        </svg>
-        <span>Porta</span>
-      </button>
-      <button class="ts-btn tool-btn" id="toolArco" data-tool="arco" title="Arco — vão estrutural pra sacada, garagem ou conceito aberto. Clique sobre uma parede">
-        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M8 34V18a12 12 0 0 1 24 0v16"/>
-        </svg>
-        <span>Arco</span>
-      </button>
-      <button class="ts-btn ts-disabled" data-disabled-label="Escada" title="Escada — em breve">
-        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M6 32h6v-6h6v-6h6v-6h6v-6"/>
-        </svg>
-        <span>Escada</span>
-        <span class="ts-badge-soon">em breve</span>
-      </button>
-    </div>
-
-    <div class="ts-divider"></div>
-    <div class="ts-group-label">Fachada</div>
-    <div class="ts-group">
-      <button class="ts-btn" id="fachadaToggleBtn" title="Fachada — abre as ferramentas de envidraçamento, volumetria e ornamentos" aria-expanded="false">
-        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="6" y="6" width="28" height="28" rx="1"/>
-          <path d="M20 6v28M6 20h28"/>
-        </svg>
-        <span>Fachada</span>
-      </button>
-    </div>
-    <div class="ts-group fachada-flyout" id="fachadaFlyout" aria-hidden="true">
-      <button class="ts-btn" id="addGlazingPanelBtn" data-room-preset="glazing" title="Envidraçamento — clique pra criar um painel de vidro solto, arraste pra posicionar e encostar numa parede">
-        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="6" y="6" width="28" height="28" rx="1"/>
-          <path d="M20 6v28M6 20h28"/>
-        </svg>
-        <span>Envidraçamento</span>
+      <button class="ts-btn tool-btn" id="toolPaintBucket" data-tool="paintBucket" title="Lata de tinta — clique numa parede pra pintar">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20l13-13 15 15-13 13z"/><path d="M10 15l15 15"/><path d="M31 26c0 2.8-1.7 5-3.5 5s-3.5-2.2-3.5-5c0-2.2 3.5-6 3.5-6s3.5 3.8 3.5 6z"/></svg>
+        <span>Pintar</span>
       </button>
       <button class="ts-btn" id="addVolumeBoxBtn" data-room-preset="volumetria" title="Volumetria — clique pra criar um bloco sólido, arraste pra posicionar e encostar numa parede">
         <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1482,27 +1564,220 @@
         </svg>
         <span>Volumetria</span>
       </button>
-      <button class="ts-btn ts-disabled" data-disabled-label="Ornamentos" title="Ornamentos — em breve">
+    </div>
+    <div class="cp-action-row ts-disabled" data-disabled-label="Espessura da parede">
+      <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg>
+      Espessura da parede — em breve
+    </div>
+  </div>
+
+  <div class="category-panel" id="panelAberturas" data-panel="aberturas">
+    <div class="cp-header">
+      <div><div class="cp-title">Aberturas</div><div class="cp-desc">Portas e janelas</div></div>
+      <button class="cp-close" data-close-panel title="Fechar">×</button>
+    </div>
+    <div class="ts-group-label">Portas</div>
+    <div class="cp-group-grid">
+      <button class="ts-btn tool-btn" id="toolPorta" data-tool="door" title="Porta — clique sobre uma parede">
         <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="20" cy="14" r="7"/>
-          <path d="M13 20 8 34M27 20l5 14M14 34h12"/>
+          <rect x="11" y="6" width="18" height="28" rx="1"/>
+          <circle cx="25" cy="20" r="1.4" fill="currentColor" stroke="none"/>
         </svg>
-        <span>Ornamentos</span>
-        <span class="ts-badge-soon">em breve</span>
+        <span>Abrir</span>
       </button>
-      <button class="ts-btn ts-disabled" data-disabled-label="Brises" title="Brises — em breve">
+      <button class="ts-btn ts-disabled" data-disabled-label="Porta de Correr" title="Porta de Correr — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Correr</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Porta Pivotante" title="Porta Pivotante — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Pivotante</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Porta Dupla" title="Porta Dupla — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Dupla</span><span class="ts-badge-soon">em breve</span></button>
+    </div>
+    <div class="ts-group-label">Janelas</div>
+    <div class="cp-group-grid">
+      <button class="ts-btn tool-btn" id="toolJanela" data-tool="window" title="Janela — clique sobre uma parede">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="8" y="8" width="24" height="24" rx="1.5"/>
+          <path d="M20 8v24M8 20h24"/>
+        </svg>
+        <span>Janela</span>
+      </button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Janela Maxim-Ar" title="Maxim-Ar — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Maxim-Ar</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Janela Basculante" title="Basculante — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Basculante</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Janela Fixa" title="Fixa — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Fixa</span><span class="ts-badge-soon">em breve</span></button>
+    </div>
+    <div class="ts-group-label">Outros</div>
+    <div class="cp-group-grid">
+      <button class="ts-btn tool-btn" id="toolArco" data-tool="arco" title="Arco — vão estrutural pra sacada, garagem ou conceito aberto. Clique sobre uma parede">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8 34V18a12 12 0 0 1 24 0v16"/>
+        </svg>
+        <span>Arco</span>
+      </button>
+      <button class="ts-btn" id="addGlazingPanelBtn" data-room-preset="glazing" title="Envidraçamento — clique pra criar um painel de vidro solto, arraste pra posicionar e encostar numa parede">
         <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="6" y="6" width="28" height="28" rx="1"/>
-          <path d="M6 13h28M6 20h28M6 27h28"/>
+          <path d="M20 6v28M6 20h28"/>
         </svg>
-        <span>Brises</span>
-        <span class="ts-badge-soon">em breve</span>
+        <span>Vitrô</span>
+      </button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Escada" title="Escada — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 32h6v-6h6v-6h6v-6h6v-6"/></svg><span>Vão</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Shaft" title="Shaft — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Shaft</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Claraboia" title="Claraboia — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Claraboia</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Ornamentos" title="Ornamentos — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="20" cy="14" r="7"/><path d="M13 20 8 34M27 20l5 14M14 34h12"/></svg><span>Ornamentos</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Brises" title="Brises — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="28" height="28" rx="1"/><path d="M6 13h28M6 20h28M6 27h28"/></svg><span>Brises</span><span class="ts-badge-soon">em breve</span></button>
+    </div>
+    <div class="cp-action-row ts-disabled" data-disabled-label="Personalizar abertura">
+      <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg>
+      Personalizar abertura — em breve
+    </div>
+  </div>
+
+  <div class="category-panel" id="panelCobertura" data-panel="cobertura">
+    <div class="cp-header">
+      <div><div class="cp-title">Cobertura</div><div class="cp-desc">Crie telhados e lajes</div></div>
+      <button class="cp-close" data-close-panel title="Fechar">×</button>
+    </div>
+    <div class="ts-group-label">Telhados</div>
+    <div class="cp-group-grid">
+      <button class="ts-btn" id="toolTelhado1Agua" title="1 Água">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 28 32 10"/><path d="M6 28v6h26v-6"/></svg>
+        <span>1 Água</span>
+      </button>
+      <button class="ts-btn tool-btn" id="toolTelhado" data-tool="telhado" title="Telhado (2 Águas)">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 22 20 8l16 14"/>
+          <path d="M9 20v12h22V20"/>
+          <path d="M17 32v-8h6v8"/>
+        </svg>
+        <span>2 Águas</span>
+      </button>
+      <button class="ts-btn ts-disabled" data-disabled-label="3 Águas" title="3 Águas — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>3 Águas</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn" id="toolTelhado4Aguas" title="4 Águas">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 26 16 10h8l12 16"/><path d="M8 26h24v6H8z"/><path d="M16 10 20 26M24 10 20 26" stroke-opacity="0.5"/></svg>
+        <span>4 Águas</span>
       </button>
     </div>
+    <div class="cp-group-grid">
+      <button class="ts-btn" id="toolTelhadoPlatibanda" title="Platibanda">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="10" width="26" height="8" rx="1"/><rect x="10" y="18" width="20" height="12"/></svg>
+        <span>Platibanda</span>
+      </button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Meia Água" title="Meia Água — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Meia Água</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Beiral" title="Beiral — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Beiral</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Personalizado" title="Personalizado — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Personalizado</span><span class="ts-badge-soon">em breve</span></button>
+    </div>
+    <div class="ts-group-label">Lajes</div>
+    <div class="cp-group-grid">
+      <button class="ts-btn tool-btn" id="generateLajeBtn" title="Gera a laje de todos os cômodos fechados do pavimento atual — sem isso, o cômodo fica sem teto/laje">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="6" y="14" width="28" height="6"/>
+          <path d="M9 20v10M31 20v10M6 30h28"/>
+        </svg>
+        <span>Laje Lisa</span>
+      </button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Laje Nervurada" title="Laje Nervurada — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Laje Nervurada</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Laje Técnica" title="Laje Técnica — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Laje Técnica</span><span class="ts-badge-soon">em breve</span></button>
+    </div>
+    <!-- addAtticBtn: legado — o ático hoje nasce pela própria ferramenta
+         Telhado (diálogo Ático/Normal), este botão nunca teve handler
+         de clique próprio; mantido oculto só pra não quebrar nenhuma
+         referência antiga a este id. -->
+    <button class="ts-btn" id="addAtticBtn" style="display:none" title="O ático agora é criado pela ferramenta Telhado">
+      <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M5 23 20 8l15 15"/>
+        <path d="M9 21v11h22V21"/>
+        <path d="M14 32V22h12v10"/>
+        <path d="M20 22v10"/>
+      </svg>
+      <span>Ático</span>
+    </button>
+    <div class="cp-action-row ts-disabled" data-disabled-label="Editar inclinação e beiral">
+      <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg>
+      Editar inclinação e beiral — em breve
+    </div>
+  </div>
 
-    <div class="ts-divider"></div>
+  <div class="category-panel" id="panelMateriais" data-panel="materiais">
+    <div class="cp-header">
+      <div><div class="cp-title">Materiais</div><div class="cp-desc">Pisos, revestimentos e acabamentos</div></div>
+      <button class="cp-close" data-close-panel title="Fechar">×</button>
+    </div>
+    <!-- Categoria inteira travada por enquanto (decisão do Product
+         Owner): nenhuma tela de "clique pra aplicar material numa
+         superfície" existe hoje — o painel Materiais atual é só um
+         relatório de quantitativo, não um seletor. -->
+    <div class="ts-group-label">Pisos</div>
+    <div class="cp-group-grid">
+      <button class="ts-btn ts-disabled" data-disabled-label="Porcelanato" title="Porcelanato — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Porcelanato</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Cerâmica" title="Cerâmica — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Cerâmica</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Madeira" title="Madeira — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Madeira</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Concreto" title="Concreto — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Concreto</span><span class="ts-badge-soon">em breve</span></button>
+    </div>
+    <div class="ts-group-label">Revestimentos</div>
+    <div class="cp-group-grid">
+      <button class="ts-btn ts-disabled" data-disabled-label="Pintura" title="Pintura — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Pintura</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Pedra" title="Pedra — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Pedra</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Tijolinho" title="Tijolinho — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Tijolinho</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Porcelanato (parede)" title="Porcelanato — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Porcelanato</span><span class="ts-badge-soon">em breve</span></button>
+    </div>
+    <div class="ts-group-label">Acabamentos</div>
+    <div class="cp-group-grid">
+      <button class="ts-btn ts-disabled" data-disabled-label="Rodapé" title="Rodapé — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Rodapé</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Soleira" title="Soleira — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Soleira</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Peitoril" title="Peitoril — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Peitoril</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Moldura" title="Moldura — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Moldura</span><span class="ts-badge-soon">em breve</span></button>
+    </div>
+    <div class="cp-action-row ts-disabled" data-disabled-label="Mais materiais">
+      <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg>
+      Mais materiais — em breve
+    </div>
+  </div>
+
+  <div class="category-panel" id="panelMobiliario" data-panel="mobiliario">
+    <div class="cp-header">
+      <div><div class="cp-title">Mobiliário</div><div class="cp-desc">Móveis e objetos para sua casa</div></div>
+      <button class="cp-close" data-close-panel title="Fechar">×</button>
+    </div>
+    <!-- Categoria inteira travada por enquanto (decisão do Product
+         Owner): não existe seletor manual de móvel hoje, só mobília
+         automática por preset de cômodo (Ambientes). -->
+    <div class="ts-group-label">Sala</div>
+    <div class="cp-group-grid">
+      <button class="ts-btn ts-disabled" data-disabled-label="Sofá" title="Sofá — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Sofá</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Mesa" title="Mesa — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Mesa</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="TV" title="TV — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>TV</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Estante" title="Estante — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Estante</span><span class="ts-badge-soon">em breve</span></button>
+    </div>
+    <div class="ts-group-label">Quarto</div>
+    <div class="cp-group-grid">
+      <button class="ts-btn ts-disabled" data-disabled-label="Cama" title="Cama — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Cama</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Guarda-roupa" title="Guarda-roupa — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Guarda-roupa</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Criado" title="Criado — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Criado</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Cômoda" title="Cômoda — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Cômoda</span><span class="ts-badge-soon">em breve</span></button>
+    </div>
+    <div class="ts-group-label">Cozinha</div>
+    <div class="cp-group-grid">
+      <button class="ts-btn ts-disabled" data-disabled-label="Balcão" title="Balcão — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Balcão</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Geladeira" title="Geladeira — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Geladeira</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Fogão" title="Fogão — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Fogão</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Pia" title="Pia — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Pia</span><span class="ts-badge-soon">em breve</span></button>
+    </div>
+    <div class="cp-action-row ts-disabled" data-disabled-label="Ver todos os móveis">
+      <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg>
+      Ver todos os móveis — em breve
+    </div>
+  </div>
+
+  <div class="category-panel" id="panelInstalacoes" data-panel="instalacoes">
+    <div class="cp-header">
+      <div><div class="cp-title">Instalações</div><div class="cp-desc">Elétrica, hidráulica e sanitária</div></div>
+      <button class="cp-close" data-close-panel title="Fechar">×</button>
+    </div>
+    <!-- Hidráulica: os 10 botões abaixo já existiam (data-tool=
+         "hydraulic:..."), só movidos pra dentro desta categoria — os
+         rótulos continuam os de sempre, não tentei forçar num ícone
+         "Ponto Água/Caixa D'água/Ralo/Tubo" só de 4 itens porque não dá
+         pra saber com segurança qual dos 10 tipos reais cada um da
+         referência representaria. -->
     <div class="ts-group-label">Hidráulica</div>
-    <div class="ts-small-group hydraulic-tools" id="hydraulicToolsPanel" aria-hidden="true">
+    <div class="ts-small-group">
       <button class="ts-small-btn tool-btn" data-tool="hydraulic:kitchen_faucet" title="Ponto de água fria da pia de cozinha">💧 Pia cozinha</button>
       <button class="ts-small-btn tool-btn" data-tool="hydraulic:bathroom_faucet" title="Ponto de água fria do lavatório">💧 Lavatório</button>
       <button class="ts-small-btn tool-btn" data-tool="hydraulic:toilet_supply" title="Alimentação da caixa acoplada">💧 Água vaso</button>
@@ -1514,37 +1789,112 @@
       <button class="ts-small-btn tool-btn" data-tool="hydraulic:shower_drain" title="Ralo do box no piso">▣ Ralo chuveiro</button>
       <button class="ts-small-btn tool-btn" data-tool="hydraulic:floor_drain" title="Ralo comum no piso">▣ Ralo</button>
     </div>
-
-    <div class="ts-divider"></div>
-    <div class="ts-group-label">Avançado</div>
-    <div class="ts-small-group">
-      <button class="ts-small-btn tool-btn" id="toolWall" data-tool="wall" title="Parede livre">
-        <svg class="ts-small-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20 20 4"/></svg>
-        Parede
-      </button>
-      <button class="ts-small-btn tool-btn" id="toolRoom" data-tool="room" title="Cômodo de tamanho livre (2 cliques)">
-        <svg class="ts-small-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="1"/></svg>
-        Cômodo livre
-      </button>
-      <button class="ts-small-btn tool-btn" id="toolColumnQuadrada" data-tool="columnQuadrada" title="Coluna quadrada">
-        <svg class="ts-small-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="6" width="12" height="12"/></svg>
-        Coluna
-      </button>
-      <button class="ts-small-btn tool-btn" id="toolColumnRedonda" data-tool="columnRedonda" title="Coluna redonda">
-        <svg class="ts-small-icon" viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="12" cy="12" r="7"/></svg>
-        Coluna
-      </button>
-      <button class="ts-small-btn tool-btn" id="toolDemolish" data-tool="demolish" title="Quebrar parede — clique numa parede pra demolir">
-        <svg class="ts-small-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 6l4 4-7 7-4-4z"/><path d="M12.5 7.5l3-3 4 4-3 3"/><path d="M6 17l-2 2 3 3 2-2"/></svg>
-        Quebrar parede
-      </button>
-      <button class="ts-small-btn tool-btn" id="toolPaintBucket" data-tool="paintBucket" title="Lata de tinta — clique numa parede pra pintar">
-        <svg class="ts-small-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12l8-8 9 9-8 8z"/><path d="M6 9l9 9"/><path d="M19 16c0 1.7-1 3-2 3s-2-1.3-2-3c0-1.3 2-3.5 2-3.5s2 2.2 2 3.5z"/></svg>
-        Pintar
-      </button>
+    <div class="ts-group-label">Elétrica</div>
+    <div class="cp-group-grid">
+      <button class="ts-btn ts-disabled" data-disabled-label="Interruptor" title="Interruptor — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Interruptor</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Tomada" title="Tomada — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Tomada</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Ponto de Luz" title="Ponto de Luz — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Ponto Luz</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Quadro Elétrico" title="Quadro Elétrico — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Quadro</span><span class="ts-badge-soon">em breve</span></button>
     </div>
-
+    <div class="cp-action-row ts-disabled" data-disabled-label="Camadas de instalações">
+      <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg>
+      Camadas de instalações — em breve
+    </div>
   </div>
+
+  <div class="category-panel" id="panelMais" data-panel="mais">
+    <div class="cp-header">
+      <div><div class="cp-title">Mais</div><div class="cp-desc">Outros recursos</div></div>
+      <button class="cp-close" data-close-panel title="Fechar">×</button>
+    </div>
+    <div class="ts-group-label">Ferramentas</div>
+    <div class="cp-group-grid">
+      <button class="ts-btn ts-disabled" data-disabled-label="Medir" title="Medir — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Medir</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn" id="moreCotaBtn" title="Cotas — mostra/esconde as medidas na tela">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 30h28"/><path d="M6 25v10M34 25v10"/></svg>
+        <span>Cota</span>
+      </button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Texto" title="Texto — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Texto</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Nível" title="Nível — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Nível</span><span class="ts-badge-soon">em breve</span></button>
+    </div>
+    <div class="ts-group-label">Visualização</div>
+    <div class="cp-group-grid">
+      <button class="ts-btn ts-disabled" data-disabled-label="Sombras" title="Sombras — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Sombras</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Textura" title="Textura — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Textura</span><span class="ts-badge-soon">em breve</span></button>
+      <button class="ts-btn" id="moreTransparenciaBtn" title="Transparência — deixa as paredes vazadas, útil pra comparar com uma planta baixa importada">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="1" stroke-dasharray="3 2"/></svg>
+        <span>Transparência</span>
+      </button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Corte" title="Corte — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Corte</span><span class="ts-badge-soon">em breve</span></button>
+    </div>
+    <div class="ts-group-label">Projetos</div>
+    <div class="cp-group-grid">
+      <button class="ts-btn" id="moreSalvarBtn" title="Salvar projeto">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h20l6 6v22H8z"/><rect x="13" y="6" width="14" height="9"/><rect x="12" y="24" width="16" height="10"/></svg>
+        <span>Salvar</span>
+      </button>
+      <button class="ts-btn" id="moreAbrirBtn" title="Abrir um projeto salvo">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 14v18h30V14H21l-3-4H5z"/></svg>
+        <span>Abrir</span>
+      </button>
+      <button class="ts-btn" id="moreExportarBtn" title="Baixar uma cópia de segurança do projeto (.json)">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6v20M12 18l8 8 8-8"/><path d="M6 30v4h28v-4"/></svg>
+        <span>Exportar</span>
+      </button>
+      <button class="ts-btn ts-disabled" data-disabled-label="Dados" title="Dados — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Dados</span><span class="ts-badge-soon">em breve</span></button>
+    </div>
+    <!-- Terreno e Planta de Referência não têm categoria própria na
+         referência (nenhuma das 8 é claramente "projeto/terreno") —
+         são ações de configuração inicial (uma vez por projeto), mais
+         perto do espírito de "Mais" do que de qualquer categoria de
+         desenho do dia a dia. Mantidos com os mesmos ids/data-tool de
+         sempre, só realocados aqui. -->
+    <div class="ts-group-label">Terreno e planta</div>
+    <div class="cp-group-grid">
+      <button class="ts-btn tool-btn" id="toolTerreno" data-tool="terreno" title="Terreno — defina o tamanho do lote e clique nos lados do retângulo pra adicionar ou remover muro">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="5" y="8" width="30" height="24" rx="1"/>
+          <path d="M5 20h30M20 8v24" stroke-opacity="0.4"/>
+        </svg>
+        <span>Terreno</span>
+      </button>
+      <button class="ts-btn" id="importPlanUnderlayBtn" title="Importar planta baixa (imagem ou PDF) como referência no chão do pavimento atual, pra desenhar as paredes por cima">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="6" y="6" width="28" height="28" rx="1"/>
+          <path d="M12 26l6-8 5 6 4-5 5 7"/>
+          <circle cx="14" cy="14" r="2.5"/>
+        </svg>
+        <span>Importar planta</span>
+      </button>
+      <input type="file" id="planUnderlayFileInput" accept="image/*,.pdf" style="display:none">
+    </div>
+    <div class="cp-action-row ts-disabled" data-disabled-label="Atalhos e preferências">
+      <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg>
+      Atalhos e preferências — em breve
+    </div>
+  </div>
+
+  <!-- Painel flutuante da Hidráulica, aberto pelo botão "Hid." da
+       topbar (id="hydraulicsBtn", fora desta barra lateral) — mantido
+       do jeito que sempre foi (mesmos botões, mesmo id), só não faz
+       mais parte da lista rolável de antes. A categoria "Instalações"
+       da barra nova tem uma CÓPIA dos mesmos 10 botões (sem id, só
+       data-tool — o listener genérico pega os dois lugares igual),
+       pra quem prefere chegar neles pela navegação nova; os dois
+       caminhos convivem até decidir se um deles sai. -->
+  <div class="ts-small-group hydraulic-tools" id="hydraulicToolsPanel" aria-hidden="true">
+    <button class="ts-small-btn tool-btn" data-tool="hydraulic:kitchen_faucet" title="Ponto de água fria da pia de cozinha">💧 Pia cozinha</button>
+    <button class="ts-small-btn tool-btn" data-tool="hydraulic:bathroom_faucet" title="Ponto de água fria do lavatório">💧 Lavatório</button>
+    <button class="ts-small-btn tool-btn" data-tool="hydraulic:toilet_supply" title="Alimentação da caixa acoplada">💧 Água vaso</button>
+    <button class="ts-small-btn tool-btn" data-tool="hydraulic:shower" title="Ponto alto do chuveiro">🚿 Chuveiro</button>
+    <button class="ts-small-btn tool-btn" data-tool="hydraulic:external_faucet" title="Torneira na face externa da parede">💧 Torneira ext.</button>
+    <button class="ts-small-btn tool-btn" data-tool="hydraulic:kitchen_sink_waste" title="Saída da pia para a caixa de gordura">◉ Esgoto pia</button>
+    <button class="ts-small-btn tool-btn" data-tool="hydraulic:bathroom_sink_waste" title="Saída de esgoto do lavatório">◉ Esg. lavatório</button>
+    <button class="ts-small-btn tool-btn" data-tool="hydraulic:toilet_waste" title="Saída de esgoto do vaso no piso">◉ Esgoto vaso</button>
+    <button class="ts-small-btn tool-btn" data-tool="hydraulic:shower_drain" title="Ralo do box no piso">▣ Ralo chuveiro</button>
+    <button class="ts-small-btn tool-btn" data-tool="hydraulic:floor_drain" title="Ralo comum no piso">▣ Ralo</button>
+  </div>
+
   <div id="wallGizmo" class="gizmo">
     <button class="gz" data-action="rotateCcw" title="Girar anti-horário">↺</button>
     <button class="gz" data-action="up" title="Mover pra cima">↑</button>

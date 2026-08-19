@@ -4505,8 +4505,11 @@ import {
     // — sem isso, clicar num botão também desenha uma parede/cômodo no
     // grid, porque o pointerdown do container escuta em qualquer clique
     // dentro dele, botão incluso.
-    var toolSidebarEl = document.getElementById('toolSidebar');
-    if (toolSidebarEl) toolSidebarEl.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
+    // toolSidebar virou dois containers (rail de categorias + painéis
+    // flutuantes, um por categoria — ver index.html) — cada um precisa
+    // da mesma proteção que o container único de antes tinha.
+    var toolSidebarEls = document.querySelectorAll('.category-rail, .category-panel');
+    toolSidebarEls.forEach(function (el: any) { el.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); }); });
 
     hoverMarker = buildHoverMarker();
     scene.add(hoverMarker);
@@ -4671,6 +4674,12 @@ import {
   export function getSelectedHydraulicNodeId() { return selectedHydraulicNodeId; }
   export function getSelectedRoomWallIds() { return selectedRoomWallIds; }
   export function setNextRoofAtticMode(enabled: boolean) { pendingRoofAttic = enabled; }
+  // Categoria "Cobertura" da barra nova — escolher o tipo (1/2/4 Águas,
+  // Platibanda) ANTES de clicar em Telhado, em vez de nascer sempre
+  // duasAguas e trocar depois pelo painel de tipo. Não pula a checagem
+  // Ático/Normal (`atticModeOverlay`) — só pré-seleciona qual tipo vale
+  // se a pessoa escolher "Normal" ali.
+  export function setNextRoofType(type: any) { pendingRoofType = type; }
   // Botão "Ajustar altura" do gizmo (DEC-116) — arma a alça de altura
   // do cômodo SÓ pra esta parede, só até o próximo ajuste/seleção. Sem
   // isso, a alça nem existe na cena (ver renderSelectionHandles em
@@ -4684,7 +4693,7 @@ export const ViewportController = {
   select, selectColumn, selectRoof, selectOpening, selectVaranda, selectFurniture, selectGlazingPanel, selectVolumeBox, selectPlanUnderlay, selectHydraulicNode, beginHydraulicRouteDraw,
   getSelectedWallId, getSelectedColumnId, getSelectedRoofId,
   getSelectedOpeningId, getSelectedVarandaId, getSelectedLajeId, getSelectedFurnitureId, getSelectedGlazingPanelId, getSelectedVolumeBoxId, getSelectedPlanUnderlay, getSelectedHydraulicNodeId, getSelectedRoomWallIds,
-  setNextRoofAtticMode, armHeightAdjust, toggleDimensions,
+  setNextRoofAtticMode, setNextRoofType, armHeightAdjust, toggleDimensions,
   toggleWallDiagnostics,
   resetCamera,
   toggleTouchCameraMode,

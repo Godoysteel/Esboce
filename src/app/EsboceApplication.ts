@@ -291,16 +291,43 @@ export class EsboceApplication {
       Store.commands.addFloor();
       ViewportController.deselect();
     });
-    this.requireElement("toolTelhado").addEventListener("click", () => {
+    // Categoria "Cobertura" da barra nova: 4 botões (1/2/4 Águas,
+    // Platibanda) escolhem o TIPO antes de abrir o mesmo diálogo
+    // Ático/Normal de sempre — não pula a pergunta, só pré-seleciona
+    // qual tipo vale se a resposta for "Normal" (ver
+    // ViewportController.setNextRoofType). #toolTelhado (2 Águas)
+    // mantém o id de sempre — é o tipo padrão, sem mudança de
+    // comportamento pra quem clicava nele antes desta reforma.
+    const armRoofTool = (type: string) => {
+      ViewportController.setNextRoofType(type);
       ViewportController.setNextRoofAtticMode(false);
       this.requireElement("atticModeOverlay").style.display = "flex";
-    });
+    };
+    this.requireElement("toolTelhado").addEventListener("click", () => armRoofTool("duasAguas"));
+    this.requireElement("toolTelhado1Agua").addEventListener("click", () => armRoofTool("umaAgua"));
+    this.requireElement("toolTelhado4Aguas").addEventListener("click", () => armRoofTool("quatroAguas"));
+    this.requireElement("toolTelhadoPlatibanda").addEventListener("click", () => armRoofTool("platibanda"));
     this.requireElement("generateLajeBtn").addEventListener("click", () => {
       const roomCount = Core.detectRooms(Store.currentWalls()).length;
       Store.commands.generateLajeForCurrentFloor();
       this.requireElement('viewportHint').textContent = roomCount
         ? 'Laje gerada — ' + roomCount + (roomCount === 1 ? ' cômodo coberto.' : ' cômodos cobertos.')
         : 'Nenhum cômodo fechado neste pavimento ainda — feche as paredes antes de gerar a laje.';
+    });
+    // Rail de categorias (Ambientes/Paredes/Aberturas/Cobertura/
+    // Materiais/Mobiliário/Instalações/Mais) — um painel visível por
+    // vez, puramente de UI (não é estado de Store/ViewportController).
+    // "Ambientes" já nasce marcado .active/.visible no HTML, batendo
+    // com o estado inicial daqui.
+    const categoryRailButtons = Array.from(document.querySelectorAll<HTMLElement>(".cat-rail-btn"));
+    const categoryPanels = Array.from(document.querySelectorAll<HTMLElement>(".category-panel"));
+    const showCategory = (key: string | undefined) => {
+      categoryRailButtons.forEach((btn) => btn.classList.toggle("active", btn.dataset.category === key));
+      categoryPanels.forEach((panel) => panel.classList.toggle("visible", panel.dataset.panel === key));
+    };
+    categoryRailButtons.forEach((btn) => btn.addEventListener("click", () => showCategory(btn.dataset.category)));
+    document.querySelectorAll<HTMLElement>("[data-close-panel]").forEach((btn) => {
+      btn.addEventListener("click", () => showCategory(undefined));
     });
     this.requireElement("atticModeClose").addEventListener("click", () => {
       this.requireElement("atticModeOverlay").style.display = "none";
@@ -327,23 +354,6 @@ export class EsboceApplication {
     const orbitBtn = this.requireElement("viewModeOrbitBtn");
     const view3DBtn = this.requireElement("viewMode3DBtn");
     const view2DBtn = this.requireElement("viewMode2DBtn");
-    // Botão-mestre "Fachada" — abre/fecha o container de sub-ferramentas
-    // (Envidraçamento/Volumetria/Ornamentos/Brises) em acordeão dentro
-    // da própria barra lateral, mesmo espírito de toggle do botão de
-    // Hidráulica (hydraulicsBtn) abaixo, só que sem painel flutuante —
-    // o container nasce logo abaixo do botão no fluxo normal da lista,
-    // então não precisa de posicionamento calculado.
-    const fachadaToggleBtn = document.getElementById('fachadaToggleBtn');
-    const fachadaFlyout = document.getElementById('fachadaFlyout');
-    if (fachadaToggleBtn && fachadaFlyout) {
-      fachadaToggleBtn.addEventListener('click', () => {
-        const willOpen = !fachadaFlyout.classList.contains('visible');
-        fachadaFlyout.classList.toggle('visible', willOpen);
-        fachadaFlyout.setAttribute('aria-hidden', String(!willOpen));
-        fachadaToggleBtn.classList.toggle('active', willOpen);
-        fachadaToggleBtn.setAttribute('aria-expanded', String(willOpen));
-      });
-    }
     // Importar Planta Baixa — botão dispara o <input type="file"> oculto;
     // aceita imagem direto ou PDF (primeira página, rasterizada via
     // pdfjs-dist em PlanImport.ts). Nasce centrada na caixa delimitadora
@@ -496,6 +506,18 @@ export class EsboceApplication {
     this.requireElement("shareProjectBtn").addEventListener("click", () => this.shareProject());
     this.requireElement("myProjectsBtn").addEventListener("click", () => this.openMyProjects());
     this.requireElement("exportProjectBtn").addEventListener("click", () => this.exportProjectFile());
+    // Categoria "Mais" da barra nova: "Transparência" só aciona o
+    // checkbox que já existe no menu de Camadas (LayersPanel.ts já
+    // escuta o "change" dele) — sem estado novo, sem duplicar a lógica
+    // de mostrar/esconder a camada.
+    this.requireElement("moreTransparenciaBtn").addEventListener("click", () => this.requireElement("paredesTransparentesToggle").click());
+    // Mesma ideia pros outros 3 botões novos da categoria "Mais" — só
+    // clicam no botão de sempre (que já tem toda a lógica própria,
+    // inclusive os que vivem dentro do menu Arquivo).
+    this.requireElement("moreCotaBtn").addEventListener("click", () => this.requireElement("dimensionsToggleBtn").click());
+    this.requireElement("moreSalvarBtn").addEventListener("click", () => this.requireElement("saveProjectBtn").click());
+    this.requireElement("moreAbrirBtn").addEventListener("click", () => this.requireElement("myProjectsBtn").click());
+    this.requireElement("moreExportarBtn").addEventListener("click", () => this.requireElement("exportProjectBtn").click());
     this.requireElement("importProjectBtn").addEventListener("click", () => this.requireElement("importProjectInput").click());
     this.requireElement("importProjectInput").addEventListener("change", (event) => this.importProjectFile(event));
     this.requireElement("catalogBtn").addEventListener("click", () => this.openCatalog());
