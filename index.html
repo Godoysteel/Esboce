@@ -915,30 +915,30 @@
     position: absolute;
     left: 10px; top: calc(var(--top-overlay-h) + 10px); bottom: 10px;
     z-index: 5;
-    display: flex; flex-direction: column; gap: 6px;
+    display: flex; flex-direction: column; gap: 4px;
     background: rgba(255,255,255,0.97);
     border: 1px solid #D3D1C7;
     border-radius: 12px;
-    padding: 10px 8px;
+    padding: 8px 8px;
     overflow-y: auto;
     width: 84px;
   }
   .cat-rail-btn {
-    display: flex; flex-direction: column; align-items: center; gap: 3px;
-    padding: 8px 4px 6px;
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    padding: 6px 4px 5px;
     border: 1.5px solid transparent;
     border-radius: 10px;
     background: transparent;
     cursor: pointer;
-    font-size: 10px;
+    font-size: 9.5px;
     font-weight: 600;
     color: #5F5E5A;
-    line-height: 1.15;
+    line-height: 1.1;
     text-align: center;
   }
   .cat-rail-btn:hover { background: #F1EFE8; }
   .cat-rail-btn.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
-  .cat-rail-btn .ts-icon { width: 26px; height: 26px; color: #6b6398; }
+  .cat-rail-btn .ts-icon { width: 22px; height: 22px; color: #6b6398; }
   .cat-rail-btn.active .ts-icon { color: #FFFFFF; }
   .cat-rail-btn .cat-rail-desc { display: none; font-size: 8.5px; font-weight: 500; opacity: .85; }
   .cat-rail-btn.active .cat-rail-desc { display: block; }
@@ -1326,32 +1326,33 @@
        padrão do seletor de sistema construtivo), nunca escondidos. -->
   <div class="category-rail" id="categoryRail">
     <!-- Produtos: não faz parte das 8 categorias novas (não aparece na
-         referência), mantido aqui só pra não perder Catálogo/Materiais/
-         Adicionar produto, que já funcionam de verdade hoje. -->
-    <button class="ts-btn ts-btn-cta" id="addProductBtn" title="Adicionar produto ao projeto — abre o catálogo">
-      <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M20 10v20M10 20h20"/>
-      </svg>
-      <span>Adicionar produto</span>
-    </button>
-    <button class="ts-btn" id="catalogBtn" title="Ver catálogo de produtos dos parceiros">
-      <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M6 16l2-8h24l2 8"/>
-        <path d="M6 16a4 4 0 0 0 8 0 4 4 0 0 0 8 0 4 4 0 0 0 8 0 4 4 0 0 0 8 0"/>
-        <path d="M8 16v14a2 2 0 0 0 2 2h20a2 2 0 0 0 2-2V16"/>
-        <rect x="16" y="24" width="8" height="8"/>
-      </svg>
-      <span>Catálogo</span>
-    </button>
-    <button class="ts-btn" id="materialsToggleBtn" title="Lista de materiais">
-      <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="6" y="6" width="12" height="12" rx="2"/>
-        <rect x="22" y="6" width="12" height="12" rx="2"/>
-        <rect x="6" y="22" width="12" height="12" rx="2"/>
-        <rect x="22" y="22" width="12" height="12" rx="2"/>
-      </svg>
-      <span>Materiais</span>
-    </button>
+         referência), mantido aqui só pra não perder Catálogo/
+         Quantitativo/Adicionar produto, que já funcionam de verdade
+         hoje. Formato compacto (ts-small-btn, ícone+texto lado a lado
+         em vez de empilhado) de propósito — são 3 itens A MAIS
+         disputando a mesma barra estreita das 8 categorias; empilhado
+         (ts-btn) elas sozinhas já quase enchiam a tela em 720px de
+         altura, empurrando Instalações/Mais pra fora da vista sem
+         indicação clara de que dava pra rolar (bug reportado ao vivo
+         pelo Product Owner — "não estou encontrando" o Terreno, que
+         fica dentro de Mais). Renomeado "Materiais"→"Quantitativo"
+         aqui (mesmo id/função de sempre) só pra não repetir o mesmo
+         rótulo da categoria "Materiais" logo abaixo — são coisas
+         diferentes (relatório vs. seletor). -->
+    <div class="ts-small-group">
+      <button class="ts-small-btn" id="addProductBtn" title="Adicionar produto ao projeto — abre o catálogo">
+        <svg class="ts-small-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        Adicionar
+      </button>
+      <button class="ts-small-btn" id="catalogBtn" title="Ver catálogo de produtos dos parceiros">
+        <svg class="ts-small-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10l1-5h14l1 5"/><path d="M5 10v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9"/><rect x="10" y="14" width="4" height="6"/></svg>
+        Catálogo
+      </button>
+      <button class="ts-small-btn" id="materialsToggleBtn" title="Lista de materiais (quantitativo e estimativa de custo)">
+        <svg class="ts-small-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg>
+        Quantitativo
+      </button>
+    </div>
     <div class="ts-divider"></div>
 
     <button class="cat-rail-btn active" data-category="ambientes" title="Ambientes — quarto, sala, cozinha...">
