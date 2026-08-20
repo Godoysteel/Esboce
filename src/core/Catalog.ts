@@ -130,14 +130,25 @@ export const products: Product[] = [
     // SketchUp/Blender pelo usuário, servidos de public/models/.
     // Ver Scene3DRenderer.ts pra como modelUrl é resolvido em runtime
     // (sempre com import.meta.env.BASE_URL na frente, nunca caminho fixo).
+    //
+    // PREÇO: nenhum destes tem fornecedor cadastrado ainda — os valores
+    // abaixo (e os das esquadrias de vidro logo mais adiante) são preço
+    // BASE de referência (média de mercado nacional, faixa popular/médio,
+    // peça avulsa sem instalação), não vindos de nenhum fornecedor real.
+    // Existiam como `price: 0`, o que fazia todo móvel/porta/janela de
+    // vidro escolhido ficar de fora do orçamento silenciosamente — mesmo
+    // problema de cobertura já corrigido pra outras peças em DEC-135,
+    // agora fechado aqui: pedido do Product Owner foi "os preços que o
+    // fornecedor não tem, colocamos um preço base" (nenhuma linha do
+    // orçamento deve ficar sem preço só por falta de fornecedor).
     { id: 'vortice.movel.sofa', name: 'Sofá 3 lugares', manufacturer: 'vortice', category: 'furniture',
-      commercial: { sku: 'VOR-MOV-001', price: 0, unit: 'peca' },
+      commercial: { sku: 'VOR-MOV-001', price: 1800.00, unit: 'peca' },
       assets: { colorHex: '#C7B79A', textureUrl: null, modelUrl: 'models/sofa.glb' } },
     { id: 'vortice.movel.mesinha-centro', name: 'Mesinha de Centro', manufacturer: 'vortice', category: 'furniture',
-      commercial: { sku: 'VOR-MOV-002', price: 0, unit: 'peca' },
+      commercial: { sku: 'VOR-MOV-002', price: 450.00, unit: 'peca' },
       assets: { colorHex: '#8A6B4A', textureUrl: null, modelUrl: 'models/mesinha.glb' } },
     { id: 'vortice.movel.tv', name: 'TV com Painel', manufacturer: 'vortice', category: 'furniture',
-      commercial: { sku: 'VOR-MOV-003', price: 0, unit: 'peca' },
+      commercial: { sku: 'VOR-MOV-003', price: 1600.00, unit: 'peca' },
       assets: { colorHex: '#2C2C2A', textureUrl: null, modelUrl: 'models/tv.glb' } },
     // --- Esquadrias (portas/janelas) modeladas — família enviada pelo
     // usuário (glTF exportado do Blender a partir de um catálogo de
@@ -150,57 +161,57 @@ export const products: Product[] = [
     // tamanho REAL medido na malha (não o nominal do nome do arquivo,
     // que fica ~1% maior) — a Opening nasce exatamente desse tamanho.
     { id: 'vortice.porta.vidro-1000x2100', name: 'Porta de Vidro 1000x2100', manufacturer: 'vortice', category: 'door', frameMaterial: 'vidro',
-      commercial: { sku: 'VOR-ESQ-001', price: 0, unit: 'peca' },
+      commercial: { sku: 'VOR-ESQ-001', price: 1470.00, unit: 'peca' },
       assets: { colorHex: '#DCE6EA', textureUrl: null, modelUrl: 'models/porta-vidro-1000x2100.glb', nominalWidthM: 0.989, nominalHeightM: 2.077, thumbnailUrl: 'images/esquadrias/porta-vidro-600-700-800-900-1000x2100.png' } },
     { id: 'vortice.porta.vidro-600x2100', name: 'Porta de Vidro 600x2100', manufacturer: 'vortice', category: 'door', frameMaterial: 'vidro',
-      commercial: { sku: 'VOR-ESQ-002', price: 0, unit: 'peca' },
+      commercial: { sku: 'VOR-ESQ-002', price: 890.00, unit: 'peca' },
       assets: { colorHex: '#DCE6EA', textureUrl: null, modelUrl: 'models/porta-vidro-600x2100.glb', nominalWidthM: 0.594, nominalHeightM: 2.077, thumbnailUrl: 'images/esquadrias/porta-vidro-600-700-800-900-1000x2100.png' } },
     { id: 'vortice.porta.vidro-700x2100', name: 'Porta de Vidro 700x2100', manufacturer: 'vortice', category: 'door', frameMaterial: 'vidro',
-      commercial: { sku: 'VOR-ESQ-003', price: 0, unit: 'peca' },
+      commercial: { sku: 'VOR-ESQ-003', price: 1030.00, unit: 'peca' },
       assets: { colorHex: '#DCE6EA', textureUrl: null, modelUrl: 'models/porta-vidro-700x2100.glb', nominalWidthM: 0.692, nominalHeightM: 2.077, thumbnailUrl: 'images/esquadrias/porta-vidro-600-700-800-900-1000x2100.png' } },
     { id: 'vortice.porta.vidro-800x2100', name: 'Porta de Vidro 800x2100', manufacturer: 'vortice', category: 'door', frameMaterial: 'vidro',
-      commercial: { sku: 'VOR-ESQ-004', price: 0, unit: 'peca' },
+      commercial: { sku: 'VOR-ESQ-004', price: 1180.00, unit: 'peca' },
       assets: { colorHex: '#DCE6EA', textureUrl: null, modelUrl: 'models/porta-vidro-800x2100.glb', nominalWidthM: 0.791, nominalHeightM: 2.077, thumbnailUrl: 'images/esquadrias/porta-vidro-600-700-800-900-1000x2100.png' } },
     { id: 'vortice.porta.vidro-900x2100', name: 'Porta de Vidro 900x2100', manufacturer: 'vortice', category: 'door', frameMaterial: 'vidro',
-      commercial: { sku: 'VOR-ESQ-005', price: 0, unit: 'peca' },
+      commercial: { sku: 'VOR-ESQ-005', price: 1330.00, unit: 'peca' },
       assets: { colorHex: '#DCE6EA', textureUrl: null, modelUrl: 'models/porta-vidro-900x2100.glb', nominalWidthM: 0.890, nominalHeightM: 2.077, thumbnailUrl: 'images/esquadrias/porta-vidro-600-700-800-900-1000x2100.png' } },
     { id: 'vortice.porta.giro-1200x2100', name: 'Porta de Giro 1200x2100', manufacturer: 'vortice', category: 'door', frameMaterial: 'vidro',
-      commercial: { sku: 'VOR-ESQ-006', price: 0, unit: 'peca' },
+      commercial: { sku: 'VOR-ESQ-006', price: 1770.00, unit: 'peca' },
       assets: { colorHex: '#DCE6EA', textureUrl: null, modelUrl: 'models/porta-giro-1200x2100.glb', nominalWidthM: 1.187, nominalHeightM: 2.077, thumbnailUrl: 'images/esquadrias/porta-giro-1200-1500-2000x2100.png' } },
     { id: 'vortice.porta.giro-1500x2100', name: 'Porta de Giro 1500x2100', manufacturer: 'vortice', category: 'door', frameMaterial: 'vidro',
-      commercial: { sku: 'VOR-ESQ-007', price: 0, unit: 'peca' },
+      commercial: { sku: 'VOR-ESQ-007', price: 2210.00, unit: 'peca' },
       assets: { colorHex: '#DCE6EA', textureUrl: null, modelUrl: 'models/porta-giro-1500x2100.glb', nominalWidthM: 1.484, nominalHeightM: 2.077, thumbnailUrl: 'images/esquadrias/porta-giro-1200-1500-2000x2100.png' } },
     { id: 'vortice.porta.giro-2000x2100', name: 'Porta de Giro 2000x2100', manufacturer: 'vortice', category: 'door', frameMaterial: 'vidro',
-      commercial: { sku: 'VOR-ESQ-008', price: 0, unit: 'peca' },
+      commercial: { sku: 'VOR-ESQ-008', price: 2940.00, unit: 'peca' },
       assets: { colorHex: '#DCE6EA', textureUrl: null, modelUrl: 'models/porta-giro-2000x2100.glb', nominalWidthM: 1.978, nominalHeightM: 2.077, thumbnailUrl: 'images/esquadrias/porta-giro-1200-1500-2000x2100.png' } },
     { id: 'vortice.porta.correr-2500x2100', name: 'Porta de Correr 2500x2100', manufacturer: 'vortice', category: 'door', frameMaterial: 'vidro',
-      commercial: { sku: 'VOR-ESQ-009', price: 0, unit: 'peca' },
+      commercial: { sku: 'VOR-ESQ-009', price: 4460.00, unit: 'peca' },
       assets: { colorHex: '#DCE6EA', textureUrl: null, modelUrl: 'models/porta-correr-2500x2100.glb', nominalWidthM: 2.473, nominalHeightM: 2.097, thumbnailUrl: 'images/esquadrias/porta-correr-2500-3000x2100.png' } },
     { id: 'vortice.porta.correr-3000x2100', name: 'Porta de Correr 3000x2100', manufacturer: 'vortice', category: 'door', frameMaterial: 'vidro',
-      commercial: { sku: 'VOR-ESQ-010', price: 0, unit: 'peca' },
+      commercial: { sku: 'VOR-ESQ-010', price: 5360.00, unit: 'peca' },
       assets: { colorHex: '#DCE6EA', textureUrl: null, modelUrl: 'models/porta-correr-3000x2100.glb', nominalWidthM: 2.967, nominalHeightM: 2.097, thumbnailUrl: 'images/esquadrias/porta-correr-2500-3000x2100.png' } },
     // --- Janelas — mesmo lote/família das portas (DEC-74/75), agora
     // categoria 'window'. Janela_de_correr_1200x500 e Maximo_ar_700x500
     // são as duas menores/mais baixas da leva — parecem pensadas pra
     // banheiro (mesma faixa de altura do Box_banheiro logo abaixo).
     { id: 'vortice.janela.correr-1200x500', name: 'Janela de Correr 1200x500', manufacturer: 'vortice', category: 'window', frameMaterial: 'vidro',
-      commercial: { sku: 'VOR-ESQ-011', price: 0, unit: 'peca' },
+      commercial: { sku: 'VOR-ESQ-011', price: 480.00, unit: 'peca' },
       assets: { colorHex: '#DCE6EA', textureUrl: null, modelUrl: 'models/janela-correr-1200x500.glb', nominalWidthM: 1.187, nominalHeightM: 0.495, thumbnailUrl: 'images/esquadrias/janela-correr-1200x500.png' } },
     // thumbnailUrl: primeira imagem de referência recebida — Sessão 30.
     { id: 'vortice.janela.correr-1200x1200', name: 'Janela de Correr 1200x1200', manufacturer: 'vortice', category: 'window', frameMaterial: 'vidro',
-      commercial: { sku: 'VOR-ESQ-012', price: 0, unit: 'peca' },
+      commercial: { sku: 'VOR-ESQ-012', price: 720.00, unit: 'peca' },
       assets: { colorHex: '#DCE6EA', textureUrl: null, modelUrl: 'models/janela-correr-1200x1200.glb', nominalWidthM: 1.187, nominalHeightM: 1.187, thumbnailUrl: 'images/esquadrias/janela-correr-1200x1200.png' } },
     { id: 'vortice.janela.correr-1500x1200', name: 'Janela de Correr 1500x1200', manufacturer: 'vortice', category: 'window', frameMaterial: 'vidro',
-      commercial: { sku: 'VOR-ESQ-013', price: 0, unit: 'peca' },
+      commercial: { sku: 'VOR-ESQ-013', price: 900.00, unit: 'peca' },
       assets: { colorHex: '#DCE6EA', textureUrl: null, modelUrl: 'models/janela-correr-1500x1200.glb', nominalWidthM: 1.484, nominalHeightM: 1.187, thumbnailUrl: 'images/esquadrias/janela-correr-1200x1200.png' } },
     { id: 'vortice.janela.correr-2000x1200', name: 'Janela de Correr 2000x1200', manufacturer: 'vortice', category: 'window', frameMaterial: 'vidro',
-      commercial: { sku: 'VOR-ESQ-014', price: 0, unit: 'peca' },
+      commercial: { sku: 'VOR-ESQ-014', price: 1150.00, unit: 'peca' },
       assets: { colorHex: '#DCE6EA', textureUrl: null, modelUrl: 'models/janela-correr-2000x1200.glb', nominalWidthM: 1.978, nominalHeightM: 1.187, thumbnailUrl: 'images/esquadrias/janela-correr-2000-2500-3000x1200.png' } },
     { id: 'vortice.janela.correr-2500x1200', name: 'Janela de Correr 2500x1200', manufacturer: 'vortice', category: 'window', frameMaterial: 'vidro',
-      commercial: { sku: 'VOR-ESQ-015', price: 0, unit: 'peca' },
+      commercial: { sku: 'VOR-ESQ-015', price: 1400.00, unit: 'peca' },
       assets: { colorHex: '#DCE6EA', textureUrl: null, modelUrl: 'models/janela-correr-2500x1200.glb', nominalWidthM: 2.473, nominalHeightM: 1.187, thumbnailUrl: 'images/esquadrias/janela-correr-2000-2500-3000x1200.png' } },
     { id: 'vortice.janela.correr-3000x1200', name: 'Janela de Correr 3000x1200', manufacturer: 'vortice', category: 'window', frameMaterial: 'vidro',
-      commercial: { sku: 'VOR-ESQ-016', price: 0, unit: 'peca' },
+      commercial: { sku: 'VOR-ESQ-016', price: 1650.00, unit: 'peca' },
       assets: { colorHex: '#DCE6EA', textureUrl: null, modelUrl: 'models/janela-correr-3000x1200.glb', nominalWidthM: 2.967, nominalHeightM: 1.187, thumbnailUrl: 'images/esquadrias/janela-correr-2000-2500-3000x1200.png' } },
     // Nome de exibição corrigido pra "Basculante" (nome técnico certo —
     // giro num eixo horizontal, diferente de "máximo-ar"), avisado pelo
@@ -209,19 +220,19 @@ export const products: Product[] = [
     // .glb no projeto também, sem necessidade real já que não aparecem
     // pra ninguém).
     { id: 'vortice.janela.maximo-ar-700x500', name: 'Basculante 700x500', manufacturer: 'vortice', category: 'window', frameMaterial: 'vidro',
-      commercial: { sku: 'VOR-ESQ-017', price: 0, unit: 'peca' },
+      commercial: { sku: 'VOR-ESQ-017', price: 320.00, unit: 'peca' },
       assets: { colorHex: '#DCE6EA', textureUrl: null, modelUrl: 'models/janela-maximo-ar-700x500.glb', nominalWidthM: 0.692, nominalHeightM: 0.495, thumbnailUrl: 'images/esquadrias/janela-basculante-700x500.png' } },
     { id: 'vortice.movel.cama', name: 'Cama de Casal', manufacturer: 'vortice', category: 'furniture',
-      commercial: { sku: 'VOR-MOV-004', price: 0, unit: 'peca' },
+      commercial: { sku: 'VOR-MOV-004', price: 1200.00, unit: 'peca' },
       assets: { colorHex: '#D9D5C7', textureUrl: null, modelUrl: 'models/cama.glb' } },
     { id: 'vortice.movel.guarda-roupa', name: 'Guarda-Roupa', manufacturer: 'vortice', category: 'furniture',
-      commercial: { sku: 'VOR-MOV-005', price: 0, unit: 'peca' },
+      commercial: { sku: 'VOR-MOV-005', price: 1500.00, unit: 'peca' },
       assets: { colorHex: '#B9B6AA', textureUrl: null, modelUrl: 'models/armario.glb' } },
     { id: 'vortice.movel.vaso-sanitario', name: 'Vaso Sanitário', manufacturer: 'vortice', category: 'furniture',
-      commercial: { sku: 'VOR-MOV-006', price: 0, unit: 'peca' },
+      commercial: { sku: 'VOR-MOV-006', price: 450.00, unit: 'peca' },
       assets: { colorHex: '#F4F1E8', textureUrl: null, modelUrl: 'models/vaso-sanitario.glb' } },
     { id: 'vortice.movel.lavatorio', name: 'Lavatório', manufacturer: 'vortice', category: 'furniture',
-      commercial: { sku: 'VOR-MOV-007', price: 0, unit: 'peca' },
+      commercial: { sku: 'VOR-MOV-007', price: 350.00, unit: 'peca' },
       assets: { colorHex: '#F4F1E8', textureUrl: null, modelUrl: 'models/pia-banheiro.glb' } },
     // Box de banheiro — DOIS modelos distintos, não um substituindo o
     // outro (correção pós-lançamento: a primeira versão desta entrada,
@@ -233,25 +244,25 @@ export const products: Product[] = [
     // redimensionar sozinho conforme a largura do banheiro (com teto de
     // ~2m) fica pra depois, ver DEC-76.
     { id: 'vortice.movel.box-chuveiro', name: 'Box de Chuveiro de Canto', manufacturer: 'vortice', category: 'furniture',
-      commercial: { sku: 'VOR-MOV-008', price: 0, unit: 'peca' },
+      commercial: { sku: 'VOR-MOV-008', price: 600.00, unit: 'peca' },
       assets: { colorHex: '#D9E8EC', textureUrl: null, modelUrl: 'models/box-banheiro.glb' } },
     { id: 'vortice.movel.box-chuveiro-reto-1500x2000', name: 'Box de Chuveiro Reto 1500x2000', manufacturer: 'vortice', category: 'furniture',
-      commercial: { sku: 'VOR-MOV-014', price: 0, unit: 'peca' },
+      commercial: { sku: 'VOR-MOV-014', price: 750.00, unit: 'peca' },
       assets: { colorHex: '#D9E8EC', textureUrl: null, modelUrl: 'models/box-banheiro-1500x2000.glb', thumbnailUrl: 'images/esquadrias/box-banheiro-1500x2000.png' } },
     { id: 'vortice.movel.chuveiro', name: 'Chuveiro', manufacturer: 'vortice', category: 'furniture',
-      commercial: { sku: 'VOR-MOV-009', price: 0, unit: 'peca' },
+      commercial: { sku: 'VOR-MOV-009', price: 180.00, unit: 'peca' },
       assets: { colorHex: '#C7C7C7', textureUrl: null, modelUrl: 'models/chuveiro.glb' } },
     { id: 'vortice.movel.espelho', name: 'Espelho', manufacturer: 'vortice', category: 'furniture',
-      commercial: { sku: 'VOR-MOV-010', price: 0, unit: 'peca' },
+      commercial: { sku: 'VOR-MOV-010', price: 150.00, unit: 'peca' },
       assets: { colorHex: '#DDE6E8', textureUrl: null, modelUrl: 'models/espelho.glb' } },
     { id: 'vortice.eletro.geladeira', name: 'Geladeira', manufacturer: 'vortice', category: 'furniture',
-      commercial: { sku: 'VOR-MOV-011', price: 0, unit: 'peca' },
+      commercial: { sku: 'VOR-MOV-011', price: 2800.00, unit: 'peca' },
       assets: { colorHex: '#E8E8E8', textureUrl: null, modelUrl: 'models/geladeira.glb' } },
     { id: 'vortice.movel.mesa', name: 'Mesa de Jantar', manufacturer: 'vortice', category: 'furniture',
-      commercial: { sku: 'VOR-MOV-012', price: 0, unit: 'peca' },
+      commercial: { sku: 'VOR-MOV-012', price: 900.00, unit: 'peca' },
       assets: { colorHex: '#8A6B4A', textureUrl: null, modelUrl: 'models/mesa.glb' } },
     { id: 'vortice.movel.armario-cozinha', name: 'Armário de Cozinha', manufacturer: 'vortice', category: 'furniture',
-      commercial: { sku: 'VOR-MOV-013', price: 0, unit: 'peca' },
+      commercial: { sku: 'VOR-MOV-013', price: 2200.00, unit: 'peca' },
       assets: { colorHex: '#D9D5C7', textureUrl: null, modelUrl: 'models/armario.glb' } }
   ];
 export function getProductsByCategory(cat: ProductCategory): Product[] { return products.filter((p) => p.category === cat); }

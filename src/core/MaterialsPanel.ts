@@ -1006,11 +1006,21 @@ const REFERENCE_PRICES = {
 //     faces, valor mais conservador que o CUB/m² residencial completo
 //     (~R$1.950-3.100/m² pra PR/RS/SC em 2025, fonte blog Cassol) já
 //     que não inclui fundação/telhado/instalações — só a massa em si.
+//   • rodapePerM: rodapé cerâmico/poliestireno assentado, faixa de
+//     mercado ~R$12-25/m instalado — meio da faixa.
+//   • soleiraPerM: soleira de granito/mármore sob porta, faixa de
+//     mercado ~R$70-110/m instalada — meio da faixa.
+//   Arco não tem preço aqui de propósito — ver comentário em buildRows()
+//   perto de 'Arcos': é um vão sem folha, a alvenaria que deixa de
+//   existir ali já reduz custo em outras linhas, um preço fixo pareceria
+//   custo extra quando o efeito líquido tende a ser economia.
 const ESTIMATED_MARKET_PRICES = {
   glazingPanelPerM2: 580.00,
   balconyRailingPerM: 420.00,
   varandaPerM2: 320.00,
   volumeBoxGenericPerM2: 260.00,
+  rodapePerM: 18.00,
+  soleiraPerM: 90.00,
 };
 
 // Rendimento de referência pra converter área de parede em latas de
@@ -1056,8 +1066,12 @@ function productUnitCost(productId: string, areaM2: number): number | null {
   if (!p || !p.commercial || p.commercial.price == null) return null;
   const price = p.commercial.price;
   if (p.commercial.unit === 'm2' || p.commercial.unit === 'un') return areaM2 * price;
-  if (p.commercial.unit === 'peca' && p.assets && p.assets.pecaCoverageM2) {
-    return Math.ceil(areaM2 / p.assets.pecaCoverageM2) * price;
+  if (p.commercial.unit === 'peca') {
+    if (p.assets && p.assets.pecaCoverageM2) return Math.ceil(areaM2 / p.assets.pecaCoverageM2) * price;
+    // Peça sem "cobertura" declarada (ex.: uma porta/janela específica,
+    // já do tamanho certo pro vão) — 1 abertura = 1 peça inteira, preço
+    // não escala pela área.
+    return price;
   }
   if (p.commercial.unit === 'lata_18L') {
     const latas = Math.ceil((areaM2 * PAINT_COATS) / PAINT_YIELD_M2_PER_CAN_PER_COAT);
@@ -1126,7 +1140,7 @@ export function buildRows(): (string | number)[][] {
 
   push('Geral', 'Paredes (comprimento)', q.totals.wallLength, 'm', null);
   push('Geral', 'Piso (área)', q.totals.floorArea, 'm²', null);
-  push('Geral', 'Rodapé (comprimento)', q.totals.baseboard, 'm', null);
+  push('Geral', 'Rodapé (comprimento)', q.totals.baseboard, 'm', q.totals.baseboard > 0 ? q.totals.baseboard * ESTIMATED_MARKET_PRICES.rodapePerM : null);
   push('Geral', 'Telhado (área real da água)', q.totals.roofArea, 'm²', null);
   // Portas/janelas são esquadrias de tamanho livre (largura/altura
   // ajustáveis por abertura, sem medida fixa) — por isso cobradas por
@@ -1143,9 +1157,18 @@ export function buildRows(): (string | number)[][] {
     ? q.totals.windowsProductCost + q.totals.windowsGenericAreaM2 * materialPrice('windowPerM2')
     : null;
   push('Geral', 'Janelas', q.totals.windows, 'un', windowCost);
+  // Sem preço próprio: o arco é um vão sem batente/folha — a alvenaria
+  // que deixa de existir ali já reduz wallAreaNet (bloco/argamassa/
+  // pintura, ver o desconto de openingsArea logo acima) e a verga acima
+  // do vão já tem linha própria ("Vergas acima de vãos"). Um preço fixo
+  // aqui daria a impressão de custo extra quando o efeito líquido tende
+  // a ser economia, não gasto.
   push('Geral', 'Arcos', q.totals.arcos, 'un', null);
+  // Soleira é vendida/orçada por metro linear — o preço entra só na
+  // linha de comprimento, "unidades" fica informativo (evita contar
+  // o mesmo material duas vezes).
   push('Geral', 'Soleiras externas (unidades)', q.totals.soleiraCount, 'un', null);
-  push('Geral', 'Soleiras externas (comprimento)', q.totals.soleiraLength, 'm', null);
+  push('Geral', 'Soleiras externas (comprimento)', q.totals.soleiraLength, 'm', q.totals.soleiraLength > 0 ? q.totals.soleiraLength * ESTIMATED_MARKET_PRICES.soleiraPerM : null);
   // Pele de vidro, Sacada de vidro e Varanda não têm produto de
   // catálogo próprio — sempre média de mercado (ESTIMATED_MARKET_PRICES,
   // ver comentário completo ali).
