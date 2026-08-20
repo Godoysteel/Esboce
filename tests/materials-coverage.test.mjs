@@ -14,6 +14,10 @@ const catalogSource = await readFile(
   new URL('../src/core/Catalog.ts', import.meta.url),
   'utf8',
 );
+const typesSource = await readFile(
+  new URL('../src/core/types.ts', import.meta.url),
+  'utf8',
+);
 
 // Pedido do Product Owner após auditoria de cobertura: piso, parede e
 // telhado sem acabamento escolhido no editor não podem ficar de fora do
@@ -154,4 +158,75 @@ test('Chapisco+Reboco vira categoria própria, aplicado nas DUAS faces de toda p
   assert.match(body, /rebocoVolumeM3 \* MASONRY_REF\.cementKgPerM3/);
   assert.match(body, /rebocoVolumeM3 \* MASONRY_REF\.calKgPerM3/);
   assert.match(body, /rebocoVolumeM3 \* MASONRY_REF\.sandM3PerM3/);
+});
+
+// Product Owner: "como podemos aferir se tudo o que está sendo criado
+// está mesmo sendo quantificado e orçado?" — auditoria manual encontrou
+// 5 peças com ZERO linha no quantitativo (Pele de vidro, Sacada de
+// vidro, Varanda, Bloco de Volumetria, Móveis). Corrigidas nesta
+// versão (ver Registro de Decisões Técnicas), e este teste passa a
+// existir especificamente pra NUNCA mais depender de auditoria manual
+// de novo: qualquer array de entidade novo adicionado em `Floor`
+// (types.ts) que não apareça em algum lugar de MaterialsPanel.ts falha
+// aqui automaticamente, na hora que a peça for criada — não meses
+// depois, numa conversa como esta.
+test('cobertura de quantitativo: TODO array de entidade de Floor (types.ts) aparece em algum lugar de MaterialsPanel.ts', () => {
+  const floorStart = typesSource.indexOf('export interface Floor {');
+  assert.ok(floorStart !== -1, 'Floor não encontrada em types.ts — o arquivo mudou de formato?');
+  const floorEnd = typesSource.indexOf('\n}', floorStart);
+  const floorBody = typesSource.slice(floorStart, floorEnd);
+  // Só campos que são ARRAY de entidade (ex.: "walls: Wall[];") — id/
+  // name/kind/planUnderlay/roomFinishes(*) não representam uma peça
+  // construída que precise de linha de quantitativo.
+  const arrayFields = Array.from(floorBody.matchAll(/^\s*(\w+): \w+\[\];/gm)).map((m) => m[1]);
+  assert.ok(arrayFields.length >= 10, 'esperava pelo menos 10 arrays de entidade em Floor — a extração por regex quebrou?');
+  arrayFields.forEach((field) => {
+    assert.match(
+      materialsSource,
+      new RegExp('floor\\.' + field + '\\b'),
+      `floor.${field} não aparece em MaterialsPanel.ts — peça nova sem cobertura de quantitativo (ver DEC de auditoria)`,
+    );
+  });
+});
+
+test('Pele de vidro, Sacada de vidro e Varanda viram linha de custo real em buildRows(), pela média de mercado (ESTIMATED_MARKET_PRICES)', () => {
+  assert.match(materialsSource, /totals\.glazingPanelAreaM2 \+= p\.widthM \* p\.heightM;/);
+  assert.match(materialsSource, /totals\.balconyRailingLengthM \+= r\.widthM;/);
+  assert.match(materialsSource, /totals\.varandaAreaM2 \+= Math\.abs\(\(v\.x2 - v\.x1\) \* \(v\.y2 - v\.y1\)\) \/ \(Core\.GRID \* Core\.GRID\);/);
+  assert.match(materialsSource, /push\('Geral', 'Pele de vidro \(área\)', q\.totals\.glazingPanelAreaM2, 'm²', q\.totals\.glazingPanelAreaM2 \* ESTIMATED_MARKET_PRICES\.glazingPanelPerM2\)/);
+  assert.match(materialsSource, /push\('Geral', 'Sacada de vidro \(comprimento\)', q\.totals\.balconyRailingLengthM, 'm', q\.totals\.balconyRailingLengthM \* ESTIMATED_MARKET_PRICES\.balconyRailingPerM\)/);
+  assert.match(materialsSource, /push\('Geral', 'Varanda \(área\)', q\.totals\.varandaAreaM2, 'm²', q\.totals\.varandaAreaM2 \* ESTIMATED_MARKET_PRICES\.varandaPerM2\)/);
+});
+
+test('ESTIMATED_MARKET_PRICES tem os 4 valores de referência esperados (m² de vidro, m linear de guarda-corpo, m² de varanda, m² de volumetria genérica)', () => {
+  const start = materialsSource.indexOf('const ESTIMATED_MARKET_PRICES = {');
+  const end = materialsSource.indexOf('};', start);
+  const body = materialsSource.slice(start, end);
+  assert.match(body, /glazingPanelPerM2:\s*580\.00/);
+  assert.match(body, /balconyRailingPerM:\s*420\.00/);
+  assert.match(body, /varandaPerM2:\s*320\.00/);
+  assert.match(body, /volumeBoxGenericPerM2:\s*260\.00/);
+});
+
+// Bloco de Volumetria: mesmo padrão fornecedor-real-primeiro de portas/
+// janelas — se tem finishProductId escolhido (Lata de tinta, DEC-134),
+// usa o preço do PRÓPRIO produto pela área de superfície (as 6 faces);
+// sem acabamento, cai na média de mercado genérica.
+test('Bloco de Volumetria: custo usa o produto pintado (Lata de tinta) quando existe, senão a média de mercado genérica pela área de superfície', () => {
+  const start = materialsSource.indexOf('(floor.volumeBoxes || []).forEach(function (b) {');
+  const end = materialsSource.indexOf('\n    });', start);
+  const body = materialsSource.slice(start, end);
+  assert.match(body, /const surfaceAreaM2 = 2 \* \(b\.widthM \* b\.heightM \+ b\.widthM \* b\.depthM \+ b\.heightM \* b\.depthM\);/);
+  assert.match(body, /const cost = b\.finishProductId \? productUnitCost\(b\.finishProductId, surfaceAreaM2\) : null;/);
+  assert.match(materialsSource, /const volumeBoxCost = q\.totals\.volumeBoxProductCost \+ q\.totals\.volumeBoxGenericAreaM2 \* ESTIMATED_MARKET_PRICES\.volumeBoxGenericPerM2;/);
+});
+
+// Móveis: soma o preço já cadastrado no PRÓPRIO produto do Catálogo
+// (Furniture.productId) — sem estimativa nova inventada aqui (os
+// móveis de exemplo do Catálogo estão com preço 0 hoje; é uma tarefa
+// separada de dados de catálogo, não deste quantitativo).
+test('Móveis somam o preço do produto do Catálogo (Furniture.productId), sem estimativa nova pra móvel', () => {
+  assert.match(materialsSource, /const product = Catalog\.getProduct\(f\.productId\);/);
+  assert.match(materialsSource, /if \(product && product\.commercial && product\.commercial\.price\) totals\.furnitureCost \+= product\.commercial\.price;/);
+  assert.match(materialsSource, /push\('Mobiliário', 'Móveis posicionados', q\.totals\.furnitureCount, 'un', q\.totals\.furnitureCost > 0 \? q\.totals\.furnitureCost : null\)/);
 });

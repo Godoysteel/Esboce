@@ -296,6 +296,22 @@ interface Totals {
   lajeCount: number; lajeAreaM2: number;
   vergaCount: number; vergaSpanM: number;
   roofTimberAreaM2: number;
+  // Peças que não tinham NENHUMA linha no quantitativo até esta versão
+  // (auditoria pedida pelo Product Owner: "como podemos aferir se tudo
+  // o que está sendo criado, está mesmo sendo quantificado e
+  // orçado?") — Pele de vidro, Sacada de vidro e Varanda não têm
+  // produto de catálogo próprio, então usam sempre a média de mercado
+  // ESTIMATED_MARKET_PRICES. Bloco de Volumetria segue o mesmo padrão
+  // fornecedor-real-primeiro de portas/janelas (productCost quando tem
+  // finishProductId escolhido, genericAreaM2 caindo pra média quando
+  // não tem). Móveis somam o preço do próprio produto do Catálogo
+  // (Furniture.productId) — sem estimativa nova, é o preço já
+  // cadastrado ali (hoje zerado nos móveis de exemplo).
+  glazingPanelAreaM2: number;
+  balconyRailingLengthM: number;
+  varandaAreaM2: number;
+  volumeBoxAreaM2: number; volumeBoxProductCost: number; volumeBoxGenericAreaM2: number;
+  furnitureCount: number; furnitureCost: number;
 }
 interface Masonry { blocks: number; mortarM3: number; cementKg: number; calKg: number; sandM3: number; }
 interface Structure {
@@ -357,7 +373,10 @@ export function compute(): ComputeResult {
     columnCount: 0, columnVolume: 0, estimatedColumnCount: 0,
     lajeCount: 0, lajeAreaM2: 0,
     vergaCount: 0, vergaSpanM: 0,
-    roofTimberAreaM2: 0
+    roofTimberAreaM2: 0,
+    glazingPanelAreaM2: 0, balconyRailingLengthM: 0, varandaAreaM2: 0,
+    volumeBoxAreaM2: 0, volumeBoxProductCost: 0, volumeBoxGenericAreaM2: 0,
+    furnitureCount: 0, furnitureCost: 0
   };
   const paint: Record<string, number> = {}, floorTile: Record<string, number> = {}, roofTile: Record<string, number> = {};
 
@@ -495,6 +514,51 @@ export function compute(): ComputeResult {
     (floor.columns || []).forEach(function (col) {
       totals.columnCount++;
       totals.columnVolume += columnVolumeM3(col, currentWallHeight);
+    });
+
+    // Varanda: área do retângulo (mesmo espírito de piso/laje, mas sem
+    // Core.detectRooms — varanda não é fechada por parede, ver
+    // comentário mais abaixo sobre a laje automática por cômodo não
+    // cobrir esse caso).
+    (floor.varandas || []).forEach(function (v) {
+      totals.varandaAreaM2 += Math.abs((v.x2 - v.x1) * (v.y2 - v.y1)) / (Core.GRID * Core.GRID);
+    });
+
+    // Pele de vidro: área real do painel (widthM × heightM) — sempre
+    // média de mercado (ESTIMATED_MARKET_PRICES), não tem produto de
+    // catálogo próprio ainda (glassMaterial é só cor/opacidade, não uma
+    // referência de fornecedor).
+    (floor.glazingPanels || []).forEach(function (p) {
+      totals.glazingPanelAreaM2 += p.widthM * p.heightM;
+    });
+
+    // Sacada de vidro: comprimento (widthM) — guarda-corpo de vidro é
+    // sempre vendido/orçado por metro linear no mercado, não por m².
+    (floor.balconyRailings || []).forEach(function (r) {
+      totals.balconyRailingLengthM += r.widthM;
+    });
+
+    // Bloco de Volumetria: mesmo padrão fornecedor-real-primeiro de
+    // portas/janelas — se tem finishProductId (pintado com a Lata de
+    // tinta, ver DEC-134), usa o preço do próprio produto pela área de
+    // superfície total (6 faces, mesmo material nas 6); sem acabamento
+    // escolhido, cai na média de mercado genérica em buildRows().
+    (floor.volumeBoxes || []).forEach(function (b) {
+      const surfaceAreaM2 = 2 * (b.widthM * b.heightM + b.widthM * b.depthM + b.heightM * b.depthM);
+      totals.volumeBoxAreaM2 += surfaceAreaM2;
+      const cost = b.finishProductId ? productUnitCost(b.finishProductId, surfaceAreaM2) : null;
+      if (cost != null) totals.volumeBoxProductCost += cost;
+      else totals.volumeBoxGenericAreaM2 += surfaceAreaM2;
+    });
+
+    // Móveis: soma o preço do próprio produto do Catálogo
+    // (Furniture.productId) — não é estimativa nova, é o preço já
+    // cadastrado no produto (hoje 0 nos móveis de exemplo do Catálogo;
+    // populando um preço real lá, aparece aqui automaticamente).
+    (floor.furniture || []).forEach(function (f) {
+      totals.furnitureCount++;
+      const product = Catalog.getProduct(f.productId);
+      if (product && product.commercial && product.commercial.price) totals.furnitureCost += product.commercial.price;
     });
 
     // Laje: passou a nascer automática por cômodo fechado, exatamente
@@ -668,6 +732,11 @@ export function render(): void {
   html += '<div class="materials-line"><span>Janelas</span><span>' + q.totals.windows + ' un.</span></div>';
   html += '<div class="materials-line"><span>Arcos</span><span>' + q.totals.arcos + ' un.</span></div>';
   html += '<div class="materials-line"><span>Soleiras externas</span><span>' + q.totals.soleiraCount + ' un. · ' + fmtM(q.totals.soleiraLength) + '</span></div>';
+  if (q.totals.glazingPanelAreaM2 > 0) html += '<div class="materials-line"><span>Pele de vidro</span><span>' + fmtM2(q.totals.glazingPanelAreaM2) + '</span></div>';
+  if (q.totals.balconyRailingLengthM > 0) html += '<div class="materials-line"><span>Sacada de vidro</span><span>' + fmtM(q.totals.balconyRailingLengthM) + '</span></div>';
+  if (q.totals.varandaAreaM2 > 0) html += '<div class="materials-line"><span>Varanda</span><span>' + fmtM2(q.totals.varandaAreaM2) + '</span></div>';
+  if (q.totals.volumeBoxAreaM2 > 0) html += '<div class="materials-line"><span>Bloco de Volumetria (superfície)</span><span>' + fmtM2(q.totals.volumeBoxAreaM2) + '</span></div>';
+  if (q.totals.furnitureCount > 0) html += '<div class="materials-line"><span>Móveis posicionados</span><span>' + q.totals.furnitureCount + ' un.</span></div>';
   if (q.foundation) {
     const f = q.foundation;
     html += '<div class="object-panel-section-label">Fundação (' + (f.type === 'baldrame' ? 'baldrame' : 'radier') + ' — ref. taxa de aço 70 kg/m³)</div>';
@@ -857,6 +926,38 @@ const REFERENCE_PRICES = {
   windowPerM2: 150.00,
   nailPerKg: 14.00
 };
+
+// Preços médios ESTIMADOS de mercado (Brasil, referência 2025-2026)
+// pra peças que não têm produto de catálogo/fornecedor próprio ainda —
+// diferente de REFERENCE_PRICES acima, não têm o mecanismo de preço
+// real via Supabase (MaterialPriceKey/ensureRealPrices), são só uma
+// referência fixa. Auditoria pedida pelo Product Owner ("como podemos
+// aferir se tudo o que está sendo criado está sendo quantificado e
+// orçado?") encontrou 5 peças com ZERO linha no quantitativo — ver
+// Registro de Decisões Técnicas.
+//   • glazingPanelPerM2: fachada/esquadria de vidro temperado + perfil
+//     de alumínio, instalada — faixa de mercado ~R$450-700/m²,
+//     usando o meio da faixa.
+//   • balconyRailingPerM: guarda-corpo de vidro temperado (8-10mm) +
+//     perfil de alumínio, sempre orçado por METRO LINEAR no mercado
+//     (não por m², a altura já é padronizada pela norma) — faixa
+//     ~R$350-500/m.
+//   • varandaPerM2: laje + piso + acabamento básico de varanda
+//     coberta — não é cômodo fechado (sem parede pra Core.detectRooms
+//     cobrir), então nunca tinha custo de piso/laje nenhum.
+//   • volumeBoxGenericPerM2: bloco de volumetria SEM acabamento
+//     escolhido (sem finishProductId — ver Store.commands.
+//     setVolumeBoxFinish, DEC-134) — estrutura + reboco básico nas 6
+//     faces, valor mais conservador que o CUB/m² residencial completo
+//     (~R$1.950-3.100/m² pra PR/RS/SC em 2025, fonte blog Cassol) já
+//     que não inclui fundação/telhado/instalações — só a massa em si.
+const ESTIMATED_MARKET_PRICES = {
+  glazingPanelPerM2: 580.00,
+  balconyRailingPerM: 420.00,
+  varandaPerM2: 320.00,
+  volumeBoxGenericPerM2: 260.00,
+};
+
 // Rendimento de referência pra converter área de parede em latas de
 // tinta (o Catalog vende tinta por lata, não por m² — não existe ainda
 // um campo "rendimento" no produto, então uso uma referência de bula
@@ -990,6 +1091,18 @@ export function buildRows(): (string | number)[][] {
   push('Geral', 'Arcos', q.totals.arcos, 'un', null);
   push('Geral', 'Soleiras externas (unidades)', q.totals.soleiraCount, 'un', null);
   push('Geral', 'Soleiras externas (comprimento)', q.totals.soleiraLength, 'm', null);
+  // Pele de vidro, Sacada de vidro e Varanda não têm produto de
+  // catálogo próprio — sempre média de mercado (ESTIMATED_MARKET_PRICES,
+  // ver comentário completo ali).
+  if (q.totals.glazingPanelAreaM2 > 0) {
+    push('Geral', 'Pele de vidro (área)', q.totals.glazingPanelAreaM2, 'm²', q.totals.glazingPanelAreaM2 * ESTIMATED_MARKET_PRICES.glazingPanelPerM2);
+  }
+  if (q.totals.balconyRailingLengthM > 0) {
+    push('Geral', 'Sacada de vidro (comprimento)', q.totals.balconyRailingLengthM, 'm', q.totals.balconyRailingLengthM * ESTIMATED_MARKET_PRICES.balconyRailingPerM);
+  }
+  if (q.totals.varandaAreaM2 > 0) {
+    push('Geral', 'Varanda (área)', q.totals.varandaAreaM2, 'm²', q.totals.varandaAreaM2 * ESTIMATED_MARKET_PRICES.varandaPerM2);
+  }
   if (q.foundation) {
     const f = q.foundation;
     const fLabel = 'Fundação (' + f.type + ')';
@@ -1094,6 +1207,23 @@ export function buildRows(): (string | number)[][] {
   addProductRows('Pintura', q.paint);
   addProductRows('Piso', q.floorTile);
   addProductRows('Telhado', q.roofTile);
+
+  // Bloco de Volumetria: mesmo padrão fornecedor-real > média já usado
+  // em portas/janelas — a fração com finishProductId escolhido (Lata de
+  // tinta, DEC-134) usa o preço do próprio produto (volumeBoxProductCost,
+  // já resolvido em compute()); a fração sem acabamento cai na média de
+  // mercado genérica. Área de superfície total (as 6 faces do box)
+  // sempre mostrada, seja qual for a origem do preço.
+  if (q.totals.volumeBoxAreaM2 > 0) {
+    const volumeBoxCost = q.totals.volumeBoxProductCost + q.totals.volumeBoxGenericAreaM2 * ESTIMATED_MARKET_PRICES.volumeBoxGenericPerM2;
+    push('Volumetria', 'Bloco de Volumetria (área de superfície)', q.totals.volumeBoxAreaM2, 'm²', volumeBoxCost);
+  }
+  // Móveis: preço do próprio produto do Catálogo (Furniture.productId),
+  // já somado em compute() — sem média de mercado nova (ver comentário
+  // em Totals).
+  if (q.totals.furnitureCount > 0) {
+    push('Mobiliário', 'Móveis posicionados', q.totals.furnitureCount, 'un', q.totals.furnitureCost > 0 ? q.totals.furnitureCost : null);
+  }
 
   if (hasCost) rows.push(['TOTAL', 'Custo estimado (soma dos itens com preço)', '', '', '', fmtBRL(grandTotal)]);
   return rows;
