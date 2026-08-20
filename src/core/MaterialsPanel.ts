@@ -20,7 +20,7 @@ import type { Point, Wall, Roof, Column, Laje, Project } from './types.js';
 import { constructionSystemDefinition, hasCeramicMasonryEstimate } from './ConstructionSystem.js';
 import { floorWallHeight } from './Attic.js';
 import { listCatalogProducts, listManufacturers } from './SupabaseClient.js';
-import { classifyHydraulicJunction } from './Hydraulics.js';
+import { classifyHydraulicJunction, destinationLabelForNetwork } from './Hydraulics.js';
 import type { HydraulicNetworkType, HydraulicNode, HydraulicSegment } from './types.js';
 
 let bodyEl: HTMLElement | null, panelEl: HTMLElement | null;
@@ -343,9 +343,20 @@ interface RoofTimber { areaM2: number; ripaLinearM: number; caibroLinearM: numbe
 // nenhum tipo de hidráulica era contado antes desta seção — resolver
 // água fria também é tarefa maior, fora do pedido específico de esgoto
 // e pluvial).
+// Item por item — "01 joelho de PVC 50mm linha esgoto", pedido explícito
+// do Product Owner pra lista dar pra levar direto na loja. `productLine`
+// agrupa kitchen_sewer+sanitary_sewer (mesmo tubo/conexão de PVC linha
+// esgoto — o preço de mercado não muda por causa de qual pia/vaso ele
+// atende) separado de rainwater (linha pluvial, produto Aquapluv
+// diferente).
+type HydraulicProductLine = 'esgoto' | 'pluvial';
+interface HydraulicPipeGroup { productLine: HydraulicProductLine; diameterMm: number; lengthM: number; bars: number; }
+interface HydraulicFittingGroup { productLine: HydraulicProductLine; diameterMm: number; kind: 'elbow45' | 'elbow90' | 'tee' | 'cross'; count: number; }
+interface HydraulicDestinationGroup { networkType: HydraulicNetworkType; label: string; count: number; }
 interface HydraulicsQuantities {
-  kitchenSewerLengthM: number; sanitarySewerLengthM: number; rainwaterLengthM: number;
-  destinationCount: number; connectionCount: number;
+  pipeGroups: HydraulicPipeGroup[];
+  fittingGroups: HydraulicFittingGroup[];
+  destinationGroups: HydraulicDestinationGroup[];
 }
 type Foundation = FoundationQuantity;
 interface ComputeResult {
@@ -746,13 +757,14 @@ export function compute(): ComputeResult {
       + tercaLinearM * ROOF_TIMBER_REF.tercaSectionM2
   };
 
-  // Esgoto/pluvial — comprimento 3D real de cada segmento (não a linha
-  // reta 2D: soma a diferença de cota, inclusive entre pavimentos, mesma
-  // convenção de altura global usada em Hydraulics.buildOrthogonalNetworkFromFixtures)
-  // por networkType, e contagem de conexões (cotovelo/tê/cruz — reaproveita
-  // classifyHydraulicJunction, já existia "de base pro quantitativo" sem
-  // nunca ter sido consumido). Água fria fica de fora (ver comentário na
-  // interface HydraulicsQuantities).
+  // Esgoto/pluvial — item por item (tubo por diâmetro em barras de 6m,
+  // conexão por diâmetro+tipo), pedido explícito do Product Owner ("01
+  // joelho de PVC 50mm linha esgoto...", pra dar pra levar a lista direto
+  // na loja). Comprimento é o 3D real de cada segmento (não a linha reta
+  // 2D: soma a diferença de cota, inclusive entre pavimentos, mesma
+  // convenção de altura global usada em
+  // Hydraulics.buildOrthogonalNetworkFromFixtures). Água fria fica de
+  // fora (ver comentário na interface HydraulicsQuantities).
   const hydraulicNodesById = new Map((project.hydraulics.nodes || []).map((node) => [node.id, node]));
   const floorStackHeight = Scene3DRenderer.FLOOR_STACK_HEIGHT_GETTER();
   function hydraulicSegmentLengthMeters(segment: HydraulicSegment): number {
@@ -762,26 +774,62 @@ export function compute(): ComputeResult {
     const dz = ((end.floorIndex || 0) - (start.floorIndex || 0)) * floorStackHeight + (end.elevationM - start.elevationM);
     return Math.hypot(dx, dy, dz);
   }
-  function hydraulicLengthByType(networkType: HydraulicNetworkType): number {
-    return (project.hydraulics.segments || [])
-      .filter((segment) => segment.networkType === networkType)
-      .reduce((sum, segment) => sum + hydraulicSegmentLengthMeters(segment), 0);
+  function hydraulicProductLine(networkType: HydraulicNetworkType): HydraulicProductLine {
+    return networkType === 'rainwater' ? 'pluvial' : 'esgoto';
   }
-  const hydraulicDestinationNodes = (project.hydraulics.nodes || []).filter((node) => node.kind === 'destination');
-  const hydraulicConnectionCount = (['kitchen_sewer', 'sanitary_sewer', 'rainwater'] as HydraulicNetworkType[]).reduce((sum, networkType) => {
-    const ownNodes = (project.hydraulics.nodes || []).filter((node) => node.networkType === networkType && (node.kind === 'junction' || node.kind === 'destination'));
-    return sum + ownNodes.filter((node) => {
-      const kind = classifyHydraulicJunction(project.hydraulics, node.id);
-      return kind === 'elbow45' || kind === 'elbow90' || kind === 'tee' || kind === 'cross';
-    }).length;
-  }, 0);
-  const hydraulics: HydraulicsQuantities = {
-    kitchenSewerLengthM: hydraulicLengthByType('kitchen_sewer'),
-    sanitarySewerLengthM: hydraulicLengthByType('sanitary_sewer'),
-    rainwaterLengthM: hydraulicLengthByType('rainwater'),
-    destinationCount: hydraulicDestinationNodes.length,
-    connectionCount: hydraulicConnectionCount,
-  };
+  const HYDRAULIC_SEWER_RAINWATER_TYPES: HydraulicNetworkType[] = ['kitchen_sewer', 'sanitary_sewer', 'rainwater'];
+  // Tubo — soma comprimento por (linha do produto, diâmetro), depois
+  // converte pra barra de 6m (padrão comercial brasileiro), arredondando
+  // pra cima o TOTAL do grupo (mesma lógica já usada em sacos de
+  // cimento/latas de tinta — você não compra fração de barra).
+  const pipeLengthByGroup = new Map<string, { productLine: HydraulicProductLine; diameterMm: number; lengthM: number }>();
+  (project.hydraulics.segments || []).forEach((segment) => {
+    if (!HYDRAULIC_SEWER_RAINWATER_TYPES.includes(segment.networkType)) return;
+    const productLine = hydraulicProductLine(segment.networkType);
+    const key = productLine + '|' + segment.diameterMm;
+    const existing = pipeLengthByGroup.get(key) || { productLine, diameterMm: segment.diameterMm, lengthM: 0 };
+    existing.lengthM += hydraulicSegmentLengthMeters(segment);
+    pipeLengthByGroup.set(key, existing);
+  });
+  const pipeGroups: HydraulicPipeGroup[] = Array.from(pipeLengthByGroup.values())
+    .map((group) => ({ ...group, bars: Math.ceil(group.lengthM / HYDRAULIC_PIPE_BAR_LENGTH_M) }))
+    .sort((a, b) => a.productLine.localeCompare(b.productLine) || a.diameterMm - b.diameterMm);
+  // Conexões — cada nó vira um joelho/tê/cruzeta real por (linha,
+  // diâmetro, tipo); diâmetro do nó vem de um segmento vizinho (todo
+  // trecho de uma mesma fixture nasce com o mesmo diâmetro, ver
+  // Hydraulics.buildOrthogonalNetworkFromFixtures). 'straight'/'end' não
+  // viram conexão (trecho reto/ponta solta não precisa de peça própria
+  // nesta simplificação).
+  function hydraulicNodeDiameterMm(nodeId: string): number {
+    const segment = (project.hydraulics.segments || []).find((s) => s.startNodeId === nodeId || s.endNodeId === nodeId);
+    return segment ? segment.diameterMm : 50;
+  }
+  const fittingCountByGroup = new Map<string, HydraulicFittingGroup>();
+  HYDRAULIC_SEWER_RAINWATER_TYPES.forEach((networkType) => {
+    const productLine = hydraulicProductLine(networkType);
+    (project.hydraulics.nodes || [])
+      .filter((node) => node.networkType === networkType && (node.kind === 'junction' || node.kind === 'destination'))
+      .forEach((node) => {
+        const kind = classifyHydraulicJunction(project.hydraulics, node.id);
+        if (kind !== 'elbow45' && kind !== 'elbow90' && kind !== 'tee' && kind !== 'cross') return;
+        const diameterMm = hydraulicNodeDiameterMm(node.id);
+        const key = productLine + '|' + diameterMm + '|' + kind;
+        const existing = fittingCountByGroup.get(key) || { productLine, diameterMm, kind, count: 0 };
+        existing.count++;
+        fittingCountByGroup.set(key, existing);
+      });
+  });
+  const fittingGroups: HydraulicFittingGroup[] = Array.from(fittingCountByGroup.values())
+    .sort((a, b) => a.productLine.localeCompare(b.productLine) || a.diameterMm - b.diameterMm || a.kind.localeCompare(b.kind));
+  // Caixas — uma linha por tipo (gordura/inspeção/saída pluvial), nunca
+  // lumped: são estruturas fisicamente diferentes (NBR 8160).
+  const destinationGroups: HydraulicDestinationGroup[] = HYDRAULIC_SEWER_RAINWATER_TYPES
+    .map((networkType) => ({
+      networkType, label: destinationLabelForNetwork(networkType),
+      count: (project.hydraulics.nodes || []).filter((node) => node.kind === 'destination' && node.networkType === networkType).length,
+    }))
+    .filter((group) => group.count > 0);
+  const hydraulics: HydraulicsQuantities = { pipeGroups, fittingGroups, destinationGroups };
 
   return { totals, paint, floorTile, roofTile, masonry, structure, foundation, laje, roofTimber, hydraulics, constructionSystem: project.constructionSystem };
 }
@@ -842,14 +890,20 @@ export function render(): void {
   if (q.totals.varandaAreaM2 > 0) html += '<div class="materials-line"><span>Varanda</span><span>' + fmtM2(q.totals.varandaAreaM2) + '</span></div>';
   if (q.totals.volumeBoxAreaM2 > 0) html += '<div class="materials-line"><span>Bloco de Volumetria (superfície)</span><span>' + fmtM2(q.totals.volumeBoxAreaM2) + '</span></div>';
   if (q.totals.furnitureCount > 0) html += '<div class="materials-line"><span>Móveis posicionados</span><span>' + q.totals.furnitureCount + ' un.</span></div>';
-  var hasHydraulics = q.hydraulics.kitchenSewerLengthM > 0 || q.hydraulics.sanitarySewerLengthM > 0 || q.hydraulics.rainwaterLengthM > 0;
-  if (hasHydraulics) {
+  // Painel rápido: só o resumo (mesmo padrão de Pintura/Piso/Telhado
+  // acima, que também só mostram área aqui — a lista item por item
+  // completa, com tubo/conexão por diâmetro, fica no PDF/planilha/CSV
+  // (buildRows(), ver "Instalações hidrossanitárias" lá).
+  if (q.hydraulics.pipeGroups.length > 0 || q.hydraulics.destinationGroups.length > 0) {
     html += '<div class="object-panel-section-label">Instalações hidrossanitárias (esgoto e pluvial, sem inclinação)</div>';
-    if (q.hydraulics.kitchenSewerLengthM > 0) html += '<div class="materials-line"><span>Esgoto de cozinha</span><span>' + fmtM(q.hydraulics.kitchenSewerLengthM) + '</span></div>';
-    if (q.hydraulics.sanitarySewerLengthM > 0) html += '<div class="materials-line"><span>Esgoto sanitário</span><span>' + fmtM(q.hydraulics.sanitarySewerLengthM) + '</span></div>';
-    if (q.hydraulics.rainwaterLengthM > 0) html += '<div class="materials-line"><span>Pluvial</span><span>' + fmtM(q.hydraulics.rainwaterLengthM) + '</span></div>';
-    if (q.hydraulics.destinationCount > 0) html += '<div class="materials-line"><span>Caixas (gordura/inspeção/pluvial)</span><span>' + q.hydraulics.destinationCount + ' un.</span></div>';
-    if (q.hydraulics.connectionCount > 0) html += '<div class="materials-line"><span>Conexões</span><span>' + q.hydraulics.connectionCount + ' un.</span></div>';
+    q.hydraulics.pipeGroups.forEach(function (group) {
+      html += '<div class="materials-line"><span>Tubo ' + HYDRAULIC_PRODUCT_LINE_LABEL[group.productLine] + ' ' + group.diameterMm + 'mm</span><span>' + fmtM(group.lengthM) + '</span></div>';
+    });
+    const fittingTotal = q.hydraulics.fittingGroups.reduce(function (sum, group) { return sum + group.count; }, 0);
+    if (fittingTotal > 0) html += '<div class="materials-line"><span>Conexões</span><span>' + fittingTotal + ' un.</span></div>';
+    q.hydraulics.destinationGroups.forEach(function (group) {
+      html += '<div class="materials-line"><span>' + group.label + '</span><span>' + group.count + ' un.</span></div>';
+    });
   }
   if (q.foundation) {
     const f = q.foundation;
@@ -1073,14 +1127,6 @@ const REFERENCE_PRICES = {
 //   perto de 'Arcos': é um vão sem folha, a alvenaria que deixa de
 //   existir ali já reduz custo em outras linhas, um preço fixo pareceria
 //   custo extra quando o efeito líquido tende a ser economia.
-//   • kitchenSewerPipePerM/sanitarySewerPipePerM/rainwaterPipePerM: tubo
-//     PVC + conexões instalado, linha Predial Tigre (Série Normal —
-//     40/50/75/100/150/200mm batem com os diâmetros já usados por
-//     fixture). Esgoto de cozinha é quase todo 50mm (pia); esgoto
-//     sanitário mistura 40/50/100mm (lavatório/ralo/vaso), média puxada
-//     pro lado do vaso que é o trecho mais caro; pluvial é 75mm
-//     (condutor vertical, mínimo comercial acima do mínimo técnico de
-//     70mm da linha Aquapluv).
 //   • hydraulicDestinationBoxUnit: caixa de gordura/inspeção/saída
 //     pluvial em PVC pré-moldado, faixa de mercado ~R$80-150/un — meio
 //     da faixa, mesmo valor pras 3 (a norma diferencia função, não
@@ -1092,11 +1138,41 @@ const ESTIMATED_MARKET_PRICES = {
   volumeBoxGenericPerM2: 260.00,
   rodapePerM: 18.00,
   soleiraPerM: 90.00,
-  kitchenSewerPipePerM: 28.00,
-  sanitarySewerPipePerM: 35.00,
-  rainwaterPipePerM: 26.00,
   hydraulicDestinationBoxUnit: 115.00,
 };
+
+// Tubo/conexão de PVC pra esgoto/pluvial — item por item (pedido
+// explícito do Product Owner: "01 joelho de PVC 50mm linha esgoto...",
+// pra lista dar pra levar direto na loja). Linha "esgoto" cobre
+// kitchen_sewer+sanitary_sewer (mesmo tubo/conexão de PVC Predial Tigre
+// Série Normal — o preço de mercado não muda por causa de qual pia/vaso
+// atende); "pluvial" é a linha Aquapluv, produto diferente. Diâmetros
+// batem com os já usados por fixture (40/50/75/100mm).
+// Barra de tubo = 6m, padrão comercial brasileiro (mesma lógica de
+// arredondar pra cima já usada em sacos de cimento/latas de tinta).
+// Único preço ancorado numa fonte real encontrada na pesquisa (tubo
+// esgoto 75mm, barra de 3m, R$103,10 — Lojas Solar, ref. Tigre
+// 11030904 — dobrado aqui pra barra de 6m); os demais são estimativa de
+// faixa de mercado pro mesmo padrão de marca/qualidade — busca de preço
+// exato por item bloqueada por proteção anti-bot nas lojas online.
+const HYDRAULIC_PIPE_BAR_LENGTH_M = 6;
+const HYDRAULIC_PIPE_BAR_PRICE: Record<HydraulicProductLine, Record<number, number>> = {
+  esgoto: { 40: 70.00, 50: 95.00, 75: 206.00, 100: 280.00 },
+  pluvial: { 75: 180.00 },
+};
+const HYDRAULIC_FITTING_PRICE: Record<HydraulicProductLine, Record<number, Record<string, number>>> = {
+  esgoto: {
+    40: { elbow90: 8.00, elbow45: 7.00, tee: 14.00, cross: 22.00 },
+    50: { elbow90: 10.00, elbow45: 9.00, tee: 18.00, cross: 28.00 },
+    75: { elbow90: 22.00, elbow45: 19.00, tee: 38.00, cross: 55.00 },
+    100: { elbow90: 32.00, elbow45: 28.00, tee: 55.00, cross: 80.00 },
+  },
+  pluvial: {
+    75: { elbow90: 20.00, elbow45: 17.00, tee: 34.00, cross: 50.00 },
+  },
+};
+const HYDRAULIC_FITTING_KIND_LABEL: Record<string, string> = { elbow90: 'Joelho 90°', elbow45: 'Joelho 45°', tee: 'Tê', cross: 'Cruzeta' };
+const HYDRAULIC_PRODUCT_LINE_LABEL: Record<HydraulicProductLine, string> = { esgoto: 'linha esgoto', pluvial: 'linha pluvial' };
 
 // Rendimento de referência pra converter área de parede em latas de
 // tinta (o Catalog vende tinta por lata, não por m² — não existe ainda
@@ -1378,25 +1454,25 @@ export function buildRows(): (string | number)[][] {
     push('Mobiliário', 'Móveis posicionados', q.totals.furnitureCount, 'un', q.totals.furnitureCost > 0 ? q.totals.furnitureCost : null);
   }
 
-  // Esgoto e pluvial — sem inclinação (traçado esquemático, ver
-  // Hydraulics.ts). Água fria fica de fora por ora (gap pré-existente
-  // maior, fora do pedido específico desta seção).
+  // Esgoto e pluvial — item por item (pedido explícito do Product Owner:
+  // "01 joelho de PVC 50mm linha esgoto...", pra dar pra levar direto na
+  // loja). Sem inclinação (traçado esquemático, ver Hydraulics.ts). Água
+  // fria fica de fora por ora (gap pré-existente maior, fora do pedido
+  // específico desta seção).
   const hLabel = 'Instalações hidrossanitárias';
-  if (q.hydraulics.kitchenSewerLengthM > 0) {
-    push(hLabel, 'Esgoto de cozinha (tubulação)', q.hydraulics.kitchenSewerLengthM, 'm', q.hydraulics.kitchenSewerLengthM * ESTIMATED_MARKET_PRICES.kitchenSewerPipePerM);
-  }
-  if (q.hydraulics.sanitarySewerLengthM > 0) {
-    push(hLabel, 'Esgoto sanitário (tubulação)', q.hydraulics.sanitarySewerLengthM, 'm', q.hydraulics.sanitarySewerLengthM * ESTIMATED_MARKET_PRICES.sanitarySewerPipePerM);
-  }
-  if (q.hydraulics.rainwaterLengthM > 0) {
-    push(hLabel, 'Pluvial (condutor)', q.hydraulics.rainwaterLengthM, 'm', q.hydraulics.rainwaterLengthM * ESTIMATED_MARKET_PRICES.rainwaterPipePerM);
-  }
-  if (q.hydraulics.destinationCount > 0) {
-    push(hLabel, 'Caixas (gordura/inspeção/pluvial)', q.hydraulics.destinationCount, 'un', q.hydraulics.destinationCount * ESTIMATED_MARKET_PRICES.hydraulicDestinationBoxUnit);
-  }
-  if (q.hydraulics.connectionCount > 0) {
-    push(hLabel, 'Conexões (cotovelo/tê/cruz)', q.hydraulics.connectionCount, 'un', null);
-  }
+  q.hydraulics.pipeGroups.forEach(function (group) {
+    const unitPrice = HYDRAULIC_PIPE_BAR_PRICE[group.productLine][group.diameterMm];
+    const item = 'Tubo PVC ' + HYDRAULIC_PRODUCT_LINE_LABEL[group.productLine] + ' ' + group.diameterMm + 'mm (barra ' + HYDRAULIC_PIPE_BAR_LENGTH_M + 'm)';
+    push(hLabel, item, group.bars, 'un', unitPrice != null ? group.bars * unitPrice : null);
+  });
+  q.hydraulics.fittingGroups.forEach(function (group) {
+    const unitPrice = HYDRAULIC_FITTING_PRICE[group.productLine]?.[group.diameterMm]?.[group.kind];
+    const item = (HYDRAULIC_FITTING_KIND_LABEL[group.kind] || group.kind) + ' PVC ' + HYDRAULIC_PRODUCT_LINE_LABEL[group.productLine] + ' ' + group.diameterMm + 'mm';
+    push(hLabel, item, group.count, 'un', unitPrice != null ? group.count * unitPrice : null);
+  });
+  q.hydraulics.destinationGroups.forEach(function (group) {
+    push(hLabel, group.label, group.count, 'un', group.count * ESTIMATED_MARKET_PRICES.hydraulicDestinationBoxUnit);
+  });
 
   if (hasCost) rows.push(['TOTAL', 'Custo estimado (soma dos itens com preço)', '', '', '', fmtBRL(grandTotal)]);
   return rows;

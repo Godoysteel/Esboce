@@ -2,6 +2,20 @@ import type { Floor, Furniture, HydraulicJunctionKind, HydraulicNetworkType, Hyd
 
 const GRID = 20;
 const FLOOR_STACK_HEIGHT_M = 2.85;
+/**
+ * "Corte" de 45°+45° no canto horizontal do traçado automático de
+ * esgoto/pluvial, em vez de um único cotovelo de 90° — NBR 8160 §4.2.5.1:
+ * desvios de coletor/subcoletor "devem ser feitos com peças com ângulo
+ * central igual ou inferior a 45°". Só se aplica às redes por GRAVIDADE
+ * (esgoto sanitário, esgoto de cozinha, pluvial — `endpointRole:
+ * 'destination'`); água fria é pressurizada (NBR 5626), não tem essa
+ * exigência de ângulo, e continua com o cotovelo de 90° de sempre. A
+ * transição horizontal→vertical (entrada/saída da queda) TAMBÉM continua
+ * 90° dos dois lados — a norma permite 90° nessa transição especificamente
+ * (só limita o desvio nos trechos horizontais).
+ */
+const HORIZONTAL_CHAMFER_M = 0.3;
+const HORIZONTAL_CHAMFER_GRID = HORIZONTAL_CHAMFER_M * GRID;
 let hydraulicIdSequence = 0;
 export function nextHydraulicId(prefix: string) { return `${prefix}_${Date.now().toString(36)}_${hydraulicIdSequence++}`; }
 
@@ -140,15 +154,29 @@ export function hydraulicFixtureVisualPosition(node: HydraulicNode, wall: Wall |
 export type HydraulicEndpointRole = 'source' | 'destination';
 
 /**
- * Núcleo comum do traçado ortogonal "ingênuo" (sem inclinação nenhuma —
- * decisão explícita do Product Owner) — usado tanto pra água fria
- * (`role: 'source'`, ponto fixo elevado, ex. caixa d'água) quanto pra
+ * Núcleo comum do traçado "ingênuo" (sem inclinação nenhuma — decisão
+ * explícita do Product Owner) — usado tanto pra água fria (`role:
+ * 'source'`, ponto fixo elevado, ex. caixa d'água) quanto pra
  * esgoto/pluvial (`role: 'destination'`, ponto fixo no nível do chão,
  * ex. caixa de gordura/inspeção/saída pluvial). Um segmento não tem
  * sentido de fluxo próprio no modelo — só liga dois pontos — então o
  * mesmo formato de cadeia (2 movimentos horizontais na cota do ponto
  * fixo + 1 queda/subida vertical perto da outra ponta) serve pros dois
- * casos, só trocando qual lado é o "fixo".
+ * casos, só trocando qual lado é o "fixo". O canto entre os 2 movimentos
+ * horizontais é reto (90°) pra água fria, e "cortado" em duas curvas de
+ * 45° pra esgoto/pluvial (ver HORIZONTAL_CHAMFER_M) — a NBR 8160 limita
+ * desvios de coletor/subcoletor a 45°, exigência que não existe pra água
+ * fria pressurizada.
+ *
+ * NOTA DE ESCOPO (documentado, não implementado ainda): hoje cada fixture
+ * ganha seu próprio traçado independente até o ponto fixo compartilhado —
+ * se várias fixtures do mesmo tipo estão próximas, saem vários trechos
+ * paralelos até a mesma caixa/tanque, em vez de convergir num tronco
+ * comum antes do destino (o que a norma prevê via caixa de passagem/
+ * coletor comum, e economizaria tubulação). Ver "Fusão de ramais num
+ * tronco comum" no Registro de decisões técnicas — não implementado por
+ * decisão explícita do Product Owner nesta sessão, fica pra um pedido
+ * futuro específico.
  *
  * Preserva SEMPRE nós/segmentos de QUALQUER OUTRO networkType intactos.
  * Sem isso, gerar a rede de um tipo (ex. água fria) apagaria a rede já
@@ -213,11 +241,34 @@ function buildOrthogonalNetworkFromFixtures(
     }
     const fixtureFloor = fixture.floorIndex || 0;
     const ownerFixtureId = fixture.id;
-    const legA: HydraulicNode = {
-      id: nextHydraulicId('hyd-junction'), kind: 'junction', networkType,
-      label: endpointRole === 'source' ? 'Distribuição superior' : 'Saída do ponto',
-      x: fixture.x, y: endpoint.y, elevationM: endpoint.elevationM, floorIndex: endpointFloor, ownerFixtureId,
-    };
+    // Canto horizontal (mudança de direção X→Y, na cota do ponto fixo):
+    // "cortado" em duas curvas de 45° pras redes por gravidade (ver
+    // HORIZONTAL_CHAMFER_M acima); um único cotovelo de 90° pra água fria.
+    const cornerX = fixture.x, cornerY = endpoint.y;
+    const dxLeg = fixture.x - endpoint.x, dyLeg = fixture.y - endpoint.y;
+    const chamfer = endpointRole === 'destination' && dxLeg !== 0 && dyLeg !== 0
+      ? Math.min(HORIZONTAL_CHAMFER_GRID, Math.abs(dxLeg) / 2, Math.abs(dyLeg) / 2)
+      : 0;
+    const cornerNodes: HydraulicNode[] = chamfer > 0
+      ? (() => {
+          const signX = Math.sign(dxLeg), signY = Math.sign(dyLeg);
+          const preCorner: HydraulicNode = {
+            id: nextHydraulicId('hyd-junction'), kind: 'junction', networkType,
+            label: 'Curva 45° — saída do ponto', x: cornerX - signX * chamfer, y: cornerY,
+            elevationM: endpoint.elevationM, floorIndex: endpointFloor, ownerFixtureId,
+          };
+          const postCorner: HydraulicNode = {
+            id: nextHydraulicId('hyd-junction'), kind: 'junction', networkType,
+            label: 'Curva 45° — direção do ponto', x: cornerX, y: cornerY + signY * chamfer,
+            elevationM: endpoint.elevationM, floorIndex: endpointFloor, ownerFixtureId,
+          };
+          return [preCorner, postCorner];
+        })()
+      : [{
+          id: nextHydraulicId('hyd-junction'), kind: 'junction', networkType,
+          label: endpointRole === 'source' ? 'Distribuição superior' : 'Saída do ponto',
+          x: cornerX, y: cornerY, elevationM: endpoint.elevationM, floorIndex: endpointFloor, ownerFixtureId,
+        } as HydraulicNode];
     const legB: HydraulicNode = {
       id: nextHydraulicId('hyd-junction'), kind: 'junction', networkType,
       label: endpointRole === 'source' ? 'Descida do ponto' : 'Chegada na caixa',
@@ -228,15 +279,17 @@ function buildOrthogonalNetworkFromFixtures(
       label: endpointRole === 'source' ? 'Base da descida' : 'Saída da tubulação',
       x: fixture.x, y: fixture.y, elevationM: fixture.elevationM, floorIndex: fixtureFloor, ownerFixtureId,
     };
-    nodes.push(legA, legB, nearFixture);
+    nodes.push(...cornerNodes, legB, nearFixture);
     const diameterMm = endpointRole === 'source' ? 20 : (hydraulicFixtureTemplate(fixture.fixtureType!)?.diameterMm || 50);
-    [[endpoint, legA], [legA, legB], [legB, nearFixture], [nearFixture, fixture]].forEach(([start, end]) => {
-      var startGlobal = (start!.floorIndex || 0) * FLOOR_STACK_HEIGHT_M + start!.elevationM;
-      var endGlobal = (end!.floorIndex || 0) * FLOOR_STACK_HEIGHT_M + end!.elevationM;
-      if (start!.x !== end!.x || start!.y !== end!.y || startGlobal !== endGlobal) {
-        segments.push({ id: nextHydraulicId('hyd-segment'), networkType, startNodeId: start!.id, endNodeId: end!.id, diameterMm, ownerFixtureId });
+    const chain = [endpoint, ...cornerNodes, legB, nearFixture, fixture];
+    for (let i = 0; i < chain.length - 1; i++) {
+      const start = chain[i]!, end = chain[i + 1]!;
+      const startGlobal = (start.floorIndex || 0) * FLOOR_STACK_HEIGHT_M + start.elevationM;
+      const endGlobal = (end.floorIndex || 0) * FLOOR_STACK_HEIGHT_M + end.elevationM;
+      if (start.x !== end.x || start.y !== end.y || startGlobal !== endGlobal) {
+        segments.push({ id: nextHydraulicId('hyd-segment'), networkType, startNodeId: start.id, endNodeId: end.id, diameterMm, ownerFixtureId });
       }
-    });
+    }
   });
   return { nodes, segments };
 }

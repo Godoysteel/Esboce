@@ -6,6 +6,7 @@ import {
   buildColdWaterNetworkFromFixtures,
   buildDestinationNetworkFromFixtures,
   buildGuidedHydraulicRoute,
+  classifyHydraulicJunction,
   createPositionedHydraulicFixture,
   destinationLabelForNetwork,
   hydraulicFixtureTemplate,
@@ -41,7 +42,7 @@ test('destinationLabelForNetwork nomeia cada tipo com a estrutura certa da NBR 8
   assert.equal(destinationLabelForNetwork('rainwater'), 'Caixa de saída pluvial');
 });
 
-test('buildDestinationNetworkFromFixtures gera um destino único no chão e roteia cada ponto até ele, sem inclinação nenhuma (tudo ortogonal)', () => {
+test('buildDestinationNetworkFromFixtures gera um destino único no chão e roteia cada ponto até ele, sem inclinação nenhuma (elevação nunca muda junto com x/y)', () => {
   const wall = makeWall('w', 0, 0, 100, 0);
   const waste = createPositionedHydraulicFixture('kitchen_sink_waste', 50, 0, wall);
   waste.floorIndex = 0;
@@ -52,13 +53,61 @@ test('buildDestinationNetworkFromFixtures gera um destino único no chão e rote
   assert.equal(destination.networkType, 'kitchen_sewer');
   assert.equal(destination.label, 'Caixa de gordura');
   assert.ok(system.segments.length >= 2);
-  // sem inclinação: todo segmento muda só UM eixo por vez (ortogonal), nunca uma diagonal com cota fracionária
+  // sem inclinação: a elevação nunca muda no mesmo trecho em que x ou y mudam
+  // (a queda/subida é sempre um trecho vertical isolado). Mudar x E y juntos
+  // no mesmo trecho horizontal É esperado agora — é o corte de 45° (ver teste
+  // "corte de 45°" abaixo) — só a cota que precisa continuar exclusiva.
   system.segments.forEach((segment) => {
     const start = system.nodes.find((node) => node.id === segment.startNodeId);
     const end = system.nodes.find((node) => node.id === segment.endNodeId);
-    const changedAxes = [start.x !== end.x, start.y !== end.y, start.elevationM !== end.elevationM || (start.floorIndex || 0) !== (end.floorIndex || 0)].filter(Boolean).length;
-    assert.equal(changedAxes, 1, 'cada trecho deve mudar só um eixo — traçado esquemático, sem diagonal/inclinação');
+    const elevationChanged = start.elevationM !== end.elevationM || (start.floorIndex || 0) !== (end.floorIndex || 0);
+    const planeChanged = start.x !== end.x || start.y !== end.y;
+    assert.ok(!(elevationChanged && planeChanged), 'trecho não pode misturar queda/subida com deslocamento no plano — isso seria inclinação');
   });
+});
+
+test('corte de 45° (NBR 8160 §4.2.5.1): canto horizontal do traçado automático de esgoto/pluvial vira duas curvas de 45° em vez de um cotovelo de 90°, quando a fixture não está alinhada com a caixa', () => {
+  // Sala 5x5m (100x100 unidades de grid) — caixa nasce fora, na borda leste,
+  // na METADE da altura (y=50) — uma fixture na parede oeste (y=0) força um
+  // desvio horizontal real nos dois eixos (dx e dy não-nulos).
+  const walls = [
+    makeWall('w1', 0, 0, 100, 0), makeWall('w2', 100, 0, 100, 100),
+    makeWall('w3', 100, 100, 0, 100), makeWall('w4', 0, 100, 0, 0),
+  ];
+  const waste = createPositionedHydraulicFixture('bathroom_sink_waste', 30, 0, walls[0]);
+  waste.floorIndex = 0;
+  const floors = [makeFloor(walls)];
+  const system = buildDestinationNetworkFromFixtures('sanitary_sewer', floors, { nodes: [waste], segments: [] });
+  const destination = system.nodes.find((node) => node.kind === 'destination');
+  assert.ok(destination);
+  // duas curvas de 45° no lugar do único cotovelo de 90° antigo
+  const cornerNodes = system.nodes.filter((node) => node.ownerFixtureId === waste.id && node.label.startsWith('Curva 45°'));
+  assert.equal(cornerNodes.length, 2);
+  cornerNodes.forEach((node) => assert.equal(classifyHydraulicJunction(system, node.id), 'elbow45'));
+  // exatamente um trecho diagonal (muda x E y, mesma cota) entre as duas curvas
+  const diagonalSegments = system.segments.filter((segment) => {
+    const start = system.nodes.find((node) => node.id === segment.startNodeId);
+    const end = system.nodes.find((node) => node.id === segment.endNodeId);
+    return start.x !== end.x && start.y !== end.y && start.elevationM === end.elevationM;
+  });
+  assert.equal(diagonalSegments.length, 1);
+  // a transição horizontal→vertical (entrada na queda) continua 90°, como antes
+  const verticalDrop = system.nodes.find((node) => node.ownerFixtureId === waste.id && node.label === 'Chegada na caixa');
+  assert.ok(verticalDrop);
+  assert.equal(classifyHydraulicJunction(system, verticalDrop.id), 'elbow90');
+});
+
+test('água fria (pressurizada) não ganha o corte de 45° — continua com cotovelo de 90°, mesmo quando a fixture não está alinhada com a caixa d\'água', () => {
+  const walls = [
+    makeWall('w1', 0, 0, 100, 0), makeWall('w2', 100, 0, 100, 100),
+    makeWall('w3', 100, 100, 0, 100), makeWall('w4', 0, 100, 0, 0),
+  ];
+  const point = createPositionedHydraulicFixture('kitchen_faucet', 30, 0, walls[0]);
+  point.floorIndex = 0;
+  const floors = [makeFloor(walls)];
+  const system = buildColdWaterNetworkFromFixtures(floors, { nodes: [point], segments: [] });
+  const cornerNodes = system.nodes.filter((node) => node.ownerFixtureId === point.id && node.label.startsWith('Curva 45°'));
+  assert.equal(cornerNodes.length, 0, 'água fria não segue a exigência de 45° da NBR 8160 (é rede pressurizada, NBR 5626)');
 });
 
 test('buildDestinationNetworkFromFixtures reaproveita o mesmo destino (mesmo id) ao regenerar — trecho guiado nunca fica órfão', () => {
@@ -186,9 +235,30 @@ test('index.html: botão de captação pluvial existe nos dois painéis de Hidr�
   assert.equal(matches.length, 2, 'esperava o botão nos dois blocos, mesmo padrão dos outros 10 já existentes');
 });
 
-test('quantitativo: comprimento de esgoto/pluvial por networkType aparece em MaterialsPanel.ts (cobertura, mesmo espírito de materials-coverage.test.mjs)', () => {
-  assert.match(materialsSource, /kitchenSewerLengthM/);
-  assert.match(materialsSource, /sanitarySewerLengthM/);
-  assert.match(materialsSource, /rainwaterLengthM/);
+test('quantitativo: esgoto/pluvial vira item por item em MaterialsPanel.ts (tubo por diâmetro em barra, conexão por diâmetro+tipo) — pedido explícito do Product Owner pra lista dar pra levar na loja', () => {
+  assert.match(materialsSource, /HYDRAULIC_PIPE_BAR_PRICE/);
+  assert.match(materialsSource, /HYDRAULIC_FITTING_PRICE/);
+  assert.match(materialsSource, /HYDRAULIC_PIPE_BAR_LENGTH_M/);
   assert.match(materialsSource, /hydraulicDestinationBoxUnit/);
+  // cada grupo de tubo vira uma linha "Tubo PVC <linha> <diâmetro>mm (barra Xm)"
+  assert.match(materialsSource, /'Tubo PVC ' \+ HYDRAULIC_PRODUCT_LINE_LABEL\[group\.productLine\]/);
+  // cada grupo de conexão vira uma linha "Joelho/Tê/Cruzeta PVC <linha> <diâmetro>mm"
+  assert.match(materialsSource, /HYDRAULIC_FITTING_KIND_LABEL\[group\.kind\]/);
+});
+
+test('quantitativo: barra de tubo é 6m e arredonda pra cima (mesma lógica de sacos de cimento/latas de tinta — não dá pra comprar fração)', () => {
+  const wall = makeWall('w', 0, 0, 200, 0);
+  const pia = createPositionedHydraulicFixture('kitchen_sink_waste', 100, 0, wall);
+  pia.floorIndex = 0;
+  const floors = [makeFloor([wall])];
+  const system = buildDestinationNetworkFromFixtures('kitchen_sewer', floors, { nodes: [pia], segments: [] });
+  const totalM = system.segments.filter((s) => s.networkType === 'kitchen_sewer').reduce((sum, segment) => {
+    const start = system.nodes.find((n) => n.id === segment.startNodeId);
+    const end = system.nodes.find((n) => n.id === segment.endNodeId);
+    const dx = (end.x - start.x) / 20, dy = (end.y - start.y) / 20;
+    const dz = (end.elevationM - start.elevationM);
+    return sum + Math.hypot(dx, dy, dz);
+  }, 0);
+  const expectedBars = Math.ceil(totalM / 6);
+  assert.ok(expectedBars >= 1);
 });
