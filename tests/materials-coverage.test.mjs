@@ -18,6 +18,10 @@ const typesSource = await readFile(
   new URL('../src/core/types.ts', import.meta.url),
   'utf8',
 );
+const rendererSource = await readFile(
+  new URL('../src/core/Scene3DRenderer.ts', import.meta.url),
+  'utf8',
+);
 
 // Pedido do Product Owner após auditoria de cobertura: piso, parede e
 // telhado sem acabamento escolhido no editor não podem ficar de fora do
@@ -229,4 +233,57 @@ test('Móveis somam o preço do produto do Catálogo (Furniture.productId), sem 
   assert.match(materialsSource, /const product = Catalog\.getProduct\(f\.productId\);/);
   assert.match(materialsSource, /if \(product && product\.commercial && product\.commercial\.price\) totals\.furnitureCost \+= product\.commercial\.price;/);
   assert.match(materialsSource, /push\('Mobiliário', 'Móveis posicionados', q\.totals\.furnitureCount, 'un', q\.totals\.furnitureCost > 0 \? q\.totals\.furnitureCost : null\)/);
+});
+
+// Product Owner, depois de conferir a auditoria de quantitativo: "está
+// contabilizando as paredes da platibanda, aquelas muretinhas e quando
+// ela avança para fora das paredes tem que contabilizar a laje do
+// bairal também, isso é contabilizado hoje?" — pesquisado antes de
+// implementar (platibanda é geometricamente o OPOSTO do beiral —
+// parede que sobe, sem projeção horizontal — mas sempre construída com
+// o mesmo bloco/tijolo da parede comum). Dois buracos reais
+// confirmados e corrigidos: a muretinha em si (geometria pura, nunca
+// foi uma Wall) e a laje que precisa acompanhar o retângulo do telhado
+// quando ele é arrastado pra além do contorno da parede.
+
+test('Scene3DRenderer expõe os getters de altura do parapeito (clamp) pro quantitativo não duplicar o valor', () => {
+  assert.match(rendererSource, /export function PARAPET_HEIGHT_MIN_GETTER\(\) \{ return PARAPET_HEIGHT_MIN; \}/);
+  assert.match(rendererSource, /export function PARAPET_HEIGHT_MAX_GETTER\(\) \{ return PARAPET_HEIGHT_MAX; \}/);
+  assert.match(rendererSource, /export function PARAPET_HEIGHT_DEFAULT_GETTER\(\) \{ return PARAPET_HEIGHT_DEFAULT; \}/);
+  const start = rendererSource.indexOf('export const Scene3DRenderer = {');
+  const end = rendererSource.indexOf('};', start);
+  const body = rendererSource.slice(start, end);
+  assert.match(body, /PARAPET_HEIGHT_MIN_GETTER/);
+  assert.match(body, /PARAPET_HEIGHT_MAX_GETTER/);
+  assert.match(body, /PARAPET_HEIGHT_DEFAULT_GETTER/);
+});
+
+test('muretinha da platibanda (geometria pura, nunca foi Wall) vira alvenaria de verdade: perímetro × altura real do parapeito, em wallAreaNet e pintada nas duas faces', () => {
+  const start = materialsSource.indexOf("addTo(roofTile, roof.finishProductId ||");
+  const end = materialsSource.indexOf('\n      }', materialsSource.indexOf("if (roof.type === 'platibanda') {", start));
+  const body = materialsSource.slice(start, end);
+  assert.match(body, /const parapetHeightM = clampParapetHeight\(roof\.parapetHeight\);/);
+  assert.match(body, /const parapetAreaM2 = 2 \* \(parapetWidthM \+ parapetDepthM\) \* parapetHeightM;/);
+  assert.match(body, /totals\.wallAreaNet \+= parapetAreaM2;/);
+  const paintCount = (body.match(/addTo\(paint, DEFAULT_PAINT_PRODUCT_ID, parapetAreaM2\);/g) || []).length;
+  assert.equal(paintCount, 2, 'a muretinha tem duas faces (dentro/fora) — mesmo padrão do oitão');
+});
+
+test('clampParapetHeight usa os mesmos 3 valores do 3D via getter, não duplica o clamp', () => {
+  const start = materialsSource.indexOf('function clampParapetHeight(');
+  const end = materialsSource.indexOf('\n}', start);
+  const body = materialsSource.slice(start, end);
+  assert.match(body, /Scene3DRenderer\.PARAPET_HEIGHT_MIN_GETTER\(\)/);
+  assert.match(body, /Scene3DRenderer\.PARAPET_HEIGHT_MAX_GETTER\(\)/);
+  assert.match(body, /Scene3DRenderer\.PARAPET_HEIGHT_DEFAULT_GETTER\(\)/);
+});
+
+test('laje acompanha o retângulo do telhado platibanda quando ele avança pra fora das paredes — soma só a diferença, sem contar duas vezes', () => {
+  const start = materialsSource.indexOf("if (roof.type !== 'platibanda') return;");
+  assert.ok(start !== -1, 'bloco de laje-vs-platibanda não encontrado');
+  const end = materialsSource.indexOf('\n    });', start);
+  const body = materialsSource.slice(start, end);
+  assert.match(body, /const room = Core\.roomAtPoint\(floor\.walls, cx, cy\);/);
+  assert.match(body, /if \(!\(floor\.roomLajeGenerated \|\| \{\}\)\[roomKey\]\) return;/);
+  assert.match(body, /if \(roofFootprintAreaM2 > roomAreaM2\) totals\.lajeAreaM2 \+= roofFootprintAreaM2 - roomAreaM2;/);
 });

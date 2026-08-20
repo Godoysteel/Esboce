@@ -4469,6 +4469,13 @@ export function hashColorHex(key: string): number {
   // materiais lê daqui em vez de guardar um segundo valor solto que
   // pode dessincronizar do que o 3D realmente desenha.
   export function LAJE_THICKNESS_GETTER() { return LAJE_THICKNESS; }
+  // Altura real do parapeito da platibanda (clamp aplicado ao desenhar
+  // — ver clampParapetHeight) — mesma ideia dos getters acima: o
+  // quantitativo de materiais lê daqui em vez de guardar um segundo
+  // clamp solto que pode dessincronizar do que o 3D realmente desenha.
+  export function PARAPET_HEIGHT_MIN_GETTER() { return PARAPET_HEIGHT_MIN; }
+  export function PARAPET_HEIGHT_MAX_GETTER() { return PARAPET_HEIGHT_MAX; }
+  export function PARAPET_HEIGHT_DEFAULT_GETTER() { return PARAPET_HEIGHT_DEFAULT; }
 
 // Namespace de compatibilidade — mesma razão de Core.ts/Store.ts/Catalog.ts
 // (chamadas Scene3DRenderer.xxx no código legado, enquanto
@@ -4489,5 +4496,8 @@ export const Scene3DRenderer = {
   RADIER_MARGIN_GETTER,
   BALDRAME_WIDTH_GETTER,
   BALDRAME_THICKNESS_GETTER,
-  LAJE_THICKNESS_GETTER
+  LAJE_THICKNESS_GETTER,
+  PARAPET_HEIGHT_MIN_GETTER,
+  PARAPET_HEIGHT_MAX_GETTER,
+  PARAPET_HEIGHT_DEFAULT_GETTER
 };

@@ -94,6 +94,20 @@ function umaAguaBackWallAreaMeters(roof: Roof): number {
   return calculateUmaAguaBackWallAreaMeters(roof, roofQuantityConfig());
 }
 
+// Altura real do parapeito da platibanda (muretinha) — mesmo clamp do
+// 3D (ver Scene3DRenderer.clampParapetHeight), lido pelos getters em
+// vez de duplicar os 3 valores aqui soltos (mesma técnica de
+// roofQuantityConfig acima). Auditoria pedida pelo Product Owner: a
+// platibanda é geometria pura (Scene3DRenderer.buildParapetWalls), não
+// uma Wall de verdade — sem isso, o loop de `floor.walls` nunca via
+// essa alvenaria.
+function clampParapetHeight(h: number | undefined): number {
+  const min = Scene3DRenderer.PARAPET_HEIGHT_MIN_GETTER();
+  const max = Scene3DRenderer.PARAPET_HEIGHT_MAX_GETTER();
+  const def = Scene3DRenderer.PARAPET_HEIGHT_DEFAULT_GETTER();
+  return Math.max(min, Math.min(max, h != null ? h : def));
+}
+
 // Volume estruturral de uma coluna (pilar), em m³ — lado/diâmetro fixo
 // (Core.COLUMN_SIZE) vezes a altura do pé-direito do pavimento.
 function columnVolumeM3(col: Column, wallHeight: number): number {
@@ -486,6 +500,26 @@ export function compute(): ComputeResult {
       // — platibanda usa eternit/fibrocimento (telhado embutido atrás do
       // parapeito), os demais usam cerâmica comum.
       addTo(roofTile, roof.finishProductId || (roof.type === 'platibanda' ? DEFAULT_ETERNIT_PRODUCT_ID : DEFAULT_CERAMIC_TILE_PRODUCT_ID), areaM2);
+      // Muretinha da platibanda — alvenaria de VERDADE (mesmo material
+      // das paredes, confirmado em pesquisa: platibanda é sempre
+      // construída com o mesmo bloco/tijolo da parede) que fica de fora
+      // do orçamento até esta versão porque não é uma Wall — é
+      // geometria pura desenhada a partir do próprio retângulo do
+      // telhado (ver Scene3DRenderer.buildParapetWalls). Perímetro do
+      // retângulo × altura real do parapeito (mesmo clamp do 3D, ver
+      // clampParapetHeight acima) — soma em wallAreaNet (entra
+      // automaticamente em bloco/argamassa/chapisco/reboco, já
+      // calculados a partir dessa mesma variável) e em paint nas DUAS
+      // faces (dentro/fora, mesmo padrão do oitão logo abaixo).
+      if (roof.type === 'platibanda') {
+        const parapetHeightM = clampParapetHeight(roof.parapetHeight);
+        const parapetWidthM = Math.abs(roof.x2 - roof.x1) / Core.GRID;
+        const parapetDepthM = Math.abs(roof.y2 - roof.y1) / Core.GRID;
+        const parapetAreaM2 = 2 * (parapetWidthM + parapetDepthM) * parapetHeightM;
+        totals.wallAreaNet += parapetAreaM2;
+        addTo(paint, DEFAULT_PAINT_PRODUCT_ID, parapetAreaM2);
+        addTo(paint, DEFAULT_PAINT_PRODUCT_ID, parapetAreaM2);
+      }
       // O oitão/fechamento lateral é alvenaria derivada do telhado: entra
       // como parede, mas não participa do contorno dos cômodos. Duas
       // águas possui duas faces triangulares/retangulares iguais, uma em
@@ -586,6 +620,27 @@ export function compute(): ComputeResult {
       if (!(floor.roomLajeGenerated || {})[roomKey]) return;
       totals.lajeCount++;
       totals.lajeAreaM2 += room.area / (Core.GRID * Core.GRID);
+    });
+
+    // Platibanda avançando pra fora das paredes: o retângulo do telhado
+    // (roof.x1/y1/x2/y2) é arrastável independente das paredes — se ele
+    // ficar maior que o cômodo embaixo, a LAJE de verdade (a que o
+    // parapeito assenta em cima, e que sustenta a estrutura do telhado
+    // "embutido" atrás dele) precisa acompanhar esse tamanho maior, não
+    // parar no contorno da parede. Soma só a DIFERENÇA (a área do
+    // cômodo já foi somada no loop acima) — evita contar duas vezes, e
+    // não faz nada se o telhado não avançou (diferença ≤ 0) ou se não
+    // achou nenhum cômodo com laje gerada embaixo do centro dele.
+    (floor.roofs || []).forEach(function (roof) {
+      if (roof.type !== 'platibanda') return;
+      const cx = (roof.x1 + roof.x2) / 2, cy = (roof.y1 + roof.y2) / 2;
+      const room = Core.roomAtPoint(floor.walls, cx, cy);
+      if (!room) return;
+      const roomKey = Core.findRoomWallIds(floor.walls, room).slice().sort().join(',');
+      if (!(floor.roomLajeGenerated || {})[roomKey]) return;
+      const roofFootprintAreaM2 = (Math.abs(roof.x2 - roof.x1) / Core.GRID) * (Math.abs(roof.y2 - roof.y1) / Core.GRID);
+      const roomAreaM2 = room.area / (Core.GRID * Core.GRID);
+      if (roofFootprintAreaM2 > roomAreaM2) totals.lajeAreaM2 += roofFootprintAreaM2 - roomAreaM2;
     });
 
     // Pilaretes ESTIMADOS embutidos na alvenaria (ver comentário em
