@@ -251,17 +251,20 @@ const MASONRY_REF = {
 // Preço de madeira serrada (R$/m³, ripa/caibro/terça tratada) —
 // ver DEC-100 correção pós-lançamento nº2: preço médio de varejo
 // (por metro linear, convertido pra m³ pela seção de cada peça),
-// cadastrado como produto Vórtice Materiais (`woodPerM3`) — resolve
-// a "Volume total de madeira" abaixo. As linhas por peça (Ripas/
-// Caibros/Terças) continuam sem custo próprio de propósito — o
-// mesmo volume já é cobrado ali, custar as duas visões juntas
-// duplicaria.
+// cadastrado como produto Vórtice Materiais (`woodPerM3`). Cada
+// peça (Ripa/Caibro/Terça) tem seu próprio preço por UNIDADE,
+// derivado da mesma taxa R$/m³ aplicada ao volume de UMA peça de
+// WOOD_PIECE_LENGTH_M (bitola própria de cada uma) — sem duplicar
+// custo entre uma visão "linha por peça" e uma "volume total"
+// separada (pedido do Product Owner: madeira em peças de 3m, igual
+// se compra na loja).
 const ROOF_TIMBER_REF = {
   ripaSpacingM: 0.32, ripaSectionM2: 0.015 * 0.05,
   caibroSpacingM: 0.55, caibroSectionM2: 0.05 * 0.06,
   tercaSpacingM: 1.75, tercaSectionM2: 0.06 * 0.12,
   wasteFactor: 1.10
 };
+const WOOD_PIECE_LENGTH_M = 3;
 
 // Consumo de prego do madeiramento (ripa+caibro+terça) — SINAPI 92539:
 // prego 22x48 0,03kg + prego 19x36 0,05kg + prego 15x15 0,07kg, por m²
@@ -298,16 +301,18 @@ const DEFAULT_ETERNIT_PRODUCT_ID = 'vortice.telha.eternit-6mm';
 interface Totals {
   wallLength: number; wallAreaNet: number; floorArea: number; baseboard: number; roofArea: number;
   doors: number; windows: number; arcos: number; soleiraCount: number; soleiraLength: number;
-  // Portas/janelas com Opening.productId apontando pra um produto real
-  // de catálogo (ex.: fornecedor parceiro de vidro) somam custo aqui,
-  // pelo preço próprio do produto (m² real da abertura, já que largura/
-  // altura são livres — esquadria não tem tamanho fixo). O restante
-  // (sem produto real, ou produto sem preço válido) acumula ÁREA em
-  // *GenericAreaM2, cobrado pela média Vórtice (R$/m²) em buildRows() —
-  // mesmo padrão "fornecedor real > média" já usado no cimento (ver
-  // ensureRealPrices), agora por m² em vez de por unidade fixa.
-  doorsProductCost: number; doorsGenericAreaM2: number;
-  windowsProductCost: number; windowsGenericAreaM2: number;
+  // Porta/janela de VIDRO (Opening.productId aponta um produto real do
+  // catálogo) vira item por metro quadrado — convenção de mercado pra
+  // esquadria de vidro/alumínio (pedido do Product Owner) — agrupada
+  // por produto em `doorProducts`/`windowProducts` (mesmo padrão de
+  // `paint`/`floorTile`/`roofTile`, ver addProductRows). Porta SEM
+  // produto escolhido assume porta de madeira padrão (não existe
+  // produto de porta de madeira no catálogo ainda) — por UNIDADE, não
+  // m², porque uma porta de madeira pronta é vendida como peça inteira
+  // de tamanho padrão, não por metro quadrado de vão. Janela sem
+  // produto continua por m² genérico (não existe conceito de "janela
+  // de madeira" no catálogo — toda janela aqui é esquadria de vidro).
+  doorGenericCount: number; windowsGenericAreaM2: number;
   columnCount: number; columnVolume: number; estimatedColumnCount: number;
   lajeCount: number; lajeAreaM2: number;
   vergaCount: number; vergaSpanM: number;
@@ -361,6 +366,7 @@ interface HydraulicsQuantities {
 type Foundation = FoundationQuantity;
 interface ComputeResult {
   totals: Totals; paint: Record<string, number>; floorTile: Record<string, number>; roofTile: Record<string, number>;
+  doorProducts: Record<string, number>; windowProducts: Record<string, number>;
   masonry: Masonry; structure: Structure; foundation: Foundation; laje: LajeQuantities; roofTimber: RoofTimber;
   hydraulics: HydraulicsQuantities;
   constructionSystem: Project['constructionSystem'];
@@ -407,7 +413,7 @@ export function compute(): ComputeResult {
   const totals: Totals = {
     wallLength: 0, wallAreaNet: 0, floorArea: 0, baseboard: 0, roofArea: 0,
     doors: 0, windows: 0, arcos: 0, soleiraCount: 0, soleiraLength: 0,
-    doorsProductCost: 0, doorsGenericAreaM2: 0, windowsProductCost: 0, windowsGenericAreaM2: 0,
+    doorGenericCount: 0, windowsGenericAreaM2: 0,
     columnCount: 0, columnVolume: 0, estimatedColumnCount: 0,
     lajeCount: 0, lajeAreaM2: 0,
     vergaCount: 0, vergaSpanM: 0,
@@ -417,6 +423,7 @@ export function compute(): ComputeResult {
     furnitureCount: 0, furnitureCost: 0
   };
   const paint: Record<string, number> = {}, floorTile: Record<string, number> = {}, roofTile: Record<string, number> = {};
+  const doorProducts: Record<string, number> = {}, windowProducts: Record<string, number> = {};
 
   project.floors.forEach(function (floor) {
     const currentWallHeight = floorWallHeight(floor, standardWallHeight);
@@ -460,15 +467,15 @@ export function compute(): ComputeResult {
       const openingAreaM2 = op.width * op.height;
       if (op.kind === 'door') {
         totals.doors++;
-        const cost = op.productId ? productUnitCost(op.productId, openingAreaM2) : null;
-        if (cost != null) totals.doorsProductCost += cost;
-        else totals.doorsGenericAreaM2 += openingAreaM2;
+        const product = op.productId ? Catalog.getProduct(op.productId) : null;
+        if (product) addTo(doorProducts, op.productId!, openingAreaM2);
+        else totals.doorGenericCount++;
       } else if (op.kind === 'arco') {
         totals.arcos++;
       } else {
         totals.windows++;
-        const cost = op.productId ? productUnitCost(op.productId, openingAreaM2) : null;
-        if (cost != null) totals.windowsProductCost += cost;
+        const product = op.productId ? Catalog.getProduct(op.productId) : null;
+        if (product) addTo(windowProducts, op.productId!, openingAreaM2);
         else totals.windowsGenericAreaM2 += openingAreaM2;
       }
       totals.vergaCount++;
@@ -831,7 +838,7 @@ export function compute(): ComputeResult {
     .filter((group) => group.count > 0);
   const hydraulics: HydraulicsQuantities = { pipeGroups, fittingGroups, destinationGroups };
 
-  return { totals, paint, floorTile, roofTile, masonry, structure, foundation, laje, roofTimber, hydraulics, constructionSystem: project.constructionSystem };
+  return { totals, paint, floorTile, roofTile, doorProducts, windowProducts, masonry, structure, foundation, laje, roofTimber, hydraulics, constructionSystem: project.constructionSystem };
 }
 
 function productLine(productId: string, areaM2: number): string {
@@ -1019,7 +1026,7 @@ export function render(): void {
 // resiliência da ADR-007 §7: preço indisponível nunca trava nada, só
 // degrada.
 interface RealPriceMatch { value: number; source: string; }
-type MaterialPriceKey = 'cementPerKg' | 'limePerKg' | 'sandPerM3' | 'concretePerM3' | 'steelPerKg' | 'brickPerUnit' | 'woodPerM3' | 'doorPerM2' | 'windowPerM2' | 'nailPerKg';
+type MaterialPriceKey = 'cementPerKg' | 'limePerKg' | 'sandPerM3' | 'concretePerM3' | 'steelPerKg' | 'brickPerUnit' | 'woodPerM3' | 'windowPerM2' | 'nailPerKg';
 let realPrices: { [K in MaterialPriceKey]?: RealPriceMatch } = {};
 let realPricesFetchStarted = false;
 let onRealPricesLoaded: (() => void) | null = null;
@@ -1037,7 +1044,6 @@ const VORTICE_MATERIAL_SKUS: Record<MaterialPriceKey, { sku: string; unitDivisor
   steelPerKg: { sku: 'vortice-aco-ca50-kg', unitDivisor: 1 },
   brickPerUnit: { sku: 'vortice-tijolo-9x19x19-un', unitDivisor: 1 },
   woodPerM3: { sku: 'vortice-madeira-telhado-m3', unitDivisor: 1 },
-  doorPerM2: { sku: 'vortice-porta-interna-kit-m2', unitDivisor: 1 },
   windowPerM2: { sku: 'vortice-janela-aluminio-m2', unitDivisor: 1 },
   nailPerKg: { sku: 'vortice-prego-kg', unitDivisor: 1 },
 };
@@ -1090,7 +1096,6 @@ const REFERENCE_PRICES = {
   steelPerKg: 8.00,
   brickPerUnit: 1.20,
   woodPerM3: 5000.00,
-  doorPerM2: 700.00,
   windowPerM2: 150.00,
   nailPerKg: 14.00
 };
@@ -1131,6 +1136,11 @@ const REFERENCE_PRICES = {
 //     pluvial em PVC pré-moldado, faixa de mercado ~R$80-150/un — meio
 //     da faixa, mesmo valor pras 3 (a norma diferencia função, não
 //     custo de mercado do item em si).
+//   • woodDoorPerUnit: porta de madeira pronta (semi-oca, c/batente e
+//     ferragem básica) instalada — assumida pra toda porta SEM produto
+//     de catálogo escolhido, já que não existe produto de porta de
+//     madeira cadastrado ainda (só esquadria de vidro); faixa de
+//     mercado ~R$350-550/un instalada — meio da faixa.
 const ESTIMATED_MARKET_PRICES = {
   glazingPanelPerM2: 580.00,
   balconyRailingPerM: 420.00,
@@ -1139,6 +1149,7 @@ const ESTIMATED_MARKET_PRICES = {
   rodapePerM: 18.00,
   soleiraPerM: 90.00,
   hydraulicDestinationBoxUnit: 115.00,
+  woodDoorPerUnit: 450.00,
 };
 
 // Tubo/conexão de PVC pra esgoto/pluvial — item por item (pedido
@@ -1293,21 +1304,23 @@ export function buildRows(): (string | number)[][] {
   push('Geral', 'Piso (área)', q.totals.floorArea, 'm²', null);
   push('Geral', 'Rodapé (comprimento)', q.totals.baseboard, 'm', q.totals.baseboard > 0 ? q.totals.baseboard * ESTIMATED_MARKET_PRICES.rodapePerM : null);
   push('Geral', 'Telhado (área real da água)', q.totals.roofArea, 'm²', null);
-  // Portas/janelas são esquadrias de tamanho livre (largura/altura
-  // ajustáveis por abertura, sem medida fixa) — por isso cobradas por
-  // m² real, não por unidade fixa. Produto real de catálogo escolhido
-  // (fornecedor parceiro, ex. vidro) usa o preço próprio dele; o
-  // restante (sem produto, ou produto sem preço válido) usa a média
-  // Vórtice por m² — mesmo padrão fornecedor real > média já usado no
-  // cimento.
-  const doorCost = q.totals.doors > 0
-    ? q.totals.doorsProductCost + q.totals.doorsGenericAreaM2 * materialPrice('doorPerM2')
-    : null;
-  push('Geral', 'Portas', q.totals.doors, 'un', doorCost);
-  const windowCost = q.totals.windows > 0
-    ? q.totals.windowsProductCost + q.totals.windowsGenericAreaM2 * materialPrice('windowPerM2')
-    : null;
-  push('Geral', 'Janelas', q.totals.windows, 'un', windowCost);
+  // Porta/janela de VIDRO (produto real de catálogo escolhido) — item
+  // por PRODUTO, quantidade em m² real da abertura (convenção de
+  // mercado pra esquadria de vidro/alumínio, pedido do Product Owner),
+  // mesmo padrão de Pintura/Piso/Telhado logo abaixo (addProductRows).
+  // Porta SEM produto escolhido assume porta de madeira padrão — por
+  // UNIDADE, com preço de referência de mercado (não existe produto de
+  // porta de madeira no catálogo ainda). Janela sem produto continua
+  // por m² genérico, média Vórtice — não existe "janela de madeira" no
+  // catálogo, toda janela aqui é esquadria de vidro.
+  addProductRows('Esquadrias de vidro', q.doorProducts);
+  addProductRows('Esquadrias de vidro', q.windowProducts);
+  if (q.totals.doorGenericCount > 0) {
+    push('Geral', 'Porta de madeira (padrão)', q.totals.doorGenericCount, 'un', q.totals.doorGenericCount * ESTIMATED_MARKET_PRICES.woodDoorPerUnit);
+  }
+  if (q.totals.windowsGenericAreaM2 > 0) {
+    push('Geral', 'Janela (padrão)', q.totals.windowsGenericAreaM2, 'm²', q.totals.windowsGenericAreaM2 * materialPrice('windowPerM2'));
+  }
   // Sem preço próprio: o arco é um vão sem batente/folha — a alvenaria
   // que deixa de existir ali já reduz wallAreaNet (bloco/argamassa/
   // pintura, ver o desconto de openingsArea logo acima) e a verga acima
@@ -1403,10 +1416,19 @@ export function buildRows(): (string | number)[][] {
   }
   if (q.roofTimber.areaM2 > 0) {
     const tLabel = 'Madeiramento (ref. SINAPI 92539)';
-    push(tLabel, 'Ripas', q.roofTimber.ripaLinearM, 'm', null);
-    push(tLabel, 'Caibros', q.roofTimber.caibroLinearM, 'm', null);
-    push(tLabel, 'Terças', q.roofTimber.tercaLinearM, 'm', null);
-    push(tLabel, 'Volume total de madeira', q.roofTimber.volumeM3, 'm³', q.roofTimber.volumeM3 * materialPrice('woodPerM3'));
+    // Peça de loja padrão (3m) — mesma lógica de barra de 6m já usada
+    // pro tubo hidráulico: comprimento linear vira Nº de peças inteiras,
+    // arredondado pra cima; cada peça custa pela seção transversal
+    // própria dela (ripa/caibro/terça têm bitolas diferentes — ver
+    // ROOF_TIMBER_REF), não uma média por m³ solta numa linha à parte.
+    const woodPricePerM3 = materialPrice('woodPerM3');
+    function woodPieceCost(sectionM2: number): number { return sectionM2 * WOOD_PIECE_LENGTH_M * woodPricePerM3; }
+    const ripaPieces = Math.ceil(q.roofTimber.ripaLinearM / WOOD_PIECE_LENGTH_M);
+    const caibroPieces = Math.ceil(q.roofTimber.caibroLinearM / WOOD_PIECE_LENGTH_M);
+    const tercaPieces = Math.ceil(q.roofTimber.tercaLinearM / WOOD_PIECE_LENGTH_M);
+    push(tLabel, 'Ripa 1,5x5cm (peça ' + WOOD_PIECE_LENGTH_M + 'm)', ripaPieces, 'un', ripaPieces * woodPieceCost(ROOF_TIMBER_REF.ripaSectionM2));
+    push(tLabel, 'Caibro 5x6cm (peça ' + WOOD_PIECE_LENGTH_M + 'm)', caibroPieces, 'un', caibroPieces * woodPieceCost(ROOF_TIMBER_REF.caibroSectionM2));
+    push(tLabel, 'Terça 6x12cm (peça ' + WOOD_PIECE_LENGTH_M + 'm)', tercaPieces, 'un', tercaPieces * woodPieceCost(ROOF_TIMBER_REF.tercaSectionM2));
     const nailKg = q.roofTimber.areaM2 * ROOF_TIMBER_NAIL_KG_PER_M2;
     push(tLabel, 'Pregos', nailKg, 'kg', nailKg * materialPrice('nailPerKg'));
   }
