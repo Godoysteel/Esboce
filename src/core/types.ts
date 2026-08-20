@@ -256,6 +256,26 @@ export interface VolumeBox {
   finishProductId?: string;
 }
 
+// Só 'reta' nesta primeira rodada (lance único, sem patamar) — union
+// pronta pra crescer (L/U/caracol), mesmo espírito de RoofType.
+export type StairModel = 'reta';
+
+export interface Stair {
+  id: string;
+  /** Centro do retângulo em planta, mesma unidade de grade de Wall.x1/VolumeBox.x (20 = 1m). */
+  x: number;
+  y: number;
+  /** Passos de 90°, mesmo padrão de VolumeBox/Furniture — sem alça de giro livre. */
+  rotationDeg: number;
+  model: StairModel;
+  /** Única dimensão livre por alça — o comprimento (corrida) é derivado do pé-direito do pavimento + geometria padrão de degrau (ver Core.STAIR_RISER_M/STAIR_TREAD_M), não é ajustável. */
+  widthM: number;
+  /** Cor sólida — usada só quando não há finishProductId. */
+  colorHex?: string;
+  /** Acabamento tipo parede (mesmo catálogo "paint" de Wall/VolumeBox). Presente = sobrescreve colorHex. */
+  finishProductId?: string;
+}
+
 // Planta baixa importada (imagem, ou primeira página de um PDF já
 // rasterizada) — vira uma referência visual no CHÃO do pavimento, pra
 // o Product Owner desenhar as paredes por cima em vez de medir tudo do
@@ -296,6 +316,7 @@ export interface Floor {
   glazingPanels: GlazingPanel[];
   balconyRailings: BalconyRailing[];
   volumeBoxes: VolumeBox[];
+  stairs: Stair[];
   planUnderlay?: PlanUnderlay | null;
   roomFinishes: Record<string, string>;
   roomFinishSettings?: Record<string, { scale: number; rotation: number }>;

@@ -10,7 +10,7 @@
 import type {
   Point, Wall, Column, ColumnShape, Roof, RoofType, RidgeAxis,
   Varanda, VarandaFrontSide, Laje, Opening, OpeningKind, Floor, Project,
-  Room, WallFootprint, WallOBB, MTV, Interval, Furniture, GlazingPanel, BalconyRailing, VolumeBox, PlanUnderlay,
+  Room, WallFootprint, WallOBB, MTV, Interval, Furniture, GlazingPanel, BalconyRailing, VolumeBox, Stair, StairModel, PlanUnderlay,
   Terreno, TerrenoMuroSide
 } from './types.js';
 
@@ -397,6 +397,87 @@ export function createVolumeBoxEntity(
   };
 }
 
+// Escada — nasce solta, sempre livre (mesmo espírito do Bloco de
+// Volumetria: sem ímã de parede, só um aviso não-bloqueante se a base
+// ficar longe de apoio). Regra de Blondel (referência clássica de
+// dimensionamento de escada, uso corrente na construção civil
+// brasileira): 2×espelho + piso ≈ 63-64cm — usando espelho 17,5cm e
+// piso 28cm, 2×0,175+0,28 = 0,63m, dentro da faixa. O número de degraus
+// é derivado do pé-direito real do pavimento (FLOOR_STACK_HEIGHT,
+// Scene3DRenderer.FLOOR_STACK_HEIGHT_GETTER — nunca duplicado aqui como
+// valor solto), ajustando o espelho pra dividir a altura exata — o
+// comprimento (corrida) sai desse número de degraus × piso, não é uma
+// alça livre como largura é.
+export const STAIR_RISER_M = 0.175;
+export const STAIR_TREAD_M = 0.28;
+export const STAIR_MIN_WIDTH_M = 0.8;
+export const STAIR_MAX_WIDTH_M = 2.0;
+export const STAIR_DEFAULT_WIDTH_M = 1.0;
+// Tolerância pro aviso (não bloqueia) de "base longe de parede/coluna".
+export const STAIR_SUPPORT_HINT_TOLERANCE_M = 0.3;
+
+export function createStairEntity(x: number, y: number, rotationDeg?: number, widthM?: number, model?: StairModel, id?: string): Stair {
+  return {
+    id: id || nextId('stair'),
+    x, y, rotationDeg: rotationDeg || 0,
+    model: model || 'reta',
+    widthM: widthM != null ? widthM : STAIR_DEFAULT_WIDTH_M,
+  };
+}
+
+/**
+ * Nº de degraus e comprimento total (corrida) de uma escada reta pra
+ * vencer exatamente `floorStackHeightM` de altura — ver regra de
+ * Blondel acima. Devolve também `riserRealM` (espelho real, ajustado
+ * pra dividir a altura exata em passos inteiros), usado na malha 3D.
+ */
+export function stairStepPlan(floorStackHeightM: number): { stepCount: number; riserRealM: number; lengthM: number } {
+  const stepCount = Math.max(1, Math.ceil(floorStackHeightM / STAIR_RISER_M));
+  return { stepCount, riserRealM: floorStackHeightM / stepCount, lengthM: stepCount * STAIR_TREAD_M };
+}
+
+/**
+ * Retângulo (planta) ocupado por uma escada — 4 pontos em unidade de
+ * grade, CW, pronto tanto pro corte na laje (Scene3DRenderer,
+ * Shape.holes) quanto pra malha 3D. Como a rotação é sempre múltiplo de
+ * 90° (ver Store.rotateStair), o retângulo continua AXIS-ALIGNED em
+ * coordenadas de mundo — só troca largura↔comprimento a cada 90°, sem
+ * precisar de matemática de polígono rotacionado arbitrário.
+ */
+export function stairFootprintRectangle(stair: Stair, floorStackHeightM: number): { x1: number; y1: number; x2: number; y2: number } {
+  const { lengthM } = stairStepPlan(floorStackHeightM);
+  const swapped = Math.round(stair.rotationDeg / 90) % 2 !== 0;
+  const halfWidthGrid = (swapped ? lengthM : stair.widthM) * GRID / 2;
+  const halfLengthGrid = (swapped ? stair.widthM : lengthM) * GRID / 2;
+  return { x1: stair.x - halfWidthGrid, y1: stair.y - halfLengthGrid, x2: stair.x + halfWidthGrid, y2: stair.y + halfLengthGrid };
+}
+
+/**
+ * Menor distância (em METROS) de um ponto até a parede OU coluna mais
+ * próxima — mesma matemática ponto-segmento com clamp já usada no ímã
+ * da Pele de vidro (ViewportController.nearestWallForGlazingAttach),
+ * só que aqui não gruda em nada: serve só pro aviso não-bloqueante da
+ * escada ("base longe de apoio"). Coluna usa distância euclidiana
+ * simples até o centro, descontando o raio efetivo (COLUMN_SIZE/2).
+ */
+export function nearestSupportDistanceMeters(px: number, py: number, walls: Wall[], columns: Column[]): number {
+  let best = Infinity;
+  walls.forEach((w) => {
+    const dx = w.x2 - w.x1, dy = w.y2 - w.y1;
+    const lenSq = dx * dx + dy * dy;
+    if (lenSq < 1e-9) return;
+    const t = Math.max(0, Math.min(1, ((px - w.x1) * dx + (py - w.y1) * dy) / lenSq));
+    const projX = w.x1 + dx * t, projY = w.y1 + dy * t;
+    const dist = Math.hypot(px - projX, py - projY);
+    if (dist < best) best = dist;
+  });
+  columns.forEach((c) => {
+    const dist = Math.max(0, Math.hypot(px - c.x, py - c.y) - COLUMN_SIZE / 2);
+    if (dist < best) best = dist;
+  });
+  return best / GRID;
+}
+
 // Planta baixa importada — nasce com 10m de largura (mantendo a
 // proporção da imagem original) centrada em (x,y). Nenhuma extração
 // automática de parede aqui (isso é outra etapa, bem maior — ver
@@ -453,7 +534,7 @@ export function lajeBounds(laje: Laje): { minX: number; maxX: number; minY: numb
 }
 
 export function createFloorEntity(name: string, kind: Floor['kind'] = 'standard'): Floor {
-  return { id: nextId('floor'), name, kind, walls: [], columns: [], roofs: [], openings: [], varandas: [], lajes: [], furniture: [], glazingPanels: [], balconyRailings: [], volumeBoxes: [], roomFinishes: {}, roomFinishSettings: {} };
+  return { id: nextId('floor'), name, kind, walls: [], columns: [], roofs: [], openings: [], varandas: [], lajes: [], furniture: [], glazingPanels: [], balconyRailings: [], volumeBoxes: [], stairs: [], roomFinishes: {}, roomFinishSettings: {} };
 }
 
 // x,y: posição do "pé" do móvel no plano do pavimento. rotationDeg: passos
@@ -1914,6 +1995,8 @@ export const Core = {
   computeBalconyRailingJoints, RAILING_JOIN_TOL_MODEL,
   createVolumeBoxEntity, VOLUME_BOX_DEFAULT_WIDTH_M, VOLUME_BOX_DEFAULT_HEIGHT_M, VOLUME_BOX_DEFAULT_DEPTH_M, VOLUME_BOX_DEFAULT_COLOR,
   VOLUME_BOX_MIN_SIZE_M, VOLUME_BOX_MAX_SIZE_M, VOLUME_BOX_MIN_HEIGHT_M, VOLUME_BOX_MAX_HEIGHT_M, VOLUME_BOX_MAX_SILL_HEIGHT_M,
+  createStairEntity, stairStepPlan, stairFootprintRectangle, nearestSupportDistanceMeters,
+  STAIR_RISER_M, STAIR_TREAD_M, STAIR_MIN_WIDTH_M, STAIR_MAX_WIDTH_M, STAIR_DEFAULT_WIDTH_M, STAIR_SUPPORT_HINT_TOLERANCE_M,
   createPlanUnderlayEntity, PLAN_UNDERLAY_DEFAULT_WIDTH_M, PLAN_UNDERLAY_DEFAULT_OPACITY,
   createProject, distToSegment, projectOnSegment, detectRooms,
   TERRENO_MURO_HEIGHT_M, terrenoMuroId, terrenoMuroSegment, createTerrenoEntity, createTerrenoMuroEntity

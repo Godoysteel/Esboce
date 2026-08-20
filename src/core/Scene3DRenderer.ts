@@ -2360,6 +2360,73 @@ export function hashColorHex(key: string): number {
     return hitMesh;
   }
 
+  // Escada — dispatch por stair.model, hoje só 'reta' (mesmo padrão de
+  // buildRoofPiece pros tipos de telhado; estrutura pronta pra L/U
+  // entrarem depois sem reescrever nada).
+  function buildStairMaterial(stair: any) {
+    var product = stair.finishProductId ? Catalog.getProduct(stair.finishProductId) : null;
+    var hasRealTexture = !!(product && product.category === 'floor_tile' && product.assets.textures);
+    var isCeramic = !!(product && product.category === 'floor_tile' && !hasRealTexture);
+    var ceramicMap = isCeramic ? buildCeramicTexture(product!.assets.colorHex, 1, 0) : null;
+    var wallPbrMaps = hasRealTexture ? buildWallFaceMaterial(product) : null;
+    var colorHex = product ? product.assets.colorHex : (stair.colorHex || '#C9C4B8');
+    return new THREE.MeshStandardMaterial({
+      color: new THREE.Color((isCeramic || hasRealTexture) ? '#ffffff' : colorHex),
+      map: hasRealTexture ? wallPbrMaps!.map : ceramicMap,
+      normalMap: hasRealTexture ? wallPbrMaps!.normalMap : null,
+      roughnessMap: hasRealTexture ? wallPbrMaps!.roughnessMap : null,
+      aoMap: hasRealTexture ? wallPbrMaps!.aoMap : null,
+      roughness: hasRealTexture ? 1 : 0.85,
+      metalness: 0.05,
+    });
+  }
+
+  // Um bloco SÓLIDO por degrau, cada um contendo por completo os
+  // anteriores (mesma base em x=0/z=-halfLength, crescendo em altura E
+  // profundidade a cada degrau) — a UNIÃO das superfícies expostas de
+  // todos os blocos já forma o perfil escalonado certo (piso+espelho de
+  // cada degrau), sem precisar de geometria booleana de verdade. Base
+  // em y=0 (ancorada no piso do próprio pavimento — ver
+  // buildStairHitMesh), topo do último degrau bate exatamente na cota
+  // do pavimento de cima (FLOOR_STACK_HEIGHT).
+  function buildStairReta(stair: any) {
+    var plan = Core.stairStepPlan(FLOOR_STACK_HEIGHT);
+    var mat = buildStairMaterial(stair);
+    var group = new THREE.Group();
+    var halfLength = plan.lengthM / 2;
+    for (var i = 0; i < plan.stepCount; i++) {
+      var stepHeight = plan.riserRealM * (i + 1);
+      var stepDepth = Core.STAIR_TREAD_M * (i + 1);
+      var geo = new THREE.BoxGeometry(stair.widthM, stepHeight, stepDepth);
+      var box = new THREE.Mesh(geo, mat);
+      box.position.set(0, stepHeight / 2, -halfLength + stepDepth / 2);
+      group.add(box);
+    }
+    return group;
+  }
+
+  function buildStairMesh(stair: any) {
+    if (stair.model === 'reta') return buildStairReta(stair);
+    return buildStairReta(stair);
+  }
+
+  function buildStairHitMesh(stair: any, scale: any, offsetX: any, offsetY: any, yOffset: any) {
+    var plan = Core.stairStepPlan(FLOOR_STACK_HEIGHT);
+    var hitGeo = new THREE.BoxGeometry(stair.widthM, FLOOR_STACK_HEIGHT, plan.lengthM);
+    // Ancora a base do hit-box em y=0 (em vez do centro, padrão de
+    // BoxGeometry) — mesma convenção da malha visível (buildStairReta),
+    // que também nasce com a base em y=0.
+    hitGeo.translate(0, FLOOR_STACK_HEIGHT / 2, 0);
+    var hitMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 });
+    var hitMesh = new THREE.Mesh(hitGeo, hitMat);
+    var group = buildStairMesh(stair);
+    hitMesh.add(group);
+    var px = ((stair.x || 0) - offsetX) * scale, pz = ((stair.y || 0) - offsetY) * scale;
+    hitMesh.position.set(px, yOffset, pz);
+    hitMesh.rotation.y = -((stair.rotationDeg || 0) * Math.PI / 180);
+    return hitMesh;
+  }
+
   // Laje: nasce automática por cômodo fechado, mesmo contorno inset já
   // calculado pro piso (insetPoints/shape) — só muda a altura (topo da
   // parede, não a base) e a espessura/textura real de laje. Substitui
@@ -3499,6 +3566,25 @@ export function hashColorHex(key: string): number {
       scene.add(vbBottomHandle); registry.handleMeshes.push(vbBottomHandle);
     }
 
+    if (viewState.selectedStair) {
+      // Escada — só a largura é livre por alça (esquerda/direita, eixo
+      // local X); a corrida é derivada do pé-direito, não é ajustável
+      // nesta rodada (ver Core.stairStepPlan).
+      var stSel = viewState.selectedStair;
+      var stYOffset = viewState.editingYOffset;
+      var stCx = stSel.x || 0, stCy = stSel.y || 0, stAngle = (stSel.rotationDeg || 0) * Math.PI / 180;
+      var stAxisX = Math.cos(stAngle), stAxisY = Math.sin(stAngle);
+      var stCenterWorldX = (stCx - offsetX) * scale, stCenterWorldZ = (stCy - offsetY) * scale;
+      var stHandleY = stYOffset + FLOOR_STACK_HEIGHT / 2;
+      [-1, 1].forEach(function (side) {
+        var modelOffset = stSel.widthM * Core.GRID / 2 * side;
+        var handle = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 12), new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false }));
+        handle.position.set(stCenterWorldX + stAxisX * modelOffset * scale, stHandleY, stCenterWorldZ + stAxisY * modelOffset * scale);
+        handle.userData.handle = side < 0 ? 'stairWidthLeft' : 'stairWidthRight';
+        handle.renderOrder = 999; scene.add(handle); registry.handleMeshes.push(handle);
+      });
+    }
+
     if (viewState.selectedVaranda) {
       var vSel = viewState.selectedVaranda, vYOffset = viewState.editingYOffset;
       var vMidX = (vSel.x1 + vSel.x2) / 2, vMidY = (vSel.y1 + vSel.y2) / 2;
@@ -3694,6 +3780,16 @@ export function hashColorHex(key: string): number {
         vmesh.userData.volumeBoxId = box.id; vmesh.userData.floorIndex = floorIdx;
         scene.add(vmesh);
         registry.furnitureMeshes.push(vmesh);
+      });
+
+      (floorData.stairs || []).forEach(function (stair) {
+        // furnitureMeshes (não structureMeshes) — mesmo Group aninhado
+        // dentro do hitMesh, mesma limpeza recursiva do VolumeBox acima.
+        var smesh = buildStairHitMesh(stair, scale, offsetX, offsetY, yOffset);
+        tagCategory(smesh, 'stair');
+        smesh.userData.stairId = stair.id; smesh.userData.floorIndex = floorIdx;
+        scene.add(smesh);
+        registry.furnitureMeshes.push(smesh);
       });
 
       if (wallsVisible) {
@@ -4334,6 +4430,33 @@ export function hashColorHex(key: string): number {
             if (i === 0) lajeShape.moveTo(wx, wz); else lajeShape.lineTo(wx, wz);
           });
           lajeShape.closePath();
+          // Escada: fura o buraco na laje quando o retângulo dela cruza
+          // este cômodo — clipado contra o bounding box do próprio
+          // cômodo pra nunca gerar geometria quebrada se a escada for
+          // arrastada parcialmente pra fora (Core.stairFootprintRectangle
+          // já devolve um retângulo axis-aligned, já que a rotação é
+          // sempre múltiplo de 90° — Store.rotateStair). Mesma técnica
+          // de Shape.holes já usada em buildPerimeterFrameShape/
+          // buildInsetFrameShape (quadro da fundação), só nunca tinha
+          // sido aplicada a um cômodo.
+          var roomMinX = Infinity, roomMaxX = -Infinity, roomMinY = Infinity, roomMaxY = -Infinity;
+          outsetPoints.forEach(function (p: any) {
+            roomMinX = Math.min(roomMinX, p.x); roomMaxX = Math.max(roomMaxX, p.x);
+            roomMinY = Math.min(roomMinY, p.y); roomMaxY = Math.max(roomMaxY, p.y);
+          });
+          (floorData.stairs || []).forEach(function (stair: any) {
+            var rect = Core.stairFootprintRectangle(stair, FLOOR_STACK_HEIGHT);
+            var ix1 = Math.max(rect.x1, roomMinX), ix2 = Math.min(rect.x2, roomMaxX);
+            var iy1 = Math.max(rect.y1, roomMinY), iy2 = Math.min(rect.y2, roomMaxY);
+            if (ix2 <= ix1 || iy2 <= iy1) return; // sem cruzamento de verdade
+            var hole = new THREE.Path();
+            [{ x: ix1, y: iy1 }, { x: ix2, y: iy1 }, { x: ix2, y: iy2 }, { x: ix1, y: iy2 }].forEach(function (p, i) {
+              var wx = (p.x - offsetX) * scale, wz = (p.y - offsetY) * scale;
+              if (i === 0) hole.moveTo(wx, wz); else hole.lineTo(wx, wz);
+            });
+            hole.closePath();
+            lajeShape.holes.push(hole);
+          });
           var lajeSizeX = 0, lajeSizeZ = 0;
           outsetPoints.forEach(function (p: any, i: any) {
             var p2 = outsetPoints[(i + 1) % outsetPoints.length]!;

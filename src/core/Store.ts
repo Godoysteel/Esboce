@@ -9,7 +9,7 @@ import { buildColdWaterKitchenPrototype, buildColdWaterNetworkFromFixtures, buil
 import type {
   Project, Floor, Wall, Column, Roof, Opening, OpeningKind, Varanda, Laje, Furniture, ColumnShape, RoofType,
   RidgeAxis, VarandaFrontSide, FoundationType, StoreEvent, StoreListener,
-  WallSnapshot, LinkedWallUpdate, GlazingPanel, GlazingGlassMaterial, BalconyRailing, VolumeBox, PlanUnderlay, Terreno, TerrenoMuroSide,
+  WallSnapshot, LinkedWallUpdate, GlazingPanel, GlazingGlassMaterial, BalconyRailing, VolumeBox, Stair, PlanUnderlay, Terreno, TerrenoMuroSide,
   HydraulicNetworkType
 } from './types.js';
 
@@ -147,6 +147,16 @@ export function volumeBoxesOfFloor(floor: Floor): VolumeBox[] {
 export function findVolumeBox(id: string): VolumeBox | null {
   const boxes = currentVolumeBoxes();
   for (let i = 0; i < boxes.length; i++) if (boxes[i]!.id === id) return boxes[i]!;
+  return null;
+}
+export function currentStairs(): Stair[] {
+  const f = currentFloor();
+  if (!f.stairs) f.stairs = [];
+  return f.stairs;
+}
+export function findStair(id: string): Stair | null {
+  const stairs = currentStairs();
+  for (let i = 0; i < stairs.length; i++) if (stairs[i]!.id === id) return stairs[i]!;
   return null;
 }
 // Planta baixa importada — uma por pavimento (não lista), por isso
@@ -1548,6 +1558,65 @@ export const commands = {
     emit({ type: 'VolumeBoxFinishSet', volumeBoxId, productId });
   },
 
+  // Escada — sempre livre, sem ímã de parede (mesmo espírito do Bloco de
+  // Volumetria); rotação em passos de 90° (Product Owner confirmou:
+  // mesmo padrão do resto do app, sem alça de giro livre).
+  createStair(x: number, y: number): Stair | null {
+    pushUndoSnapshot();
+    const s = Core.createStairEntity(x, y);
+    currentStairs().push(s);
+    emit({ type: 'StairCreated', floorIndex: project.currentFloorIndex, stairId: s.id });
+    return s;
+  },
+
+  updateStairBodyLive(stairId: string, x: number, y: number): void {
+    const s = findStair(stairId); if (!s) return;
+    s.x = x; s.y = y;
+    emit({ type: 'StairMoved', stairId, live: true });
+  },
+
+  deleteStair(stairId: string): void {
+    const list = currentStairs();
+    let idx = -1;
+    for (let i = 0; i < list.length; i++) if (list[i]!.id === stairId) { idx = i; break; }
+    if (idx < 0) return;
+    pushUndoSnapshot();
+    list.splice(idx, 1);
+    emit({ type: 'StairDeleted', stairId });
+  },
+
+  // Cópia exata de rotateVolumeBox/rotateFurniture.
+  rotateStair(stairId: string, stepDeg?: number): void {
+    const s = findStair(stairId); if (!s) return;
+    pushUndoSnapshot();
+    const step = stepDeg || 90;
+    s.rotationDeg = (s.rotationDeg + step + 360) % 360;
+    emit({ type: 'StairRotated', stairId });
+  },
+
+  // Confirma a largura ao soltar a alça esquerda/direita — mesmo padrão
+  // de updateVolumeBoxSizeLive (sem alça de altura/profundidade: a
+  // corrida é derivada do pé-direito, não é livre).
+  updateStairWidthLive(stairId: string, widthM: number, centerDeltaM = 0): void {
+    const s = findStair(stairId); if (!s) return;
+    const finalWidthM = Math.max(Core.STAIR_MIN_WIDTH_M, Math.min(Core.STAIR_MAX_WIDTH_M, widthM));
+    if (centerDeltaM) {
+      const angle = (s.rotationDeg || 0) * Math.PI / 180;
+      s.x = (s.x || 0) + Math.cos(angle) * centerDeltaM * Core.GRID;
+      s.y = (s.y || 0) + Math.sin(angle) * centerDeltaM * Core.GRID;
+    }
+    s.widthM = finalWidthM;
+    emit({ type: 'StairResized', stairId, live: true });
+  },
+
+  // Acabamento tipo parede — mesmo padrão de setVolumeBoxFinish.
+  setStairFinish(stairId: string, productId: string): void {
+    const s = findStair(stairId); if (!s) return;
+    pushUndoSnapshot();
+    s.finishProductId = productId;
+    emit({ type: 'StairFinishSet', stairId, productId });
+  },
+
   // Planta baixa importada (referência visual no chão) — uma por
   // pavimento, por isso "set" (substitui a que já existisse) em vez de
   // "create" numa lista. Ajustes por passo fixo (mover/girar/escalar),
@@ -1810,6 +1879,7 @@ export const Store = {
   currentGlazingPanels,
   currentBalconyRailings,
   currentVolumeBoxes,
+  currentStairs,
   currentPlanUnderlay,
   currentFurniture,
   findWall,
@@ -1821,6 +1891,7 @@ export const Store = {
   findGlazingPanel,
   findBalconyRailing,
   findVolumeBox,
+  findStair,
   findFurniture,
   findHydraulicNode,
   currentTerreno,

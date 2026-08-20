@@ -332,6 +332,7 @@ interface Totals {
   balconyRailingLengthM: number;
   varandaAreaM2: number;
   volumeBoxAreaM2: number; volumeBoxProductCost: number; volumeBoxGenericAreaM2: number;
+  stairCount: number;
   furnitureCount: number; furnitureCost: number;
 }
 interface Masonry { blocks: number; mortarM3: number; cementKg: number; calKg: number; sandM3: number; }
@@ -420,6 +421,7 @@ export function compute(): ComputeResult {
     roofTimberAreaM2: 0,
     glazingPanelAreaM2: 0, balconyRailingLengthM: 0, varandaAreaM2: 0,
     volumeBoxAreaM2: 0, volumeBoxProductCost: 0, volumeBoxGenericAreaM2: 0,
+    stairCount: 0,
     furnitureCount: 0, furnitureCost: 0
   };
   const paint: Record<string, number> = {}, floorTile: Record<string, number> = {}, roofTile: Record<string, number> = {};
@@ -614,6 +616,15 @@ export function compute(): ComputeResult {
       const cost = b.finishProductId ? productUnitCost(b.finishProductId, surfaceAreaM2) : null;
       if (cost != null) totals.volumeBoxProductCost += cost;
       else totals.volumeBoxGenericAreaM2 += surfaceAreaM2;
+    });
+
+    // Escada: item posicionado, mesmo nível de detalhe que Bloco de
+    // Volumetria/Varanda hoje (contagem + preço de referência de
+    // mercado em buildRows()) — sem decompor em degrau/concreto/aço
+    // nesta rodada (estrutura sob medida, não catálogo padronizado como
+    // o PVC da hidráulica).
+    (floor.stairs || []).forEach(function () {
+      totals.stairCount++;
     });
 
     // Móveis: soma o preço do próprio produto do Catálogo
@@ -896,6 +907,7 @@ export function render(): void {
   if (q.totals.balconyRailingLengthM > 0) html += '<div class="materials-line"><span>Sacada de vidro</span><span>' + fmtM(q.totals.balconyRailingLengthM) + '</span></div>';
   if (q.totals.varandaAreaM2 > 0) html += '<div class="materials-line"><span>Varanda</span><span>' + fmtM2(q.totals.varandaAreaM2) + '</span></div>';
   if (q.totals.volumeBoxAreaM2 > 0) html += '<div class="materials-line"><span>Bloco de Volumetria (superfície)</span><span>' + fmtM2(q.totals.volumeBoxAreaM2) + '</span></div>';
+  if (q.totals.stairCount > 0) html += '<div class="materials-line"><span>Escadas posicionadas</span><span>' + q.totals.stairCount + ' un.</span></div>';
   if (q.totals.furnitureCount > 0) html += '<div class="materials-line"><span>Móveis posicionados</span><span>' + q.totals.furnitureCount + ' un.</span></div>';
   // Painel rápido: só o resumo (mesmo padrão de Pintura/Piso/Telhado
   // acima, que também só mostram área aqui — a lista item por item
@@ -1141,6 +1153,12 @@ const REFERENCE_PRICES = {
 //     de catálogo escolhido, já que não existe produto de porta de
 //     madeira cadastrado ainda (só esquadria de vidro); faixa de
 //     mercado ~R$350-550/un instalada — meio da faixa.
+//   • stairPerUnit: escada reta residencial (estrutura de concreto +
+//     acabamento básico, mão de obra inclusa), faixa de mercado
+//     ~R$2.500-4.500/un — meio da faixa. Mesmo nível de detalhe que
+//     Bloco de Volumetria/Varanda hoje (contagem + referência única),
+//     não decomposto em degrau/concreto/aço nesta rodada — é estrutura
+//     sob medida, não catálogo padronizado como o PVC da hidráulica.
 const ESTIMATED_MARKET_PRICES = {
   glazingPanelPerM2: 580.00,
   balconyRailingPerM: 420.00,
@@ -1150,6 +1168,7 @@ const ESTIMATED_MARKET_PRICES = {
   soleiraPerM: 90.00,
   hydraulicDestinationBoxUnit: 115.00,
   woodDoorPerUnit: 450.00,
+  stairPerUnit: 3500.00,
 };
 
 // Tubo/conexão de PVC pra esgoto/pluvial — item por item (pedido
@@ -1468,6 +1487,12 @@ export function buildRows(): (string | number)[][] {
   if (q.totals.volumeBoxAreaM2 > 0) {
     const volumeBoxCost = q.totals.volumeBoxProductCost + q.totals.volumeBoxGenericAreaM2 * ESTIMATED_MARKET_PRICES.volumeBoxGenericPerM2;
     push('Volumetria', 'Bloco de Volumetria (área de superfície)', q.totals.volumeBoxAreaM2, 'm²', volumeBoxCost);
+  }
+  // Escada: contagem + preço de referência único (ver
+  // ESTIMATED_MARKET_PRICES.stairPerUnit) — mesmo nível de detalhe que
+  // Bloco de Volumetria/Varanda hoje.
+  if (q.totals.stairCount > 0) {
+    push('Estrutura', 'Escada (posicionada)', q.totals.stairCount, 'un', q.totals.stairCount * ESTIMATED_MARKET_PRICES.stairPerUnit);
   }
   // Móveis: preço do próprio produto do Catálogo (Furniture.productId),
   // já somado em compute() — sem média de mercado nova (ver comentário

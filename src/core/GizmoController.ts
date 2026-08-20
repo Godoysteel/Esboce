@@ -93,6 +93,21 @@ function handleVolumeBoxAction(volumeBoxId: string, action: string): void {
   }
 }
 
+// Escada: mesmo padrão do Bloco de Volumetria acima — girar (90° por
+// clique) e excluir. Largura é só arraste na alça 3D (dragMode
+// stairWidth*); mover é arrasto livre direto na peça (dragMode
+// 'stairBody').
+function handleStairAction(stairId: string, action: string): void {
+  const s = Store.findStair(stairId);
+  if (!s) return;
+  if (action === 'close') { ViewportController.deselect(); return; }
+  if (action === 'delete') { Store.commands.deleteStair(stairId); ViewportController.deselect(); return; }
+  if (action === 'rotateCw' || action === 'rotateCcw') {
+    Store.commands.rotateStair(stairId, action === 'rotateCw' ? 90 : -90);
+    return;
+  }
+}
+
 // Móvel: girar (90° por clique)/duplicar/excluir. Mover é só arrasto
 // livre direto na peça (ver ViewportController — dragMode
 // 'furnitureBody'); os botões de seta não fazem sentido aqui porque o
@@ -251,6 +266,17 @@ export function init(): void {
     const volumeBoxId = ViewportController.getSelectedVolumeBoxId();
     if (!volumeBoxId) return;
     handleVolumeBoxAction(volumeBoxId, btn.dataset.action);
+  });
+
+  // Gizmo próprio da Escada (index.html#stairGizmo) — mesmo raciocínio
+  // do Bloco de Volumetria acima.
+  const stairGizmoEl = document.getElementById('stairGizmo');
+  stairGizmoEl?.addEventListener('click', function (e: any) {
+    const btn = e.target.closest('button.gz');
+    if (!btn) return;
+    const stairId = ViewportController.getSelectedStairId();
+    if (!stairId) return;
+    handleStairAction(stairId, btn.dataset.action);
   });
 
   // Gizmo da Planta Baixa importada (index.html#planUnderlayGizmo) —

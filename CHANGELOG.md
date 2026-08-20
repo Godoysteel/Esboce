@@ -1,5 +1,7 @@
 # Changelog
 
+> Adicionado: Escada (modelo reto) — posição e largura livres (arraste), rotação em passos de 90° (mesmo padrão de móvel/Bloco de Volumetria). Ao posicionar, fura automaticamente o buraco retangular na laje do pavimento; malha em degraus sólidos vencendo exatamente o pé-direito do pavimento (regra de Blondel). Aviso no rodapé (sem travar) se a base ficar longe de uma parede ou coluna. Entra no quantitativo como item posicionado, com preço de referência de mercado. Ver DEC-139.
+
 > Alterado: traçado automático de esgoto/pluvial — o canto entre os dois trechos horizontais deixa de ser um cotovelo reto de 90° e vira um corte de duas curvas de 45°, como a NBR 8160 exige pra desvios de coletor/subcoletor (esgoto/pluvial, redes por gravidade). Água fria (pressurizada) continua com cotovelo de 90°, sem essa exigência normativa. Inclinação/declividade continua fora de escopo (decisão já tomada). Ver DEC-138.
 
 > Corrigido: painéis flutuantes do telhado (mover/girar, tipo de água, cor da telha) ficavam sobrepostos ao selecionar um telhado — agora se empilham lado a lado, encostados sem sobrepor, usando a largura real de cada painel. Ver DEC-104.

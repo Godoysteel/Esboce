@@ -1,5 +1,5 @@
 import type {
-  Column, Floor, Furniture, GlazingPanel, BalconyRailing, VolumeBox, PlanUnderlay, HydraulicNode, HydraulicSegment, Laje, Opening, Project, ProjectLayers, Roof, Terreno, Varanda, Wall,
+  Column, Floor, Furniture, GlazingPanel, BalconyRailing, VolumeBox, Stair, PlanUnderlay, HydraulicNode, HydraulicSegment, Laje, Opening, Project, ProjectLayers, Roof, Terreno, Varanda, Wall,
 } from './types.js';
 
 // v6: adiciona `project.terreno` (opcional) — tamanho do lote e muros de
@@ -41,7 +41,10 @@ import type {
 // passa a ser instanciado de verdade: caixa de gordura/inspeção/saída
 // pluvial). Documentos v13 e anteriores abrem normalmente, sem nenhum
 // nó/segmento desses tipos (listas vazias/inexistentes).
-export const CURRENT_PROJECT_SCHEMA_VERSION = 14;
+// v15: `Floor.stairs` novo — escada (modelo reto), posição/largura
+// livres, rotação em passos de 90°. Documentos v14 e anteriores abrem
+// normalmente, sem nenhuma escada (lista vazia).
+export const CURRENT_PROJECT_SCHEMA_VERSION = 15;
 
 export interface StoredProjectDocument {
   schemaVersion: number;
@@ -353,6 +356,23 @@ function parseVolumeBox(value: unknown, path: string): VolumeBox {
   return box;
 }
 
+function parseStair(value: unknown, path: string): Stair {
+  const v = record(value, path);
+  const stair: Stair = {
+    id: string(v.id, `${path}.id`),
+    x: number(v.x, `${path}.x`),
+    y: number(v.y, `${path}.y`),
+    rotationDeg: number(v.rotationDeg, `${path}.rotationDeg`, 0),
+    model: enumValue(v.model, ['reta'], `${path}.model`, 'reta'),
+    widthM: number(v.widthM, `${path}.widthM`),
+  };
+  const colorHex = optionalString(v.colorHex, `${path}.colorHex`);
+  const finishProductId = optionalString(v.finishProductId, `${path}.finishProductId`);
+  if (colorHex !== undefined) stair.colorHex = colorHex;
+  if (finishProductId !== undefined) stair.finishProductId = finishProductId;
+  return stair;
+}
+
 // Planta baixa importada — dataURL pode ser um texto BEM grande (uma
 // imagem inteira em base64); tratado como uma string comum igual
 // qualquer outra, sem limite especial — o projeto inteiro já vira um
@@ -433,6 +453,7 @@ function parseFloor(value: unknown, path: string): Floor {
     glazingPanels: array(v.glazingPanels, `${path}.glazingPanels`, true).map((item, i) => parseGlazingPanel(item, `${path}.glazingPanels[${i}]`)),
     balconyRailings: array(v.balconyRailings, `${path}.balconyRailings`, true).map((item, i) => parseBalconyRailing(item, `${path}.balconyRailings[${i}]`)),
     volumeBoxes: array(v.volumeBoxes, `${path}.volumeBoxes`, true).map((item, i) => parseVolumeBox(item, `${path}.volumeBoxes[${i}]`)),
+    stairs: array(v.stairs, `${path}.stairs`, true).map((item, i) => parseStair(item, `${path}.stairs[${i}]`)),
     roomFinishes: stringMap(v.roomFinishes, `${path}.roomFinishes`),
     roomFinishSettings: settingsMap(v.roomFinishSettings, `${path}.roomFinishSettings`),
   };
