@@ -36,7 +36,12 @@ import type {
 // `finishProductId` novo (acabamento tipo parede, categoria "paint").
 // Documentos v12 e anteriores abrem normalmente; um volume que estava
 // 'attached' abre solto na origem (0,0) — reposicionar é rápido.
-export const CURRENT_PROJECT_SCHEMA_VERSION = 13;
+// v14: HydraulicNetworkType ganha 'rainwater' (sistema de esgoto e
+// pluvial, sem inclinação — Product Owner pediu; `kind: 'destination'`
+// passa a ser instanciado de verdade: caixa de gordura/inspeção/saída
+// pluvial). Documentos v13 e anteriores abrem normalmente, sem nenhum
+// nó/segmento desses tipos (listas vazias/inexistentes).
+export const CURRENT_PROJECT_SCHEMA_VERSION = 14;
 
 export interface StoredProjectDocument {
   schemaVersion: number;
@@ -76,7 +81,7 @@ function parseHydraulicNode(value: unknown, path: string): HydraulicNode {
   const node: HydraulicNode = {
     id: string(v.id, `${path}.id`),
     kind: enumValue(v.kind, ['source', 'fixture', 'junction', 'destination'], `${path}.kind`, 'junction'),
-    networkType: enumValue(v.networkType, ['cold_water', 'sanitary_sewer', 'kitchen_sewer', 'sanitary_vent'], `${path}.networkType`, 'cold_water'),
+    networkType: enumValue(v.networkType, ['cold_water', 'sanitary_sewer', 'kitchen_sewer', 'sanitary_vent', 'rainwater'], `${path}.networkType`, 'cold_water'),
     label: string(v.label, `${path}.label`, 'Ponto hidráulico'),
     x: number(v.x, `${path}.x`), y: number(v.y, `${path}.y`),
     elevationM: number(v.elevationM, `${path}.elevationM`, 0),
@@ -114,7 +119,7 @@ function parseHydraulicSegment(value: unknown, path: string): HydraulicSegment {
   if (!(diameterMm > 0 && diameterMm <= 1000)) fail(`${path}.diameterMm`, 'diâmetro fora do intervalo suportado');
   const segment: HydraulicSegment = {
     id: string(v.id, `${path}.id`),
-    networkType: enumValue(v.networkType, ['cold_water', 'sanitary_sewer', 'kitchen_sewer', 'sanitary_vent'], `${path}.networkType`, 'cold_water'),
+    networkType: enumValue(v.networkType, ['cold_water', 'sanitary_sewer', 'kitchen_sewer', 'sanitary_vent', 'rainwater'], `${path}.networkType`, 'cold_water'),
     startNodeId: string(v.startNodeId, `${path}.startNodeId`),
     endNodeId: string(v.endNodeId, `${path}.endNodeId`),
     diameterMm,

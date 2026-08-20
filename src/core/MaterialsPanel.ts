@@ -20,6 +20,8 @@ import type { Point, Wall, Roof, Column, Laje, Project } from './types.js';
 import { constructionSystemDefinition, hasCeramicMasonryEstimate } from './ConstructionSystem.js';
 import { floorWallHeight } from './Attic.js';
 import { listCatalogProducts, listManufacturers } from './SupabaseClient.js';
+import { classifyHydraulicJunction } from './Hydraulics.js';
+import type { HydraulicNetworkType, HydraulicNode, HydraulicSegment } from './types.js';
 
 let bodyEl: HTMLElement | null, panelEl: HTMLElement | null;
 
@@ -335,10 +337,21 @@ interface Structure {
 }
 interface LajeQuantities { count: number; areaM2: number; volumeM3: number; steelKg: number; }
 interface RoofTimber { areaM2: number; ripaLinearM: number; caibroLinearM: number; tercaLinearM: number; volumeM3: number; }
+// Esgoto de cozinha, esgoto sanitário e pluvial — cada um com seu ponto
+// fixo próprio (caixa de gordura/inspeção/saída pluvial, ver
+// Hydraulics.ts). Água fria fica de fora por ora (gap pré-existente,
+// nenhum tipo de hidráulica era contado antes desta seção — resolver
+// água fria também é tarefa maior, fora do pedido específico de esgoto
+// e pluvial).
+interface HydraulicsQuantities {
+  kitchenSewerLengthM: number; sanitarySewerLengthM: number; rainwaterLengthM: number;
+  destinationCount: number; connectionCount: number;
+}
 type Foundation = FoundationQuantity;
 interface ComputeResult {
   totals: Totals; paint: Record<string, number>; floorTile: Record<string, number>; roofTile: Record<string, number>;
   masonry: Masonry; structure: Structure; foundation: Foundation; laje: LajeQuantities; roofTimber: RoofTimber;
+  hydraulics: HydraulicsQuantities;
   constructionSystem: Project['constructionSystem'];
 }
 
@@ -733,7 +746,44 @@ export function compute(): ComputeResult {
       + tercaLinearM * ROOF_TIMBER_REF.tercaSectionM2
   };
 
-  return { totals, paint, floorTile, roofTile, masonry, structure, foundation, laje, roofTimber, constructionSystem: project.constructionSystem };
+  // Esgoto/pluvial — comprimento 3D real de cada segmento (não a linha
+  // reta 2D: soma a diferença de cota, inclusive entre pavimentos, mesma
+  // convenção de altura global usada em Hydraulics.buildOrthogonalNetworkFromFixtures)
+  // por networkType, e contagem de conexões (cotovelo/tê/cruz — reaproveita
+  // classifyHydraulicJunction, já existia "de base pro quantitativo" sem
+  // nunca ter sido consumido). Água fria fica de fora (ver comentário na
+  // interface HydraulicsQuantities).
+  const hydraulicNodesById = new Map((project.hydraulics.nodes || []).map((node) => [node.id, node]));
+  const floorStackHeight = Scene3DRenderer.FLOOR_STACK_HEIGHT_GETTER();
+  function hydraulicSegmentLengthMeters(segment: HydraulicSegment): number {
+    const start = hydraulicNodesById.get(segment.startNodeId), end = hydraulicNodesById.get(segment.endNodeId);
+    if (!start || !end) return 0;
+    const dx = (end.x - start.x) / Core.GRID, dy = (end.y - start.y) / Core.GRID;
+    const dz = ((end.floorIndex || 0) - (start.floorIndex || 0)) * floorStackHeight + (end.elevationM - start.elevationM);
+    return Math.hypot(dx, dy, dz);
+  }
+  function hydraulicLengthByType(networkType: HydraulicNetworkType): number {
+    return (project.hydraulics.segments || [])
+      .filter((segment) => segment.networkType === networkType)
+      .reduce((sum, segment) => sum + hydraulicSegmentLengthMeters(segment), 0);
+  }
+  const hydraulicDestinationNodes = (project.hydraulics.nodes || []).filter((node) => node.kind === 'destination');
+  const hydraulicConnectionCount = (['kitchen_sewer', 'sanitary_sewer', 'rainwater'] as HydraulicNetworkType[]).reduce((sum, networkType) => {
+    const ownNodes = (project.hydraulics.nodes || []).filter((node) => node.networkType === networkType && (node.kind === 'junction' || node.kind === 'destination'));
+    return sum + ownNodes.filter((node) => {
+      const kind = classifyHydraulicJunction(project.hydraulics, node.id);
+      return kind === 'elbow45' || kind === 'elbow90' || kind === 'tee' || kind === 'cross';
+    }).length;
+  }, 0);
+  const hydraulics: HydraulicsQuantities = {
+    kitchenSewerLengthM: hydraulicLengthByType('kitchen_sewer'),
+    sanitarySewerLengthM: hydraulicLengthByType('sanitary_sewer'),
+    rainwaterLengthM: hydraulicLengthByType('rainwater'),
+    destinationCount: hydraulicDestinationNodes.length,
+    connectionCount: hydraulicConnectionCount,
+  };
+
+  return { totals, paint, floorTile, roofTile, masonry, structure, foundation, laje, roofTimber, hydraulics, constructionSystem: project.constructionSystem };
 }
 
 function productLine(productId: string, areaM2: number): string {
@@ -792,6 +842,15 @@ export function render(): void {
   if (q.totals.varandaAreaM2 > 0) html += '<div class="materials-line"><span>Varanda</span><span>' + fmtM2(q.totals.varandaAreaM2) + '</span></div>';
   if (q.totals.volumeBoxAreaM2 > 0) html += '<div class="materials-line"><span>Bloco de Volumetria (superfície)</span><span>' + fmtM2(q.totals.volumeBoxAreaM2) + '</span></div>';
   if (q.totals.furnitureCount > 0) html += '<div class="materials-line"><span>Móveis posicionados</span><span>' + q.totals.furnitureCount + ' un.</span></div>';
+  var hasHydraulics = q.hydraulics.kitchenSewerLengthM > 0 || q.hydraulics.sanitarySewerLengthM > 0 || q.hydraulics.rainwaterLengthM > 0;
+  if (hasHydraulics) {
+    html += '<div class="object-panel-section-label">Instalações hidrossanitárias (esgoto e pluvial, sem inclinação)</div>';
+    if (q.hydraulics.kitchenSewerLengthM > 0) html += '<div class="materials-line"><span>Esgoto de cozinha</span><span>' + fmtM(q.hydraulics.kitchenSewerLengthM) + '</span></div>';
+    if (q.hydraulics.sanitarySewerLengthM > 0) html += '<div class="materials-line"><span>Esgoto sanitário</span><span>' + fmtM(q.hydraulics.sanitarySewerLengthM) + '</span></div>';
+    if (q.hydraulics.rainwaterLengthM > 0) html += '<div class="materials-line"><span>Pluvial</span><span>' + fmtM(q.hydraulics.rainwaterLengthM) + '</span></div>';
+    if (q.hydraulics.destinationCount > 0) html += '<div class="materials-line"><span>Caixas (gordura/inspeção/pluvial)</span><span>' + q.hydraulics.destinationCount + ' un.</span></div>';
+    if (q.hydraulics.connectionCount > 0) html += '<div class="materials-line"><span>Conexões</span><span>' + q.hydraulics.connectionCount + ' un.</span></div>';
+  }
   if (q.foundation) {
     const f = q.foundation;
     html += '<div class="object-panel-section-label">Fundação (' + (f.type === 'baldrame' ? 'baldrame' : 'radier') + ' — ref. taxa de aço 70 kg/m³)</div>';
@@ -1014,6 +1073,18 @@ const REFERENCE_PRICES = {
 //   perto de 'Arcos': é um vão sem folha, a alvenaria que deixa de
 //   existir ali já reduz custo em outras linhas, um preço fixo pareceria
 //   custo extra quando o efeito líquido tende a ser economia.
+//   • kitchenSewerPipePerM/sanitarySewerPipePerM/rainwaterPipePerM: tubo
+//     PVC + conexões instalado, linha Predial Tigre (Série Normal —
+//     40/50/75/100/150/200mm batem com os diâmetros já usados por
+//     fixture). Esgoto de cozinha é quase todo 50mm (pia); esgoto
+//     sanitário mistura 40/50/100mm (lavatório/ralo/vaso), média puxada
+//     pro lado do vaso que é o trecho mais caro; pluvial é 75mm
+//     (condutor vertical, mínimo comercial acima do mínimo técnico de
+//     70mm da linha Aquapluv).
+//   • hydraulicDestinationBoxUnit: caixa de gordura/inspeção/saída
+//     pluvial em PVC pré-moldado, faixa de mercado ~R$80-150/un — meio
+//     da faixa, mesmo valor pras 3 (a norma diferencia função, não
+//     custo de mercado do item em si).
 const ESTIMATED_MARKET_PRICES = {
   glazingPanelPerM2: 580.00,
   balconyRailingPerM: 420.00,
@@ -1021,6 +1092,10 @@ const ESTIMATED_MARKET_PRICES = {
   volumeBoxGenericPerM2: 260.00,
   rodapePerM: 18.00,
   soleiraPerM: 90.00,
+  kitchenSewerPipePerM: 28.00,
+  sanitarySewerPipePerM: 35.00,
+  rainwaterPipePerM: 26.00,
+  hydraulicDestinationBoxUnit: 115.00,
 };
 
 // Rendimento de referência pra converter área de parede em latas de
@@ -1301,6 +1376,26 @@ export function buildRows(): (string | number)[][] {
   // em Totals).
   if (q.totals.furnitureCount > 0) {
     push('Mobiliário', 'Móveis posicionados', q.totals.furnitureCount, 'un', q.totals.furnitureCost > 0 ? q.totals.furnitureCost : null);
+  }
+
+  // Esgoto e pluvial — sem inclinação (traçado esquemático, ver
+  // Hydraulics.ts). Água fria fica de fora por ora (gap pré-existente
+  // maior, fora do pedido específico desta seção).
+  const hLabel = 'Instalações hidrossanitárias';
+  if (q.hydraulics.kitchenSewerLengthM > 0) {
+    push(hLabel, 'Esgoto de cozinha (tubulação)', q.hydraulics.kitchenSewerLengthM, 'm', q.hydraulics.kitchenSewerLengthM * ESTIMATED_MARKET_PRICES.kitchenSewerPipePerM);
+  }
+  if (q.hydraulics.sanitarySewerLengthM > 0) {
+    push(hLabel, 'Esgoto sanitário (tubulação)', q.hydraulics.sanitarySewerLengthM, 'm', q.hydraulics.sanitarySewerLengthM * ESTIMATED_MARKET_PRICES.sanitarySewerPipePerM);
+  }
+  if (q.hydraulics.rainwaterLengthM > 0) {
+    push(hLabel, 'Pluvial (condutor)', q.hydraulics.rainwaterLengthM, 'm', q.hydraulics.rainwaterLengthM * ESTIMATED_MARKET_PRICES.rainwaterPipePerM);
+  }
+  if (q.hydraulics.destinationCount > 0) {
+    push(hLabel, 'Caixas (gordura/inspeção/pluvial)', q.hydraulics.destinationCount, 'un', q.hydraulics.destinationCount * ESTIMATED_MARKET_PRICES.hydraulicDestinationBoxUnit);
+  }
+  if (q.hydraulics.connectionCount > 0) {
+    push(hLabel, 'Conexões (cotovelo/tê/cruz)', q.hydraulics.connectionCount, 'un', null);
   }
 
   if (hasCost) rows.push(['TOTAL', 'Custo estimado (soma dos itens com preço)', '', '', '', fmtBRL(grandTotal)]);

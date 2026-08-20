@@ -38,9 +38,9 @@ test('a caixa d\'água é renderizada como duas malhas soltas (corpo+tampa), cad
   assert.match(body, /\[body, lid\]\.forEach/);
 });
 
-test('a esfera-marcador genérica é pulada para a origem de água fria — ela duplicaria o mesmo ponto sem hydraulicEditable e podia "roubar" o raycast do clique', () => {
+test('a esfera-marcador genérica é pulada pra origem de água fria e pro destino de esgoto/pluvial (caixa) — os dois têm malha própria, a esfera duplicaria o ponto sem hydraulicEditable e podia "roubar" o raycast do clique', () => {
   const body = slice(sceneSource, "function renderHydraulics(", "\n  function renderDrawPreview(");
-  assert.match(body, /if \(!\(node\.kind === 'source' && node\.networkType === 'cold_water'\)\) \{/);
+  assert.match(body, /if \(node\.kind !== 'source' && node\.kind !== 'destination'\) \{/);
 });
 
 test('pickMesh só enxerga filhos diretos de scene com .isMesh — documentado no próprio código como a razão de não usar THREE.Group', () => {

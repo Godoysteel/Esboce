@@ -3022,6 +3022,7 @@ export function hashColorHex(key: string): number {
     if (networkType === 'cold_water') return 0x2f80ed;
     if (networkType === 'sanitary_sewer') return 0x8b5e3c;
     if (networkType === 'kitchen_sewer') return 0xd97706;
+    if (networkType === 'rainwater') return 0x0d9488;
     return 0x7c3aed;
   }
 
@@ -3029,6 +3030,7 @@ export function hashColorHex(key: string): number {
     if (networkType === 'cold_water') return 0x39c6f4;
     if (networkType === 'sanitary_sewer') return 0xa66b45;
     if (networkType === 'kitchen_sewer') return 0xf59e0b;
+    if (networkType === 'rainwater') return 0x14b8a6;
     return hydraulicColor(networkType);
   }
 
@@ -3082,7 +3084,7 @@ export function hashColorHex(key: string): number {
       // hydraulicEditable, e podia "roubar" o raycast de clique dependendo
       // do ângulo de câmera (achado ao implementar o arraste da caixa
       // d'água). Demais tipos de nó continuam com a esfera normalmente.
-      if (!(node.kind === 'source' && node.networkType === 'cold_water')) {
+      if (node.kind !== 'source' && node.kind !== 'destination') {
         var radius = node.kind === 'junction' ? 0.035 : node.kind === 'fixture' ? 0.07 : 0.055;
         var geometry = new THREE.SphereGeometry(radius, 18, 14);
         var baseColor = node.kind === 'fixture' ? hydraulicFixtureColor(node.networkType) : hydraulicColor(node.networkType);
@@ -3137,6 +3139,21 @@ export function hashColorHex(key: string): number {
           scene.add(piece);
           registry.structureMeshes.push(piece);
         });
+      }
+      if (node.kind === 'destination') {
+        // Caixa de gordura/inspeção/saída pluvial — mesmo espírito do
+        // tanque de água (arrastável, cor por networkType), mas uma malha
+        // só (caixa enterrada não precisa de tampa separada visualmente).
+        var boxColor = selected ? 0xf4a340 : hydraulicColor(node.networkType);
+        var boxMaterial = new THREE.MeshStandardMaterial({ color: boxColor, emissive: selected ? 0xf4a340 : 0x000000, emissiveIntensity: selected ? 0.35 : 0, roughness: 0.55 });
+        var boxMesh = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.32, 0.5), boxMaterial);
+        boxMesh.position.set((node.x - offsetX) * scale, nodeFloorOffset + node.elevationM + 0.16, (node.y - offsetY) * scale);
+        boxMesh.userData.hydraulicNodeId = node.id;
+        boxMesh.userData.floorIndex = node.floorIndex || 0;
+        boxMesh.userData.hydraulicEditable = true;
+        tagCategory(boxMesh, 'instalacoes');
+        scene.add(boxMesh);
+        registry.structureMeshes.push(boxMesh);
       }
     });
   }

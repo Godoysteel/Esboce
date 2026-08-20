@@ -325,7 +325,7 @@ export interface ProjectLayers {
   paredesTransparentes: boolean;
 }
 
-export type HydraulicNetworkType = 'cold_water' | 'sanitary_sewer' | 'kitchen_sewer' | 'sanitary_vent';
+export type HydraulicNetworkType = 'cold_water' | 'sanitary_sewer' | 'kitchen_sewer' | 'sanitary_vent' | 'rainwater';
 export type HydraulicNodeKind = 'source' | 'fixture' | 'junction' | 'destination';
 export type HydraulicPlacementSurface = 'wall' | 'floor';
 

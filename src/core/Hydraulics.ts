@@ -38,6 +38,12 @@ export const HYDRAULIC_FIXTURE_TEMPLATES: HydraulicFixtureTemplate[] = [
   { key: 'toilet_waste', label: 'Saída do vaso sanitário', shortLabel: 'Esgoto vaso', networkType: 'sanitary_sewer', placementSurface: 'floor', elevationM: 0.02, diameterMm: 100 },
   { key: 'shower_drain', label: 'Ralo do chuveiro', shortLabel: 'Ralo chuveiro', networkType: 'sanitary_sewer', placementSurface: 'floor', elevationM: 0.02, diameterMm: 50 },
   { key: 'floor_drain', label: 'Ralo comum', shortLabel: 'Ralo', networkType: 'sanitary_sewer', placementSurface: 'floor', elevationM: 0.02, diameterMm: 50 },
+  // Ponto onde o condutor vertical (prumada pluvial) encontra a parede,
+  // perto do beiral — não modelamos a calha em si (elemento linear ao
+  // longo do telhado, fora de escopo), só a descida. Diâmetro mínimo de
+  // condutor vertical pela linha Aquapluv é 70mm; 75mm é o comercial PVC
+  // mais próximo pra cima (Tigre, catálogo técnico pluvial).
+  { key: 'rainwater_intake', label: 'Captação de água pluvial', shortLabel: 'Captação pluvial', networkType: 'rainwater', placementSurface: 'wall', elevationM: 2.60, diameterMm: 75 },
 ];
 
 export function hydraulicFixtureTemplate(key: string): HydraulicFixtureTemplate | null {
@@ -131,36 +137,73 @@ export function hydraulicFixtureVisualPosition(node: HydraulicNode, wall: Wall |
   return { x: node.x + nx * side * clearance, y: node.y + ny * side * clearance };
 }
 
-export function buildColdWaterNetworkFromFixtures(floors: Floor[], existing: HydraulicSystem): HydraulicSystem {
-  const fixtures = existing.nodes.filter((node) => node.kind === 'fixture' && !!node.fixtureType);
-  const waterFixtures = fixtures.filter((node) => node.networkType === 'cold_water');
-  if (!waterFixtures.length) return { nodes: fixtures, segments: [] };
+export type HydraulicEndpointRole = 'source' | 'destination';
+
+/**
+ * Núcleo comum do traçado ortogonal "ingênuo" (sem inclinação nenhuma —
+ * decisão explícita do Product Owner) — usado tanto pra água fria
+ * (`role: 'source'`, ponto fixo elevado, ex. caixa d'água) quanto pra
+ * esgoto/pluvial (`role: 'destination'`, ponto fixo no nível do chão,
+ * ex. caixa de gordura/inspeção/saída pluvial). Um segmento não tem
+ * sentido de fluxo próprio no modelo — só liga dois pontos — então o
+ * mesmo formato de cadeia (2 movimentos horizontais na cota do ponto
+ * fixo + 1 queda/subida vertical perto da outra ponta) serve pros dois
+ * casos, só trocando qual lado é o "fixo".
+ *
+ * Preserva SEMPRE nós/segmentos de QUALQUER OUTRO networkType intactos.
+ * Sem isso, gerar a rede de um tipo (ex. água fria) apagaria a rede já
+ * traçada de outro tipo (ex. esgoto) — cada geração reescreve
+ * `project.hydraulics` inteiro (ver Store.ts), e antes desta função só
+ * existia um tipo de rede pra se preocupar com isso.
+ */
+function buildOrthogonalNetworkFromFixtures(
+  networkType: HydraulicNetworkType,
+  endpointRole: HydraulicEndpointRole,
+  endpointLabel: string,
+  floors: Floor[],
+  existing: HydraulicSystem,
+): HydraulicSystem {
+  const otherNodes = existing.nodes.filter((node) => node.networkType !== networkType);
+  const otherSegments = existing.segments.filter((segment) => segment.networkType !== networkType);
+  const ownFixtures = existing.nodes.filter((node) => node.kind === 'fixture' && node.networkType === networkType && !!node.fixtureType);
+  if (!ownFixtures.length) return { nodes: [...otherNodes, ...ownFixtures], segments: otherSegments };
   const topFloorIndex = Math.max(0, floors.length - 1);
   const allWalls = floors.flatMap((floor) => floor.walls);
   const bounds = allWalls.length ? {
     minX: Math.min(...allWalls.flatMap((wall) => [wall.x1, wall.x2])), maxX: Math.max(...allWalls.flatMap((wall) => [wall.x1, wall.x2])),
     minY: Math.min(...allWalls.flatMap((wall) => [wall.y1, wall.y2])), maxY: Math.max(...allWalls.flatMap((wall) => [wall.y1, wall.y2])),
   } : { minX: -40, maxX: 40, minY: -40, maxY: 40 };
-  // A origem é reaproveitada quando já existe (mesmo id, mesma posição) —
-  // sem isso, todo trecho guiado manualmente (H2) que aponte pra ela ficaria
-  // órfão a cada vez que essa geração automática rodasse de novo.
-  const existingSource = existing.nodes.find((node) => node.kind === 'source' && node.networkType === 'cold_water');
-  const source: HydraulicNode = existingSource || {
-    id: nextHydraulicId('hyd-tank'), kind: 'source', networkType: 'cold_water', label: "Caixa d'água",
-    x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2,
-    elevationM: 3.35, floorIndex: topFloorIndex,
-  };
-  const nodes: HydraulicNode[] = [...fixtures, source];
-  const segments: HydraulicSystem['segments'] = [];
-  waterFixtures.forEach((fixture) => {
+  // O ponto fixo é reaproveitado quando já existe (mesmo id, mesma
+  // posição) — sem isso, todo trecho guiado manualmente (H2) que aponte
+  // pra ele ficaria órfão a cada vez que essa geração automática rodasse
+  // de novo.
+  const existingEndpoint = existing.nodes.find((node) => node.kind === endpointRole && node.networkType === networkType);
+  const endpoint: HydraulicNode = existingEndpoint || (endpointRole === 'source'
+    ? {
+        id: nextHydraulicId('hyd-tank'), kind: 'source', networkType, label: endpointLabel,
+        x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2,
+        elevationM: 3.35, floorIndex: topFloorIndex,
+      }
+    : {
+        // Fora da área construída (bordo leste), pra não nascer em cima
+        // da casa — sempre arrastável depois pra onde fizer sentido.
+        id: nextHydraulicId('hyd-dest'), kind: 'destination', networkType, label: endpointLabel,
+        x: bounds.maxX + GRID, y: (bounds.minY + bounds.maxY) / 2,
+        elevationM: 0.05, floorIndex: 0,
+      });
+  const nodes: HydraulicNode[] = [...otherNodes, ...ownFixtures, endpoint];
+  const segments: HydraulicSegment[] = [...otherSegments];
+  const endpointFloor = endpoint.floorIndex || 0;
+  ownFixtures.forEach((fixture) => {
     // Um percurso guiado manualmente (H2, ownerFixtureId + guided: true)
     // nunca é sobrescrito pela geração automática — só os pontos ainda sem
     // percurso próprio (ou com percurso INGÊNUO de uma geração anterior,
     // sem a flag `guided`) recebem o traçado ingênuo abaixo, recalculado
     // do zero. Sem o filtro por `guided` aqui, o traçado ingênuo de uma
     // fixture já roteada uma vez nunca mais seria regerado — inclusive ao
-    // mover a origem (caixa d'água) ou a própria fixture, os canos
-    // ficariam presos na posição antiga da primeira geração.
+    // mover o ponto fixo (caixa d'água / caixa de gordura) ou a própria
+    // fixture, os canos ficariam presos na posição antiga da primeira
+    // geração.
     const guidedNodes = existing.nodes.filter((node) => node.ownerFixtureId === fixture.id && node.guided);
     const guidedSegments = existing.segments.filter((segment) => segment.ownerFixtureId === fixture.id && segment.guided);
     if (guidedNodes.length || guidedSegments.length) {
@@ -170,28 +213,56 @@ export function buildColdWaterNetworkFromFixtures(floors: Floor[], existing: Hyd
     }
     const fixtureFloor = fixture.floorIndex || 0;
     const ownerFixtureId = fixture.id;
-    const horizontalA: HydraulicNode = {
-      id: nextHydraulicId('hyd-junction'), kind: 'junction', networkType: 'cold_water', label: 'Distribuição superior',
-      x: fixture.x, y: source.y, elevationM: source.elevationM, floorIndex: topFloorIndex, ownerFixtureId,
+    const legA: HydraulicNode = {
+      id: nextHydraulicId('hyd-junction'), kind: 'junction', networkType,
+      label: endpointRole === 'source' ? 'Distribuição superior' : 'Saída do ponto',
+      x: fixture.x, y: endpoint.y, elevationM: endpoint.elevationM, floorIndex: endpointFloor, ownerFixtureId,
     };
-    const horizontalB: HydraulicNode = {
-      id: nextHydraulicId('hyd-junction'), kind: 'junction', networkType: 'cold_water', label: 'Descida do ponto',
-      x: fixture.x, y: fixture.y, elevationM: source.elevationM, floorIndex: topFloorIndex, ownerFixtureId,
+    const legB: HydraulicNode = {
+      id: nextHydraulicId('hyd-junction'), kind: 'junction', networkType,
+      label: endpointRole === 'source' ? 'Descida do ponto' : 'Chegada na caixa',
+      x: fixture.x, y: fixture.y, elevationM: endpoint.elevationM, floorIndex: endpointFloor, ownerFixtureId,
     };
-    const verticalBase: HydraulicNode = {
-      id: nextHydraulicId('hyd-junction'), kind: 'junction', networkType: 'cold_water', label: 'Base da descida',
+    const nearFixture: HydraulicNode = {
+      id: nextHydraulicId('hyd-junction'), kind: 'junction', networkType,
+      label: endpointRole === 'source' ? 'Base da descida' : 'Saída da tubulação',
       x: fixture.x, y: fixture.y, elevationM: fixture.elevationM, floorIndex: fixtureFloor, ownerFixtureId,
     };
-    nodes.push(horizontalA, horizontalB, verticalBase);
-    [[source, horizontalA], [horizontalA, horizontalB], [horizontalB, verticalBase], [verticalBase, fixture]].forEach(([start, end]) => {
+    nodes.push(legA, legB, nearFixture);
+    const diameterMm = endpointRole === 'source' ? 20 : (hydraulicFixtureTemplate(fixture.fixtureType!)?.diameterMm || 50);
+    [[endpoint, legA], [legA, legB], [legB, nearFixture], [nearFixture, fixture]].forEach(([start, end]) => {
       var startGlobal = (start!.floorIndex || 0) * FLOOR_STACK_HEIGHT_M + start!.elevationM;
       var endGlobal = (end!.floorIndex || 0) * FLOOR_STACK_HEIGHT_M + end!.elevationM;
       if (start!.x !== end!.x || start!.y !== end!.y || startGlobal !== endGlobal) {
-        segments.push({ id: nextHydraulicId('hyd-segment'), networkType: 'cold_water', startNodeId: start!.id, endNodeId: end!.id, diameterMm: 20, ownerFixtureId });
+        segments.push({ id: nextHydraulicId('hyd-segment'), networkType, startNodeId: start!.id, endNodeId: end!.id, diameterMm, ownerFixtureId });
       }
     });
   });
   return { nodes, segments };
+}
+
+export function buildColdWaterNetworkFromFixtures(floors: Floor[], existing: HydraulicSystem): HydraulicSystem {
+  return buildOrthogonalNetworkFromFixtures('cold_water', 'source', "Caixa d'água", floors, existing);
+}
+
+const DESTINATION_LABELS: Partial<Record<HydraulicNetworkType, string>> = {
+  kitchen_sewer: 'Caixa de gordura',
+  sanitary_sewer: 'Caixa de inspeção',
+  rainwater: 'Caixa de saída pluvial',
+};
+
+/**
+ * Equivalente de `buildColdWaterNetworkFromFixtures` pra redes com ponto
+ * fixo no chão (esgoto de cozinha, esgoto sanitário, pluvial) em vez de
+ * elevado — mesmo traçado ortogonal sem inclinação, mesmo mecanismo de
+ * preservar percurso guiado (H2) e ponto fixo já existente.
+ */
+export function buildDestinationNetworkFromFixtures(networkType: HydraulicNetworkType, floors: Floor[], existing: HydraulicSystem): HydraulicSystem {
+  return buildOrthogonalNetworkFromFixtures(networkType, 'destination', DESTINATION_LABELS[networkType] || 'Caixa de saída', floors, existing);
+}
+
+export function destinationLabelForNetwork(networkType: HydraulicNetworkType): string {
+  return DESTINATION_LABELS[networkType] || 'Caixa de saída';
 }
 
 export interface EquipmentConnectorTemplate {
@@ -292,50 +363,71 @@ export function buildColdWaterKitchenPrototype(floor: Floor): HydraulicSystem {
  * como já era no traçado ingênuo — só o trajeto horizontal passa a ser
  * manual. Função pura: não lê nem grava em nenhum estado global.
  */
+/**
+ * Generalização de H2 (ver `buildGuidedColdWaterHeaderRoute` abaixo, que
+ * agora é um atalho pra esta função com `role: 'source'`) — funciona
+ * tanto pro ponto fixo elevado (água fria) quanto pro ponto fixo no chão
+ * (esgoto/pluvial): o usuário desenha o trecho horizontal (pontos-guia)
+ * na cota do PONTO FIXO; a queda/subida final até a fixture continua
+ * automática, como já era no traçado ingênuo.
+ */
+export function buildGuidedHydraulicRoute(
+  networkType: HydraulicNetworkType,
+  endpointRole: HydraulicEndpointRole,
+  endpoint: { id: string; x: number; y: number; elevationM: number; floorIndex?: number },
+  fixture: HydraulicNode,
+  waypoints: Point[],
+  ownerFixtureId: string,
+): HydraulicSystem {
+  const planPoints: Point[] = [{ x: endpoint.x, y: endpoint.y }, ...waypoints, { x: fixture.x, y: fixture.y }];
+  const nodes: HydraulicNode[] = [];
+  const segments: HydraulicSegment[] = [];
+  const planNodeIds: string[] = [];
+  planPoints.forEach((point, index) => {
+    if (index === 0 || index === planPoints.length - 1) return; // ponto fixo e "acima/na cota do ponto" tratados à parte
+    const node: HydraulicNode = {
+      id: nextHydraulicId('hyd-waypoint'), kind: 'junction', networkType,
+      label: 'Ponto-guia', x: point.x, y: point.y, elevationM: endpoint.elevationM,
+      ownerFixtureId, guided: true, ...(endpoint.floorIndex != null ? { floorIndex: endpoint.floorIndex } : {}),
+    };
+    nodes.push(node);
+    planNodeIds.push(node.id);
+  });
+  const aboveFixture: HydraulicNode = {
+    id: nextHydraulicId('hyd-waypoint'), kind: 'junction', networkType,
+    label: endpointRole === 'source' ? 'Descida do ponto' : 'Chegada na caixa',
+    x: fixture.x, y: fixture.y, elevationM: endpoint.elevationM,
+    ownerFixtureId, guided: true, ...(endpoint.floorIndex != null ? { floorIndex: endpoint.floorIndex } : {}),
+  };
+  nodes.push(aboveFixture);
+  type ChainPoint = { id: string; x: number; y: number; floorIndex?: number; elevationM: number };
+  const chain: ChainPoint[] = [
+    { id: endpoint.id, x: endpoint.x, y: endpoint.y, elevationM: endpoint.elevationM, ...(endpoint.floorIndex != null ? { floorIndex: endpoint.floorIndex } : {}) },
+    ...planNodeIds.map((id, i): ChainPoint => {
+      const waypoint = waypoints[i]!;
+      return { id, x: waypoint.x, y: waypoint.y, elevationM: endpoint.elevationM, ...(endpoint.floorIndex != null ? { floorIndex: endpoint.floorIndex } : {}) };
+    }),
+    { id: aboveFixture.id, x: fixture.x, y: fixture.y, elevationM: endpoint.elevationM, ...(endpoint.floorIndex != null ? { floorIndex: endpoint.floorIndex } : {}) },
+    { id: fixture.id, x: fixture.x, y: fixture.y, elevationM: fixture.elevationM, ...(fixture.floorIndex != null ? { floorIndex: fixture.floorIndex } : {}) },
+  ];
+  const diameterMm = endpointRole === 'source' ? 20 : (hydraulicFixtureTemplate(fixture.fixtureType!)?.diameterMm || 50);
+  for (let i = 0; i < chain.length - 1; i++) {
+    const a = chain[i]!, b = chain[i + 1]!;
+    const aGlobal = (a.floorIndex || 0) * FLOOR_STACK_HEIGHT_M + a.elevationM;
+    const bGlobal = (b.floorIndex || 0) * FLOOR_STACK_HEIGHT_M + b.elevationM;
+    if (a.x === b.x && a.y === b.y && aGlobal === bGlobal) continue; // sem trecho de comprimento zero
+    segments.push({ id: nextHydraulicId('hyd-segment'), networkType, startNodeId: a.id, endNodeId: b.id, diameterMm, ownerFixtureId, guided: true });
+  }
+  return { nodes, segments };
+}
+
 export function buildGuidedColdWaterHeaderRoute(
   source: { id: string; x: number; y: number; elevationM: number; floorIndex?: number },
   fixture: HydraulicNode,
   waypoints: Point[],
   ownerFixtureId: string,
 ): HydraulicSystem {
-  const planPoints: Point[] = [{ x: source.x, y: source.y }, ...waypoints, { x: fixture.x, y: fixture.y }];
-  const nodes: HydraulicNode[] = [];
-  const segments: HydraulicSegment[] = [];
-  const planNodeIds: string[] = [];
-  planPoints.forEach((point, index) => {
-    if (index === 0 || index === planPoints.length - 1) return; // origem e "acima do ponto" tratados à parte
-    const node: HydraulicNode = {
-      id: nextHydraulicId('hyd-waypoint'), kind: 'junction', networkType: 'cold_water',
-      label: 'Ponto-guia', x: point.x, y: point.y, elevationM: source.elevationM,
-      ownerFixtureId, guided: true, ...(source.floorIndex != null ? { floorIndex: source.floorIndex } : {}),
-    };
-    nodes.push(node);
-    planNodeIds.push(node.id);
-  });
-  const aboveFixture: HydraulicNode = {
-    id: nextHydraulicId('hyd-waypoint'), kind: 'junction', networkType: 'cold_water',
-    label: 'Descida do ponto', x: fixture.x, y: fixture.y, elevationM: source.elevationM,
-    ownerFixtureId, guided: true, ...(source.floorIndex != null ? { floorIndex: source.floorIndex } : {}),
-  };
-  nodes.push(aboveFixture);
-  type ChainPoint = { id: string; x: number; y: number; floorIndex?: number; elevationM: number };
-  const chain: ChainPoint[] = [
-    { id: source.id, x: source.x, y: source.y, elevationM: source.elevationM, ...(source.floorIndex != null ? { floorIndex: source.floorIndex } : {}) },
-    ...planNodeIds.map((id, i): ChainPoint => {
-      const waypoint = waypoints[i]!;
-      return { id, x: waypoint.x, y: waypoint.y, elevationM: source.elevationM, ...(source.floorIndex != null ? { floorIndex: source.floorIndex } : {}) };
-    }),
-    { id: aboveFixture.id, x: fixture.x, y: fixture.y, elevationM: source.elevationM, ...(source.floorIndex != null ? { floorIndex: source.floorIndex } : {}) },
-    { id: fixture.id, x: fixture.x, y: fixture.y, elevationM: fixture.elevationM, ...(fixture.floorIndex != null ? { floorIndex: fixture.floorIndex } : {}) },
-  ];
-  for (let i = 0; i < chain.length - 1; i++) {
-    const a = chain[i]!, b = chain[i + 1]!;
-    const aGlobal = (a.floorIndex || 0) * FLOOR_STACK_HEIGHT_M + a.elevationM;
-    const bGlobal = (b.floorIndex || 0) * FLOOR_STACK_HEIGHT_M + b.elevationM;
-    if (a.x === b.x && a.y === b.y && aGlobal === bGlobal) continue; // sem trecho de comprimento zero
-    segments.push({ id: nextHydraulicId('hyd-segment'), networkType: 'cold_water', startNodeId: a.id, endNodeId: b.id, diameterMm: 20, ownerFixtureId, guided: true });
-  }
-  return { nodes, segments };
+  return buildGuidedHydraulicRoute('cold_water', 'source', source, fixture, waypoints, ownerFixtureId);
 }
 
 /**

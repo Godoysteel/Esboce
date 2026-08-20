@@ -1131,7 +1131,7 @@ import {
       var hydraulicFlipButton = roomGizmoEl.querySelector('[data-action="flipHydraulicFace"]');
       if (hydraulicFlipButton) hydraulicFlipButton.style.display = hydraulicNode && hydraulicNode.placementSurface === 'wall' ? '' : 'none';
       var hydraulicRouteButton = roomGizmoEl.querySelector('[data-action="routeHydraulicToSource"]');
-      if (hydraulicRouteButton) hydraulicRouteButton.style.display = hydraulicNode && hydraulicNode.kind === 'fixture' && hydraulicNode.networkType === 'cold_water' ? '' : 'none';
+      if (hydraulicRouteButton) hydraulicRouteButton.style.display = hydraulicNode && hydraulicNode.kind === 'fixture' && !!hydraulicNode.fixtureType ? '' : 'none';
       if (!hydraulicNode) {
         selectedHydraulicNodeId = null;
         roomGizmoEl.classList.remove('visible');
@@ -1838,7 +1838,7 @@ import {
 
   function beginHydraulicRouteDraw(fixtureId: string) {
     var fixture = Store.findHydraulicNode(fixtureId);
-    if (!fixture || fixture.kind !== 'fixture' || fixture.networkType !== 'cold_water') return;
+    if (!fixture || fixture.kind !== 'fixture' || !fixture.fixtureType) return;
     hydraulicRouteDrawState = { fixtureId: fixtureId, points: [] };
     clearHydraulicRouteDrawMarkers();
     roomGizmoEl.classList.remove('visible');
@@ -1849,7 +1849,7 @@ import {
 
   function finishHydraulicRouteDraw() {
     if (!hydraulicRouteDrawState) return;
-    var ok = Store.commands.setGuidedHydraulicColdWaterRoute(hydraulicRouteDrawState.fixtureId, hydraulicRouteDrawState.points);
+    var ok = Store.commands.setGuidedHydraulicRoute(hydraulicRouteDrawState.fixtureId, hydraulicRouteDrawState.points);
     hydraulicRouteDrawState = null;
     clearHydraulicRouteDrawMarkers();
     updateHydraulicRouteDrawBar();
@@ -2804,6 +2804,18 @@ import {
             Store.commands.beginTransaction();
             return;
           }
+          if (hydraulicEntity.kind === 'destination') {
+            // Caixa de gordura/inspeção/saída pluvial: mesmo tratamento da
+            // caixa d'água — arraste livre, rede regenerada só no soltar
+            // (updateHydraulicDestinationBodyLive).
+            selectHydraulicNode(hydraulicId);
+            dragMode = 'hydraulicDestinationBody';
+            dragElementStart = { x: hydraulicEntity.x, y: hydraulicEntity.y, lastX: hydraulicEntity.x, lastY: hydraulicEntity.y };
+            dragGroundStart = getGroundModelPoint(e.clientX, e.clientY);
+            hydraulicFixtureDragObjects = findHydraulicFixtureSceneObjects(hydraulicId);
+            Store.commands.beginTransaction();
+            return;
+          }
           if (!hydraulicEntity.fixtureType) return;
           selectHydraulicNode(hydraulicId);
           dragMode = 'hydraulicFixtureBody';
@@ -3337,6 +3349,21 @@ import {
         hydraulicFixtureDragObjects.forEach(function (object: any) {
           object.position.x = sourceWorld.x;
           object.position.z = sourceWorld.z;
+        });
+      }
+      return;
+    }
+    if (dragMode === 'hydraulicDestinationBody') {
+      var destGround = getGroundModelPoint(e.clientX, e.clientY);
+      if (destGround && dragGroundStart && hydraulicFixtureDragObjects.length) {
+        var destDx = destGround.x - dragGroundStart.x, destDy = destGround.y - dragGroundStart.y;
+        var destNextX = dragElementStart.x + destDx, destNextY = dragElementStart.y + destDy;
+        dragElementStart.lastX = destNextX;
+        dragElementStart.lastY = destNextY;
+        var destWorld = modelToWorld(destNextX, destNextY);
+        hydraulicFixtureDragObjects.forEach(function (object: any) {
+          object.position.x = destWorld.x;
+          object.position.z = destWorld.z;
         });
       }
       return;
@@ -3949,6 +3976,15 @@ import {
     if (dragMode === 'hydraulicSourceBody') {
       if (selectedHydraulicNodeId && dragElementStart) {
         Store.commands.updateHydraulicSourceBodyLive(selectedHydraulicNodeId, dragElementStart.lastX, dragElementStart.lastY);
+      }
+      hydraulicFixtureDragObjects = [];
+      dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
+      render();
+      return;
+    }
+    if (dragMode === 'hydraulicDestinationBody') {
+      if (selectedHydraulicNodeId && dragElementStart) {
+        Store.commands.updateHydraulicDestinationBodyLive(selectedHydraulicNodeId, dragElementStart.lastX, dragElementStart.lastY);
       }
       hydraulicFixtureDragObjects = [];
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;

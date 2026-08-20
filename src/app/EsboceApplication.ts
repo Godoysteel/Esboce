@@ -427,6 +427,17 @@ export class EsboceApplication {
           ? "Tubulação de água fria gerada desde a caixa d'água até os pontos posicionados."
           : 'Posicione ao menos um ponto de água na parede antes de gerar a tubulação.';
       });
+      const generateSewerButton = document.createElement('button');
+      generateSewerButton.id = 'generateSewerRainwaterNetworkBtn';
+      generateSewerButton.className = 'hydraulic-generate';
+      generateSewerButton.textContent = 'Gerar esgoto e pluvial';
+      hydraulicToolsPanel.appendChild(generateSewerButton);
+      generateSewerButton.addEventListener('click', () => {
+        const generated = Store.commands.generateSewerAndRainwaterNetwork();
+        this.requireElement('viewportHint').textContent = generated
+          ? 'Tubulação de esgoto e pluvial gerada até a caixa de gordura, caixa de inspeção e/ou saída pluvial.'
+          : 'Posicione ao menos um ponto de esgoto ou captação pluvial antes de gerar a tubulação.';
+      });
     }
     const setViewMode = (mode: '2d' | '3d') => {
       this.viewMode = mode;
