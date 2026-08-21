@@ -95,6 +95,17 @@ export function hashColorHex(key: string): number {
   var FORRO_HANGER_SPACING_M = 1.2;
   var FORRO_HANGER_WIRE_RADIUS = 0.003;
   var FORRO_REGULADOR_SIZE = 0.04, FORRO_REGULADOR_H = 0.025;
+  // Afastamento máximo perímetro→primeiro perfil/pendural — 100mm,
+  // confirmado no Manual Técnico Trevo Drywall (p.78-79, "Fixação do
+  // perímetro F530": "a distância máxima entre o eixo do perfil e a
+  // borda da chapa, bem como entre esta e o pendural, deve ser de, no
+  // máximo, 100 mm"). Vale nos dois sentidos: entre paredes na direção
+  // de espaçamento dos perfis (perpendicular ao perfil) E entre paredes
+  // nas pontas de cada perfil (ao longo dele, onde vai o pendural mais
+  // próximo) — mais apertado que o espaçamento normal de campo (60cm
+  // entre perfis, 1,20m entre pendurais) porque a borda da placa não
+  // tem apoio contínuo como o miolo.
+  var FORRO_PERIMETER_MAX_GAP_M = 0.10;
   // Acabamento de piso que todo cômodo nasce usando, antes de qualquer
   // escolha manual em Materiais — assim já vem com fuga desenhada em
   // vez de um verde liso sem textura. Escolha manual do usuário
@@ -3059,17 +3070,43 @@ export function hashColorHex(key: string): number {
     return { minX: minX, maxX: maxX, minZ: minZ, maxZ: maxZ };
   }
 
+  // Posições espaçadas ao longo de um eixo [minC, maxC] — dois papéis
+  // diferentes que não podem colapsar num só valor:
+  // - `gridAnchorM`: origem VIRTUAL da grade regular (ex.: largura da
+  //   tabica) — só usada pra CONTAR o espaçamento de 60cm a partir
+  //   dali, não é onde o suporte de borda de fato é desenhado. Por
+  //   isso o "segundo perfil" (primeiro da grade regular) cai em
+  //   minC + gridAnchorM + spacingM (ex.: 2,5cm de tabica + 60cm ≈
+  //   62cm da parede), não exatamente spacingM cru.
+  // - `edgeSupportM`: onde o suporte de BORDA (primeiro/último
+  //   elemento, perto da parede) é REALMENTE desenhado — perto o
+  //   bastante da tabica pra respeitar o limite normativo (100mm, ver
+  //   FORRO_PERIMETER_MAX_GAP_M), mas afastado o suficiente pra dar
+  //   apoio de verdade à ponta da placa em vez de ficar redundante bem
+  //   em cima da tabica (senão a ponta da placa fica apoiada só na
+  //   tabica — o motivo de existir esse suporte separado).
+  // Quando os dois valores são iguais (caso dos pendurais, que não têm
+  // um "afastamento de tabica" próprio) o resultado colapsa pro caso
+  // simples: grade uniforme com um ponto em cada borda.
+  function forroSpacedPositions(minC: number, maxC: number, spacingM: number, edgeSupportM: number, gridAnchorM: number) {
+    var minGridEdge = minC + gridAnchorM, maxGridEdge = maxC - gridAnchorM;
+    if (maxGridEdge <= minGridEdge) return [(minC + maxC) / 2]; // vão minúsculo — um suporte no meio já basta
+    var positions: number[] = [];
+    for (var c = minGridEdge + spacingM; c < maxGridEdge - 1e-6; c += spacingM) positions.push(c);
+    positions.unshift(minC + edgeSupportM);
+    var lastRegular = positions[positions.length - 1]!;
+    if (maxC - edgeSupportM - lastRegular > 1e-6) positions.push(maxC - edgeSupportM);
+    return positions;
+  }
+
   // Recorte por scanline par-ímpar contra um polígono simples (garantido
   // por Core.detectRooms) — cada reta cruza o contorno em pares
   // (dentro/fora), o que resolve qualquer reentrância (cômodo em L)
   // sem precisar de um algoritmo de clipping mais geral.
-  function clipRunnerLinesXZ(pts: { x: number; z: number }[], axis: 'x' | 'z', spacingM: number) {
-    var b = polygonBoundsXZ(pts);
-    var minC = axis === 'x' ? b.minX : b.minZ;
-    var maxC = axis === 'x' ? b.maxX : b.maxZ;
+  function clipRunnerLinesXZ(pts: { x: number; z: number }[], axis: 'x' | 'z', positions: number[]) {
     var segments: { x1: number; z1: number; x2: number; z2: number }[] = [];
     var MIN_SEG = 0.05; // ignora sobras < 5cm (ruído de ponta de polígono)
-    for (var c = minC + spacingM; c < maxC - 1e-6; c += spacingM) {
+    positions.forEach(function (c) {
       var crossings: number[] = [];
       for (var i = 0; i < pts.length; i++) {
         var p1 = pts[i]!, p2 = pts[(i + 1) % pts.length]!;
@@ -3082,10 +3119,10 @@ export function hashColorHex(key: string): number {
       crossings.sort(function (a, b) { return a - b; });
       for (var j = 0; j + 1 < crossings.length; j += 2) {
         var a0 = crossings[j]!, a1 = crossings[j + 1]!;
-        if (a1 - a0 < MIN_SEG) continue;
+        if (a1 - a0 < MIN_SEG) return;
         segments.push(axis === 'x' ? { x1: c, z1: a0, x2: c, z2: a1 } : { x1: a0, z1: c, x2: a1, z2: c });
       }
-    }
+    });
     return segments;
   }
 
@@ -3137,7 +3174,14 @@ export function hashColorHex(key: string): number {
     var runnerY = boardTopY + FORRO_PROFILE_H / 2;
     var b = polygonBoundsXZ(worldPts);
     var axis: 'x' | 'z' = (b.maxX - b.minX) >= (b.maxZ - b.minZ) ? 'z' : 'x';
-    var runnerSegs = clipRunnerLinesXZ(worldPts, axis, FORRO_RUNNER_SPACING_M);
+    var minC = axis === 'x' ? b.minX : b.minZ, maxC = axis === 'x' ? b.maxX : b.maxZ;
+    // Grade regular ancorada na tabica (2° perfil ≈ tabica + 60cm da
+    // parede, não 60cm cru — mesmo método do manual), mas o perfil de
+    // BORDA (1° e último) fica desenhado a FORRO_PERIMETER_MAX_GAP_M
+    // (~10cm) da parede, não em cima da tabica — ele existe pra
+    // sustentar a ponta da placa, senão ela fica apoiada só na tabica.
+    var runnerPositions = forroSpacedPositions(minC, maxC, FORRO_RUNNER_SPACING_M, FORRO_PERIMETER_MAX_GAP_M, FORRO_TABICA_W);
+    var runnerSegs = clipRunnerLinesXZ(worldPts, axis, runnerPositions);
     var wireMat = buildForroProfileMaterial();
     var regMat = buildForroProfileMaterial();
     var hangerBottomY = boardTopY + FORRO_PROFILE_H;
@@ -3146,10 +3190,17 @@ export function hashColorHex(key: string): number {
       var dx = seg.x2 - seg.x1, dz = seg.z2 - seg.z1, len = Math.hypot(dx, dz);
       if (len < 1e-6 || topY <= hangerBottomY) return;
       var ux = dx / len, uz = dz / len;
-      for (var d = FORRO_HANGER_SPACING_M / 2; d < len; d += FORRO_HANGER_SPACING_M) {
+      // Pendural mais próximo da parede também limitado a
+      // FORRO_PERIMETER_MAX_GAP_M (100mm) — mesma regra da tabica,
+      // aplicada nas DUAS pontas de cada trecho de perfil (cada ponta
+      // já é uma parede real, ver clipRunnerLinesXZ). Sem largura de
+      // tabica própria pro pendural — as duas distâncias colapsam no
+      // mesmo valor (caso simples de forroSpacedPositions).
+      var hangerPositions = forroSpacedPositions(0, len, FORRO_HANGER_SPACING_M, FORRO_PERIMETER_MAX_GAP_M, FORRO_PERIMETER_MAX_GAP_M);
+      hangerPositions.forEach(function (d) {
         var hx = seg.x1 + ux * d, hz = seg.z1 + uz * d;
         meshes.push.apply(meshes, buildForroHangerMeshes(hx, hz, hangerBottomY, topY, wireMat, regMat));
-      }
+      });
     });
 
     var tabicaMat = buildForroProfileMaterial();
