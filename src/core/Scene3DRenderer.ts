@@ -322,6 +322,12 @@ export function hashColorHex(key: string): number {
   // buildStairHitMesh.
   var STAIR_Z_FIGHT_EPSILON_M = 0.02;
 
+  // Largura/altura mínima (unidade de grade — GRID=20 por metro) pra um
+  // retângulo de corte na laje virar hole de verdade — ver o loop de
+  // furo na laje. Frestas mais finas que isso são resíduo numérico, não
+  // área real a cortar.
+  var STAIR_HOLE_MIN_DIM_GRID = 0.4; // 2cm
+
   // Retângulo (planta, em METROS, no referencial MUNDO pré-âncora —
   // getStairModel subtrai center.x/center.z depois) de um grupo de
   // pisadas (união das caixas delimitadoras de cada uma, sem margem
@@ -412,9 +418,16 @@ export function hashColorHex(key: string): number {
       if (minY < GROUND_TOUCH_M && (maxY < GROUND_TOUCH_M || (maxY - minY) > TALL_SPAN_M)) continue; // perna do patamar — descarta
       var nY = (worldNormalVec(i0).y + worldNormalVec(i1).y + worldNormalVec(i2).y) / 3;
       var nX = (worldNormalVec(i0).x + worldNormalVec(i1).x + worldNormalVec(i2).x) / 3;
+      var nZ = (worldNormalVec(i0).z + worldNormalVec(i1).z + worldNormalVec(i2).z) / 3;
       var isTop = nY > UP_NORMAL_THRESHOLD;
       var isLateral = Math.abs(nX) > LATERAL_NORMAL_THRESHOLD;
-      if (isTop || isLateral) {
+      // Product Owner: "quero que a face dos degraus também tenham a
+      // textura, não só as laterais" — o espelho (face frontal vertical
+      // de cada degrau, normal em Z) entra no granito junto com o topo
+      // e a lateral. Só a parte de baixo (normal.y negativo, nunca
+      // visível) e a viga continuam com o acabamento normal.
+      var isFront = Math.abs(nZ) > LATERAL_NORMAL_THRESHOLD;
+      if (isTop || isLateral || isFront) {
         upIndices.push(i0, i1, i2);
         if (isTop) {
           var k0 = posKey(i0), k1 = posKey(i1), k2 = posKey(i2);
@@ -4911,7 +4924,18 @@ export function hashColorHex(key: string): number {
             nonOverlappingRects.forEach(function (rect) {
               var ix1 = Math.max(rect.x1, roomMinX), ix2 = Math.min(rect.x2, roomMaxX);
               var iy1 = Math.max(rect.y1, roomMinY), iy2 = Math.min(rect.y2, roomMaxY);
-              if (ix2 <= ix1 || iy2 <= iy1) return; // sem cruzamento de verdade
+              // Fresta fina demais (< 2cm) — pode sobrar da decomposição
+              // de subtractRectXY (dois lances vizinhos com bordas quase
+              // coincidentes, mas não exatamente iguais) ou de resíduo
+              // numérico da rotação/escala. Um hole quase degenerado
+              // (largura/altura perto de zero) confunde o earcut — o
+              // sintoma reportado ao vivo era exatamente esse padrão
+              // (duas linhas finas convergindo pra um ponto longe da
+              // escada, sem erro de console nenhum, sinal de
+              // triangulação ruim e não de exceção JS). Pular esses
+              // holes não perde área visível nenhuma (2cm é imperceptível
+              // e nem seria a área real de um degrau).
+              if (ix2 - ix1 < STAIR_HOLE_MIN_DIM_GRID || iy2 - iy1 < STAIR_HOLE_MIN_DIM_GRID) return;
               var hole = new THREE.Path();
               [{ x: ix1, y: iy1 }, { x: ix2, y: iy1 }, { x: ix2, y: iy2 }, { x: ix1, y: iy2 }].forEach(function (p, i) {
                 var wx = (p.x - offsetX) * scale, wz = (p.y - offsetY) * scale;

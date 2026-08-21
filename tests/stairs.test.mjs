@@ -183,7 +183,11 @@ test('Scene3DRenderer: splitStairBodyByTopFace classifica pela normal em ESPAÇO
   assert.match(body, /worldNormal\.applyMatrix3\(normalMatrix\)\.normalize\(\);/);
   assert.match(body, /var isTop = nY > UP_NORMAL_THRESHOLD;/);
   assert.match(body, /var isLateral = Math\.abs\(nX\) > LATERAL_NORMAL_THRESHOLD;/);
-  assert.match(body, /if \(isTop \|\| isLateral\) \{/);
+  // Product Owner: "quero que a face dos degraus também tenham a
+  // textura, não só as laterais" — o espelho (face frontal, normal.z)
+  // entra no granito também.
+  assert.match(body, /var isFront = Math\.abs\(nZ\) > LATERAL_NORMAL_THRESHOLD;/);
+  assert.match(body, /if \(isTop \|\| isLateral \|\| isFront\) \{/);
   assert.match(body, /geometry\.addGroup\(0, upIndices\.length, 0\);/);
   assert.match(body, /geometry\.addGroup\(upIndices\.length, otherIndices\.length, 1\);/);
 });
@@ -249,7 +253,7 @@ test('Scene3DRenderer: getStairFootprintMeters devolve a pegada real (metros) do
 test('Scene3DRenderer: buraco na laje usa Shape.holes dentro do loop de cômodo — UM retângulo POR LANCE (getStairLajeHoleRects), cada um clipado contra o bounding box do cômodo — o corte agora acompanha o formato real da escada (L/U), não mais um retângulo só cobrindo o giro inteiro', () => {
   const start = rendererSource.indexOf('(floorData.stairs || []).forEach(function (stair: any) {');
   assert.notEqual(start, -1, 'esperava o loop de furo de escada dentro da geração de laje');
-  const body = rendererSource.slice(start, start + 2400);
+  const body = rendererSource.slice(start, start + 3200);
   assert.match(body, /var stRects = getStairLajeHoleRects\(stair\);/);
   assert.match(body, /if \(!stRects\) return;/);
   assert.match(body, /new THREE\.Path\(\)/);
@@ -267,7 +271,7 @@ test('Scene3DRenderer: retângulos de lances vizinhos (L/U) se sobrepõem de pro
   assert.match(body, /if \(ix2 < a\.x2\) result\.push/);
 
   const loopStart = rendererSource.indexOf('(floorData.stairs || []).forEach(function (stair: any) {');
-  const loopBody = rendererSource.slice(loopStart, loopStart + 2100);
+  const loopBody = rendererSource.slice(loopStart, loopStart + 3200);
   assert.match(loopBody, /next = next\.concat\(subtractRectXY\(r, placed\)\);/);
   assert.match(loopBody, /nonOverlappingRects\.forEach\(function \(rect\) \{/);
 });
