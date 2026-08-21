@@ -425,19 +425,20 @@ export function createStairEntity(x: number, y: number, rotationDeg?: number, wi
 /**
  * Retângulo (planta) ocupado por uma escada — 4 pontos em unidade de
  * grade, CW, pronto tanto pro corte na laje (Scene3DRenderer,
- * Shape.holes) quanto pra malha 3D. `depthM` é a corrida REAL (metros),
- * já calculada por quem chama a partir do bounding box do modelo .glb
- * carregado (ver Scene3DRenderer.getStairFootprintMeters) — esta função
- * fica pura/testável, sem depender de malha 3D nenhuma. Como a rotação
- * é sempre múltiplo de 90° (ver Store.rotateStair), o retângulo continua
- * AXIS-ALIGNED em coordenadas de mundo — só troca largura↔comprimento a
- * cada 90°, sem precisar de matemática de polígono rotacionado arbitrário.
+ * Shape.holes) quanto pra malha 3D. `widthM`/`depthM` são a largura e a
+ * corrida REAIS (metros), já calculadas por quem chama a partir do
+ * bounding box do modelo .glb carregado (ver
+ * Scene3DRenderer.getStairFootprintMeters — no L/U a largura real não é
+ * `stair.widthM`, ver comentário lá) — esta função fica pura/testável,
+ * sem depender de malha 3D nenhuma. Como a rotação é sempre múltiplo de
+ * 90° (ver Store.rotateStair), o retângulo continua AXIS-ALIGNED em
+ * coordenadas de mundo — só troca largura↔comprimento a cada 90°, sem
+ * precisar de matemática de polígono rotacionado arbitrário.
  */
-export function stairFootprintRectangle(stair: Stair, depthM: number): { x1: number; y1: number; x2: number; y2: number } {
-  const lengthM = depthM;
+export function stairFootprintRectangle(stair: Stair, widthM: number, depthM: number): { x1: number; y1: number; x2: number; y2: number } {
   const swapped = Math.round(stair.rotationDeg / 90) % 2 !== 0;
-  const halfWidthGrid = (swapped ? lengthM : stair.widthM) * GRID / 2;
-  const halfLengthGrid = (swapped ? stair.widthM : lengthM) * GRID / 2;
+  const halfWidthGrid = (swapped ? depthM : widthM) * GRID / 2;
+  const halfLengthGrid = (swapped ? widthM : depthM) * GRID / 2;
   return { x1: stair.x - halfWidthGrid, y1: stair.y - halfLengthGrid, x2: stair.x + halfWidthGrid, y2: stair.y + halfLengthGrid };
 }
 

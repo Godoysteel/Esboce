@@ -36,17 +36,17 @@ test('createStairEntity aceita model L/U explícito', () => {
   assert.equal(stairU.model, 'U');
 });
 
-test('stairFootprintRectangle: retângulo axis-aligned, largura×depthM em rotação 0, depthM×largura em rotação 90 (só troca de eixo, sem matemática de ângulo livre) — depthM vem de fora (bounding box real do .glb), a função fica pura', () => {
-  const depthM = 4.7; // corrida real hipotética, como viria de getStairFootprintMeters
+test('stairFootprintRectangle: retângulo axis-aligned, largura×depthM em rotação 0, depthM×largura em rotação 90 (só troca de eixo, sem matemática de ângulo livre) — largura e depthM vêm de fora (bounding box real do .glb), a função fica pura', () => {
+  const widthM = 1.3, depthM = 4.7; // valores reais hipotéticos, como viriam de getStairFootprintMeters
   const stair0 = createStairEntity(0, 0, 0, 1.0);
-  const rect0 = stairFootprintRectangle(stair0, depthM);
-  assert.ok(Math.abs((rect0.x2 - rect0.x1) / Core.GRID - 1.0) < 1e-6, 'largura no eixo X quando rotationDeg=0');
+  const rect0 = stairFootprintRectangle(stair0, widthM, depthM);
+  assert.ok(Math.abs((rect0.x2 - rect0.x1) / Core.GRID - widthM) < 1e-6, 'largura no eixo X quando rotationDeg=0');
   assert.ok(Math.abs((rect0.y2 - rect0.y1) / Core.GRID - depthM) < 1e-6, 'depthM no eixo Y quando rotationDeg=0');
 
   const stair90 = createStairEntity(0, 0, 90, 1.0);
-  const rect90 = stairFootprintRectangle(stair90, depthM);
+  const rect90 = stairFootprintRectangle(stair90, widthM, depthM);
   assert.ok(Math.abs((rect90.x2 - rect90.x1) / Core.GRID - depthM) < 1e-6, 'depthM no eixo X quando rotationDeg=90 (trocou de eixo)');
-  assert.ok(Math.abs((rect90.y2 - rect90.y1) / Core.GRID - 1.0) < 1e-6, 'largura no eixo Y quando rotationDeg=90');
+  assert.ok(Math.abs((rect90.y2 - rect90.y1) / Core.GRID - widthM) < 1e-6, 'largura no eixo Y quando rotationDeg=90');
 });
 
 test('nearestSupportDistanceMeters: perto de parede dá distância pequena, perto de coluna também, longe de tudo dá distância grande', () => {
@@ -134,39 +134,50 @@ test('Scene3DRenderer: pisada da escada usa a mesma textura de granito/mármore 
   assert.match(body, /getSoleiraMarbleMaps\(\)/);
 });
 
-test('Scene3DRenderer: getStairModel identifica a primitiva do corpo pelo nome do material ("Material"), não pela ordem — a ordem difere entre os 3 arquivos .glb', () => {
+test('Scene3DRenderer: getStairModel identifica o CORPO dos degraus pelo nome do material ("Material", peça grande — recebe granito) e a VIGA (sem material, peça pequena) separadamente, não pela ordem — a ordem difere entre os 3 arquivos .glb (confirmado ao vivo: a identificação original estava invertida, granito caiu na viga)', () => {
   const start = rendererSource.indexOf('function getStairModel(url: string)');
   assert.notEqual(start, -1);
   const body = rendererSource.slice(start, rendererSource.indexOf('\n  }\n', start));
-  assert.match(body, /child\.material\.name !== 'Material'/);
+  assert.match(body, /var isStepBody = !!\(child\.material && child\.material\.name === 'Material'\);/);
+  assert.match(body, /child\.userData\.stairPart = isStepBody \? 'body' : 'beam';/);
   assert.match(body, /child\.material = treadMat;/);
+  // O bounding box de escala/pegada (naturalW/H/D) considera só o corpo
+  // — a viga pode se estender além do último degrau e não deve inflar a
+  // corrida usada pro corte na laje.
+  assert.match(body, /var meshBox = new THREE\.Box3\(\)\.setFromObject\(child\);/);
+  assert.match(body, /var box = hasStepMesh \? stepBox : new THREE\.Box3\(\)\.setFromObject\(gltf\.scene\);/);
 });
 
-test('Scene3DRenderer: buildStairHitMesh escala a malha carregada — altura/corrida travadas no pé-direito (FLOOR_STACK_HEIGHT/naturalH), largura independente (stair.widthM/naturalW) — e devolve null enquanto o .glb não carregou', () => {
+test('Scene3DRenderer: buildStairHitMesh escala a malha carregada — altura/corrida sempre travadas no pé-direito (FLOOR_STACK_HEIGHT/naturalH); largura independente (stair.widthM/naturalW) só no modelo reto, L/U usam escala uniforme (sem distorcer o footprint do giro) — e devolve null enquanto o .glb não carregou', () => {
   const start = rendererSource.indexOf('function buildStairHitMesh(stair: any');
   assert.notEqual(start, -1);
   const body = rendererSource.slice(start, rendererSource.indexOf('\n  }', start));
   assert.match(body, /if \(!entry\) return null;/);
   assert.match(body, /var heightScale = FLOOR_STACK_HEIGHT \/ entry\.naturalH;/);
-  assert.match(body, /var widthScale = stair\.widthM \/ entry\.naturalW;/);
+  assert.match(body, /var widthScale = stair\.model === 'reta' \? \(stair\.widthM \/ entry\.naturalW\) : heightScale;/);
   assert.match(body, /instance\.scale\.set\(widthScale, heightScale, heightScale\);/);
+  // Recolore só a viga por instância — o corpo já ficou fixo em granito
+  // no template, uma vez só, no load (getStairModel).
+  assert.match(body, /child\.userData\.stairPart === 'beam'/);
+  assert.match(body, /child\.material = bodyMat;/);
 });
 
-test('Scene3DRenderer: getStairFootprintMeters devolve a pegada real (metros) do modelo carregado, null enquanto não carregou', () => {
+test('Scene3DRenderer: getStairFootprintMeters devolve a pegada real (metros) do modelo carregado — largura real (não stair.widthM) no L/U — null enquanto não carregou', () => {
   const start = rendererSource.indexOf('export function getStairFootprintMeters(stair: any)');
   assert.notEqual(start, -1);
   const body = rendererSource.slice(start, rendererSource.indexOf('\n  }', start));
   assert.match(body, /if \(!entry\) return null;/);
+  assert.match(body, /var widthM = stair\.model === 'reta' \? stair\.widthM : entry\.naturalW \* heightScale;/);
   assert.match(body, /depthM: entry\.naturalD \* heightScale/);
 });
 
-test('Scene3DRenderer: buraco na laje usa Shape.holes dentro do loop de cômodo, clipado contra o bounding box do cômodo, com a corrida real do modelo carregado (Core.stairFootprintRectangle + getStairFootprintMeters, não mais uma fórmula solta)', () => {
+test('Scene3DRenderer: buraco na laje usa Shape.holes dentro do loop de cômodo, clipado contra o bounding box do cômodo, com largura e corrida reais do modelo carregado (Core.stairFootprintRectangle + getStairFootprintMeters, não mais uma fórmula solta)', () => {
   const start = rendererSource.indexOf('(floorData.stairs || []).forEach(function (stair: any) {');
   assert.notEqual(start, -1, 'esperava o loop de furo de escada dentro da geração de laje');
   const body = rendererSource.slice(start, start + 1100);
   assert.match(body, /var stFootprint = getStairFootprintMeters\(stair\);/);
   assert.match(body, /if \(!stFootprint\) return;/);
-  assert.match(body, /Core\.stairFootprintRectangle\(stair, stFootprint\.depthM\)/);
+  assert.match(body, /Core\.stairFootprintRectangle\(stair, stFootprint\.widthM, stFootprint\.depthM\)/);
   assert.match(body, /new THREE\.Path\(\)/);
   assert.match(body, /lajeShape\.holes\.push\(hole\)/);
 });

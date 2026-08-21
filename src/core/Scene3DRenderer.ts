@@ -233,16 +233,27 @@ export function hashColorHex(key: string): number {
 
   // --- Escada (glTF) ----------------------------------------------------
   // Um .glb por StairModel, modelado pelo Product Owner no Blender: cada
-  // mesh tem 2 primitivos — um com o material "Material" (corpo/espelho
-  // dos degraus, recolorido em runtime por buildStairMaterial conforme
-  // stair.finishProductId/colorHex) e outro SEM material (a pisada — cada
-  // arquivo tem uma peça separada, sem material, propositalmente
-  // reservada pra receber a pedra de granito da soleira, ver
-  // getStairTreadMaterial). Distingue os dois pelo nome do material (só
-  // "Material" tem nome — a primitiva sem material ganha o material
-  // default do GLTFLoader, sem nome), já que a ORDEM dos primitivos não é
-  // consistente entre os 3 arquivos (confirmado inspecionando o JSON: no
-  // reta/L o corpo vem primeiro, no U vem depois).
+  // mesh tem 2 primitivos — um GRANDE com o material nomeado "Material"
+  // (o corpo dos degraus — pisos+espelhos juntos, a massa que recebe a
+  // pedra de granito da soleira, ver getStairTreadMaterial) e outro
+  // PEQUENO sem material nenhum (a viga/longarina de apoio por baixo —
+  // fica com o acabamento normal, recolorível por
+  // stair.finishProductId/colorHex via buildStairMaterial). Confirmado
+  // AO VIVO com o Product Owner (a identificação inicial estava
+  // invertida): "a textura da pedra foi aplicada na viga" — a peça sem
+  // material é a viga, não a pisada. Distingue os dois pelo NOME do
+  // material (só "Material" tem nome), já que a ORDEM dos primitivos não
+  // é consistente entre os 3 arquivos (no reta/L o corpo vem primeiro,
+  // no U vem depois). userData.stairPart marca cada mesh ('body'/'beam')
+  // pra recolorir certo por instância em buildStairHitMesh, já que depois
+  // do material trocado aqui o nome original não dá mais pra reler.
+  //
+  // O bounding box usado pra escala/pegada (naturalW/H/D) considera SÓ a
+  // malha do corpo ('body') — a viga pode se estender além do último
+  // degrau (é uma peça estrutural de apoio, não o limite andável da
+  // escada), então incluí-la inflava a corrida além do degrau de
+  // verdade, fazendo o corte na laje terminar no fim da viga em vez do
+  // fim do último degrau (bug reportado ao vivo pelo Product Owner).
   var STAIR_MODEL_URLS: { [key: string]: string } = {
     reta: 'models/escada-reta.glb',
     L: 'models/escada-l.glb',
@@ -258,12 +269,24 @@ export function hashColorHex(key: string): number {
     stairModelCache[url] = 'loading';
     gltfLoader.load(url, function (gltf) {
       var treadMat = getStairTreadMaterial();
+      var stepBox = new THREE.Box3();
+      var hasStepMesh = false;
       gltf.scene.traverse(function (child: any) {
         if (!child.isMesh) return;
         child.castShadow = true; child.receiveShadow = true;
-        if (!child.material || child.material.name !== 'Material') child.material = treadMat;
+        var isStepBody = !!(child.material && child.material.name === 'Material');
+        child.userData.stairPart = isStepBody ? 'body' : 'beam';
+        if (isStepBody) {
+          child.material = treadMat;
+          var meshBox = new THREE.Box3().setFromObject(child);
+          if (!hasStepMesh) { stepBox.copy(meshBox); hasStepMesh = true; } else stepBox.union(meshBox);
+        }
       });
-      var box = new THREE.Box3().setFromObject(gltf.scene);
+      // Fallback pro bounding box inteiro se por algum motivo nenhuma
+      // malha tiver o material "Material" (não deveria acontecer com os
+      // 3 arquivos atuais, mas evita naturalH/W/D = 0 num arquivo futuro
+      // sem esse nome de material).
+      var box = hasStepMesh ? stepBox : new THREE.Box3().setFromObject(gltf.scene);
       var center = box.getCenter(new THREE.Vector3());
       var size = box.getSize(new THREE.Vector3());
       // Mesma âncora de buildFurniturePiece: centro em X/Z, base em Y=0
@@ -294,7 +317,11 @@ export function hashColorHex(key: string): number {
     var entry = getStairModel(stairModelUrl(stair.model));
     if (!entry) return null;
     var heightScale = FLOOR_STACK_HEIGHT / entry.naturalH;
-    return { widthM: stair.widthM, depthM: entry.naturalD * heightScale };
+    // No L/U a largura real é a do modelo escalado (stair.widthM não se
+    // aplica — ver buildStairHitMesh) — usar stair.widthM aqui cortaria
+    // um retângulo mais estreito que a malha de verdade na laje.
+    var widthM = stair.model === 'reta' ? stair.widthM : entry.naturalW * heightScale;
+    return { widthM: widthM, depthM: entry.naturalD * heightScale };
   }
 
   function disposeObject3DTree(obj: any) {
@@ -2467,32 +2494,42 @@ export function hashColorHex(key: string): number {
   }
 
   // Malha real (.glb) da escada — clona o template cacheado
-  // (getStairModel), recolore só a primitiva "Material" (corpo/espelho)
-  // por instância, e escala pra bater com o pé-direito do pavimento:
-  // Y/Z uniformes travados em FLOOR_STACK_HEIGHT/naturalH (garante que o
-  // topo do último degrau sempre chega exatamente na laje de cima,
-  // qualquer que seja a escala em que o modelo foi desenhado no
-  // Blender), X independente pra a alça de largura continuar
-  // funcionando. Retorna null enquanto o .glb ainda não carregou (mesmo
-  // padrão de buildFurniturePiece — a peça simplesmente não aparece
-  // nesse rebuild(), e reaparece sozinha quando onFurnitureAssetLoaded
-  // disparar um novo render).
+  // (getStairModel), recolore só a viga (userData.stairPart==='beam';
+  // o corpo dos degraus já ficou fixo em granito no template, uma vez
+  // só, no load) por instância, e escala pra bater com o pé-direito do
+  // pavimento: Y/Z uniformes travados em FLOOR_STACK_HEIGHT/naturalH
+  // (garante que o topo do último degrau sempre chega exatamente na
+  // laje de cima, qualquer que seja a escala em que o modelo foi
+  // desenhado no Blender).
+  //
+  // A alça de largura (eixo X independente) só se aplica ao modelo
+  // 'reta' — um lance único onde "largura" tem um significado simples e
+  // livre. Nos modelos 'L'/'U' a pegada em planta é o footprint inteiro
+  // do giro (os dois lances + patamar), não a largura de um único
+  // lance — escalar só o X de forma independente encolhia/esticava a
+  // escada inteira até caber em ~1m (achatando ela), então L/U usam a
+  // MESMA escala uniforme (heightScale) nos 3 eixos, sem distorção —
+  // stair.widthM fica sem efeito visual nesses dois modelos por ora.
   function buildStairHitMesh(stair: any, scale: any, offsetX: any, offsetY: any, yOffset: any) {
     var entry = getStairModel(stairModelUrl(stair.model));
     if (!entry) return null;
     var heightScale = FLOOR_STACK_HEIGHT / entry.naturalH;
-    var widthScale = stair.widthM / entry.naturalW;
+    var widthScale = stair.model === 'reta' ? (stair.widthM / entry.naturalW) : heightScale;
     var depthM = entry.naturalD * heightScale;
     var instance = entry.group.clone(true);
     var bodyMat = buildStairMaterial(stair);
     instance.traverse(function (child: any) {
-      if (child.isMesh && child.material && child.material.name === 'Material') child.material = bodyMat;
+      if (child.isMesh && child.userData && child.userData.stairPart === 'beam') child.material = bodyMat;
     });
     instance.scale.set(widthScale, heightScale, heightScale);
     // Hit-box invisível ancorada em y=0 (base do lance, mesma convenção
     // de largura/corte na laje — centro em X/Z, base em Y), largura ×
-    // pé-direito × corrida real (já escalada).
-    var hitGeo = new THREE.BoxGeometry(stair.widthM, FLOOR_STACK_HEIGHT, depthM);
+    // pé-direito × corrida real (já escalada). No L/U a largura real
+    // renderizada é entry.naturalW×heightScale (não stair.widthM, que
+    // não se aplica a eles — ver comentário acima) — usar stair.widthM
+    // aqui deixaria a área clicável bem menor que a malha visível.
+    var hitWidthM = stair.model === 'reta' ? stair.widthM : entry.naturalW * heightScale;
+    var hitGeo = new THREE.BoxGeometry(hitWidthM, FLOOR_STACK_HEIGHT, depthM);
     hitGeo.translate(0, FLOOR_STACK_HEIGHT / 2, 0);
     var hitMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 });
     var hitMesh = new THREE.Mesh(hitGeo, hitMat);
@@ -4533,7 +4570,7 @@ export function hashColorHex(key: string): number {
           (floorData.stairs || []).forEach(function (stair: any) {
             var stFootprint = getStairFootprintMeters(stair);
             if (!stFootprint) return; // .glb ainda não carregou — sem corte nesta passada
-            var rect = Core.stairFootprintRectangle(stair, stFootprint.depthM);
+            var rect = Core.stairFootprintRectangle(stair, stFootprint.widthM, stFootprint.depthM);
             var ix1 = Math.max(rect.x1, roomMinX), ix2 = Math.min(rect.x2, roomMaxX);
             var iy1 = Math.max(rect.y1, roomMinY), iy2 = Math.min(rect.y2, roomMaxY);
             if (ix2 <= ix1 || iy2 <= iy1) return; // sem cruzamento de verdade

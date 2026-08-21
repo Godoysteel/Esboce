@@ -1,5 +1,7 @@
 # Changelog
 
+> Corrigido: Escada (modelos 3D, ver abaixo) — a pedra de granito estava caindo na viga de apoio em vez das pisadas, o corte na laje passava do limite do último degrau, e a escada em L saía achatada (a alça de largura, que só faz sentido no modelo reto, estava distorcendo o L inteiro). Ver DEC-141 (correção pós-lançamento da DEC-140).
+
 > Alterado: Escada — a geometria procedural (blocos sólidos empilhados) dá lugar a 3 modelos 3D reais (reto/L/U), escalados automaticamente pro pé-direito do pavimento. Pisada em pedra de granito (mesma textura da soleira externa); corpo/espelho continua recolorível por acabamento. O corte na laje agora usa o contorno real do modelo carregado — fica exatamente no limite do último degrau, não mais uma fórmula solta. Formato (reto/L/U) escolhido depois de posicionar, num painel próprio ao lado do gizmo. Ver DEC-140.
 
 > Adicionado: Escada (modelo reto) — posição e largura livres (arraste), rotação em passos de 90° (mesmo padrão de móvel/Bloco de Volumetria). Ao posicionar, fura automaticamente o buraco retangular na laje do pavimento; malha em degraus sólidos vencendo exatamente o pé-direito do pavimento (regra de Blondel). Aviso no rodapé (sem travar) se a base ficar longe de uma parede ou coluna. Entra no quantitativo como item posicionado, com preço de referência de mercado. Ver DEC-139.
