@@ -78,13 +78,23 @@ export function hashColorHex(key: string): number {
   var LAJE_THICKNESS = 0.15;
   // Forro de drywall procedural — parâmetros extraídos dos manuais
   // técnicos Placo/Trevo Drywall (ABNT NBR 15758-2): perfis F530
-  // espaçados no máximo a cada 60cm, cantoneira/tabica de perímetro,
+  // espaçados no máximo a cada 60cm, pontos de fixação/pendural a cada
+  // 1,20m ao longo do MESMO perfil, cantoneira/tabica de perímetro,
   // placa de 12,5mm. Seções dos perfis (largura/altura) são visuais —
   // não há catálogo de bitola oficial modelado aqui.
   var FORRO_BOARD_THICKNESS = 0.0125;
   var FORRO_RUNNER_SPACING_M = 0.6;
   var FORRO_PROFILE_W = 0.03, FORRO_PROFILE_H = 0.02;
   var FORRO_TABICA_W = 0.025, FORRO_TABICA_H = 0.03;
+  // Vão entre a placa e a estrutura acima (topo da parede/base da
+  // laje) — sem esse respiro os perfis e pendurais não têm ONDE existir
+  // (placa encostaria direto na laje). 10cm é o mínimo pra caber
+  // perfil (2cm) + arame + regulador com folga visual, sem virar um
+  // rebaixo de forro configurável (fora de escopo).
+  var FORRO_PLENUM_GAP_M = 0.10;
+  var FORRO_HANGER_SPACING_M = 1.2;
+  var FORRO_HANGER_WIRE_RADIUS = 0.003;
+  var FORRO_REGULADOR_SIZE = 0.04, FORRO_REGULADOR_H = 0.025;
   // Acabamento de piso que todo cômodo nasce usando, antes de qualquer
   // escolha manual em Materiais — assim já vem com fuga desenhada em
   // vez de um verde liso sem textura. Escolha manual do usuário
@@ -3091,26 +3101,59 @@ export function hashColorHex(key: string): number {
     return mesh;
   }
 
+  // Pendural: arame fino do perfil até a estrutura acima + regulador
+  // (blaquinho de nivelamento) na ponta de baixo, onde prende no perfil.
+  function buildForroHangerMeshes(x: number, z: number, yBottom: number, yTop: number, wireMat: THREE.Material, regMat: THREE.Material) {
+    var meshes: any[] = [];
+    var wireLen = Math.max(0.01, yTop - yBottom);
+    var wireGeo = new THREE.CylinderGeometry(FORRO_HANGER_WIRE_RADIUS, FORRO_HANGER_WIRE_RADIUS, wireLen, 6);
+    var wireMesh = new THREE.Mesh(wireGeo, wireMat);
+    wireMesh.position.set(x, (yBottom + yTop) / 2, z);
+    meshes.push(wireMesh);
+    var regGeo = new THREE.BoxGeometry(FORRO_REGULADOR_SIZE, FORRO_REGULADOR_H, FORRO_REGULADOR_SIZE);
+    var regMesh = new THREE.Mesh(regGeo, regMat);
+    regMesh.position.set(x, yBottom + FORRO_REGULADOR_H / 2, z);
+    meshes.push(regMesh);
+    return meshes;
+  }
+
   // Monta o forro inteiro de um cômodo: placa (mesmo shape/contorno do
-  // piso, insetPoints) + grade de perfis F530 + tabica de perímetro.
+  // piso, insetPoints) + grade de perfis F530 + pendurais (arame +
+  // regulador, a cada 1,20m ao longo do perfil) + tabica de perímetro.
   // worldPts são os insetPoints já convertidos pra metros reais (x,z).
+  // `topY` é a referência de estrutura acima (topo da parede/base da
+  // laje, mesma cota que buildAutoLajePiece usa) — a placa fica
+  // FORRO_PLENUM_GAP_M abaixo disso, com os perfis e pendurais ocupando
+  // o vão entre as duas (nunca abaixo da placa — perfil visível por
+  // baixo da placa era o bug reportado: "forro invertido").
   function buildForroDrywallPiece(shape: any, worldPts: { x: number; z: number }[], topY: any) {
     var meshes: any[] = [];
+    var boardTopY = topY - FORRO_PLENUM_GAP_M;
     var boardMat = buildForroBoardMaterial();
-    var boardMesh = makeSlabMesh(shape, FORRO_BOARD_THICKNESS, topY, 0xCCCCCC, 1, true, null, boardMat, null);
+    var boardMesh = makeSlabMesh(shape, FORRO_BOARD_THICKNESS, boardTopY, 0xCCCCCC, 1, true, null, boardMat, null);
     meshes.push(boardMesh);
 
     var profileMat = buildForroProfileMaterial();
-    var runnerY = topY - FORRO_BOARD_THICKNESS - FORRO_PROFILE_H / 2;
+    var runnerY = boardTopY + FORRO_PROFILE_H / 2;
     var b = polygonBoundsXZ(worldPts);
     var axis: 'x' | 'z' = (b.maxX - b.minX) >= (b.maxZ - b.minZ) ? 'z' : 'x';
     var runnerSegs = clipRunnerLinesXZ(worldPts, axis, FORRO_RUNNER_SPACING_M);
+    var wireMat = buildForroProfileMaterial();
+    var regMat = buildForroProfileMaterial();
+    var hangerBottomY = boardTopY + FORRO_PROFILE_H;
     runnerSegs.forEach(function (seg) {
       meshes.push(buildForroProfileBoxMesh(seg.x1, seg.z1, seg.x2, seg.z2, FORRO_PROFILE_W, FORRO_PROFILE_H, runnerY, profileMat));
+      var dx = seg.x2 - seg.x1, dz = seg.z2 - seg.z1, len = Math.hypot(dx, dz);
+      if (len < 1e-6 || topY <= hangerBottomY) return;
+      var ux = dx / len, uz = dz / len;
+      for (var d = FORRO_HANGER_SPACING_M / 2; d < len; d += FORRO_HANGER_SPACING_M) {
+        var hx = seg.x1 + ux * d, hz = seg.z1 + uz * d;
+        meshes.push.apply(meshes, buildForroHangerMeshes(hx, hz, hangerBottomY, topY, wireMat, regMat));
+      }
     });
 
     var tabicaMat = buildForroProfileMaterial();
-    var tabicaY = topY - FORRO_BOARD_THICKNESS - FORRO_TABICA_H / 2;
+    var tabicaY = boardTopY - FORRO_BOARD_THICKNESS / 2;
     worldPts.forEach(function (p1, i) {
       var p2 = worldPts[(i + 1) % worldPts.length]!;
       meshes.push(buildForroProfileBoxMesh(p1.x, p1.z, p2.x, p2.z, FORRO_TABICA_W, FORRO_TABICA_H, tabicaY, tabicaMat));
