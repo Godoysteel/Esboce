@@ -1,5 +1,7 @@
 # Changelog
 
+> Corrigido: Escada — o corte na laje do L/U estava gerando uma malha quebrada (triângulos longos cruzando a laje inteira) porque os retângulos de lances vizinhos se sobrepunham de propósito na virada, e isso quebra a triangulação; agora cada retângulo é recortado contra os anteriores antes de virar furo, sem sobreposição, cobrindo a mesma área de antes. Escada desce mais um pouco (20mm) pra acabar de vez com o Z-fighting na laje. Ver DEC-145 (5ª correção pós-lançamento da DEC-140).
+
 > Alterado/Corrigido: Escada — o corte na laje do L/U agora acompanha o formato REAL da escada (um retângulo por lance, encostados na quina da virada), não mais um retângulo único cobrindo todo o giro (que sobrava área no vão de dentro da curva). Granito passa a cobrir também as laterais dos degraus, não só a pisada. Corrigido Z-fighting entre o topo do último degrau e a laje (a malha visível desce alguns milímetros). Ver DEC-144 (4ª correção pós-lançamento da DEC-140).
 
 > Corrigido: Escada em U estava sem textura de granito nenhuma (a malha desse arquivo específico precisa da normal em espaço mundo, não local, pra saber quais faces são "de cima") e tinha a viga de apoio escondida por engano em vez dos pés do patamar — a viga volta a aparecer, e agora só os pés (identificados pela geometria de verdade — tocam o chão) ficam de fora. Ver DEC-143 (3ª correção pós-lançamento da DEC-140).

@@ -249,12 +249,27 @@ test('Scene3DRenderer: getStairFootprintMeters devolve a pegada real (metros) do
 test('Scene3DRenderer: buraco na laje usa Shape.holes dentro do loop de cômodo — UM retângulo POR LANCE (getStairLajeHoleRects), cada um clipado contra o bounding box do cômodo — o corte agora acompanha o formato real da escada (L/U), não mais um retângulo só cobrindo o giro inteiro', () => {
   const start = rendererSource.indexOf('(floorData.stairs || []).forEach(function (stair: any) {');
   assert.notEqual(start, -1, 'esperava o loop de furo de escada dentro da geração de laje');
-  const body = rendererSource.slice(start, start + 1300);
+  const body = rendererSource.slice(start, start + 2400);
   assert.match(body, /var stRects = getStairLajeHoleRects\(stair\);/);
   assert.match(body, /if \(!stRects\) return;/);
-  assert.match(body, /stRects\.forEach\(function \(rect\) \{/);
   assert.match(body, /new THREE\.Path\(\)/);
   assert.match(body, /lajeShape\.holes\.push\(hole\)/);
+});
+
+test('Scene3DRenderer: retângulos de lances vizinhos (L/U) se sobrepõem de propósito na pisada da virada (DEC-144), mas dois Shape.holes sobrepostos quebram a triangulação do earcut (malha com "espinhos" na laje, reportado ao vivo) — subtractRectXY decompõe cada retângulo novo na parte ainda não coberta pelos anteriores antes de virar hole, preservando a mesma área total sem holes que se cruzam', () => {
+  const start = rendererSource.indexOf('function subtractRectXY(a:');
+  assert.notEqual(start, -1);
+  const body = rendererSource.slice(start, rendererSource.indexOf('\n  }', start));
+  assert.match(body, /if \(ix1 >= ix2 \|\| iy1 >= iy2\) return \[a\];/);
+  assert.match(body, /if \(a\.y1 < iy1\) result\.push/);
+  assert.match(body, /if \(iy2 < a\.y2\) result\.push/);
+  assert.match(body, /if \(a\.x1 < ix1\) result\.push/);
+  assert.match(body, /if \(ix2 < a\.x2\) result\.push/);
+
+  const loopStart = rendererSource.indexOf('(floorData.stairs || []).forEach(function (stair: any) {');
+  const loopBody = rendererSource.slice(loopStart, loopStart + 2100);
+  assert.match(loopBody, /next = next\.concat\(subtractRectXY\(r, placed\)\);/);
+  assert.match(loopBody, /nonOverlappingRects\.forEach\(function \(rect\) \{/);
 });
 
 test('ViewportController: soltar a escada longe de apoio mostra AVISO no rodapé, sem travar/reverter a posição (Product Owner: aviso, sem travar) — usa a corrida real do modelo carregado', () => {

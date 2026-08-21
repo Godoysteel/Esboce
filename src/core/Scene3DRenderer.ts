@@ -320,7 +320,7 @@ export function hashColorHex(key: string): number {
   // Milímetros que a malha visível da escada desce em relação à hit-box
   // (que fica com a altura cheia) — evita Z-fighting com a laje, ver
   // buildStairHitMesh.
-  var STAIR_Z_FIGHT_EPSILON_M = 0.004;
+  var STAIR_Z_FIGHT_EPSILON_M = 0.02;
 
   // Retângulo (planta, em METROS, no referencial MUNDO pré-âncora —
   // getStairModel subtrai center.x/center.z depois) de um grupo de
@@ -586,6 +586,26 @@ export function hashColorHex(key: string): number {
     return entry.legRectsLocal.map(function (localRect) {
       return Core.stairLegWorldRectangle(stair, localRect, widthScale, heightScale);
     });
+  }
+
+  // Subtrai `b` de `a` (retângulos axis-aligned), devolvendo 0-4
+  // retângulos que cobrem exatamente a parte de `a` que NÃO está em `b`
+  // — técnica padrão de "diferença de retângulos". Usada pra decompor os
+  // retângulos de lance da escada (getStairLajeHoleRects), que se
+  // SOBREPÕEM de propósito na pisada da virada (DEC-144), em holes que
+  // NÃO se sobrepõem entre si — dois `Shape.holes` sobrepostos quebram a
+  // triangulação do earcut (malha com "espinhos" na laje, reportado ao
+  // vivo pelo Product Owner), mesmo cobrindo a mesma área total no fim.
+  function subtractRectXY(a: { x1: number; y1: number; x2: number; y2: number }, b: { x1: number; y1: number; x2: number; y2: number }): { x1: number; y1: number; x2: number; y2: number }[] {
+    var ix1 = Math.max(a.x1, b.x1), ix2 = Math.min(a.x2, b.x2);
+    var iy1 = Math.max(a.y1, b.y1), iy2 = Math.min(a.y2, b.y2);
+    if (ix1 >= ix2 || iy1 >= iy2) return [a]; // sem sobreposição de verdade
+    var result: { x1: number; y1: number; x2: number; y2: number }[] = [];
+    if (a.y1 < iy1) result.push({ x1: a.x1, y1: a.y1, x2: a.x2, y2: iy1 }); // faixa de cima
+    if (iy2 < a.y2) result.push({ x1: a.x1, y1: iy2, x2: a.x2, y2: a.y2 }); // faixa de baixo
+    if (a.x1 < ix1) result.push({ x1: a.x1, y1: iy1, x2: ix1, y2: iy2 }); // faixa da esquerda (só a banda do meio)
+    if (ix2 < a.x2) result.push({ x1: ix2, y1: iy1, x2: a.x2, y2: iy2 }); // faixa da direita (só a banda do meio)
+    return result;
   }
 
   function disposeObject3DTree(obj: any) {
@@ -4867,7 +4887,28 @@ export function hashColorHex(key: string): number {
           (floorData.stairs || []).forEach(function (stair: any) {
             var stRects = getStairLajeHoleRects(stair);
             if (!stRects) return; // .glb ainda não carregou — sem corte nesta passada
+            // Os retângulos de lances vizinhos (L/U) se SOBREPÕEM de
+            // propósito na pisada da virada (DEC-144, garante que não
+            // sobra vão na quina) — mas THREE.ShapeGeometry/earcut espera
+            // holes que não se cruzem entre si; dois holes sobrepostos
+            // quebram a triangulação (malha com "espinhos", reportado ao
+            // vivo pelo Product Owner). subtractRectXY decompõe cada
+            // retângulo novo na parte que ainda não foi coberta pelos
+            // anteriores, preservando a MESMA área total (a união
+            // continua idêntica) sem holes sobrepostos.
+            var placedRects: { x1: number; y1: number; x2: number; y2: number }[] = [];
+            var nonOverlappingRects: { x1: number; y1: number; x2: number; y2: number }[] = [];
             stRects.forEach(function (rect) {
+              var remaining = [rect];
+              placedRects.forEach(function (placed) {
+                var next: { x1: number; y1: number; x2: number; y2: number }[] = [];
+                remaining.forEach(function (r) { next = next.concat(subtractRectXY(r, placed)); });
+                remaining = next;
+              });
+              remaining.forEach(function (r) { nonOverlappingRects.push(r); });
+              placedRects.push(rect);
+            });
+            nonOverlappingRects.forEach(function (rect) {
               var ix1 = Math.max(rect.x1, roomMinX), ix2 = Math.min(rect.x2, roomMaxX);
               var iy1 = Math.max(rect.y1, roomMinY), iy2 = Math.min(rect.y2, roomMaxY);
               if (ix2 <= ix1 || iy2 <= iy1) return; // sem cruzamento de verdade
