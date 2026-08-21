@@ -260,21 +260,19 @@ test('Scene3DRenderer: buraco na laje usa Shape.holes dentro do loop de cômodo 
   assert.match(body, /lajeShape\.holes\.push\(hole\)/);
 });
 
-test('Scene3DRenderer: retângulos de lances vizinhos (L/U) se sobrepõem de propósito na pisada da virada (DEC-144), mas dois Shape.holes sobrepostos quebram a triangulação do earcut (malha com "espinhos" na laje, reportado ao vivo) — subtractRectXY decompõe cada retângulo novo na parte ainda não coberta pelos anteriores antes de virar hole, preservando a mesma área total sem holes que se cruzam', () => {
-  const start = rendererSource.indexOf('function subtractRectXY(a:');
+test('Scene3DRenderer: retângulos de lances vizinhos (L/U) se sobrepõem de propósito na pisada da virada (DEC-144) — unionRectanglesToOutlines traça o contorno da união como UM polígono fechado por região conectada, em vez de empurrar vários retângulos que se tocam/sobrepõem como holes separados (holes vizinhos que só se tocam deixavam uma faixa de laje sólida sobrando, reportado ao vivo mesmo depois do snap de bordas)', () => {
+  const start = rendererSource.indexOf('function unionRectanglesToOutlines(rects:');
   assert.notEqual(start, -1);
-  const body = rendererSource.slice(start, rendererSource.indexOf('\n  }', start));
-  assert.match(body, /if \(ix1 >= ix2 \|\| iy1 >= iy2\) return \[a\];/);
-  assert.match(body, /if \(a\.y1 < iy1\) result\.push/);
-  assert.match(body, /if \(iy2 < a\.y2\) result\.push/);
-  assert.match(body, /if \(a\.x1 < ix1\) result\.push/);
-  assert.match(body, /if \(ix2 < a\.x2\) result\.push/);
+  const body = rendererSource.slice(start, rendererSource.indexOf('\n  }', start + 2000));
+  assert.match(body, /covered\[cellIdx\(i, j\)\] = rects\.some\(function \(r\) \{ return cx > r\.x1 && cx < r\.x2 && cy > r\.y1 && cy < r\.y2; \}\);/);
+  assert.match(body, /if \(loop\.length >= 3\) loops\.push\(loop\);/);
 
   const loopStart = rendererSource.indexOf('(floorData.stairs || []).forEach(function (stair: any) {');
   const loopBody = rendererSource.slice(loopStart, loopStart + 3200);
   assert.match(loopBody, /var stRects = snapStairLegRectEdges\(stRectsRaw, STAIR_LEG_EDGE_SNAP_GRID\);/);
-  assert.match(loopBody, /next = next\.concat\(subtractRectXY\(r, placed\)\);/);
-  assert.match(loopBody, /nonOverlappingRects\.forEach\(function \(rect\) \{/);
+  assert.match(loopBody, /clippedRects\.push\(\{ x1: ix1, y1: iy1, x2: ix2, y2: iy2 \}\);/);
+  assert.match(loopBody, /unionRectanglesToOutlines\(clippedRects\)\.forEach\(function \(loop\) \{/);
+  assert.doesNotMatch(loopBody, /subtractRectXY/);
 });
 
 test('Scene3DRenderer: snapStairLegRectEdges junta bordas de lances vizinhos QUASE coincidentes (resíduo de ponto flutuante da rotação/escala) num só valor ANTES de decompor — reportado ao vivo com dados exatos do Product Owner: sem isso, um caso real produzia um fragmento de 2,65m × 9mm ("faixas atravessando o fosso" quando descartado, malha quebrada quando mantido). x1/y1 (bordas mínimas) sempre pro MENOR valor do grupo, x2/y2 (bordas máximas) sempre pro MAIOR — nunca encolhe, só expande, preservando a área total da união', () => {

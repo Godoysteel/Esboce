@@ -600,26 +600,6 @@ export function hashColorHex(key: string): number {
     });
   }
 
-  // Subtrai `b` de `a` (retângulos axis-aligned), devolvendo 0-4
-  // retângulos que cobrem exatamente a parte de `a` que NÃO está em `b`
-  // — técnica padrão de "diferença de retângulos". Usada pra decompor os
-  // retângulos de lance da escada (getStairLajeHoleRects), que se
-  // SOBREPÕEM de propósito na pisada da virada (DEC-144), em holes que
-  // NÃO se sobrepõem entre si — dois `Shape.holes` sobrepostos quebram a
-  // triangulação do earcut (malha com "espinhos" na laje, reportado ao
-  // vivo pelo Product Owner), mesmo cobrindo a mesma área total no fim.
-  function subtractRectXY(a: { x1: number; y1: number; x2: number; y2: number }, b: { x1: number; y1: number; x2: number; y2: number }): { x1: number; y1: number; x2: number; y2: number }[] {
-    var ix1 = Math.max(a.x1, b.x1), ix2 = Math.min(a.x2, b.x2);
-    var iy1 = Math.max(a.y1, b.y1), iy2 = Math.min(a.y2, b.y2);
-    if (ix1 >= ix2 || iy1 >= iy2) return [a]; // sem sobreposição de verdade
-    var result: { x1: number; y1: number; x2: number; y2: number }[] = [];
-    if (a.y1 < iy1) result.push({ x1: a.x1, y1: a.y1, x2: a.x2, y2: iy1 }); // faixa de cima
-    if (iy2 < a.y2) result.push({ x1: a.x1, y1: iy2, x2: a.x2, y2: a.y2 }); // faixa de baixo
-    if (a.x1 < ix1) result.push({ x1: a.x1, y1: iy1, x2: ix1, y2: iy2 }); // faixa da esquerda (só a banda do meio)
-    if (ix2 < a.x2) result.push({ x1: ix2, y1: iy1, x2: a.x2, y2: iy2 }); // faixa da direita (só a banda do meio)
-    return result;
-  }
-
   // Agrupa (cluster) valores de borda que estão a menos de `epsilon` um
   // do outro — usado por snapStairLegRectEdges pra tratar bordas QUASE
   // coincidentes (resíduo de ponto flutuante da rotação/escala) como se
@@ -677,6 +657,88 @@ export function hashColorHex(key: string): number {
         x1: snapEdgeValue(r.x1, x1Clusters, 'min'), x2: snapEdgeValue(r.x2, x2Clusters, 'max'),
         y1: snapEdgeValue(r.y1, y1Clusters, 'min'), y2: snapEdgeValue(r.y2, y2Clusters, 'max'),
       };
+    });
+  }
+
+  // Traça o contorno da UNIÃO de retângulos axis-aligned (já com bordas
+  // ajustadas por snapStairLegRectEdges) como UM ÚNICO polígono fechado por
+  // região conectada — em vez da abordagem anterior de decompor a
+  // sobreposição em vários retângulos que se TOCAM entre si (subtractRectXY)
+  // e empurrar cada um deles como um `Shape.holes` separado. Retângulos que
+  // se tocam na mesma aresta continuavam gerando, ao vivo, uma faixa de laje
+  // sólida sobrando bem no meio do buraco (reportado pelo Product Owner
+  // mesmo depois do snap de bordas eliminar a perda de área) — earcut liga
+  // cada hole ao contorno externo por uma "ponte" independente, e holes
+  // vizinhos que só se tocam (sem se sobrepor) não têm garantia nenhuma de
+  // virar uma única região preenchida. Um polígono único, traçado direto do
+  // contorno da união, elimina essa aresta compartilhada por completo — não
+  // depende de nenhum comportamento específico do earcut pra holes vizinhos.
+  // Verificado com um script Node à parte: reproduz exatamente a mesma área
+  // da união (mesmo valor que a decomposição em retângulos), sem
+  // auto-interseção, pros dados reais dos lances de escada L/U.
+  function unionRectanglesToOutlines(rects: { x1: number; y1: number; x2: number; y2: number }[]): { x: number; y: number }[][] {
+    if (rects.length === 0) return [];
+    var xsSet: Record<string, number> = {}, ysSet: Record<string, number> = {};
+    rects.forEach(function (r) { xsSet[r.x1] = r.x1; xsSet[r.x2] = r.x2; ysSet[r.y1] = r.y1; ysSet[r.y2] = r.y2; });
+    var xs = Object.keys(xsSet).map(Number).sort(function (a, b) { return a - b; });
+    var ys = Object.keys(ysSet).map(Number).sort(function (a, b) { return a - b; });
+    var nx = xs.length - 1, ny = ys.length - 1;
+    if (nx <= 0 || ny <= 0) return [];
+    var covered: boolean[] = new Array(nx * ny).fill(false);
+    function cellIdx(i: number, j: number) { return j * nx + i; }
+    for (var i = 0; i < nx; i++) {
+      for (var j = 0; j < ny; j++) {
+        var cx = (xs[i]! + xs[i + 1]!) / 2, cy = (ys[j]! + ys[j + 1]!) / 2;
+        covered[cellIdx(i, j)] = rects.some(function (r) { return cx > r.x1 && cx < r.x2 && cy > r.y1 && cy < r.y2; });
+      }
+    }
+    var segs: { x1: number; y1: number; x2: number; y2: number }[] = [];
+    for (var i2 = 0; i2 < nx; i2++) {
+      for (var j2 = 0; j2 < ny; j2++) {
+        if (!covered[cellIdx(i2, j2)]) continue;
+        if (i2 === 0 || !covered[cellIdx(i2 - 1, j2)]) segs.push({ x1: xs[i2]!, y1: ys[j2]!, x2: xs[i2]!, y2: ys[j2 + 1]! });
+        if (i2 === nx - 1 || !covered[cellIdx(i2 + 1, j2)]) segs.push({ x1: xs[i2 + 1]!, y1: ys[j2 + 1]!, x2: xs[i2 + 1]!, y2: ys[j2]! });
+        if (j2 === 0 || !covered[cellIdx(i2, j2 - 1)]) segs.push({ x1: xs[i2 + 1]!, y1: ys[j2]!, x2: xs[i2]!, y2: ys[j2]! });
+        if (j2 === ny - 1 || !covered[cellIdx(i2, j2 + 1)]) segs.push({ x1: xs[i2]!, y1: ys[j2 + 1]!, x2: xs[i2 + 1]!, y2: ys[j2 + 1]! });
+      }
+    }
+    function key(x: number, y: number) { return x.toFixed(6) + ',' + y.toFixed(6); }
+    var fromMap: Record<string, number[]> = {};
+    segs.forEach(function (s, idx) {
+      var k = key(s.x1, s.y1);
+      if (!fromMap[k]) fromMap[k] = [];
+      fromMap[k]!.push(idx);
+    });
+    var used: boolean[] = new Array(segs.length).fill(false);
+    var loops: { x: number; y: number }[][] = [];
+    segs.forEach(function (s0, idx0) {
+      if (used[idx0]) return;
+      var loop: { x: number; y: number }[] = [{ x: s0.x1, y: s0.y1 }];
+      var cur = s0;
+      used[idx0] = true;
+      var guard = 0;
+      while (guard++ < segs.length + 1) {
+        loop.push({ x: cur.x2, y: cur.y2 });
+        if (key(cur.x2, cur.y2) === key(s0.x1, s0.y1)) break;
+        var candidates = fromMap[key(cur.x2, cur.y2)] || [];
+        var found = -1;
+        for (var c = 0; c < candidates.length; c++) { if (!used[candidates[c]!]) { found = candidates[c]!; break; } }
+        if (found === -1) break; // malha degenerada — evita loop infinito, descarta o restante
+        cur = segs[found]!; used[found] = true;
+      }
+      loop.pop();
+      if (loop.length >= 3) loops.push(loop);
+    });
+    // Remove vértices colineares consecutivos (simplifica o L/U resultante)
+    return loops.map(function (loop) {
+      var out: { x: number; y: number }[] = [];
+      var n = loop.length;
+      for (var k2 = 0; k2 < n; k2++) {
+        var prev = loop[(k2 - 1 + n) % n]!, cur2 = loop[k2]!, next = loop[(k2 + 1) % n]!;
+        var collinear = (prev.x === cur2.x && cur2.x === next.x) || (prev.y === cur2.y && cur2.y === next.y);
+        if (!collinear) out.push(cur2);
+      }
+      return out.length >= 3 ? out : loop;
     });
   }
 
@@ -4971,32 +5033,29 @@ export function hashColorHex(key: string): number {
             // as bordas primeiro elimina o fragmento fino na origem, sem
             // perder área nenhuma da união.
             var stRects = snapStairLegRectEdges(stRectsRaw, STAIR_LEG_EDGE_SNAP_GRID);
-            // SOBREPÕEM de propósito na pisada da virada (DEC-144,
-            // garante que não sobra vão na quina) — mas
-            // THREE.ShapeGeometry/earcut espera holes que não se cruzem
-            // entre si; dois holes sobrepostos quebram a triangulação
-            // (malha com "espinhos", reportado ao vivo). subtractRectXY
-            // decompõe cada retângulo novo na parte que ainda não foi
-            // coberta pelos anteriores, preservando a MESMA área total
-            // (a união continua idêntica) sem holes sobrepostos.
-            var placedRects: { x1: number; y1: number; x2: number; y2: number }[] = [];
-            var nonOverlappingRects: { x1: number; y1: number; x2: number; y2: number }[] = [];
+            // Clipa cada retângulo de lance contra o bounding box do cômodo
+            // ANTES de unir — mantém os retângulos axis-aligned (a
+            // interseção de dois axis-aligned rects ainda é um axis-aligned
+            // rect), condição que unionRectanglesToOutlines depende pra
+            // funcionar.
+            var clippedRects: { x1: number; y1: number; x2: number; y2: number }[] = [];
             stRects.forEach(function (rect) {
-              var remaining = [rect];
-              placedRects.forEach(function (placed) {
-                var next: { x1: number; y1: number; x2: number; y2: number }[] = [];
-                remaining.forEach(function (r) { next = next.concat(subtractRectXY(r, placed)); });
-                remaining = next;
-              });
-              remaining.forEach(function (r) { nonOverlappingRects.push(r); });
-              placedRects.push(rect);
-            });
-            nonOverlappingRects.forEach(function (rect) {
               var ix1 = Math.max(rect.x1, roomMinX), ix2 = Math.min(rect.x2, roomMaxX);
               var iy1 = Math.max(rect.y1, roomMinY), iy2 = Math.min(rect.y2, roomMaxY);
               if (ix2 <= ix1 || iy2 <= iy1) return; // sem cruzamento de verdade
+              clippedRects.push({ x1: ix1, y1: iy1, x2: ix2, y2: iy2 });
+            });
+            // Os retângulos de lance SE SOBREPÕEM de propósito na pisada da
+            // virada (DEC-144, garante que não sobra vão na quina) —
+            // unionRectanglesToOutlines traça o contorno da união inteira
+            // como UM polígono fechado por região conectada, em vez de
+            // empurrar vários retângulos que se tocam/sobrepõem como holes
+            // separados (a abordagem anterior deixava uma faixa de laje
+            // sólida sobrando na aresta compartilhada entre dois holes
+            // vizinhos, reportado ao vivo mesmo depois do snap de bordas).
+            unionRectanglesToOutlines(clippedRects).forEach(function (loop) {
               var hole = new THREE.Path();
-              [{ x: ix1, y: iy1 }, { x: ix2, y: iy1 }, { x: ix2, y: iy2 }, { x: ix1, y: iy2 }].forEach(function (p, i) {
+              loop.forEach(function (p, i) {
                 var wx = (p.x - offsetX) * scale, wz = (p.y - offsetY) * scale;
                 if (i === 0) hole.moveTo(wx, wz); else hole.lineTo(wx, wz);
               });
