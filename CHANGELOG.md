@@ -1,5 +1,7 @@
 # Changelog
 
+> Corrigido: Escada em U ainda saía pequena e desproporcional — a causa raiz era o cálculo do bounding box do modelo (usa um modo aproximado que não lida bem com a rotação composta específica do arquivo do U). Granito passa a se aplicar só na pisada/patamar (face de cima), não mais no espelho vertical do degrau. Removidos os 4 pés de apoio do patamar da escada em U, a pedido. Ver DEC-142 (2ª correção pós-lançamento da DEC-140).
+
 > Corrigido: Escada (modelos 3D, ver abaixo) — a pedra de granito estava caindo na viga de apoio em vez das pisadas, o corte na laje passava do limite do último degrau, e a escada em L saía achatada (a alça de largura, que só faz sentido no modelo reto, estava distorcendo o L inteiro). Ver DEC-141 (correção pós-lançamento da DEC-140).
 
 > Alterado: Escada — a geometria procedural (blocos sólidos empilhados) dá lugar a 3 modelos 3D reais (reto/L/U), escalados automaticamente pro pé-direito do pavimento. Pisada em pedra de granito (mesma textura da soleira externa); corpo/espelho continua recolorível por acabamento. O corte na laje agora usa o contorno real do modelo carregado — fica exatamente no limite do último degrau, não mais uma fórmula solta. Formato (reto/L/U) escolhido depois de posicionar, num painel próprio ao lado do gizmo. Ver DEC-140.

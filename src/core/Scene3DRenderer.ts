@@ -260,6 +260,41 @@ export function hashColorHex(key: string): number {
     U: 'models/escada-u.glb',
   };
   function stairModelUrl(model: any): string { return STAIR_MODEL_URLS[model] || STAIR_MODEL_URLS.reta!; }
+
+  // O corpo dos degraus (pisos+espelhos) é UMA malha só, sem separação
+  // de material entre a pisada (topo, onde o Product Owner quer a pedra
+  // de granito — "a textura se aplica somente sob a face superior dos
+  // degraus e patamar") e o espelho/lateral (que deve continuar com o
+  // acabamento normal, pintável). Divide os triângulos em 2 grupos pela
+  // direção da normal — os que apontam pra cima (face de cima da pisada
+  // e do patamar) viram grupo 0 (granito), o resto (espelho, laterais,
+  // parte de baixo) vira grupo 1 (acabamento normal) — via
+  // BufferGeometry.groups + Mesh.material como array, técnica padrão do
+  // Three.js pra várias materiais numa malha só sem duplicar geometria.
+  function splitStairBodyByTopFace(geometry: any) {
+    var posAttr = geometry.attributes.position;
+    var normAttr = geometry.attributes.normal;
+    var srcIndex = geometry.index ? geometry.index.array : null;
+    var triCount = srcIndex ? srcIndex.length / 3 : posAttr.count / 3;
+    var upIndices: number[] = [];
+    var otherIndices: number[] = [];
+    var UP_NORMAL_THRESHOLD = 0.7;
+    for (var t = 0; t < triCount; t++) {
+      var i0 = srcIndex ? srcIndex[t * 3] : t * 3;
+      var i1 = srcIndex ? srcIndex[t * 3 + 1] : t * 3 + 1;
+      var i2 = srcIndex ? srcIndex[t * 3 + 2] : t * 3 + 2;
+      var ny = (normAttr.getY(i0) + normAttr.getY(i1) + normAttr.getY(i2)) / 3;
+      var bucket = ny > UP_NORMAL_THRESHOLD ? upIndices : otherIndices;
+      bucket.push(i0, i1, i2);
+    }
+    var newIndex = new Uint32Array(upIndices.length + otherIndices.length);
+    newIndex.set(upIndices, 0);
+    newIndex.set(otherIndices, upIndices.length);
+    geometry.setIndex(new THREE.BufferAttribute(newIndex, 1));
+    geometry.clearGroups();
+    geometry.addGroup(0, upIndices.length, 0);
+    geometry.addGroup(upIndices.length, otherIndices.length, 1);
+  }
   interface StairModelEntry { group: THREE.Group; naturalW: number; naturalD: number; naturalH: number; }
   var stairModelCache: { [url: string]: StairModelEntry | 'loading' } = {};
   function getStairModel(url: string): StairModelEntry | null {
@@ -277,8 +312,26 @@ export function hashColorHex(key: string): number {
         var isStepBody = !!(child.material && child.material.name === 'Material');
         child.userData.stairPart = isStepBody ? 'body' : 'beam';
         if (isStepBody) {
-          child.material = treadMat;
-          var meshBox = new THREE.Box3().setFromObject(child);
+          splitStairBodyByTopFace(child.geometry);
+          // grupo 0 (faces de cima, ver splitStairBodyByTopFace) = granito
+          // sempre; grupo 1 (espelho/laterais) = placeholder aqui, cada
+          // instância troca por buildStairMaterial(stair) em
+          // buildStairHitMesh (nunca muta este array — sempre substitui a
+          // referência inteira, senão contaminaria o template e outras
+          // instâncias já clonadas, que apontam pro MESMO array por
+          // padrão em Object3D.clone()).
+          child.material = [treadMat, treadMat];
+          // precise=true é ESSENCIAL aqui — o padrão (false) rotaciona só
+          // os 8 cantos do bounding box LOCAL e reenquadra, em vez de
+          // transformar os vértices de verdade. Pra uma rotação de nó
+          // simples (múltiplo de 90° num único eixo, caso do modelo L)
+          // dá no mesmo, mas pra uma rotação composta fora de eixo (caso
+          // do nó do modelo U) infla MUITO o box — foi exatamente essa
+          // inflação que causava "a escada U ficou pequena, nem encosta
+          // no chão" (naturalH saía maior que o real, encolhendo demais
+          // no heightScale). Confirmado comparando os dois modos num
+          // script Node à parte antes de mudar aqui.
+          var meshBox = new THREE.Box3().setFromObject(child, true);
           if (!hasStepMesh) { stepBox.copy(meshBox); hasStepMesh = true; } else stepBox.union(meshBox);
         }
       });
@@ -286,7 +339,7 @@ export function hashColorHex(key: string): number {
       // malha tiver o material "Material" (não deveria acontecer com os
       // 3 arquivos atuais, mas evita naturalH/W/D = 0 num arquivo futuro
       // sem esse nome de material).
-      var box = hasStepMesh ? stepBox : new THREE.Box3().setFromObject(gltf.scene);
+      var box = hasStepMesh ? stepBox : new THREE.Box3().setFromObject(gltf.scene, true);
       var center = box.getCenter(new THREE.Vector3());
       var size = box.getSize(new THREE.Vector3());
       // Mesma âncora de buildFurniturePiece: centro em X/Z, base em Y=0
@@ -2494,9 +2547,15 @@ export function hashColorHex(key: string): number {
   }
 
   // Malha real (.glb) da escada — clona o template cacheado
-  // (getStairModel), recolore só a viga (userData.stairPart==='beam';
-  // o corpo dos degraus já ficou fixo em granito no template, uma vez
-  // só, no load) por instância, e escala pra bater com o pé-direito do
+  // (getStairModel) e recolore por instância: a viga
+  // (userData.stairPart==='beam') recebe o acabamento inteiro; o corpo
+  // dos degraus (userData.stairPart==='body') já é um array de 2
+  // materiais (grupo 0 = faces de cima, sempre granito; grupo 1 =
+  // espelho/laterais) — só o índice 1 troca por instância, o granito do
+  // índice 0 nunca muda. SEMPRE substitui o array inteiro (nunca
+  // `material[1] = x`), porque clone(true) copia a REFERÊNCIA do array
+  // — mutar em vez de substituir vazaria pro template e pra outras
+  // instâncias já clonadas. Depois escala pra bater com o pé-direito do
   // pavimento: Y/Z uniformes travados em FLOOR_STACK_HEIGHT/naturalH
   // (garante que o topo do último degrau sempre chega exatamente na
   // laje de cima, qualquer que seja a escala em que o modelo foi
@@ -2518,8 +2577,21 @@ export function hashColorHex(key: string): number {
     var depthM = entry.naturalD * heightScale;
     var instance = entry.group.clone(true);
     var bodyMat = buildStairMaterial(stair);
+    var treadMat = getStairTreadMaterial();
     instance.traverse(function (child: any) {
-      if (child.isMesh && child.userData && child.userData.stairPart === 'beam') child.material = bodyMat;
+      if (!child.isMesh || !child.userData) return;
+      if (child.userData.stairPart === 'beam') {
+        // No modelo U a "viga" (peça sem material) são os 4 pés de apoio
+        // do patamar (96 vértices ÷ 4 pernas = 24 cada, uma caixa simples
+        // por perna) — Product Owner pediu pra tirar ("consegue retirar
+        // os pés da escada U?"). No reta/L a mesma peça é a longarina
+        // diagonal sob o lance, que continua útil visualmente — por isso
+        // o esconder é só pro modelo U, não geral.
+        child.visible = stair.model !== 'U';
+        child.material = bodyMat;
+      } else if (child.userData.stairPart === 'body') {
+        child.material = [treadMat, bodyMat];
+      }
     });
     instance.scale.set(widthScale, heightScale, heightScale);
     // Hit-box invisível ancorada em y=0 (base do lance, mesma convenção
