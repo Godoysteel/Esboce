@@ -443,6 +443,42 @@ export function stairFootprintRectangle(stair: Stair, widthM: number, depthM: nu
 }
 
 /**
+ * Versão geral de `stairFootprintRectangle` pra um retângulo QUALQUER
+ * (não necessariamente centrado em stair.x/y) em espaço local ancorado
+ * do modelo — usada pro corte na laje do L/U, onde cada lance (trecho
+ * reto) tem seu próprio retângulo, deslocado do centro geral da escada
+ * (ver Scene3DRenderer.getStairModel/splitStairBodyByTopFace, que
+ * calcula esses retângulos a partir da malha .glb de verdade). Escala
+ * primeiro (mesma lógica de buildStairHitMesh — X pela largura, Z pela
+ * altura/pé-direito), gira os 4 cantos pelos múltiplos exatos de 90°
+ * (sem seno/cosseno de ponto flutuante, pra não sobrar resíduo
+ * numérico) e desloca pra `stair.x/y`. Pro modelo reto (um retângulo só,
+ * já centrado) dá exatamente o mesmo resultado que
+ * `stairFootprintRectangle` — é literalmente a mesma matemática, só
+ * generalizada pra um retângulo fora do centro.
+ */
+export function stairLegWorldRectangle(
+  stair: Stair,
+  localRect: { x1: number; x2: number; z1: number; z2: number },
+  scaleX: number,
+  scaleZ: number
+): { x1: number; y1: number; x2: number; y2: number } {
+  const steps = ((Math.round(stair.rotationDeg / 90) % 4) + 4) % 4;
+  const lx1 = localRect.x1 * scaleX * GRID, lx2 = localRect.x2 * scaleX * GRID;
+  const lz1 = localRect.z1 * scaleZ * GRID, lz2 = localRect.z2 * scaleZ * GRID;
+  const corners: [number, number][] = [[lx1, lz1], [lx2, lz1], [lx2, lz2], [lx1, lz2]];
+  const rotated = corners.map(([x, z]): [number, number] => {
+    if (steps === 1) return [-z, x];
+    if (steps === 2) return [-x, -z];
+    if (steps === 3) return [z, -x];
+    return [x, z];
+  });
+  const xs = rotated.map((p) => p[0]), zs = rotated.map((p) => p[1]);
+  const minX = Math.min(...xs), maxX = Math.max(...xs), minZ = Math.min(...zs), maxZ = Math.max(...zs);
+  return { x1: stair.x + minX, y1: stair.y + minZ, x2: stair.x + maxX, y2: stair.y + maxZ };
+}
+
+/**
  * Menor distância (em METROS) de um ponto até a parede OU coluna mais
  * próxima — mesma matemática ponto-segmento com clamp já usada no ímã
  * da Pele de vidro (ViewportController.nearestWallForGlazingAttach),
@@ -1985,7 +2021,7 @@ export const Core = {
   computeBalconyRailingJoints, RAILING_JOIN_TOL_MODEL,
   createVolumeBoxEntity, VOLUME_BOX_DEFAULT_WIDTH_M, VOLUME_BOX_DEFAULT_HEIGHT_M, VOLUME_BOX_DEFAULT_DEPTH_M, VOLUME_BOX_DEFAULT_COLOR,
   VOLUME_BOX_MIN_SIZE_M, VOLUME_BOX_MAX_SIZE_M, VOLUME_BOX_MIN_HEIGHT_M, VOLUME_BOX_MAX_HEIGHT_M, VOLUME_BOX_MAX_SILL_HEIGHT_M,
-  createStairEntity, stairFootprintRectangle, nearestSupportDistanceMeters,
+  createStairEntity, stairFootprintRectangle, stairLegWorldRectangle, nearestSupportDistanceMeters,
   STAIR_MIN_WIDTH_M, STAIR_MAX_WIDTH_M, STAIR_DEFAULT_WIDTH_M, STAIR_SUPPORT_HINT_TOLERANCE_M,
   createPlanUnderlayEntity, PLAN_UNDERLAY_DEFAULT_WIDTH_M, PLAN_UNDERLAY_DEFAULT_OPACITY,
   createProject, distToSegment, projectOnSegment, detectRooms,

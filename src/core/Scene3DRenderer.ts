@@ -303,7 +303,73 @@ export function hashColorHex(key: string): number {
   // espelho sobe só a altura de UM degrau). Por segurança o corte SÓ
   // remove o triângulo quando bate um dos dois padrões — no reto/L,
   // onde não existe perna nenhuma, isso não acha nada e não remove nada.
-  function splitStairBodyByTopFace(mesh: any) {
+  // Além da face de cima, a pedra também cobre as LATERAIS de cada
+  // degrau (Product Owner: "quero que tenha textura de pedra nas
+  // laterais dos degraus... pra simular uma pedra de granito instalada
+  // nos degraus") — confirmado num script à parte que cada degrau já
+  // tem sua própria pisada + duas faces laterais pequenas (a "bochecha"
+  // exposta do degrau, ~1 altura de espelho cada, normal em X) como
+  // peças PRÓPRIAS na malha — normal.x em espaço mundo separa essas
+  // igual à normal.y separa o topo, sem precisar subdividir geometria
+  // nenhuma (não dá pra isolar uma faixa de 20mm sem vértice nenhum
+  // nessa cota — a malha não tem esse corte —, então a lateral INTEIRA
+  // de cada degrau vira granito, que já entrega o efeito "pedra
+  // instalada na lateral" pedido).
+  var LATERAL_NORMAL_THRESHOLD = 0.7;
+
+  // Milímetros que a malha visível da escada desce em relação à hit-box
+  // (que fica com a altura cheia) — evita Z-fighting com a laje, ver
+  // buildStairHitMesh.
+  var STAIR_Z_FIGHT_EPSILON_M = 0.004;
+
+  // Retângulo (planta, em METROS, no referencial MUNDO pré-âncora —
+  // getStairModel subtrai center.x/center.z depois) de um grupo de
+  // pisadas (união das caixas delimitadoras de cada uma, sem margem
+  // nenhuma — cada pisada já cobre a largura inteira do lance e as
+  // pisadas se encostam pisada-a-pisada, sem vão entre elas, confirmado
+  // num script à parte comparando contra o corte de UM lance reto: bate
+  // exatamente com o bounding box do corpo inteiro, erro zero).
+  interface TreadInfo { y: number; cx: number; cz: number; minX: number; maxX: number; minZ: number; maxZ: number; }
+  interface LocalRect { x1: number; x2: number; z1: number; z2: number; }
+
+  // Agrupa as pisadas em "lances" (trechos retos) — cada lance é uma
+  // sequência contígua de pisadas onde um eixo (X OU Z) fica
+  // aproximadamente constante. Detecta troca de lance tanto quando o
+  // eixo constante muda (reto→L: de "X constante" pra "Z constante" na
+  // volta) quanto quando o MESMO eixo continua constante mas num valor
+  // bem diferente (caso do U: as duas pernas são "X constante", só que
+  // em cotas de X diferentes, paralelas e voltando). A pisada na virada
+  // (patamar) fica repetida nos dois lances vizinhos — de propósito, pra
+  // o corte na laje não deixar vão nenhum bem no canto da virada, igual
+  // ao desenho que o Product Owner mandou (dois retângulos que se
+  // encostam/sobrepõem exatamente na quina).
+  var FLIGHT_AXIS_TOLERANCE_M = 0.3;
+  function segmentTreadsByFlight(treads: TreadInfo[]): number[][] {
+    if (treads.length < 2) return treads.length === 1 ? [[0]] : [];
+    var runs: number[][] = [];
+    var currentRun: number[] = [0];
+    var runAxis: 'x' | 'z' | null = null;
+    var runValue = 0;
+    for (var i = 1; i < treads.length; i++) {
+      var dx = Math.abs(treads[i]!.cx - treads[i - 1]!.cx);
+      var dz = Math.abs(treads[i]!.cz - treads[i - 1]!.cz);
+      var edgeAxis: 'x' | 'z' = dx < dz ? 'x' : 'z';
+      var edgeValue = edgeAxis === 'x' ? treads[i]!.cx : treads[i]!.cz;
+      if (runAxis === null) {
+        runAxis = edgeAxis; runValue = edgeValue; currentRun.push(i);
+      } else if (edgeAxis === runAxis && Math.abs(edgeValue - runValue) < FLIGHT_AXIS_TOLERANCE_M) {
+        currentRun.push(i);
+      } else {
+        runs.push(currentRun);
+        currentRun = [i - 1, i]; // pivô compartilhado com o lance anterior
+        runAxis = edgeAxis; runValue = edgeValue;
+      }
+    }
+    runs.push(currentRun);
+    return runs;
+  }
+
+  function splitStairBodyByTopFace(mesh: any): LocalRect[] {
     var geometry = mesh.geometry;
     var posAttr = geometry.attributes.position;
     var normAttr = geometry.attributes.normal;
@@ -313,31 +379,51 @@ export function hashColorHex(key: string): number {
     var normalMatrix = new THREE.Matrix3().getNormalMatrix(worldMatrix);
     var worldNormal = new THREE.Vector3();
     var worldPos = new THREE.Vector3();
-    function worldNormalY(i: number) {
+    function worldNormalVec(i: number) {
       worldNormal.set(normAttr.getX(i), normAttr.getY(i), normAttr.getZ(i));
       worldNormal.applyMatrix3(normalMatrix).normalize();
-      return worldNormal.y;
+      return worldNormal;
     }
-    function worldPosY(i: number) {
+    function worldPosVec(i: number) {
       worldPos.set(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i));
       worldPos.applyMatrix4(worldMatrix);
-      return worldPos.y;
+      return worldPos;
     }
     var GROUND_TOUCH_M = 0.1;
     var TALL_SPAN_M = 0.5;
     var upIndices: number[] = [];
     var otherIndices: number[] = [];
     var UP_NORMAL_THRESHOLD = 0.7;
+    // union-find (por posição-mundo compartilhada) só entre os
+    // triângulos de topo — separa cada pisada/patamar em seu próprio
+    // grupo (não são soldados uns aos outros, só à massa do degrau
+    // embaixo, que fica de fora dessa análise).
+    var parent: { [key: string]: string } = {};
+    function find(k: string): string { var p = parent[k] || k; if (p !== k) { p = find(p); parent[k] = p; } return p; }
+    function union(a: string, b: string) { var ra = find(a), rb = find(b); if (ra !== rb) parent[ra] = rb; }
+    function posKey(i: number): string { var p = worldPosVec(i); return p.x.toFixed(3) + ',' + p.y.toFixed(3) + ',' + p.z.toFixed(3); }
+    var upTriKeys: [string, string, string][] = [];
     for (var t = 0; t < triCount; t++) {
       var i0 = srcIndex ? srcIndex[t * 3] : t * 3;
       var i1 = srcIndex ? srcIndex[t * 3 + 1] : t * 3 + 1;
       var i2 = srcIndex ? srcIndex[t * 3 + 2] : t * 3 + 2;
-      var y0 = worldPosY(i0), y1 = worldPosY(i1), y2 = worldPosY(i2);
+      var p0 = worldPosVec(i0), y0 = p0.y; var p1 = worldPosVec(i1), y1 = p1.y; var p2 = worldPosVec(i2), y2 = p2.y;
       var minY = Math.min(y0, y1, y2), maxY = Math.max(y0, y1, y2);
       if (minY < GROUND_TOUCH_M && (maxY < GROUND_TOUCH_M || (maxY - minY) > TALL_SPAN_M)) continue; // perna do patamar — descarta
-      var ny = (worldNormalY(i0) + worldNormalY(i1) + worldNormalY(i2)) / 3;
-      var bucket = ny > UP_NORMAL_THRESHOLD ? upIndices : otherIndices;
-      bucket.push(i0, i1, i2);
+      var nY = (worldNormalVec(i0).y + worldNormalVec(i1).y + worldNormalVec(i2).y) / 3;
+      var nX = (worldNormalVec(i0).x + worldNormalVec(i1).x + worldNormalVec(i2).x) / 3;
+      var isTop = nY > UP_NORMAL_THRESHOLD;
+      var isLateral = Math.abs(nX) > LATERAL_NORMAL_THRESHOLD;
+      if (isTop || isLateral) {
+        upIndices.push(i0, i1, i2);
+        if (isTop) {
+          var k0 = posKey(i0), k1 = posKey(i1), k2 = posKey(i2);
+          union(k0, k1); union(k1, k2);
+          upTriKeys.push([k0, k1, k2]);
+        }
+      } else {
+        otherIndices.push(i0, i1, i2);
+      }
     }
     var newIndex = new Uint32Array(upIndices.length + otherIndices.length);
     newIndex.set(upIndices, 0);
@@ -346,8 +432,48 @@ export function hashColorHex(key: string): number {
     geometry.clearGroups();
     geometry.addGroup(0, upIndices.length, 0);
     geometry.addGroup(upIndices.length, otherIndices.length, 1);
+
+    // Pisadas individuais (só os triângulos de TOPO, não os laterais) —
+    // cada uma vira um retângulo exato (bounding box das próprias
+    // pisadas, sem margem — ver comentário acima), agrupadas em lances
+    // por segmentTreadsByFlight, unidas num retângulo por lance.
+    var islandOf: { [key: string]: TreadInfo } = {};
+    upTriKeys.forEach(function (tri) {
+      tri.forEach(function (k) {
+        var root = find(k);
+        if (!islandOf[root]) islandOf[root] = { y: 0, cx: 0, cz: 0, minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity };
+      });
+    });
+    var counts: { [key: string]: number } = {};
+    upTriKeys.forEach(function (tri) {
+      tri.forEach(function (k) {
+        var root = find(k);
+        var parts = k.split(',');
+        var x = parseFloat(parts[0]!), y = parseFloat(parts[1]!), z = parseFloat(parts[2]!);
+        var info = islandOf[root]!;
+        info.y += y; info.cx += x; info.cz += z;
+        info.minX = Math.min(info.minX, x); info.maxX = Math.max(info.maxX, x);
+        info.minZ = Math.min(info.minZ, z); info.maxZ = Math.max(info.maxZ, z);
+        counts[root] = (counts[root] || 0) + 1;
+      });
+    });
+    var treads: TreadInfo[] = Object.keys(islandOf).map(function (root) {
+      var info = islandOf[root]!; var n = counts[root]!;
+      return { y: info.y / n, cx: info.cx / n, cz: info.cz / n, minX: info.minX, maxX: info.maxX, minZ: info.minZ, maxZ: info.maxZ };
+    });
+    treads.sort(function (a, b) { return a.y - b.y; });
+    var runs = segmentTreadsByFlight(treads);
+    return runs.map(function (run) {
+      var x1 = Infinity, x2 = -Infinity, z1 = Infinity, z2 = -Infinity;
+      run.forEach(function (i) {
+        var tr = treads[i]!;
+        x1 = Math.min(x1, tr.minX); x2 = Math.max(x2, tr.maxX);
+        z1 = Math.min(z1, tr.minZ); z2 = Math.max(z2, tr.maxZ);
+      });
+      return { x1: x1, x2: x2, z1: z1, z2: z2 };
+    });
   }
-  interface StairModelEntry { group: THREE.Group; naturalW: number; naturalD: number; naturalH: number; }
+  interface StairModelEntry { group: THREE.Group; naturalW: number; naturalD: number; naturalH: number; legRectsLocal: LocalRect[]; }
   var stairModelCache: { [url: string]: StairModelEntry | 'loading' } = {};
   function getStairModel(url: string): StairModelEntry | null {
     var cached = stairModelCache[url];
@@ -358,6 +484,7 @@ export function hashColorHex(key: string): number {
       var treadMat = getStairTreadMaterial();
       var stepBox = new THREE.Box3();
       var hasStepMesh = false;
+      var legRectsWorld: LocalRect[] = [];
       // Precisa estar atualizado ANTES do traverse — splitStairBodyByTopFace
       // lê mesh.matrixWorld pra classificar por normal em espaço mundo
       // (ver comentário na função), e sem isso ficaria com a matriz
@@ -369,7 +496,7 @@ export function hashColorHex(key: string): number {
         var isStepBody = !!(child.material && child.material.name === 'Material');
         child.userData.stairPart = isStepBody ? 'body' : 'beam';
         if (isStepBody) {
-          splitStairBodyByTopFace(child);
+          legRectsWorld = legRectsWorld.concat(splitStairBodyByTopFace(child));
           // grupo 0 (faces de cima, ver splitStairBodyByTopFace) = granito
           // sempre; grupo 1 (espelho/laterais) = placeholder aqui, cada
           // instância troca por buildStairMaterial(stair) em
@@ -408,7 +535,17 @@ export function hashColorHex(key: string): number {
       gltf.scene.position.set(-center.x, -box.min.y, -center.z);
       var anchored = new THREE.Group();
       anchored.add(gltf.scene);
-      stairModelCache[url] = { group: anchored, naturalW: size.x, naturalD: size.z, naturalH: size.y };
+      // Retângulos por lance (splitStairBodyByTopFace) foram calculados
+      // ANTES da âncora acima — subtrai o mesmo deslocamento (center.x/
+      // center.z) pra ficarem no mesmo referencial "local ancorado" que
+      // tudo mais usa (stair.x/y = centro do retângulo, largura/giro/
+      // corte na laje). Sem nenhum lance identificado (não deveria
+      // acontecer), cai num único retângulo = a caixa inteira, mesmo
+      // comportamento de antes desta função existir.
+      var legRectsLocal: LocalRect[] = legRectsWorld.length > 0
+        ? legRectsWorld.map(function (r) { return { x1: r.x1 - center.x, x2: r.x2 - center.x, z1: r.z1 - center.z, z2: r.z2 - center.z }; })
+        : [{ x1: box.min.x - center.x, x2: box.max.x - center.x, z1: box.min.z - center.z, z2: box.max.z - center.z }];
+      stairModelCache[url] = { group: anchored, naturalW: size.x, naturalD: size.z, naturalH: size.y, legRectsLocal: legRectsLocal };
       if (onFurnitureAssetLoaded) onFurnitureAssetLoaded();
     }, undefined, function (err) {
       console.error('Falha ao carregar escada ' + url, err);
@@ -432,6 +569,23 @@ export function hashColorHex(key: string): number {
     // um retângulo mais estreito que a malha de verdade na laje.
     var widthM = stair.model === 'reta' ? stair.widthM : entry.naturalW * heightScale;
     return { widthM: widthM, depthM: entry.naturalD * heightScale };
+  }
+
+  // Retângulos de corte na laje (unidade de grade, mundo) — UM por
+  // LANCE (trecho reto) da escada, não mais um retângulo só cobrindo o
+  // giro inteiro. No reto é sempre 1 retângulo (mesmo resultado de
+  // antes); no L/U são 2-3, cada um batendo exatamente na pegada real
+  // daquele trecho — o vão "de dentro" da virada (onde não tem degrau
+  // nenhum) fica de fora do corte, do jeito que o Product Owner marcou
+  // na própria imagem da escada L. null enquanto o .glb não carregou.
+  export function getStairLajeHoleRects(stair: any): { x1: number; y1: number; x2: number; y2: number }[] | null {
+    var entry = getStairModel(stairModelUrl(stair.model));
+    if (!entry) return null;
+    var heightScale = FLOOR_STACK_HEIGHT / entry.naturalH;
+    var widthScale = stair.model === 'reta' ? (stair.widthM / entry.naturalW) : heightScale;
+    return entry.legRectsLocal.map(function (localRect) {
+      return Core.stairLegWorldRectangle(stair, localRect, widthScale, heightScale);
+    });
   }
 
   function disposeObject3DTree(obj: any) {
@@ -2653,6 +2807,15 @@ export function hashColorHex(key: string): number {
       }
     });
     instance.scale.set(widthScale, heightScale, heightScale);
+    // Desce a malha VISÍVEL uns milímetros (não a hit-box, que continua
+    // com a altura cheia pra não perder área clicável) — o topo do
+    // último degrau nasce exatamente na mesma cota do topo da laje
+    // (FLOOR_STACK_HEIGHT, de propósito — ver DEC-139/resposta sobre
+    // altura final da escada), e essa coincidência exata causava
+    // Z-fighting (tremulação) bem na borda do corte. Um offset pequeno
+    // o bastante pra nunca aparecer visualmente resolve sem tirar a
+    // escada do lugar de verdade.
+    instance.position.y = -STAIR_Z_FIGHT_EPSILON_M;
     // Hit-box invisível ancorada em y=0 (base do lance, mesma convenção
     // de largura/corte na laje — centro em X/Z, base em Y), largura ×
     // pé-direito × corrida real (já escalada). No L/U a largura real
@@ -4681,37 +4844,41 @@ export function hashColorHex(key: string): number {
           // Escada: fura o buraco na laje quando o retângulo dela cruza
           // este cômodo — clipado contra o bounding box do próprio
           // cômodo pra nunca gerar geometria quebrada se a escada for
-          // arrastada parcialmente pra fora. A corrida usada no
-          // retângulo vem do bounding box REAL do .glb já carregado
-          // (getStairFootprintMeters), não de uma fórmula — o corte fica
-          // exatamente no limite do último degrau, seja qual for o
-          // modelo (reta/L/U). Enquanto o .glb ainda não carregou, pula
-          // o corte nesta passada (reaparece sozinho quando o asset
-          // chegar e disparar um novo render). Core.stairFootprintRectangle
-          // já devolve um retângulo axis-aligned, já que a rotação é
-          // sempre múltiplo de 90° (Store.rotateStair). Mesma técnica
-          // de Shape.holes já usada em buildPerimeterFrameShape/
-          // buildInsetFrameShape (quadro da fundação), só nunca tinha
-          // sido aplicada a um cômodo.
+          // arrastada parcialmente pra fora. UM retângulo POR LANCE
+          // (getStairLajeHoleRects), não mais um retângulo só cobrindo o
+          // giro inteiro do L/U — cada um vem do bounding box REAL das
+          // pisadas daquele trecho (splitStairBodyByTopFace), então o
+          // corte acompanha o formato de verdade da escada (o vão "de
+          // dentro" da virada, sem degrau nenhum, fica de fora — DEC-144,
+          // conforme a marcação que o Product Owner fez na imagem da
+          // escada L). No reto continua sendo 1 retângulo só, resultado
+          // idêntico a antes. Enquanto o .glb não carregou, pula o corte
+          // nesta passada (reaparece sozinho quando o asset chegar e
+          // disparar um novo render). Cada retângulo já é axis-aligned,
+          // já que a rotação é sempre múltiplo de 90° (Store.rotateStair).
+          // Mesma técnica de Shape.holes já usada em
+          // buildPerimeterFrameShape/buildInsetFrameShape (quadro da
+          // fundação), só nunca tinha sido aplicada a um cômodo.
           var roomMinX = Infinity, roomMaxX = -Infinity, roomMinY = Infinity, roomMaxY = -Infinity;
           outsetPoints.forEach(function (p: any) {
             roomMinX = Math.min(roomMinX, p.x); roomMaxX = Math.max(roomMaxX, p.x);
             roomMinY = Math.min(roomMinY, p.y); roomMaxY = Math.max(roomMaxY, p.y);
           });
           (floorData.stairs || []).forEach(function (stair: any) {
-            var stFootprint = getStairFootprintMeters(stair);
-            if (!stFootprint) return; // .glb ainda não carregou — sem corte nesta passada
-            var rect = Core.stairFootprintRectangle(stair, stFootprint.widthM, stFootprint.depthM);
-            var ix1 = Math.max(rect.x1, roomMinX), ix2 = Math.min(rect.x2, roomMaxX);
-            var iy1 = Math.max(rect.y1, roomMinY), iy2 = Math.min(rect.y2, roomMaxY);
-            if (ix2 <= ix1 || iy2 <= iy1) return; // sem cruzamento de verdade
-            var hole = new THREE.Path();
-            [{ x: ix1, y: iy1 }, { x: ix2, y: iy1 }, { x: ix2, y: iy2 }, { x: ix1, y: iy2 }].forEach(function (p, i) {
-              var wx = (p.x - offsetX) * scale, wz = (p.y - offsetY) * scale;
-              if (i === 0) hole.moveTo(wx, wz); else hole.lineTo(wx, wz);
+            var stRects = getStairLajeHoleRects(stair);
+            if (!stRects) return; // .glb ainda não carregou — sem corte nesta passada
+            stRects.forEach(function (rect) {
+              var ix1 = Math.max(rect.x1, roomMinX), ix2 = Math.min(rect.x2, roomMaxX);
+              var iy1 = Math.max(rect.y1, roomMinY), iy2 = Math.min(rect.y2, roomMaxY);
+              if (ix2 <= ix1 || iy2 <= iy1) return; // sem cruzamento de verdade
+              var hole = new THREE.Path();
+              [{ x: ix1, y: iy1 }, { x: ix2, y: iy1 }, { x: ix2, y: iy2 }, { x: ix1, y: iy2 }].forEach(function (p, i) {
+                var wx = (p.x - offsetX) * scale, wz = (p.y - offsetY) * scale;
+                if (i === 0) hole.moveTo(wx, wz); else hole.lineTo(wx, wz);
+              });
+              hole.closePath();
+              lajeShape.holes.push(hole);
             });
-            hole.closePath();
-            lajeShape.holes.push(hole);
           });
           var lajeSizeX = 0, lajeSizeZ = 0;
           outsetPoints.forEach(function (p: any, i: any) {
@@ -4885,6 +5052,7 @@ export const Scene3DRenderer = {
   getOpeningModelMeshes,
   getFurnitureFootprint,
   getStairFootprintMeters,
+  getStairLajeHoleRects,
   FLOOR_STACK_HEIGHT_GETTER,
   WALL_HEIGHT_GETTER,
   ROOF_OVERHANG_GETTER,
