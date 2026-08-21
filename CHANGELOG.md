@@ -1,5 +1,7 @@
 # Changelog
 
+> Corrigido: Escada em U estava sem textura de granito nenhuma (a malha desse arquivo específico precisa da normal em espaço mundo, não local, pra saber quais faces são "de cima") e tinha a viga de apoio escondida por engano em vez dos pés do patamar — a viga volta a aparecer, e agora só os pés (identificados pela geometria de verdade — tocam o chão) ficam de fora. Ver DEC-143 (3ª correção pós-lançamento da DEC-140).
+
 > Corrigido: Escada em U ainda saía pequena e desproporcional — a causa raiz era o cálculo do bounding box do modelo (usa um modo aproximado que não lida bem com a rotação composta específica do arquivo do U). Granito passa a se aplicar só na pisada/patamar (face de cima), não mais no espelho vertical do degrau. Removidos os 4 pés de apoio do patamar da escada em U, a pedido. Ver DEC-142 (2ª correção pós-lançamento da DEC-140).
 
 > Corrigido: Escada (modelos 3D, ver abaixo) — a pedra de granito estava caindo na viga de apoio em vez das pisadas, o corte na laje passava do limite do último degrau, e a escada em L saía achatada (a alça de largura, que só faz sentido no modelo reto, estava distorcendo o L inteiro). Ver DEC-141 (correção pós-lançamento da DEC-140).

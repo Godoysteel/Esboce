@@ -271,11 +271,60 @@ export function hashColorHex(key: string): number {
   // parte de baixo) vira grupo 1 (acabamento normal) — via
   // BufferGeometry.groups + Mesh.material como array, técnica padrão do
   // Three.js pra várias materiais numa malha só sem duplicar geometria.
-  function splitStairBodyByTopFace(geometry: any) {
+  //
+  // Recebe o MESH (não só a geometry) porque a normal usada pra
+  // classificar precisa ser em espaço MUNDO, não local — confirmado com
+  // um script Node à parte: no arquivo do U, nenhum triângulo tem normal
+  // LOCAL apontando pra +Y (a malha foi modelada num referencial próprio
+  // que só vira "pra cima" de verdade depois da rotação composta do nó,
+  // ver DEC-142/143); classificar pela normal local deixava o grupo 0
+  // vazio pro U (0 de 320 triângulos), fazendo a pedra sumir por completo
+  // nesse modelo especificamente ("está faltando a textura na escada
+  // U"). Com a normal transformada por mesh.matrixWorld (Matrix3
+  // getNormalMatrix — trata escala não-uniforme corretamente, diferente
+  // de aplicar a matriz de posição direto), os 3 arquivos dão uma
+  // proporção de faces "pra cima" bem parecida (reta 16,7%, L 20,0%, U
+  // 17,5%) — sinal de que a classificação agora é confiável nos 3.
+  // Os "pés" do patamar do U (Product Owner: "consegue retirar os pés da
+  // escada U?") são geometria de verdade soldada ao MESMO pedaço
+  // conectado do patamar (confirmado com um script Node à parte, análise
+  // de componentes conectados por vértice compartilhado) — não dá pra
+  // escondê-los como peça separada (ver stairPart==='beam', que é a
+  // longarina diagonal sob os lances, uma coisa BEM diferente que
+  // precisa continuar visível). O sinal que separa perna de patamar com
+  // segurança, medido no mesmo script: toda perna toca o chão (Y mundo
+  // ≈ 0) — ou um triângulo achatado bem no pé (Y mín ≈ Y máx ≈ 0, a sola
+  // do pé) ou uma parede fina que sobe do chão até a base do patamar
+  // (Y mín ≈ 0, Y máx bem mais alto, vão vertical grande). Já a laje do
+  // patamar em si nunca desce perto do chão (fica isolada lá em cima,
+  // apoiada nas próprias pernas). Um espelho de degrau comum (não-perna)
+  // também pode tocar Y≈0 no primeiro degrau, mas nunca teria o mesmo
+  // padrão (nem achatado no chão, nem um vão vertical tão grande — um
+  // espelho sobe só a altura de UM degrau). Por segurança o corte SÓ
+  // remove o triângulo quando bate um dos dois padrões — no reto/L,
+  // onde não existe perna nenhuma, isso não acha nada e não remove nada.
+  function splitStairBodyByTopFace(mesh: any) {
+    var geometry = mesh.geometry;
     var posAttr = geometry.attributes.position;
     var normAttr = geometry.attributes.normal;
     var srcIndex = geometry.index ? geometry.index.array : null;
     var triCount = srcIndex ? srcIndex.length / 3 : posAttr.count / 3;
+    var worldMatrix = mesh.matrixWorld;
+    var normalMatrix = new THREE.Matrix3().getNormalMatrix(worldMatrix);
+    var worldNormal = new THREE.Vector3();
+    var worldPos = new THREE.Vector3();
+    function worldNormalY(i: number) {
+      worldNormal.set(normAttr.getX(i), normAttr.getY(i), normAttr.getZ(i));
+      worldNormal.applyMatrix3(normalMatrix).normalize();
+      return worldNormal.y;
+    }
+    function worldPosY(i: number) {
+      worldPos.set(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i));
+      worldPos.applyMatrix4(worldMatrix);
+      return worldPos.y;
+    }
+    var GROUND_TOUCH_M = 0.1;
+    var TALL_SPAN_M = 0.5;
     var upIndices: number[] = [];
     var otherIndices: number[] = [];
     var UP_NORMAL_THRESHOLD = 0.7;
@@ -283,7 +332,10 @@ export function hashColorHex(key: string): number {
       var i0 = srcIndex ? srcIndex[t * 3] : t * 3;
       var i1 = srcIndex ? srcIndex[t * 3 + 1] : t * 3 + 1;
       var i2 = srcIndex ? srcIndex[t * 3 + 2] : t * 3 + 2;
-      var ny = (normAttr.getY(i0) + normAttr.getY(i1) + normAttr.getY(i2)) / 3;
+      var y0 = worldPosY(i0), y1 = worldPosY(i1), y2 = worldPosY(i2);
+      var minY = Math.min(y0, y1, y2), maxY = Math.max(y0, y1, y2);
+      if (minY < GROUND_TOUCH_M && (maxY < GROUND_TOUCH_M || (maxY - minY) > TALL_SPAN_M)) continue; // perna do patamar — descarta
+      var ny = (worldNormalY(i0) + worldNormalY(i1) + worldNormalY(i2)) / 3;
       var bucket = ny > UP_NORMAL_THRESHOLD ? upIndices : otherIndices;
       bucket.push(i0, i1, i2);
     }
@@ -306,13 +358,18 @@ export function hashColorHex(key: string): number {
       var treadMat = getStairTreadMaterial();
       var stepBox = new THREE.Box3();
       var hasStepMesh = false;
+      // Precisa estar atualizado ANTES do traverse — splitStairBodyByTopFace
+      // lê mesh.matrixWorld pra classificar por normal em espaço mundo
+      // (ver comentário na função), e sem isso ficaria com a matriz
+      // identidade default (nunca computada).
+      gltf.scene.updateMatrixWorld(true);
       gltf.scene.traverse(function (child: any) {
         if (!child.isMesh) return;
         child.castShadow = true; child.receiveShadow = true;
         var isStepBody = !!(child.material && child.material.name === 'Material');
         child.userData.stairPart = isStepBody ? 'body' : 'beam';
         if (isStepBody) {
-          splitStairBodyByTopFace(child.geometry);
+          splitStairBodyByTopFace(child);
           // grupo 0 (faces de cima, ver splitStairBodyByTopFace) = granito
           // sempre; grupo 1 (espelho/laterais) = placeholder aqui, cada
           // instância troca por buildStairMaterial(stair) em
@@ -2581,13 +2638,15 @@ export function hashColorHex(key: string): number {
     instance.traverse(function (child: any) {
       if (!child.isMesh || !child.userData) return;
       if (child.userData.stairPart === 'beam') {
-        // No modelo U a "viga" (peça sem material) são os 4 pés de apoio
-        // do patamar (96 vértices ÷ 4 pernas = 24 cada, uma caixa simples
-        // por perna) — Product Owner pediu pra tirar ("consegue retirar
-        // os pés da escada U?"). No reta/L a mesma peça é a longarina
-        // diagonal sob o lance, que continua útil visualmente — por isso
-        // o esconder é só pro modelo U, não geral.
-        child.visible = stair.model !== 'U';
+        // A "viga" (peça sem material) é a longarina diagonal sob os
+        // lances nos 3 modelos — CONTINUA sempre visível (correção: uma
+        // tentativa anterior escondia essa peça inteira pro modelo U,
+        // achando que ela fossem os pés do patamar; o Product Owner
+        // corrigiu ao vivo — "removeu as vigas e não os pés... as vigas
+        // devem continuar". Os pés de verdade são geometria SOLDADA ao
+        // patamar, dentro da malha 'body' — ver splitStairBodyByTopFace,
+        // que já os descarta na origem por um critério geométrico
+        // próprio, não por esconder esta peça aqui).
         child.material = bodyMat;
       } else if (child.userData.stairPart === 'body') {
         child.material = [treadMat, bodyMat];

@@ -134,13 +134,13 @@ test('Scene3DRenderer: pisada da escada usa a mesma textura de granito/mármore 
   assert.match(body, /getSoleiraMarbleMaps\(\)/);
 });
 
-test('Scene3DRenderer: getStairModel identifica o CORPO dos degraus pelo nome do material ("Material", peça grande — recebe granito só nas faces de cima) e a VIGA (sem material, peça pequena) separadamente, não pela ordem — a ordem difere entre os 3 arquivos .glb (confirmado ao vivo: a identificação original estava invertida, granito caiu na viga). O bounding box usa precise=true (Box3.setFromObject com segundo argumento), essencial pra rotação composta fora de eixo (modelo U) não inflar naturalH/D — confirmado com um script Node à parte que o modo impreciso (padrão) dava um box bem maior que o real pra esse arquivo especificamente.', () => {
+test('Scene3DRenderer: getStairModel identifica o CORPO dos degraus pelo nome do material ("Material", peça grande — recebe granito só nas faces de cima) e a VIGA (sem material, peça pequena — a longarina diagonal, continua sempre visível) separadamente, não pela ordem — a ordem difere entre os 3 arquivos .glb (confirmado ao vivo: a identificação original estava invertida, granito caiu na viga). O bounding box usa precise=true (Box3.setFromObject com segundo argumento), essencial pra rotação composta fora de eixo (modelo U) não inflar naturalH/D — confirmado com um script Node à parte que o modo impreciso (padrão) dava um box bem maior que o real pra esse arquivo especificamente.', () => {
   const start = rendererSource.indexOf('function getStairModel(url: string)');
   assert.notEqual(start, -1);
   const body = rendererSource.slice(start, rendererSource.indexOf('\n  }\n', start));
   assert.match(body, /var isStepBody = !!\(child\.material && child\.material\.name === 'Material'\);/);
   assert.match(body, /child\.userData\.stairPart = isStepBody \? 'body' : 'beam';/);
-  assert.match(body, /splitStairBodyByTopFace\(child\.geometry\);/);
+  assert.match(body, /splitStairBodyByTopFace\(child\);/);
   assert.match(body, /child\.material = \[treadMat, treadMat\];/);
   // O bounding box de escala/pegada (naturalW/H/D) considera só o corpo
   // — a viga pode se estender além do último degrau e não deve inflar a
@@ -150,14 +150,24 @@ test('Scene3DRenderer: getStairModel identifica o CORPO dos degraus pelo nome do
   assert.match(body, /var box = hasStepMesh \? stepBox : new THREE\.Box3\(\)\.setFromObject\(gltf\.scene, true\);/);
 });
 
-test('Scene3DRenderer: splitStairBodyByTopFace separa o corpo dos degraus em 2 grupos de material pela normal do triângulo — faces de cima (pisada/patamar) num grupo, o resto (espelho/laterais) no outro — pra a pedra de granito não vazar pro espelho vertical (Product Owner: "a textura se aplica somente sob a face superior dos degraus e patamar")', () => {
-  const start = rendererSource.indexOf('function splitStairBodyByTopFace(geometry: any)');
+test('Scene3DRenderer: splitStairBodyByTopFace classifica pela normal em ESPAÇO MUNDO (mesh.matrixWorld via Matrix3.getNormalMatrix), não local — confirmado com um script Node à parte que no arquivo do U nenhum triângulo tem normal LOCAL voltada pra +Y (a malha só "vira" pra cima de verdade depois da rotação composta do nó), o que deixava o grupo do granito vazio nesse modelo especificamente ("está faltando a textura na escada U")', () => {
+  const start = rendererSource.indexOf('function splitStairBodyByTopFace(mesh: any)');
   assert.notEqual(start, -1);
   const body = rendererSource.slice(start, rendererSource.indexOf('\n  }', start));
-  assert.match(body, /var ny = \(normAttr\.getY\(i0\) \+ normAttr\.getY\(i1\) \+ normAttr\.getY\(i2\)\) \/ 3;/);
+  assert.match(body, /var normalMatrix = new THREE\.Matrix3\(\)\.getNormalMatrix\(worldMatrix\);/);
+  assert.match(body, /worldNormal\.applyMatrix3\(normalMatrix\)\.normalize\(\);/);
   assert.match(body, /var bucket = ny > UP_NORMAL_THRESHOLD \? upIndices : otherIndices;/);
   assert.match(body, /geometry\.addGroup\(0, upIndices\.length, 0\);/);
   assert.match(body, /geometry\.addGroup\(upIndices\.length, otherIndices\.length, 1\);/);
+});
+
+test('Scene3DRenderer: splitStairBodyByTopFace descarta os pés do patamar (geometria soldada ao corpo, não uma peça separável) por um critério geométrico em espaço mundo — toca o chão (Y<0,1m) achatado OU sobe do chão num vão vertical grande (>0,5m numa única face) — confirmado com um script Node à parte (análise de componentes conectados) que esse é o único sinal que separa perna de patamar sem também apagar o espelho do primeiro degrau', () => {
+  const start = rendererSource.indexOf('function splitStairBodyByTopFace(mesh: any)');
+  assert.notEqual(start, -1);
+  const body = rendererSource.slice(start, rendererSource.indexOf('\n  }', start));
+  assert.match(body, /var GROUND_TOUCH_M = 0\.1;/);
+  assert.match(body, /var TALL_SPAN_M = 0\.5;/);
+  assert.match(body, /if \(minY < GROUND_TOUCH_M && \(maxY < GROUND_TOUCH_M \|\| \(maxY - minY\) > TALL_SPAN_M\)\) continue;/);
 });
 
 test('Scene3DRenderer: buildStairHitMesh escala a malha carregada — altura/corrida sempre travadas no pé-direito (FLOOR_STACK_HEIGHT/naturalH); largura independente (stair.widthM/naturalW) só no modelo reto, L/U usam escala uniforme (sem distorcer o footprint do giro) — e devolve null enquanto o .glb não carregou', () => {
@@ -175,10 +185,6 @@ test('Scene3DRenderer: buildStairHitMesh escala a malha carregada — altura/cor
   assert.match(body, /child\.material = bodyMat;/);
   assert.match(body, /child\.userData\.stairPart === 'body'/);
   assert.match(body, /child\.material = \[treadMat, bodyMat\];/);
-  // Product Owner: "consegue retirar os pés da escada U?" — a viga do
-  // modelo U são os 4 pés de apoio do patamar; no reta/L a mesma peça é
-  // a longarina diagonal (continua visível). Só o U esconde.
-  assert.match(body, /child\.visible = stair\.model !== 'U';/);
 });
 
 test('Scene3DRenderer: getStairFootprintMeters devolve a pegada real (metros) do modelo carregado — largura real (não stair.widthM) no L/U — null enquanto não carregou', () => {
