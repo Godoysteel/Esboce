@@ -139,6 +139,24 @@ export function hashColorHex(key: string): number {
     return soleiraMarbleMaps;
   }
 
+  // Pisada da escada — mesma pedra de granito/mármore da soleira
+  // externa (Product Owner: "quero que use aquela textura de pedra de
+  // granito que é aplicado nas soleiras para as pisadas do degrau, como
+  // se tivesse uma pedra sobre os degraus"). Um material só, cacheado e
+  // COMPARTILHADO entre todas as escadas da cena — a pisada não tem
+  // acabamento configurável por peça (ao contrário do corpo/espelho, que
+  // segue stair.finishProductId/colorHex via buildStairMaterial).
+  var stairTreadMaterial: any = null;
+  function getStairTreadMaterial() {
+    if (stairTreadMaterial) return stairTreadMaterial;
+    var maps = getSoleiraMarbleMaps();
+    stairTreadMaterial = new THREE.MeshStandardMaterial({
+      map: maps.map, normalMap: maps.normalMap, roughnessMap: maps.roughnessMap,
+      roughness: 1, metalness: 0.05,
+    });
+    return stairTreadMaterial;
+  }
+
   interface Registry {
     wallMeshes: THREE.Object3D[];
     roomMeshes: THREE.Object3D[];
@@ -211,6 +229,72 @@ export function hashColorHex(key: string): number {
       delete furnitureModelCache[url];
     });
     return null;
+  }
+
+  // --- Escada (glTF) ----------------------------------------------------
+  // Um .glb por StairModel, modelado pelo Product Owner no Blender: cada
+  // mesh tem 2 primitivos — um com o material "Material" (corpo/espelho
+  // dos degraus, recolorido em runtime por buildStairMaterial conforme
+  // stair.finishProductId/colorHex) e outro SEM material (a pisada — cada
+  // arquivo tem uma peça separada, sem material, propositalmente
+  // reservada pra receber a pedra de granito da soleira, ver
+  // getStairTreadMaterial). Distingue os dois pelo nome do material (só
+  // "Material" tem nome — a primitiva sem material ganha o material
+  // default do GLTFLoader, sem nome), já que a ORDEM dos primitivos não é
+  // consistente entre os 3 arquivos (confirmado inspecionando o JSON: no
+  // reta/L o corpo vem primeiro, no U vem depois).
+  var STAIR_MODEL_URLS: { [key: string]: string } = {
+    reta: 'models/escada-reta.glb',
+    L: 'models/escada-l.glb',
+    U: 'models/escada-u.glb',
+  };
+  function stairModelUrl(model: any): string { return STAIR_MODEL_URLS[model] || STAIR_MODEL_URLS.reta!; }
+  interface StairModelEntry { group: THREE.Group; naturalW: number; naturalD: number; naturalH: number; }
+  var stairModelCache: { [url: string]: StairModelEntry | 'loading' } = {};
+  function getStairModel(url: string): StairModelEntry | null {
+    var cached = stairModelCache[url];
+    if (cached && cached !== 'loading') return cached;
+    if (cached === 'loading') return null;
+    stairModelCache[url] = 'loading';
+    gltfLoader.load(url, function (gltf) {
+      var treadMat = getStairTreadMaterial();
+      gltf.scene.traverse(function (child: any) {
+        if (!child.isMesh) return;
+        child.castShadow = true; child.receiveShadow = true;
+        if (!child.material || child.material.name !== 'Material') child.material = treadMat;
+      });
+      var box = new THREE.Box3().setFromObject(gltf.scene);
+      var center = box.getCenter(new THREE.Vector3());
+      var size = box.getSize(new THREE.Vector3());
+      // Mesma âncora de buildFurniturePiece: centro em X/Z, base em Y=0
+      // — necessário aqui porque o pivô de origem varia entre os 3
+      // arquivos (a escada reta nasce com a base em Z=0, não centrada),
+      // então recalcular do bounding box é a única forma confiável de
+      // alinhar com a convenção já usada por stair.x/y (centro do
+      // retângulo) em todo o resto do código (largura, giro, corte na laje).
+      gltf.scene.position.set(-center.x, -box.min.y, -center.z);
+      var anchored = new THREE.Group();
+      anchored.add(gltf.scene);
+      stairModelCache[url] = { group: anchored, naturalW: size.x, naturalD: size.z, naturalH: size.y };
+      if (onFurnitureAssetLoaded) onFurnitureAssetLoaded();
+    }, undefined, function (err) {
+      console.error('Falha ao carregar escada ' + url, err);
+      delete stairModelCache[url];
+    });
+    return null;
+  }
+
+  // Pegada real (planta) de uma escada já carregada — largura livre
+  // (stair.widthM) e corrida derivada da proporção natural do modelo,
+  // escalada pelo mesmo fator que trava a altura no pé-direito do
+  // pavimento (FLOOR_STACK_HEIGHT). null enquanto o .glb ainda não
+  // carregou (mesmo padrão de getFurnitureFootprint) — quem chama trata
+  // como "ainda não sabe", sem travar nada.
+  export function getStairFootprintMeters(stair: any): { widthM: number; depthM: number } | null {
+    var entry = getStairModel(stairModelUrl(stair.model));
+    if (!entry) return null;
+    var heightScale = FLOOR_STACK_HEIGHT / entry.naturalH;
+    return { widthM: stair.widthM, depthM: entry.naturalD * heightScale };
   }
 
   function disposeObject3DTree(obj: any) {
@@ -2360,9 +2444,10 @@ export function hashColorHex(key: string): number {
     return hitMesh;
   }
 
-  // Escada — dispatch por stair.model, hoje só 'reta' (mesmo padrão de
-  // buildRoofPiece pros tipos de telhado; estrutura pronta pra L/U
-  // entrarem depois sem reescrever nada).
+  // Escada — corpo/espelho recolorido por stair.finishProductId/colorHex
+  // (mesma lógica de VolumeBox/parede), pisada SEMPRE em granito
+  // (getStairTreadMaterial) — ver buildStairPiece, que aplica esta
+  // função só na primitiva com material nomeado "Material".
   function buildStairMaterial(stair: any) {
     var product = stair.finishProductId ? Catalog.getProduct(stair.finishProductId) : null;
     var hasRealTexture = !!(product && product.category === 'floor_tile' && product.assets.textures);
@@ -2381,46 +2466,37 @@ export function hashColorHex(key: string): number {
     });
   }
 
-  // Um bloco SÓLIDO por degrau, cada um contendo por completo os
-  // anteriores (mesma base em x=0/z=-halfLength, crescendo em altura E
-  // profundidade a cada degrau) — a UNIÃO das superfícies expostas de
-  // todos os blocos já forma o perfil escalonado certo (piso+espelho de
-  // cada degrau), sem precisar de geometria booleana de verdade. Base
-  // em y=0 (ancorada no piso do próprio pavimento — ver
-  // buildStairHitMesh), topo do último degrau bate exatamente na cota
-  // do pavimento de cima (FLOOR_STACK_HEIGHT).
-  function buildStairReta(stair: any) {
-    var plan = Core.stairStepPlan(FLOOR_STACK_HEIGHT);
-    var mat = buildStairMaterial(stair);
-    var group = new THREE.Group();
-    var halfLength = plan.lengthM / 2;
-    for (var i = 0; i < plan.stepCount; i++) {
-      var stepHeight = plan.riserRealM * (i + 1);
-      var stepDepth = Core.STAIR_TREAD_M * (i + 1);
-      var geo = new THREE.BoxGeometry(stair.widthM, stepHeight, stepDepth);
-      var box = new THREE.Mesh(geo, mat);
-      box.position.set(0, stepHeight / 2, -halfLength + stepDepth / 2);
-      group.add(box);
-    }
-    return group;
-  }
-
-  function buildStairMesh(stair: any) {
-    if (stair.model === 'reta') return buildStairReta(stair);
-    return buildStairReta(stair);
-  }
-
+  // Malha real (.glb) da escada — clona o template cacheado
+  // (getStairModel), recolore só a primitiva "Material" (corpo/espelho)
+  // por instância, e escala pra bater com o pé-direito do pavimento:
+  // Y/Z uniformes travados em FLOOR_STACK_HEIGHT/naturalH (garante que o
+  // topo do último degrau sempre chega exatamente na laje de cima,
+  // qualquer que seja a escala em que o modelo foi desenhado no
+  // Blender), X independente pra a alça de largura continuar
+  // funcionando. Retorna null enquanto o .glb ainda não carregou (mesmo
+  // padrão de buildFurniturePiece — a peça simplesmente não aparece
+  // nesse rebuild(), e reaparece sozinha quando onFurnitureAssetLoaded
+  // disparar um novo render).
   function buildStairHitMesh(stair: any, scale: any, offsetX: any, offsetY: any, yOffset: any) {
-    var plan = Core.stairStepPlan(FLOOR_STACK_HEIGHT);
-    var hitGeo = new THREE.BoxGeometry(stair.widthM, FLOOR_STACK_HEIGHT, plan.lengthM);
-    // Ancora a base do hit-box em y=0 (em vez do centro, padrão de
-    // BoxGeometry) — mesma convenção da malha visível (buildStairReta),
-    // que também nasce com a base em y=0.
+    var entry = getStairModel(stairModelUrl(stair.model));
+    if (!entry) return null;
+    var heightScale = FLOOR_STACK_HEIGHT / entry.naturalH;
+    var widthScale = stair.widthM / entry.naturalW;
+    var depthM = entry.naturalD * heightScale;
+    var instance = entry.group.clone(true);
+    var bodyMat = buildStairMaterial(stair);
+    instance.traverse(function (child: any) {
+      if (child.isMesh && child.material && child.material.name === 'Material') child.material = bodyMat;
+    });
+    instance.scale.set(widthScale, heightScale, heightScale);
+    // Hit-box invisível ancorada em y=0 (base do lance, mesma convenção
+    // de largura/corte na laje — centro em X/Z, base em Y), largura ×
+    // pé-direito × corrida real (já escalada).
+    var hitGeo = new THREE.BoxGeometry(stair.widthM, FLOOR_STACK_HEIGHT, depthM);
     hitGeo.translate(0, FLOOR_STACK_HEIGHT / 2, 0);
     var hitMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 });
     var hitMesh = new THREE.Mesh(hitGeo, hitMat);
-    var group = buildStairMesh(stair);
-    hitMesh.add(group);
+    hitMesh.add(instance);
     var px = ((stair.x || 0) - offsetX) * scale, pz = ((stair.y || 0) - offsetY) * scale;
     hitMesh.position.set(px, yOffset, pz);
     hitMesh.rotation.y = -((stair.rotationDeg || 0) * Math.PI / 180);
@@ -3785,7 +3861,11 @@ export function hashColorHex(key: string): number {
       (floorData.stairs || []).forEach(function (stair) {
         // furnitureMeshes (não structureMeshes) — mesmo Group aninhado
         // dentro do hitMesh, mesma limpeza recursiva do VolumeBox acima.
+        // null enquanto o .glb ainda não carregou (buildStairHitMesh) —
+        // a escada simplesmente não aparece nesse rebuild(), mesmo
+        // padrão de móvel/esquadria com modelo ainda carregando.
         var smesh = buildStairHitMesh(stair, scale, offsetX, offsetY, yOffset);
+        if (!smesh) return;
         tagCategory(smesh, 'stair');
         smesh.userData.stairId = stair.id; smesh.userData.floorIndex = floorIdx;
         scene.add(smesh);
@@ -4433,9 +4513,15 @@ export function hashColorHex(key: string): number {
           // Escada: fura o buraco na laje quando o retângulo dela cruza
           // este cômodo — clipado contra o bounding box do próprio
           // cômodo pra nunca gerar geometria quebrada se a escada for
-          // arrastada parcialmente pra fora (Core.stairFootprintRectangle
+          // arrastada parcialmente pra fora. A corrida usada no
+          // retângulo vem do bounding box REAL do .glb já carregado
+          // (getStairFootprintMeters), não de uma fórmula — o corte fica
+          // exatamente no limite do último degrau, seja qual for o
+          // modelo (reta/L/U). Enquanto o .glb ainda não carregou, pula
+          // o corte nesta passada (reaparece sozinho quando o asset
+          // chegar e disparar um novo render). Core.stairFootprintRectangle
           // já devolve um retângulo axis-aligned, já que a rotação é
-          // sempre múltiplo de 90° — Store.rotateStair). Mesma técnica
+          // sempre múltiplo de 90° (Store.rotateStair). Mesma técnica
           // de Shape.holes já usada em buildPerimeterFrameShape/
           // buildInsetFrameShape (quadro da fundação), só nunca tinha
           // sido aplicada a um cômodo.
@@ -4445,7 +4531,9 @@ export function hashColorHex(key: string): number {
             roomMinY = Math.min(roomMinY, p.y); roomMaxY = Math.max(roomMaxY, p.y);
           });
           (floorData.stairs || []).forEach(function (stair: any) {
-            var rect = Core.stairFootprintRectangle(stair, FLOOR_STACK_HEIGHT);
+            var stFootprint = getStairFootprintMeters(stair);
+            if (!stFootprint) return; // .glb ainda não carregou — sem corte nesta passada
+            var rect = Core.stairFootprintRectangle(stair, stFootprint.depthM);
             var ix1 = Math.max(rect.x1, roomMinX), ix2 = Math.min(rect.x2, roomMaxX);
             var iy1 = Math.max(rect.y1, roomMinY), iy2 = Math.min(rect.y2, roomMaxY);
             if (ix2 <= ix1 || iy2 <= iy1) return; // sem cruzamento de verdade
@@ -4628,6 +4716,7 @@ export const Scene3DRenderer = {
   getFurnitureMeshes,
   getOpeningModelMeshes,
   getFurnitureFootprint,
+  getStairFootprintMeters,
   FLOOR_STACK_HEIGHT_GETTER,
   WALL_HEIGHT_GETTER,
   ROOF_OVERHANG_GETTER,

@@ -256,19 +256,20 @@ export interface VolumeBox {
   finishProductId?: string;
 }
 
-// Só 'reta' nesta primeira rodada (lance único, sem patamar) — union
-// pronta pra crescer (L/U/caracol), mesmo espírito de RoofType.
-export type StairModel = 'reta';
+// Cada modelo é uma malha .glb de verdade (ver Scene3DRenderer.STAIR_MODEL_URLS),
+// escalada em runtime pra bater com o pé-direito do pavimento — mesmo
+// espírito de RoofType, mas geometria real em vez de procedural.
+export type StairModel = 'reta' | 'L' | 'U';
 
 export interface Stair {
   id: string;
-  /** Centro do retângulo em planta, mesma unidade de grade de Wall.x1/VolumeBox.x (20 = 1m). */
+  /** Centro do retângulo (bounding box em planta) da malha carregada, mesma unidade de grade de Wall.x1/VolumeBox.x (20 = 1m). */
   x: number;
   y: number;
   /** Passos de 90°, mesmo padrão de VolumeBox/Furniture — sem alça de giro livre. */
   rotationDeg: number;
   model: StairModel;
-  /** Única dimensão livre por alça — o comprimento (corrida) é derivado do pé-direito do pavimento + geometria padrão de degrau (ver Core.STAIR_RISER_M/STAIR_TREAD_M), não é ajustável. */
+  /** Única dimensão livre por alça — escala o eixo X da malha. A altura é sempre travada no pé-direito do pavimento (escala Y/Z uniforme); a corrida sai da proporção natural do modelo, não é ajustável direto. */
   widthM: number;
   /** Cor sólida — usada só quando não há finishProductId. */
   colorHex?: string;

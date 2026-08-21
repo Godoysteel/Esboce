@@ -9,7 +9,7 @@ import { buildColdWaterKitchenPrototype, buildColdWaterNetworkFromFixtures, buil
 import type {
   Project, Floor, Wall, Column, Roof, Opening, OpeningKind, Varanda, Laje, Furniture, ColumnShape, RoofType,
   RidgeAxis, VarandaFrontSide, FoundationType, StoreEvent, StoreListener,
-  WallSnapshot, LinkedWallUpdate, GlazingPanel, GlazingGlassMaterial, BalconyRailing, VolumeBox, Stair, PlanUnderlay, Terreno, TerrenoMuroSide,
+  WallSnapshot, LinkedWallUpdate, GlazingPanel, GlazingGlassMaterial, BalconyRailing, VolumeBox, Stair, StairModel, PlanUnderlay, Terreno, TerrenoMuroSide,
   HydraulicNetworkType
 } from './types.js';
 
@@ -1615,6 +1615,17 @@ export const commands = {
     pushUndoSnapshot();
     s.finishProductId = productId;
     emit({ type: 'StairFinishSet', stairId, productId });
+  },
+
+  // Troca o modelo (reta/L/U) de uma escada já colocada — mesmo padrão
+  // de setColumnShape/setRoofType (escolhido depois de posicionar, via
+  // painel próprio no gizmo). A malha .glb correspondente é resolvida
+  // pelo Scene3DRenderer.
+  setStairModel(stairId: string, model: StairModel): void {
+    const s = findStair(stairId); if (!s) return;
+    pushUndoSnapshot();
+    s.model = model;
+    emit({ type: 'StairModelSet', stairId, model });
   },
 
   // Planta baixa importada (referência visual no chão) — uma por

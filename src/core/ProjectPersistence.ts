@@ -363,7 +363,7 @@ function parseStair(value: unknown, path: string): Stair {
     x: number(v.x, `${path}.x`),
     y: number(v.y, `${path}.y`),
     rotationDeg: number(v.rotationDeg, `${path}.rotationDeg`, 0),
-    model: enumValue(v.model, ['reta'], `${path}.model`, 'reta'),
+    model: enumValue(v.model, ['reta', 'L', 'U'], `${path}.model`, 'reta'),
     widthM: number(v.widthM, `${path}.widthM`),
   };
   const colorHex = optionalString(v.colorHex, `${path}.colorHex`);

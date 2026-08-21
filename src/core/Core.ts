@@ -399,17 +399,14 @@ export function createVolumeBoxEntity(
 
 // Escada — nasce solta, sempre livre (mesmo espírito do Bloco de
 // Volumetria: sem ímã de parede, só um aviso não-bloqueante se a base
-// ficar longe de apoio). Regra de Blondel (referência clássica de
-// dimensionamento de escada, uso corrente na construção civil
-// brasileira): 2×espelho + piso ≈ 63-64cm — usando espelho 17,5cm e
-// piso 28cm, 2×0,175+0,28 = 0,63m, dentro da faixa. O número de degraus
-// é derivado do pé-direito real do pavimento (FLOOR_STACK_HEIGHT,
-// Scene3DRenderer.FLOOR_STACK_HEIGHT_GETTER — nunca duplicado aqui como
-// valor solto), ajustando o espelho pra dividir a altura exata — o
-// comprimento (corrida) sai desse número de degraus × piso, não é uma
-// alça livre como largura é.
-export const STAIR_RISER_M = 0.175;
-export const STAIR_TREAD_M = 0.28;
+// ficar longe de apoio). A geometria é uma malha .glb de verdade por
+// StairModel (ver Scene3DRenderer.STAIR_MODEL_URLS/getStairFootprintMeters),
+// escalada em runtime pra bater com o pé-direito do pavimento — não há
+// mais fórmula de degrau aqui (o antigo cálculo por regra de Blondel,
+// usado só pela geometria procedural anterior, foi removido junto com
+// ela). O comprimento (corrida) sai da proporção natural do modelo
+// (escala Y/Z uniforme travada no pé-direito) — não é uma alça livre
+// como largura é.
 export const STAIR_MIN_WIDTH_M = 0.8;
 export const STAIR_MAX_WIDTH_M = 2.0;
 export const STAIR_DEFAULT_WIDTH_M = 1.0;
@@ -426,26 +423,18 @@ export function createStairEntity(x: number, y: number, rotationDeg?: number, wi
 }
 
 /**
- * Nº de degraus e comprimento total (corrida) de uma escada reta pra
- * vencer exatamente `floorStackHeightM` de altura — ver regra de
- * Blondel acima. Devolve também `riserRealM` (espelho real, ajustado
- * pra dividir a altura exata em passos inteiros), usado na malha 3D.
- */
-export function stairStepPlan(floorStackHeightM: number): { stepCount: number; riserRealM: number; lengthM: number } {
-  const stepCount = Math.max(1, Math.ceil(floorStackHeightM / STAIR_RISER_M));
-  return { stepCount, riserRealM: floorStackHeightM / stepCount, lengthM: stepCount * STAIR_TREAD_M };
-}
-
-/**
  * Retângulo (planta) ocupado por uma escada — 4 pontos em unidade de
  * grade, CW, pronto tanto pro corte na laje (Scene3DRenderer,
- * Shape.holes) quanto pra malha 3D. Como a rotação é sempre múltiplo de
- * 90° (ver Store.rotateStair), o retângulo continua AXIS-ALIGNED em
- * coordenadas de mundo — só troca largura↔comprimento a cada 90°, sem
- * precisar de matemática de polígono rotacionado arbitrário.
+ * Shape.holes) quanto pra malha 3D. `depthM` é a corrida REAL (metros),
+ * já calculada por quem chama a partir do bounding box do modelo .glb
+ * carregado (ver Scene3DRenderer.getStairFootprintMeters) — esta função
+ * fica pura/testável, sem depender de malha 3D nenhuma. Como a rotação
+ * é sempre múltiplo de 90° (ver Store.rotateStair), o retângulo continua
+ * AXIS-ALIGNED em coordenadas de mundo — só troca largura↔comprimento a
+ * cada 90°, sem precisar de matemática de polígono rotacionado arbitrário.
  */
-export function stairFootprintRectangle(stair: Stair, floorStackHeightM: number): { x1: number; y1: number; x2: number; y2: number } {
-  const { lengthM } = stairStepPlan(floorStackHeightM);
+export function stairFootprintRectangle(stair: Stair, depthM: number): { x1: number; y1: number; x2: number; y2: number } {
+  const lengthM = depthM;
   const swapped = Math.round(stair.rotationDeg / 90) % 2 !== 0;
   const halfWidthGrid = (swapped ? lengthM : stair.widthM) * GRID / 2;
   const halfLengthGrid = (swapped ? stair.widthM : lengthM) * GRID / 2;
@@ -1995,8 +1984,8 @@ export const Core = {
   computeBalconyRailingJoints, RAILING_JOIN_TOL_MODEL,
   createVolumeBoxEntity, VOLUME_BOX_DEFAULT_WIDTH_M, VOLUME_BOX_DEFAULT_HEIGHT_M, VOLUME_BOX_DEFAULT_DEPTH_M, VOLUME_BOX_DEFAULT_COLOR,
   VOLUME_BOX_MIN_SIZE_M, VOLUME_BOX_MAX_SIZE_M, VOLUME_BOX_MIN_HEIGHT_M, VOLUME_BOX_MAX_HEIGHT_M, VOLUME_BOX_MAX_SILL_HEIGHT_M,
-  createStairEntity, stairStepPlan, stairFootprintRectangle, nearestSupportDistanceMeters,
-  STAIR_RISER_M, STAIR_TREAD_M, STAIR_MIN_WIDTH_M, STAIR_MAX_WIDTH_M, STAIR_DEFAULT_WIDTH_M, STAIR_SUPPORT_HINT_TOLERANCE_M,
+  createStairEntity, stairFootprintRectangle, nearestSupportDistanceMeters,
+  STAIR_MIN_WIDTH_M, STAIR_MAX_WIDTH_M, STAIR_DEFAULT_WIDTH_M, STAIR_SUPPORT_HINT_TOLERANCE_M,
   createPlanUnderlayEntity, PLAN_UNDERLAY_DEFAULT_WIDTH_M, PLAN_UNDERLAY_DEFAULT_OPACITY,
   createProject, distToSegment, projectOnSegment, detectRooms,
   TERRENO_MURO_HEIGHT_M, terrenoMuroId, terrenoMuroSegment, createTerrenoEntity, createTerrenoMuroEntity

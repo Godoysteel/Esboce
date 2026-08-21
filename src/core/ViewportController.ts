@@ -161,7 +161,7 @@ import {
   var MIN_DIST = 3, MAX_DIST = 35;
   var touchCameraMode = false;
 
-  var gizmoEl: any, gzSwapBtnEl: any, openingGizmoEl: any, roomGizmoEl: any, volumeBoxGizmoEl: any, stairGizmoEl: any, planUnderlayGizmoEl: any, columnShapePanelEl: any, roofTypePanelEl: any, finishPanelEl: any, paintPickerPanelEl: any, openingPickerPanelEl: any, objectPanelEl: any, objectPanelTitleEl: any, objectPanelBodyEl: any, hintEl: any, layersContextMenuEl: any, hydraulicWallPromptEl: any, hydraulicWallElevationPanelEl: any, hydraulicWallElevationTitleEl: any, hydraulicWallElevationSvgEl: any, hydraulicRouteDrawBarEl: any, hydraulicRouteDrawCountEl: any;
+  var gizmoEl: any, gzSwapBtnEl: any, openingGizmoEl: any, roomGizmoEl: any, volumeBoxGizmoEl: any, stairGizmoEl: any, stairTypePanelEl: any, planUnderlayGizmoEl: any, columnShapePanelEl: any, roofTypePanelEl: any, finishPanelEl: any, paintPickerPanelEl: any, openingPickerPanelEl: any, objectPanelEl: any, objectPanelTitleEl: any, objectPanelBodyEl: any, hintEl: any, layersContextMenuEl: any, hydraulicWallPromptEl: any, hydraulicWallElevationPanelEl: any, hydraulicWallElevationTitleEl: any, hydraulicWallElevationSvgEl: any, hydraulicRouteDrawBarEl: any, hydraulicRouteDrawCountEl: any;
   // Estado do desenho de percurso guiado (H2): fixtureId sendo roteada e os
   // pontos-guia já clicados (só plano — a queda vertical final é
   // automática, ver Hydraulics.buildGuidedColdWaterHeaderRoute). null =
@@ -412,12 +412,17 @@ import {
     if (!stair) { source.visible = true; stairResizeHiddenObject = null; return; }
     // Caixa fantasma simples do bounding box inteiro (largura × pé-
     // direito × corrida), mesma técnica de "volume fantasma" do Bloco
-    // de Volumetria — sem reconstruir os N degraus a cada frame do
-    // arraste. Geometria ancorada em y=0 (mesma convenção de
-    // buildStairHitMesh em Scene3DRenderer.ts), pra copiar a posição do
-    // source direto, sem ajuste extra.
+    // de Volumetria — sem clonar o .glb a cada frame do arraste.
+    // Geometria ancorada em y=0 (mesma convenção de buildStairHitMesh em
+    // Scene3DRenderer.ts), pra copiar a posição do source direto, sem
+    // ajuste extra. A corrida vem do bounding box real do modelo já
+    // carregado (getStairFootprintMeters) — só cai no pé-direito como
+    // aproximação se, por algum motivo, o .glb ainda não tiver
+    // carregado quando o arraste começar (não deveria acontecer, já que
+    // a peça só é selecionável depois de aparecer na cena).
     var floorStackHeight = Scene3DRenderer.FLOOR_STACK_HEIGHT_GETTER();
-    var lengthM = Core.stairStepPlan(floorStackHeight).lengthM;
+    var stFootprintPrev = Scene3DRenderer.getStairFootprintMeters(stair);
+    var lengthM = stFootprintPrev ? stFootprintPrev.depthM : floorStackHeight;
     var previewGeometry = new THREE.BoxGeometry(stair.widthM, floorStackHeight, lengthM);
     previewGeometry.translate(0, floorStackHeight / 2, 0);
     var previewMaterial = new THREE.MeshBasicMaterial({
@@ -1193,7 +1198,7 @@ import {
         positionFloatingPanel(roomGizmoEl, hydraulicWorld.x, hydraulicTop, hydraulicWorld.z, 0);
         roomGizmoEl.classList.add('visible');
       }
-      gizmoEl.classList.remove('visible'); openingGizmoEl.classList.remove('visible'); columnShapePanelEl.classList.remove('visible'); roofTypePanelEl.classList.remove('visible'); volumeBoxGizmoEl?.classList.remove('visible'); stairGizmoEl?.classList.remove('visible'); planUnderlayGizmoEl?.classList.remove('visible');
+      gizmoEl.classList.remove('visible'); openingGizmoEl.classList.remove('visible'); columnShapePanelEl.classList.remove('visible'); roofTypePanelEl.classList.remove('visible'); volumeBoxGizmoEl?.classList.remove('visible'); stairGizmoEl?.classList.remove('visible'); stairTypePanelEl?.classList.remove('visible'); planUnderlayGizmoEl?.classList.remove('visible');
       return;
     }
     var inactiveHydraulicFlipButton = roomGizmoEl.querySelector('[data-action="flipHydraulicFace"]');
@@ -1219,7 +1224,7 @@ import {
         positionFloatingPanel(openingGizmoEl, wpO.x, topY, wpO.z, 0);
         openingGizmoEl.classList.add('visible');
       }
-      gizmoEl.classList.remove('visible'); columnShapePanelEl.classList.remove('visible'); roofTypePanelEl.classList.remove('visible'); volumeBoxGizmoEl?.classList.remove('visible'); stairGizmoEl?.classList.remove('visible'); planUnderlayGizmoEl?.classList.remove('visible');
+      gizmoEl.classList.remove('visible'); columnShapePanelEl.classList.remove('visible'); roofTypePanelEl.classList.remove('visible'); volumeBoxGizmoEl?.classList.remove('visible'); stairGizmoEl?.classList.remove('visible'); stairTypePanelEl?.classList.remove('visible'); planUnderlayGizmoEl?.classList.remove('visible');
       return;
     }
     openingGizmoEl.classList.remove('visible');
@@ -1241,7 +1246,7 @@ import {
         positionFloatingPanel(roomGizmoEl, wpG.x, topYG, wpG.z, 0);
         roomGizmoEl.classList.add('visible');
       }
-      gizmoEl.classList.remove('visible'); columnShapePanelEl.classList.remove('visible'); roofTypePanelEl.classList.remove('visible'); volumeBoxGizmoEl?.classList.remove('visible'); stairGizmoEl?.classList.remove('visible'); planUnderlayGizmoEl?.classList.remove('visible');
+      gizmoEl.classList.remove('visible'); columnShapePanelEl.classList.remove('visible'); roofTypePanelEl.classList.remove('visible'); volumeBoxGizmoEl?.classList.remove('visible'); stairGizmoEl?.classList.remove('visible'); stairTypePanelEl?.classList.remove('visible'); planUnderlayGizmoEl?.classList.remove('visible');
       return;
     }
     roomGizmoEl.classList.remove('visible');
@@ -1276,7 +1281,7 @@ import {
       var stSelG = Store.findStair(selectedStairId);
       if (!stSelG) {
         selectedStairId = null; selectedPlanUnderlay = false;
-        stairGizmoEl?.classList.remove('visible');
+        stairGizmoEl?.classList.remove('visible'); stairTypePanelEl?.classList.remove('visible');
       } else {
         var wpSt = modelToWorld(stSelG.x || 0, stSelG.y || 0);
         var topYSt = currentFloorYOffset() + Scene3DRenderer.FLOOR_STACK_HEIGHT_GETTER() + 0.15;
@@ -1284,11 +1289,17 @@ import {
           positionFloatingPanel(stairGizmoEl, wpSt.x, topYSt, wpSt.z, 0);
           stairGizmoEl.classList.add('visible');
         }
+        if (stairTypePanelEl) {
+          positionFloatingPanel(stairTypePanelEl, wpSt.x, topYSt, wpSt.z, -60);
+          stairTypePanelEl.classList.add('visible');
+          stackLeftOf(stairTypePanelEl, stairGizmoEl, 8);
+          stairTypePanelEl.querySelectorAll('.st').forEach(function (btn: any) { btn.classList.toggle('active', btn.dataset.stairmodel === stSelG!.model); });
+        }
       }
       gizmoEl.classList.remove('visible'); columnShapePanelEl.classList.remove('visible'); roofTypePanelEl.classList.remove('visible'); roomGizmoEl.classList.remove('visible'); planUnderlayGizmoEl?.classList.remove('visible');
       return;
     }
-    stairGizmoEl?.classList.remove('visible');
+    stairGizmoEl?.classList.remove('visible'); stairTypePanelEl?.classList.remove('visible');
 
     // Planta baixa importada: gizmo próprio (planUnderlayGizmoEl),
     // mesmo padrão do Bloco de Volumetria acima — posicionado um
@@ -4084,10 +4095,11 @@ import {
           Store.commands.updateStairBodyLive(stId, finalStX, finalStY);
           var stEntUp = Store.findStair(stId);
           if (stEntUp) {
-            var stPlan = Core.stairStepPlan(Scene3DRenderer.FLOOR_STACK_HEIGHT_GETTER());
+            var stFootprintUp = Scene3DRenderer.getStairFootprintMeters(stEntUp);
+            var stDepthUp = stFootprintUp ? stFootprintUp.depthM : Scene3DRenderer.FLOOR_STACK_HEIGHT_GETTER();
             var stAngleUp = (stEntUp.rotationDeg || 0) * Math.PI / 180;
             var travelAxisX = -Math.sin(stAngleUp), travelAxisY = Math.cos(stAngleUp);
-            var halfLengthGrid = stPlan.lengthM * Core.GRID / 2;
+            var halfLengthGrid = stDepthUp * Core.GRID / 2;
             var startX = finalStX - travelAxisX * halfLengthGrid, startY = finalStY - travelAxisY * halfLengthGrid;
             var supportDistM = Core.nearestSupportDistanceMeters(startX, startY, Store.currentWalls(), Store.currentColumns());
             if (supportDistM > Core.STAIR_SUPPORT_HINT_TOLERANCE_M) {
@@ -4957,7 +4969,7 @@ import {
       deselect();
       var newStair = Store.commands.createStair(gxS, gyS);
       hintEl.textContent = newStair
-        ? 'Escada criada — arraste o corpo pra posicionar perto de uma parede ou coluna (a base precisa de apoio) e as alças laterais pra ajustar a largura.'
+        ? 'Escada criada — arraste o corpo pra posicionar perto de uma parede ou coluna (a base precisa de apoio), as alças laterais pra ajustar a largura, e escolha o formato (reta/L/U) no painel ao lado do gizmo.'
         : 'Não foi possível criar a escada.';
       return;
     }
@@ -5036,6 +5048,7 @@ import {
     roomGizmoEl = document.getElementById('roomGizmo');
     volumeBoxGizmoEl = document.getElementById('volumeBoxGizmo');
     stairGizmoEl = document.getElementById('stairGizmo');
+    stairTypePanelEl = document.getElementById('stairTypePanel');
     planUnderlayGizmoEl = document.getElementById('planUnderlayGizmo');
     layersContextMenuEl = document.getElementById('layersContextMenu');
     columnShapePanelEl = document.getElementById('columnShapePanel');
@@ -5202,6 +5215,12 @@ import {
     roomGizmoEl.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
     volumeBoxGizmoEl?.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
     stairGizmoEl?.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
+    stairTypePanelEl?.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
+    stairTypePanelEl?.addEventListener('click', function (e: any) {
+      var stBtn = e.target.closest('button.st');
+      if (!stBtn || !selectedStairId) return;
+      Store.commands.setStairModel(selectedStairId, stBtn.dataset.stairmodel);
+    });
     planUnderlayGizmoEl?.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
     layersContextMenuEl.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
     layersContextMenuEl.addEventListener('contextmenu', function (e: any) { e.preventDefault(); });

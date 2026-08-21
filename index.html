@@ -326,6 +326,8 @@
   .shape-panel button.sp.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
   .shape-panel button.rt { margin: 0; padding: 0; width: 30px; height: 30px; font-size: 14px; border-radius: 6px; line-height: 1; }
   .shape-panel button.rt.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
+  .shape-panel button.st { margin: 0; padding: 0; width: 30px; height: 30px; font-size: 14px; font-weight: 700; border-radius: 6px; line-height: 1; }
+  .shape-panel button.st.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
   .shape-panel button.roof-commit { grid-column: 1 / -1; width: 64px; min-height: 28px; margin: 2px 0 0; padding: 3px 5px; font-size: 11px; border-radius: 6px; }
   .finish-panel { grid-template-columns: repeat(4, 26px); }
   .finish-panel button.fn { margin: 0; padding: 0; width: 26px; height: 26px; border-radius: 50%; border: 2px solid #FFFFFF; box-shadow: 0 0 0 1px #D3D1C7; cursor: pointer; }
@@ -1965,6 +1967,11 @@
     <button class="gz" data-action="rotateCw" title="Girar horário">↻</button>
     <button class="gz danger" data-action="delete" title="Excluir">🗑</button>
     <button class="gz" data-action="close" title="Fechar">✕</button>
+  </div>
+  <div id="stairTypePanel" class="shape-panel">
+    <button class="st" data-stairmodel="reta" title="Escada reta">I</button>
+    <button class="st" data-stairmodel="L" title="Escada em L">L</button>
+    <button class="st" data-stairmodel="U" title="Escada em U">U</button>
   </div>
   <div id="planUnderlayGizmo" class="gizmo">
     <button class="gz" data-action="rotateCcw" title="Girar anti-horário">↺</button>
