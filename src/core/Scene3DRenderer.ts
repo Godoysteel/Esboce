@@ -322,11 +322,10 @@ export function hashColorHex(key: string): number {
   // buildStairHitMesh.
   var STAIR_Z_FIGHT_EPSILON_M = 0.02;
 
-  // Largura/altura mínima (unidade de grade — GRID=20 por metro) pra um
-  // retângulo de corte na laje virar hole de verdade — ver o loop de
-  // furo na laje. Frestas mais finas que isso são resíduo numérico, não
-  // área real a cortar.
-  var STAIR_HOLE_MIN_DIM_GRID = 0.4; // 2cm
+  // Tolerância (unidade de grade — GRID=20 por metro) pra juntar bordas
+  // de retângulos de lance QUASE coincidentes num só valor, antes de
+  // decompor o corte na laje — ver snapStairLegRectEdges.
+  var STAIR_LEG_EDGE_SNAP_GRID = 0.4; // 2cm
 
   // Retângulo (planta, em METROS, no referencial MUNDO pré-âncora —
   // getStairModel subtrai center.x/center.z depois) de um grupo de
@@ -619,6 +618,66 @@ export function hashColorHex(key: string): number {
     if (a.x1 < ix1) result.push({ x1: a.x1, y1: iy1, x2: ix1, y2: iy2 }); // faixa da esquerda (só a banda do meio)
     if (ix2 < a.x2) result.push({ x1: ix2, y1: iy1, x2: a.x2, y2: iy2 }); // faixa da direita (só a banda do meio)
     return result;
+  }
+
+  // Agrupa (cluster) valores de borda que estão a menos de `epsilon` um
+  // do outro — usado por snapStairLegRectEdges pra tratar bordas QUASE
+  // coincidentes (resíduo de ponto flutuante da rotação/escala) como se
+  // fossem exatamente iguais.
+  function buildEdgeClusters(values: number[], epsilon: number): { min: number; max: number }[] {
+    var sorted = values.slice().sort(function (a, b) { return a - b; });
+    var clusters: { min: number; max: number }[] = [];
+    sorted.forEach(function (v) {
+      var last = clusters[clusters.length - 1];
+      if (!last || v - last.max > epsilon) {
+        clusters.push({ min: v, max: v });
+      } else {
+        last.max = v;
+      }
+    });
+    return clusters;
+  }
+  function snapEdgeValue(v: number, clusters: { min: number; max: number }[], snapTo: 'min' | 'max'): number {
+    for (var i = 0; i < clusters.length; i++) {
+      var c = clusters[i]!;
+      if (v >= c.min - 1e-9 && v <= c.max + 1e-9) return snapTo === 'min' ? c.min : c.max;
+    }
+    return v;
+  }
+  // Retângulos de lances VIZINHOS (L/U) deveriam ter bordas
+  // COINCIDENTES onde um termina e o outro começa (mesmo ponto físico,
+  // a pisada da virada) — mas a rotação/escala de ponto flutuante às
+  // vezes produz uma diferença de frações de milímetro a alguns
+  // centímetros entre elas. subtractRectXY, sem tratamento nenhum,
+  // decompõe essa diferença como um fragmento residual FININHO (largura
+  // ou altura de milímetros, mas podendo se estender por METROS de
+  // comprimento — confirmado ao vivo com dados exatos do Product Owner:
+  // um caso real deu 2,65m × 9mm). Um hole nesse formato confunde o
+  // earcut sem lançar exceção — o sintoma reportado (linhas finas
+  // convergindo pra um ponto, ou um contorno sem preenchimento).
+  // Descartar esse fragmento (tentativa anterior) RESOLVIA a malha
+  // quebrada mas ABRIA UM VÃO DE VERDADE onde ele deveria estar
+  // (relatado ao vivo como "faixas atravessando o fosso" — laje sólida
+  // sobrando bem no meio do buraco). A correção certa é agir ANTES da
+  // decomposição: juntar (snap) bordas quase-coincidentes pro MESMO
+  // valor, sempre EXPANDINDO (nunca encolhendo) — x1/y1 (bordas
+  // "mínimas") pro menor valor do grupo, x2/y2 (bordas "máximas") pro
+  // maior — eliminando o fragmento fino na origem, sem perder nenhuma
+  // área da união (verificado com um script Node à parte: a área total
+  // depois do snap bate exatamente com a soma de todos os retângulos
+  // originais, contra ~9,74 unidades de grade perdidas na abordagem de
+  // descartar).
+  function snapStairLegRectEdges(rects: { x1: number; y1: number; x2: number; y2: number }[], epsilon: number): { x1: number; y1: number; x2: number; y2: number }[] {
+    var x1Clusters = buildEdgeClusters(rects.map(function (r) { return r.x1; }), epsilon);
+    var x2Clusters = buildEdgeClusters(rects.map(function (r) { return r.x2; }), epsilon);
+    var y1Clusters = buildEdgeClusters(rects.map(function (r) { return r.y1; }), epsilon);
+    var y2Clusters = buildEdgeClusters(rects.map(function (r) { return r.y2; }), epsilon);
+    return rects.map(function (r) {
+      return {
+        x1: snapEdgeValue(r.x1, x1Clusters, 'min'), x2: snapEdgeValue(r.x2, x2Clusters, 'max'),
+        y1: snapEdgeValue(r.y1, y1Clusters, 'min'), y2: snapEdgeValue(r.y2, y2Clusters, 'max'),
+      };
+    });
   }
 
   function disposeObject3DTree(obj: any) {
@@ -4898,17 +4957,28 @@ export function hashColorHex(key: string): number {
             roomMinY = Math.min(roomMinY, p.y); roomMaxY = Math.max(roomMaxY, p.y);
           });
           (floorData.stairs || []).forEach(function (stair: any) {
-            var stRects = getStairLajeHoleRects(stair);
-            if (!stRects) return; // .glb ainda não carregou — sem corte nesta passada
-            // Os retângulos de lances vizinhos (L/U) se SOBREPÕEM de
-            // propósito na pisada da virada (DEC-144, garante que não
-            // sobra vão na quina) — mas THREE.ShapeGeometry/earcut espera
-            // holes que não se cruzem entre si; dois holes sobrepostos
-            // quebram a triangulação (malha com "espinhos", reportado ao
-            // vivo pelo Product Owner). subtractRectXY decompõe cada
-            // retângulo novo na parte que ainda não foi coberta pelos
-            // anteriores, preservando a MESMA área total (a união
-            // continua idêntica) sem holes sobrepostos.
+            var stRectsRaw = getStairLajeHoleRects(stair);
+            if (!stRectsRaw) return; // .glb ainda não carregou — sem corte nesta passada
+            // Os retângulos de lances vizinhos (L/U) deveriam ter bordas
+            // COINCIDENTES onde um termina e o outro começa (a pisada da
+            // virada), mas a rotação/escala de ponto flutuante produz
+            // uma diferença de frações de milímetro a alguns centímetros
+            // entre elas. snapStairLegRectEdges junta essas bordas quase
+            // coincidentes ANTES de decompor — descartar o fragmento fino
+            // resultante (tentativa anterior) resolvia a malha quebrada
+            // mas abria um vão de verdade onde ele deveria estar
+            // ("faixas atravessando o fosso", reportado ao vivo); juntar
+            // as bordas primeiro elimina o fragmento fino na origem, sem
+            // perder área nenhuma da união.
+            var stRects = snapStairLegRectEdges(stRectsRaw, STAIR_LEG_EDGE_SNAP_GRID);
+            // SOBREPÕEM de propósito na pisada da virada (DEC-144,
+            // garante que não sobra vão na quina) — mas
+            // THREE.ShapeGeometry/earcut espera holes que não se cruzem
+            // entre si; dois holes sobrepostos quebram a triangulação
+            // (malha com "espinhos", reportado ao vivo). subtractRectXY
+            // decompõe cada retângulo novo na parte que ainda não foi
+            // coberta pelos anteriores, preservando a MESMA área total
+            // (a união continua idêntica) sem holes sobrepostos.
             var placedRects: { x1: number; y1: number; x2: number; y2: number }[] = [];
             var nonOverlappingRects: { x1: number; y1: number; x2: number; y2: number }[] = [];
             stRects.forEach(function (rect) {
@@ -4924,18 +4994,7 @@ export function hashColorHex(key: string): number {
             nonOverlappingRects.forEach(function (rect) {
               var ix1 = Math.max(rect.x1, roomMinX), ix2 = Math.min(rect.x2, roomMaxX);
               var iy1 = Math.max(rect.y1, roomMinY), iy2 = Math.min(rect.y2, roomMaxY);
-              // Fresta fina demais (< 2cm) — pode sobrar da decomposição
-              // de subtractRectXY (dois lances vizinhos com bordas quase
-              // coincidentes, mas não exatamente iguais) ou de resíduo
-              // numérico da rotação/escala. Um hole quase degenerado
-              // (largura/altura perto de zero) confunde o earcut — o
-              // sintoma reportado ao vivo era exatamente esse padrão
-              // (duas linhas finas convergindo pra um ponto longe da
-              // escada, sem erro de console nenhum, sinal de
-              // triangulação ruim e não de exceção JS). Pular esses
-              // holes não perde área visível nenhuma (2cm é imperceptível
-              // e nem seria a área real de um degrau).
-              if (ix2 - ix1 < STAIR_HOLE_MIN_DIM_GRID || iy2 - iy1 < STAIR_HOLE_MIN_DIM_GRID) return;
+              if (ix2 <= ix1 || iy2 <= iy1) return; // sem cruzamento de verdade
               var hole = new THREE.Path();
               [{ x: ix1, y: iy1 }, { x: ix2, y: iy1 }, { x: ix2, y: iy2 }, { x: ix1, y: iy2 }].forEach(function (p, i) {
                 var wx = (p.x - offsetX) * scale, wz = (p.y - offsetY) * scale;

@@ -254,8 +254,8 @@ test('Scene3DRenderer: buraco na laje usa Shape.holes dentro do loop de cômodo 
   const start = rendererSource.indexOf('(floorData.stairs || []).forEach(function (stair: any) {');
   assert.notEqual(start, -1, 'esperava o loop de furo de escada dentro da geração de laje');
   const body = rendererSource.slice(start, start + 3200);
-  assert.match(body, /var stRects = getStairLajeHoleRects\(stair\);/);
-  assert.match(body, /if \(!stRects\) return;/);
+  assert.match(body, /var stRectsRaw = getStairLajeHoleRects\(stair\);/);
+  assert.match(body, /if \(!stRectsRaw\) return;/);
   assert.match(body, /new THREE\.Path\(\)/);
   assert.match(body, /lajeShape\.holes\.push\(hole\)/);
 });
@@ -272,8 +272,22 @@ test('Scene3DRenderer: retângulos de lances vizinhos (L/U) se sobrepõem de pro
 
   const loopStart = rendererSource.indexOf('(floorData.stairs || []).forEach(function (stair: any) {');
   const loopBody = rendererSource.slice(loopStart, loopStart + 3200);
+  assert.match(loopBody, /var stRects = snapStairLegRectEdges\(stRectsRaw, STAIR_LEG_EDGE_SNAP_GRID\);/);
   assert.match(loopBody, /next = next\.concat\(subtractRectXY\(r, placed\)\);/);
   assert.match(loopBody, /nonOverlappingRects\.forEach\(function \(rect\) \{/);
+});
+
+test('Scene3DRenderer: snapStairLegRectEdges junta bordas de lances vizinhos QUASE coincidentes (resíduo de ponto flutuante da rotação/escala) num só valor ANTES de decompor — reportado ao vivo com dados exatos do Product Owner: sem isso, um caso real produzia um fragmento de 2,65m × 9mm ("faixas atravessando o fosso" quando descartado, malha quebrada quando mantido). x1/y1 (bordas mínimas) sempre pro MENOR valor do grupo, x2/y2 (bordas máximas) sempre pro MAIOR — nunca encolhe, só expande, preservando a área total da união', () => {
+  const start = rendererSource.indexOf('function snapStairLegRectEdges(rects:');
+  assert.notEqual(start, -1);
+  const body = rendererSource.slice(start, rendererSource.indexOf('\n  }', start));
+  assert.match(body, /x1: snapEdgeValue\(r\.x1, x1Clusters, 'min'\), x2: snapEdgeValue\(r\.x2, x2Clusters, 'max'\)/);
+  assert.match(body, /y1: snapEdgeValue\(r\.y1, y1Clusters, 'min'\), y2: snapEdgeValue\(r\.y2, y2Clusters, 'max'\)/);
+
+  const clusterStart = rendererSource.indexOf('function buildEdgeClusters(values: number[]');
+  assert.notEqual(clusterStart, -1);
+  const clusterBody = rendererSource.slice(clusterStart, rendererSource.indexOf('\n  }', clusterStart));
+  assert.match(clusterBody, /if \(!last \|\| v - last\.max > epsilon\)/);
 });
 
 test('ViewportController: soltar a escada longe de apoio mostra AVISO no rodapé, sem travar/reverter a posição (Product Owner: aviso, sem travar) — usa a corrida real do modelo carregado', () => {
