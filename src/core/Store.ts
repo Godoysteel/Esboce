@@ -816,6 +816,26 @@ export const commands = {
     emit({ type: 'LajeGenerated', roomKeys });
   },
 
+  // Botão "Gerar Forro de Drywall" — mesmo espírito de generateLajeForCurrentFloor
+  // acima, flag independente (roomForroGenerated, não roomLajeGenerated):
+  // um cômodo pode ter só laje, só forro, os dois, ou nenhum. Cômodo criado
+  // depois deste clique também nasce sem forro, precisa clicar de novo.
+  generateForroDrywallForCurrentFloor(): void {
+    const f = currentFloor();
+    const rooms = Core.detectRooms(f.walls);
+    if (!rooms.length) return;
+    pushUndoSnapshot();
+    f.roomForroGenerated = f.roomForroGenerated || {};
+    const roomKeys: string[] = [];
+    rooms.forEach((room) => {
+      const roomKey = Core.findRoomWallIds(f.walls, room).slice().sort().join(',');
+      if (!roomKey) return;
+      f.roomForroGenerated![roomKey] = true;
+      roomKeys.push(roomKey);
+    });
+    emit({ type: 'ForroDrywallGenerated', roomKeys });
+  },
+
   duplicateWall(wallId: string): Wall | null {
     const w = findWall(wallId); if (!w) return null;
     pushUndoSnapshot();

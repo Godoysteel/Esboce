@@ -76,6 +76,15 @@ export function hashColorHex(key: string): number {
 
   var WALL_HEIGHT = 2.7, WALL_THICK = Core.WALL_THICK;
   var LAJE_THICKNESS = 0.15;
+  // Forro de drywall procedural — parâmetros extraídos dos manuais
+  // técnicos Placo/Trevo Drywall (ABNT NBR 15758-2): perfis F530
+  // espaçados no máximo a cada 60cm, cantoneira/tabica de perímetro,
+  // placa de 12,5mm. Seções dos perfis (largura/altura) são visuais —
+  // não há catálogo de bitola oficial modelado aqui.
+  var FORRO_BOARD_THICKNESS = 0.0125;
+  var FORRO_RUNNER_SPACING_M = 0.6;
+  var FORRO_PROFILE_W = 0.03, FORRO_PROFILE_H = 0.02;
+  var FORRO_TABICA_W = 0.025, FORRO_TABICA_H = 0.03;
   // Acabamento de piso que todo cômodo nasce usando, antes de qualquer
   // escolha manual em Materiais — assim já vem com fuga desenhada em
   // vez de um verde liso sem textura. Escolha manual do usuário
@@ -2067,6 +2076,17 @@ export function hashColorHex(key: string): number {
       flatShading: true
     });
   }
+
+  // Materiais do forro de drywall — valores extraídos do modelo de
+  // referência (Modelos/Forro de drywall.glb): placa fosca clara
+  // (RGB 0.8, roughness 0.5) e perfil metálico mais escuro (RGB 0.334,
+  // metalness 0.5625, roughness 0.366).
+  function buildForroBoardMaterial() {
+    return new THREE.MeshStandardMaterial({ color: 0xCCCCCC, roughness: 0.5 });
+  }
+  function buildForroProfileMaterial() {
+    return new THREE.MeshStandardMaterial({ color: 0x555555, metalness: 0.5625, roughness: 0.366 });
+  }
   // Terreno — ver ADR-008. Muros já confirmados (Terreno.muros) sempre
   // aparecem, extrudados como caixa simples (sem o sistema de footprint
   // com miter de canto usado por Floor.walls — simplificação desta
@@ -3014,6 +3034,89 @@ export function hashColorHex(key: string): number {
     edgeLines.rotation.copy(mesh.rotation);
     edgeLines.position.copy(mesh.position);
     return [mesh, edgeLines];
+  }
+
+  // Forro de drywall: grade de perfis F530, recortada contra o contorno
+  // real do cômodo (funciona pra côncavo/L, não só retângulo) — mesmo
+  // espírito de "derivar 100% da geometria do cômodo" da laje acima,
+  // sem guardar malha própria (recalculada a cada render).
+  function polygonBoundsXZ(pts: { x: number; z: number }[]) {
+    var minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    pts.forEach(function (p) {
+      minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+      minZ = Math.min(minZ, p.z); maxZ = Math.max(maxZ, p.z);
+    });
+    return { minX: minX, maxX: maxX, minZ: minZ, maxZ: maxZ };
+  }
+
+  // Recorte por scanline par-ímpar contra um polígono simples (garantido
+  // por Core.detectRooms) — cada reta cruza o contorno em pares
+  // (dentro/fora), o que resolve qualquer reentrância (cômodo em L)
+  // sem precisar de um algoritmo de clipping mais geral.
+  function clipRunnerLinesXZ(pts: { x: number; z: number }[], axis: 'x' | 'z', spacingM: number) {
+    var b = polygonBoundsXZ(pts);
+    var minC = axis === 'x' ? b.minX : b.minZ;
+    var maxC = axis === 'x' ? b.maxX : b.maxZ;
+    var segments: { x1: number; z1: number; x2: number; z2: number }[] = [];
+    var MIN_SEG = 0.05; // ignora sobras < 5cm (ruído de ponta de polígono)
+    for (var c = minC + spacingM; c < maxC - 1e-6; c += spacingM) {
+      var crossings: number[] = [];
+      for (var i = 0; i < pts.length; i++) {
+        var p1 = pts[i]!, p2 = pts[(i + 1) % pts.length]!;
+        var c1 = axis === 'x' ? p1.x : p1.z, c2 = axis === 'x' ? p2.x : p2.z;
+        if ((c1 <= c) !== (c2 <= c)) {
+          var t = (c - c1) / (c2 - c1);
+          crossings.push(axis === 'x' ? (p1.z + t * (p2.z - p1.z)) : (p1.x + t * (p2.x - p1.x)));
+        }
+      }
+      crossings.sort(function (a, b) { return a - b; });
+      for (var j = 0; j + 1 < crossings.length; j += 2) {
+        var a0 = crossings[j]!, a1 = crossings[j + 1]!;
+        if (a1 - a0 < MIN_SEG) continue;
+        segments.push(axis === 'x' ? { x1: c, z1: a0, x2: c, z2: a1 } : { x1: a0, z1: c, x2: a1, z2: c });
+      }
+    }
+    return segments;
+  }
+
+  // Caixa entre dois pontos, estendida pela espessura em cada ponta
+  // (mesma técnica de buildTerrenoMuroBoxMesh) — usado pros perfis F530
+  // e pela tabica de perímetro.
+  function buildForroProfileBoxMesh(x1: number, z1: number, x2: number, z2: number, w: number, h: number, y: number, mat: THREE.Material) {
+    var dx = x2 - x1, dz = z2 - z1, len = Math.hypot(dx, dz);
+    var geo = new THREE.BoxGeometry(len + w, h, w);
+    var mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set((x1 + x2) / 2, y, (z1 + z2) / 2);
+    mesh.rotation.y = -Math.atan2(dz, dx);
+    return mesh;
+  }
+
+  // Monta o forro inteiro de um cômodo: placa (mesmo shape/contorno do
+  // piso, insetPoints) + grade de perfis F530 + tabica de perímetro.
+  // worldPts são os insetPoints já convertidos pra metros reais (x,z).
+  function buildForroDrywallPiece(shape: any, worldPts: { x: number; z: number }[], topY: any) {
+    var meshes: any[] = [];
+    var boardMat = buildForroBoardMaterial();
+    var boardMesh = makeSlabMesh(shape, FORRO_BOARD_THICKNESS, topY, 0xCCCCCC, 1, true, null, boardMat, null);
+    meshes.push(boardMesh);
+
+    var profileMat = buildForroProfileMaterial();
+    var runnerY = topY - FORRO_BOARD_THICKNESS - FORRO_PROFILE_H / 2;
+    var b = polygonBoundsXZ(worldPts);
+    var axis: 'x' | 'z' = (b.maxX - b.minX) >= (b.maxZ - b.minZ) ? 'z' : 'x';
+    var runnerSegs = clipRunnerLinesXZ(worldPts, axis, FORRO_RUNNER_SPACING_M);
+    runnerSegs.forEach(function (seg) {
+      meshes.push(buildForroProfileBoxMesh(seg.x1, seg.z1, seg.x2, seg.z2, FORRO_PROFILE_W, FORRO_PROFILE_H, runnerY, profileMat));
+    });
+
+    var tabicaMat = buildForroProfileMaterial();
+    var tabicaY = topY - FORRO_BOARD_THICKNESS - FORRO_TABICA_H / 2;
+    worldPts.forEach(function (p1, i) {
+      var p2 = worldPts[(i + 1) % worldPts.length]!;
+      meshes.push(buildForroProfileBoxMesh(p1.x, p1.z, p2.x, p2.z, FORRO_TABICA_W, FORRO_TABICA_H, tabicaY, tabicaMat));
+    });
+
+    return meshes;
   }
 
   var VARANDA_SLAB_THICK = 0.12;
@@ -4828,7 +4931,7 @@ export function hashColorHex(key: string): number {
       }
 
       rooms.forEach(function (room) {
-        if (!layers.laje) return;
+        if (!layers.laje && !layers.forroDrywall) return;
         // O piso usava o EIXO da parede (room.points, cruzamento de
         // centro) — sempre parava meia-espessura curto da face real,
         // um desalinhamento que ficou visível assim que a face da
@@ -4919,17 +5022,21 @@ export function hashColorHex(key: string): number {
           var pushOut = edgeOutwardPush(p, next);
           return { x: p.x + (pushIn.x || pushOut.x) * lajeMargin, y: p.y + (pushIn.y || pushOut.y) * lajeMargin };
         });
+        // Cômodo não é entidade persistida — o acabamento de piso é
+        // procurado pela assinatura das paredes que formam ESTE cômodo
+        // agora (mesma técnica usada em fuseAllOverlaps pra reconhecer
+        // "o mesmo cômodo" depois de uma fusão). Hoisted aqui (fora do
+        // bloco do piso) porque o forro de drywall também precisa de
+        // roomKey/roomHeight, independente do layer/flag da laje.
+        var roomKey = Core.findRoomWallIds(floorData.walls, room).slice().sort().join(',');
+        var roomHeight = Core.roomOwnHeightM(floorData.walls, insetWallIds.filter(function (id: any) { return !!id; }), currentWallHeight);
+        if (layers.laje) {
         // Espessura fina (3cm) e base sempre no mesmo nível da base da
         // parede (yOffset — o mesmo y0 usado em buildWallMeshFromFootprint),
         // em vez de depender do térreo ou empilhar sobre a laje.
         var thickness = 0.03;
         var pisoBase = yOffset;
         var pisoTopY = pisoBase + thickness;
-        // Cômodo não é entidade persistida — o acabamento de piso é
-        // procurado pela assinatura das paredes que formam ESTE cômodo
-        // agora (mesma técnica usada em fuseAllOverlaps pra reconhecer
-        // "o mesmo cômodo" depois de uma fusão).
-        var roomKey = Core.findRoomWallIds(floorData.walls, room).slice().sort().join(',');
         var roomFinishId = (floorData.roomFinishes || {})[roomKey];
         var roomFinish = roomFinishId && Catalog.getProduct(roomFinishId);
         var roomFinishSettings = (floorData.roomFinishSettings || {})[roomKey] || { scale: 1, rotation: 0 };
@@ -5079,10 +5186,29 @@ export function hashColorHex(key: string): number {
           // um vizinho mais alto — bug corrigido na DEC-89). Um cômodo
           // mais alto empurra a própria laje pra cima; os vizinhos
           // não-alterados continuam na altura padrão.
-          var roomHeight = Core.roomOwnHeightM(floorData.walls, insetWallIds.filter(function (id: any) { return !!id; }), currentWallHeight);
           var lajePieces = buildAutoLajePiece(lajeShape, lajeSizeX, lajeSizeZ, yOffset + roomHeight, lajeWallColor, viewState);
           lajePieces.forEach(function (m: any) {
             tagCategory(m, 'laje');
+            m.userData.roomKey = roomKey; m.userData.floorIndex = floorIdx;
+            scene.add(m);
+            registry.roomMeshes.push(m);
+          });
+        }
+        } // fim if (layers.laje)
+
+        // Forro de drywall — mesmo espírito da laje acima (DEC-90): só
+        // desenha depois que o botão "Gerar Forro de Drywall" marcou
+        // este roomKey, flag independente de roomLajeGenerated. Usa o
+        // contorno INTERNO (insetPoints/shape, mesmo do piso) — o forro
+        // para na face interna da parede, não sobressai como a laje.
+        if (layers.forroDrywall && (floorData.roomForroGenerated || {})[roomKey]) {
+          var forroTopY = yOffset + roomHeight;
+          var insetWorldPts = insetPoints.map(function (p: any) {
+            return { x: (p.x - offsetX) * scale, z: (p.y - offsetY) * scale };
+          });
+          var forroPieces = buildForroDrywallPiece(shape, insetWorldPts, forroTopY);
+          forroPieces.forEach(function (m: any) {
+            tagCategory(m, 'forroDrywall');
             m.userData.roomKey = roomKey; m.userData.floorIndex = floorIdx;
             scene.add(m);
             registry.roomMeshes.push(m);

@@ -1323,6 +1323,7 @@
     <label><input type="checkbox" id="paredesTerreoToggle" checked> Paredes — térreo</label>
     <label><input type="checkbox" id="colunasToggle" checked> Colunas</label>
     <label><input type="checkbox" id="lajeToggle" checked> Laje</label>
+    <label><input type="checkbox" id="forroDrywallToggle" checked> Forro de drywall</label>
     <label><input type="checkbox" id="paredesSuperioresToggle" checked> Paredes — superiores</label>
     <label><input type="checkbox" id="aberturasToggle" checked> Portas e janelas</label>
     <label title="Deixa as paredes vazadas — útil pra comparar com uma Planta Baixa importada no chão"><input type="checkbox" id="paredesTransparentesToggle"> Paredes transparentes</label>
@@ -1704,6 +1705,16 @@
       </button>
       <button class="ts-btn ts-disabled" data-disabled-label="Laje Nervurada" title="Laje Nervurada — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Laje Nervurada</span><span class="ts-badge-soon">em breve</span></button>
       <button class="ts-btn ts-disabled" data-disabled-label="Laje Técnica" title="Laje Técnica — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Laje Técnica</span><span class="ts-badge-soon">em breve</span></button>
+    </div>
+    <div class="ts-group-label">Forro</div>
+    <div class="cp-group-grid">
+      <button class="ts-btn tool-btn" id="generateForroDrywallBtn" title="Gera o forro de drywall (placa + grade estrutural) de todos os cômodos fechados do pavimento atual">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="6" y="10" width="28" height="6"/>
+          <path d="M6 22h28M6 30h28"/>
+        </svg>
+        <span>Forro de Drywall</span>
+      </button>
     </div>
     <!-- addAtticBtn: legado — o ático hoje nasce pela própria ferramenta
          Telhado (diálogo Ático/Normal), este botão nunca teve handler

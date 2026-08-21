@@ -152,3 +152,32 @@ test('projeto legado sem roomLajeGenerated carrega normalmente (cômodo antigo n
   const decoded = decodeProjectDocument(legacy);
   assert.equal('roomLajeGenerated' in decoded.project.floors[0], false);
 });
+
+// Botão "Gerar Forro de Drywall" — mesmo padrão de roomLajeGenerated acima
+// (DEC-90), flag independente: Floor.roomForroGenerated marca por roomKey
+// quais cômodos já tiveram o forro gerado.
+test('Floor.roomForroGenerated faz ida e volta sem perder o valor', () => {
+  const project = createProject();
+  project.floors[0].roomForroGenerated = { 'wall-1,wall-2,wall-3,wall-4': true };
+  const json = exportProjectBackup(project);
+  const restored = importProjectBackup(json);
+  assert.deepEqual(restored.project.floors[0].roomForroGenerated, { 'wall-1,wall-2,wall-3,wall-4': true });
+});
+
+test('Floor sem roomForroGenerated continua sem o campo depois da ida e volta (nunca vira objeto vazio explícito)', () => {
+  const project = createProject();
+  const json = exportProjectBackup(project);
+  const restored = importProjectBackup(json);
+  assert.equal('roomForroGenerated' in restored.project.floors[0], false);
+});
+
+test('projeto legado sem roomForroGenerated carrega normalmente (cômodo antigo nasce sem forro pendente, não quebrado)', () => {
+  const legacy = {
+    floors: [{ id: 'floor-1', name: 'Térreo', walls: [], columns: [], roofs: [], openings: [], varandas: [], roomFinishes: {} }],
+    currentFloorIndex: 0,
+    layers: { telhado: false },
+    foundationType: 'radier',
+  };
+  const decoded = decodeProjectDocument(legacy);
+  assert.equal('roomForroGenerated' in decoded.project.floors[0], false);
+});

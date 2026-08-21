@@ -329,6 +329,11 @@ export interface Floor {
   // laje volta a ficar pendente até gerar de novo — mesmo comportamento
   // (aceito) que roomFinishes já tem hoje.
   roomLajeGenerated?: Record<string, boolean>;
+  // Mesmo espírito de roomLajeGenerated acima, mas pro forro de drywall
+  // do teto — botão "Gerar Forro de Drywall" separado, flag independente
+  // (um cômodo pode ter laje sem forro, ou forro sem laje, os dois, ou
+  // nenhum).
+  roomForroGenerated?: Record<string, boolean>;
 }
 
 export interface ProjectLayers {
@@ -339,6 +344,7 @@ export interface ProjectLayers {
   paredesTerreo: boolean;
   colunas: boolean;
   laje: boolean;
+  forroDrywall: boolean;
   paredesSuperiores: boolean;
   aberturas: boolean;
   varanda: boolean;

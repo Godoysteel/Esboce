@@ -18,6 +18,7 @@ export function init(): void {
   bind('paredesTerreoToggle', 'paredesTerreo');
   bind('colunasToggle', 'colunas');
   bind('lajeToggle', 'laje');
+  bind('forroDrywallToggle', 'forroDrywall');
   bind('paredesSuperioresToggle', 'paredesSuperiores');
   bind('aberturasToggle', 'aberturas');
   bind('marquiseToggle', 'marquise');
@@ -30,6 +31,7 @@ export function init(): void {
   (document.getElementById('paredesTerreoToggle') as HTMLInputElement).checked = layers.paredesTerreo;
   (document.getElementById('colunasToggle') as HTMLInputElement).checked = layers.colunas;
   (document.getElementById('lajeToggle') as HTMLInputElement).checked = layers.laje;
+  (document.getElementById('forroDrywallToggle') as HTMLInputElement).checked = layers.forroDrywall;
   (document.getElementById('paredesSuperioresToggle') as HTMLInputElement).checked = layers.paredesSuperiores;
   (document.getElementById('aberturasToggle') as HTMLInputElement).checked = layers.aberturas;
   (document.getElementById('marquiseToggle') as HTMLInputElement).checked = layers.marquise;

@@ -797,6 +797,7 @@ export function createProject(constructionSystem: Project['constructionSystem'] 
       paredesTerreo: true,
       colunas: true,
       laje: true,
+      forroDrywall: true,
       paredesSuperiores: true,
       aberturas: true,
       varanda: true,

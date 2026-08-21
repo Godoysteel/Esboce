@@ -314,6 +314,13 @@ export class EsboceApplication {
         ? 'Laje gerada — ' + roomCount + (roomCount === 1 ? ' cômodo coberto.' : ' cômodos cobertos.')
         : 'Nenhum cômodo fechado neste pavimento ainda — feche as paredes antes de gerar a laje.';
     });
+    this.requireElement("generateForroDrywallBtn").addEventListener("click", () => {
+      const roomCount = Core.detectRooms(Store.currentWalls()).length;
+      Store.commands.generateForroDrywallForCurrentFloor();
+      this.requireElement('viewportHint').textContent = roomCount
+        ? 'Forro de drywall gerado — ' + roomCount + (roomCount === 1 ? ' cômodo coberto.' : ' cômodos cobertos.')
+        : 'Nenhum cômodo fechado neste pavimento ainda — feche as paredes antes de gerar o forro.';
+    });
     // Rail de categorias (Ambientes/Paredes/Aberturas/Cobertura/
     // Materiais/Mobiliário/Instalações/Mais) — um painel visível por
     // vez, puramente de UI (não é estado de Store/ViewportController).

@@ -44,7 +44,11 @@ import type {
 // v15: `Floor.stairs` novo — escada (modelo reto), posição/largura
 // livres, rotação em passos de 90°. Documentos v14 e anteriores abrem
 // normalmente, sem nenhuma escada (lista vazia).
-export const CURRENT_PROJECT_SCHEMA_VERSION = 15;
+// v16: adiciona `Floor.roomForroGenerated` (opcional, mesmo padrão de
+// roomLajeGenerated) e `ProjectLayers.forroDrywall` — botão/layer do forro
+// de drywall procedural. Documentos v15 e anteriores continuam abrindo
+// normalmente, sem forro gerado em nenhum cômodo.
+export const CURRENT_PROJECT_SCHEMA_VERSION = 16;
 
 export interface StoredProjectDocument {
   schemaVersion: number;
@@ -72,6 +76,7 @@ const DEFAULT_LAYERS: ProjectLayers = {
   paredesTerreo: true,
   colunas: true,
   laje: true,
+  forroDrywall: true,
   paredesSuperiores: true,
   aberturas: true,
   varanda: true,
@@ -465,6 +470,7 @@ function parseFloor(value: unknown, path: string): Floor {
   if (v.planUnderlay) floor.planUnderlay = parsePlanUnderlay(v.planUnderlay, `${path}.planUnderlay`);
   if (floor.kind === 'attic') floor.wallHeightM = number(v.wallHeightM, `${path}.wallHeightM`, 1.2);
   if (v.roomLajeGenerated) floor.roomLajeGenerated = booleanMap(v.roomLajeGenerated, `${path}.roomLajeGenerated`);
+  if (v.roomForroGenerated) floor.roomForroGenerated = booleanMap(v.roomForroGenerated, `${path}.roomForroGenerated`);
   const wallIds = new Set(floor.walls.map((wall) => wall.id));
   floor.openings.forEach((opening, index) => {
     if (!wallIds.has(opening.wallId)) fail(`${path}.openings[${index}].wallId`, 'parede hospedeira não existe');

@@ -1567,3 +1567,37 @@ test('botão "Gerar Laje" existe no HTML e está ligado ao comando do Store', ()
     /requireElement\("generateLajeBtn"\)\.addEventListener\("click", \(\) => \{[\s\S]{0,300}Store\.commands\.generateLajeForCurrentFloor\(\);/,
   );
 });
+
+// Mesmo padrão de generateLajeForCurrentFloor acima — botão "Gerar Forro de
+// Drywall", flag independente (roomForroGenerated, não roomLajeGenerated).
+test('Store.commands.generateForroDrywallForCurrentFloor existe, marca todo cômodo fechado do pavimento de uma vez, e cada um com seu próprio roomKey', () => {
+  const cmdStart = storeSource.indexOf('generateForroDrywallForCurrentFloor(): void {');
+  assert.notEqual(cmdStart, -1);
+  const cmdBlock = storeSource.slice(cmdStart, cmdStart + 800);
+  assert.match(cmdBlock, /const rooms = Core\.detectRooms\(f\.walls\);/);
+  assert.match(cmdBlock, /rooms\.forEach\(\(room\) => \{/);
+  assert.match(cmdBlock, /const roomKey = Core\.findRoomWallIds\(f\.walls, room\)\.slice\(\)\.sort\(\)\.join\(','\);/);
+  assert.match(cmdBlock, /f\.roomForroGenerated!\[roomKey\] = true;/);
+});
+
+test('botão "Gerar Forro" existe no HTML e está ligado ao comando do Store', () => {
+  assert.match(indexHtmlSource, /id="generateForroDrywallBtn"/);
+  assert.match(
+    esboceApplicationSource,
+    /requireElement\("generateForroDrywallBtn"\)\.addEventListener\("click", \(\) => \{[\s\S]{0,300}Store\.commands\.generateForroDrywallForCurrentFloor\(\);/,
+  );
+});
+
+// Mesmo espírito do teste da laje (linha ~127 acima) — prova que o forro
+// nasce dentro do MESMO rooms.forEach do piso/laje, reaproveitando o
+// contorno já calculado, e só desenha depois que o roomKey foi marcado.
+test('forro de drywall nasce automático por cômodo, dentro do mesmo loop que já gera o piso/laje, gated por layers.forroDrywall e roomForroGenerated', () => {
+  assert.match(scene3DRendererSource, /function buildForroDrywallPiece\(shape/);
+  const roomsStart = scene3DRendererSource.indexOf('rooms.forEach(function (room) {');
+  const roomsEnd = scene3DRendererSource.indexOf('\n      });', roomsStart);
+  const roomsFlow = scene3DRendererSource.slice(roomsStart, roomsEnd);
+  assert.match(roomsFlow, /if \(layers\.forroDrywall && \(floorData\.roomForroGenerated \|\| \{\}\)\[roomKey\]\) \{/);
+  // Independente do gate da laje — desligar "Laje" não pode esconder o forro.
+  assert.match(roomsFlow, /if \(!layers\.laje && !layers\.forroDrywall\) return;/);
+  assert.match(roomsFlow, /if \(layers\.laje\) \{/);
+});
