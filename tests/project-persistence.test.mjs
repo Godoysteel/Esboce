@@ -181,3 +181,45 @@ test('projeto legado sem roomForroGenerated carrega normalmente (cômodo antigo 
   const decoded = decodeProjectDocument(legacy);
   assert.equal('roomForroGenerated' in decoded.project.floors[0], false);
 });
+
+// Painel de tipo de placa (ST/RU/RF/cimenticia) — Floor.roomForroTipo
+// por roomKey, mesmo padrão opcional de roomForroGenerated acima.
+test('Floor.roomForroTipo faz ida e volta sem perder o valor', () => {
+  const project = createProject();
+  project.floors[0].roomForroTipo = { 'wall-1,wall-2,wall-3,wall-4': 'RU' };
+  const json = exportProjectBackup(project);
+  const restored = importProjectBackup(json);
+  assert.deepEqual(restored.project.floors[0].roomForroTipo, { 'wall-1,wall-2,wall-3,wall-4': 'RU' });
+});
+
+test('Floor sem roomForroTipo continua sem o campo depois da ida e volta (nunca vira objeto vazio explícito)', () => {
+  const project = createProject();
+  const json = exportProjectBackup(project);
+  const restored = importProjectBackup(json);
+  assert.equal('roomForroTipo' in restored.project.floors[0], false);
+});
+
+test('roomForroTipo descarta valor de tipo inválido (protege contra JSON adulterado/versão futura), mantém os válidos', () => {
+  const legacy = {
+    floors: [{
+      id: 'floor-1', name: 'Térreo', walls: [], columns: [], roofs: [], openings: [], varandas: [], roomFinishes: {},
+      roomForroTipo: { 'wall-1,wall-2': 'RF', 'wall-3,wall-4': 'tipo-que-nao-existe' },
+    }],
+    currentFloorIndex: 0,
+    layers: { telhado: false },
+    foundationType: 'radier',
+  };
+  const decoded = decodeProjectDocument(legacy);
+  assert.deepEqual(decoded.project.floors[0].roomForroTipo, { 'wall-1,wall-2': 'RF' });
+});
+
+test('projeto legado sem roomForroTipo carrega normalmente (cômodo antigo nasce com placa padrão ST)', () => {
+  const legacy = {
+    floors: [{ id: 'floor-1', name: 'Térreo', walls: [], columns: [], roofs: [], openings: [], varandas: [], roomFinishes: {} }],
+    currentFloorIndex: 0,
+    layers: { telhado: false },
+    foundationType: 'radier',
+  };
+  const decoded = decodeProjectDocument(legacy);
+  assert.equal('roomForroTipo' in decoded.project.floors[0], false);
+});

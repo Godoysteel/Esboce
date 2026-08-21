@@ -301,6 +301,10 @@ export interface PlanUnderlay {
   visible: boolean;
 }
 
+// Tipo de placa do forro de drywall — ST (standard), RU (resistente à
+// umidade, verde), RF (resistente ao fogo, rosa), cimentícia (cinza).
+export type ForroBoardType = 'ST' | 'RU' | 'RF' | 'cimenticia';
+
 export interface Floor {
   id: string;
   name: string;
@@ -334,6 +338,11 @@ export interface Floor {
   // (um cômodo pode ter laje sem forro, ou forro sem laje, os dois, ou
   // nenhum).
   roomForroGenerated?: Record<string, boolean>;
+  // Tipo de placa do forro por roomKey — muda espaçamento dos perfis
+  // F530 (60cm no ST padrão, 40cm nas placas especiais) e a cor da
+  // placa. Ausente = 'ST' (padrão), mesmo espírito opcional de
+  // roomFinishes/roomLajeGenerated acima.
+  roomForroTipo?: Record<string, ForroBoardType>;
 }
 
 export interface ProjectLayers {

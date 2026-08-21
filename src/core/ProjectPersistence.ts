@@ -1,5 +1,5 @@
 import type {
-  Column, Floor, Furniture, GlazingPanel, BalconyRailing, VolumeBox, Stair, PlanUnderlay, HydraulicNode, HydraulicSegment, Laje, Opening, Project, ProjectLayers, Roof, Terreno, Varanda, Wall,
+  Column, Floor, Furniture, GlazingPanel, BalconyRailing, VolumeBox, Stair, PlanUnderlay, HydraulicNode, HydraulicSegment, Laje, Opening, Project, ProjectLayers, Roof, Terreno, Varanda, Wall, ForroBoardType,
 } from './types.js';
 
 // v6: adiciona `project.terreno` (opcional) — tamanho do lote e muros de
@@ -48,7 +48,11 @@ import type {
 // roomLajeGenerated) e `ProjectLayers.forroDrywall` — botão/layer do forro
 // de drywall procedural. Documentos v15 e anteriores continuam abrindo
 // normalmente, sem forro gerado em nenhum cômodo.
-export const CURRENT_PROJECT_SCHEMA_VERSION = 16;
+// v17: adiciona `Floor.roomForroTipo` (opcional) — tipo de placa do forro
+// por roomKey (ST/RU/RF/cimenticia), escolhido no painel que aparece ao
+// selecionar o forro. Documentos v16 e anteriores abrem normalmente; sem
+// o campo, todo forro usa o tipo padrão ST.
+export const CURRENT_PROJECT_SCHEMA_VERSION = 17;
 
 export interface StoredProjectDocument {
   schemaVersion: number;
@@ -428,6 +432,20 @@ function booleanMap(value: unknown, path: string): Record<string, boolean> {
   return result;
 }
 
+const FORRO_BOARD_TYPES = ['ST', 'RU', 'RF', 'cimenticia'] as const;
+
+function forroTipoMap(value: unknown, path: string): Record<string, ForroBoardType> {
+  if (value == null) return {};
+  const source = record(value, path);
+  const result: Record<string, ForroBoardType> = {};
+  for (const [key, item] of Object.entries(source)) {
+    if (typeof item === 'string' && (FORRO_BOARD_TYPES as readonly string[]).includes(item)) {
+      result[key] = item as ForroBoardType;
+    }
+  }
+  return result;
+}
+
 function settingsMap(value: unknown, path: string): Record<string, { scale: number; rotation: number }> {
   if (value == null) return {};
   const source = record(value, path);
@@ -471,6 +489,7 @@ function parseFloor(value: unknown, path: string): Floor {
   if (floor.kind === 'attic') floor.wallHeightM = number(v.wallHeightM, `${path}.wallHeightM`, 1.2);
   if (v.roomLajeGenerated) floor.roomLajeGenerated = booleanMap(v.roomLajeGenerated, `${path}.roomLajeGenerated`);
   if (v.roomForroGenerated) floor.roomForroGenerated = booleanMap(v.roomForroGenerated, `${path}.roomForroGenerated`);
+  if (v.roomForroTipo) floor.roomForroTipo = forroTipoMap(v.roomForroTipo, `${path}.roomForroTipo`);
   const wallIds = new Set(floor.walls.map((wall) => wall.id));
   floor.openings.forEach((opening, index) => {
     if (!wallIds.has(opening.wallId)) fail(`${path}.openings[${index}].wallId`, 'parede hospedeira não existe');

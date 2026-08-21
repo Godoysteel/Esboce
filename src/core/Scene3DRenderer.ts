@@ -106,6 +106,18 @@ export function hashColorHex(key: string): number {
   // entre perfis, 1,20m entre pendurais) porque a borda da placa não
   // tem apoio contínuo como o miolo.
   var FORRO_PERIMETER_MAX_GAP_M = 0.10;
+  // Tipo de placa do forro (Store.commands.setForroBoardType, painel
+  // que aparece ao selecionar o forro na cena) — muda o espaçamento dos
+  // perfis F530 (ST usa o padrão de 60cm acima; RU/RF/cimentícia usam
+  // 40cm entre eixos, grade mais fechada) e a cor da placa (cores
+  // características de cada tipo, sem textura/papel modelado).
+  var FORRO_RUNNER_SPACING_TIGHT_M = 0.4;
+  var FORRO_BOARD_COLORS: Record<string, number> = {
+    ST: 0xCCCCCC,
+    RU: 0x5B9A4A,
+    RF: 0xD9748C,
+    cimenticia: 0x9C9690,
+  };
   // Acabamento de piso que todo cômodo nasce usando, antes de qualquer
   // escolha manual em Materiais — assim já vem com fuga desenhada em
   // vez de um verde liso sem textura. Escolha manual do usuário
@@ -2102,8 +2114,8 @@ export function hashColorHex(key: string): number {
   // referência (Modelos/Forro de drywall.glb): placa fosca clara
   // (RGB 0.8, roughness 0.5) e perfil metálico mais escuro (RGB 0.334,
   // metalness 0.5625, roughness 0.366).
-  function buildForroBoardMaterial() {
-    return new THREE.MeshStandardMaterial({ color: 0xCCCCCC, roughness: 0.5 });
+  function buildForroBoardMaterial(colorHex: number) {
+    return new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.5 });
   }
   function buildForroProfileMaterial() {
     return new THREE.MeshStandardMaterial({ color: 0x555555, metalness: 0.5625, roughness: 0.366 });
@@ -3163,11 +3175,12 @@ export function hashColorHex(key: string): number {
   // FORRO_PLENUM_GAP_M abaixo disso, com os perfis e pendurais ocupando
   // o vão entre as duas (nunca abaixo da placa — perfil visível por
   // baixo da placa era o bug reportado: "forro invertido").
-  function buildForroDrywallPiece(shape: any, worldPts: { x: number; z: number }[], topY: any) {
+  function buildForroDrywallPiece(shape: any, worldPts: { x: number; z: number }[], topY: any, tipo: string) {
     var meshes: any[] = [];
     var boardTopY = topY - FORRO_PLENUM_GAP_M;
-    var boardMat = buildForroBoardMaterial();
-    var boardMesh = makeSlabMesh(shape, FORRO_BOARD_THICKNESS, boardTopY, 0xCCCCCC, 1, true, null, boardMat, null);
+    var boardColor = FORRO_BOARD_COLORS[tipo] || FORRO_BOARD_COLORS.ST!;
+    var boardMat = buildForroBoardMaterial(boardColor);
+    var boardMesh = makeSlabMesh(shape, FORRO_BOARD_THICKNESS, boardTopY, boardColor, 1, true, null, boardMat, null);
     meshes.push(boardMesh);
 
     var profileMat = buildForroProfileMaterial();
@@ -3175,12 +3188,15 @@ export function hashColorHex(key: string): number {
     var b = polygonBoundsXZ(worldPts);
     var axis: 'x' | 'z' = (b.maxX - b.minX) >= (b.maxZ - b.minZ) ? 'z' : 'x';
     var minC = axis === 'x' ? b.minX : b.minZ, maxC = axis === 'x' ? b.maxX : b.maxZ;
-    // Grade regular ancorada na tabica (2° perfil ≈ tabica + 60cm da
-    // parede, não 60cm cru — mesmo método do manual), mas o perfil de
+    // Grade regular ancorada na tabica (2° perfil ≈ tabica + espaçamento
+    // da parede, não cru — mesmo método do manual), mas o perfil de
     // BORDA (1° e último) fica desenhado a FORRO_PERIMETER_MAX_GAP_M
     // (~10cm) da parede, não em cima da tabica — ele existe pra
     // sustentar a ponta da placa, senão ela fica apoiada só na tabica.
-    var runnerPositions = forroSpacedPositions(minC, maxC, FORRO_RUNNER_SPACING_M, FORRO_PERIMETER_MAX_GAP_M, FORRO_TABICA_W);
+    // Espaçamento de campo: 60cm no ST (padrão), 40cm nas placas
+    // especiais (RU/RF/cimentícia — grade mais fechada).
+    var runnerSpacingM = tipo === 'ST' ? FORRO_RUNNER_SPACING_M : FORRO_RUNNER_SPACING_TIGHT_M;
+    var runnerPositions = forroSpacedPositions(minC, maxC, runnerSpacingM, FORRO_PERIMETER_MAX_GAP_M, FORRO_TABICA_W);
     var runnerSegs = clipRunnerLinesXZ(worldPts, axis, runnerPositions);
     var wireMat = buildForroProfileMaterial();
     var regMat = buildForroProfileMaterial();
@@ -5300,7 +5316,8 @@ export function hashColorHex(key: string): number {
           var insetWorldPts = insetPoints.map(function (p: any) {
             return { x: (p.x - offsetX) * scale, z: (p.y - offsetY) * scale };
           });
-          var forroPieces = buildForroDrywallPiece(shape, insetWorldPts, forroTopY);
+          var forroTipo = (floorData.roomForroTipo || {})[roomKey] || 'ST';
+          var forroPieces = buildForroDrywallPiece(shape, insetWorldPts, forroTopY, forroTipo);
           forroPieces.forEach(function (m: any) {
             tagCategory(m, 'forroDrywall');
             m.userData.roomKey = roomKey; m.userData.floorIndex = floorIdx;

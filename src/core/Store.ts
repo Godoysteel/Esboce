@@ -8,7 +8,7 @@ import { Core } from './Core.js';
 import { buildColdWaterKitchenPrototype, buildColdWaterNetworkFromFixtures, buildDestinationNetworkFromFixtures, buildGuidedHydraulicRoute, createPositionedHydraulicFixture, destinationLabelForNetwork, hydraulicFixtureVisualPosition, nextHydraulicId, removeGuidedRouteForFixture, resolveHydraulicFixturePosition, type HydraulicEndpointRole } from './Hydraulics.js';
 import type {
   Project, Floor, Wall, Column, Roof, Opening, OpeningKind, Varanda, Laje, Furniture, ColumnShape, RoofType,
-  RidgeAxis, VarandaFrontSide, FoundationType, StoreEvent, StoreListener,
+  RidgeAxis, VarandaFrontSide, FoundationType, StoreEvent, StoreListener, ForroBoardType,
   WallSnapshot, LinkedWallUpdate, GlazingPanel, GlazingGlassMaterial, BalconyRailing, VolumeBox, Stair, StairModel, PlanUnderlay, Terreno, TerrenoMuroSide,
   HydraulicNetworkType
 } from './types.js';
@@ -834,6 +834,20 @@ export const commands = {
       roomKeys.push(roomKey);
     });
     emit({ type: 'ForroDrywallGenerated', roomKeys });
+  },
+
+  // Tipo de placa do forro (ST/RU/RF/cimenticia) — muda espaçamento dos
+  // perfis F530 e a cor da placa (ver Scene3DRenderer). Não exige que o
+  // forro já tenha sido gerado nesse roomKey — a escolha fica pronta
+  // pra quando "Gerar Forro" for clicado, mesmo espírito não-bloqueante
+  // de setRoomFinish acima.
+  setForroBoardType(roomKey: string, tipo: ForroBoardType): void {
+    if (!roomKey) return;
+    pushUndoSnapshot();
+    const f = currentFloor();
+    f.roomForroTipo = f.roomForroTipo || {};
+    f.roomForroTipo[roomKey] = tipo;
+    emit({ type: 'ForroBoardTypeSet', roomKey, tipo });
   },
 
   duplicateWall(wallId: string): Wall | null {

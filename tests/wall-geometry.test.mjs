@@ -1601,3 +1601,35 @@ test('forro de drywall nasce automático por cômodo, dentro do mesmo loop que j
   assert.match(roomsFlow, /if \(!layers\.laje && !layers\.forroDrywall\) return;/);
   assert.match(roomsFlow, /if \(layers\.laje\) \{/);
 });
+
+// Painel de tipo de placa (ST/RU/RF/cimenticia), aberto clicando no
+// forro na cena (selectForro) — muda espaçamento dos perfis F530 e a
+// cor da placa (ver Scene3DRenderer.buildForroDrywallPiece).
+test('Store.commands.setForroBoardType existe e grava o tipo por roomKey', () => {
+  const cmdStart = storeSource.indexOf('setForroBoardType(roomKey: string, tipo: ForroBoardType): void {');
+  assert.notEqual(cmdStart, -1);
+  const cmdBlock = storeSource.slice(cmdStart, cmdStart + 400);
+  assert.match(cmdBlock, /f\.roomForroTipo\[roomKey\] = tipo;/);
+});
+
+test('forro é selecionável na cena (clique) e abre o painel de tipo de placa — ViewportController.selectForro/getSelectedForroRoomKey', () => {
+  assert.match(viewportControllerSource, /function selectForro\(roomKey: any\)/);
+  assert.match(viewportControllerSource, /export function getSelectedForroRoomKey\(\) \{ return selectedForroRoomKey; \}/);
+  // isEditableMesh precisa reconhecer a categoria, senão pickMesh nunca
+  // entra no cascade que chama selectForro.
+  assert.match(viewportControllerSource, /mesh\.userData\.category === 'forroDrywall'/);
+  assert.match(viewportControllerSource, /Store\.commands\.setForroBoardType\(selectedForroRoomKey, ftBtn\.dataset\.forrotipo\);/);
+});
+
+test('botão "Gerar Forro" no HTML tem o painel de tipo de placa correspondente (forroTypePanel) com os 4 tipos', () => {
+  assert.match(indexHtmlSource, /id="forroTypePanel"/);
+  ['ST', 'RU', 'RF', 'cimenticia'].forEach((tipo) => {
+    assert.match(indexHtmlSource, new RegExp(`data-forrotipo="${tipo}"`));
+  });
+});
+
+test('cor da placa e espaçamento dos perfis mudam por tipo — ST fica no espaçamento padrão de 60cm, os demais em 40cm', () => {
+  assert.match(scene3DRendererSource, /FORRO_RUNNER_SPACING_TIGHT_M = 0\.4;/);
+  assert.match(scene3DRendererSource, /var runnerSpacingM = tipo === 'ST' \? FORRO_RUNNER_SPACING_M : FORRO_RUNNER_SPACING_TIGHT_M;/);
+  assert.match(scene3DRendererSource, /FORRO_BOARD_COLORS: Record<string, number> = \{/);
+});
