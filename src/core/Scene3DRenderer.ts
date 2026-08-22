@@ -122,7 +122,10 @@ export function hashColorHex(key: string): number {
   // escolha manual em Materiais — assim já vem com fuga desenhada em
   // vez de um verde liso sem textura. Escolha manual do usuário
   // (roomFinishId) sempre sobrescreve isso.
-  var DEFAULT_FLOOR_FINISH_ID = 'vortice.ceramica.bege-amanhecer';
+  // Piso padrão pra cômodo sem acabamento escolhido — pedido do Product
+  // Owner pra ser o laminado de madeira (textura PBR real, ambientCG
+  // "laminate_floor_02"), não mais a cerâmica bege lisa de antes.
+  var DEFAULT_FLOOR_FINISH_ID = 'vortice.piso.laminado-carvalho-claro';
   var FLOOR_STACK_HEIGHT = WALL_HEIGHT + LAJE_THICKNESS;
   var RADIER_THICKNESS = 0.18, RADIER_MARGIN = 0.15;
   var BALDRAME_WIDTH = 0.25, BALDRAME_THICKNESS = 0.2;
@@ -134,11 +137,28 @@ export function hashColorHex(key: string): number {
   var CALCADA_WIDTH = 0.6, CALCADA_THICKNESS = 0.05;
   var MARQUISE_DEPTH = 0.5, MARQUISE_THICKNESS = 0.06;
   var ROOF_PITCH_DEG = 28, ROOF_OVERHANG = 0.4, RAKE_OVERHANG = 0.2, ROOF_THICKNESS = 0.12;
-  var ROOF_COLOR = 0xB5573A, GABLE_COLOR = 0xE7E1D2;
+  var ROOF_COLOR = 0xB5573A, GABLE_COLOR = 0xFFFFFF;
   var HIGHLIGHT_ACCENT = 0xE8963C, HIGHLIGHT_MIX = 0.55;
   var SELECTED_ACCENT = 0xE8963C;
   var WALL_TOP_COLOR = GABLE_COLOR;
-  var WALL_EDGE_COLOR = 0x6F879C;
+  // roughness das faces/oitão/parapeito subiu de 0.92 pra 1 (máximo,
+  // difuso total, zero brilho especular) no mesmo passo — pedido pra
+  // ficar "mais fosco". A causa real de um branco puro não ler como
+  // branco uniforme na cena não é o material (0.92 já era bem fosco) —
+  // é a luz colorida (EsboceApplication: sol quente 0xfff1d6 + preenchimento
+  // frio 0xc5e5f2 + hemisfério céu/chão) tingindo cada face de um jeito
+  // diferente conforme a normal dela. roughness 1 tira o pouco de brilho
+  // especular que ainda sobrava; a variação de tom entre faces por causa
+  // da luz continua existindo de propósito (dá profundidade/relevo à
+  // cena) — só some de vez se a luz virar neutra/branca também, mudança
+  // bem maior (afeta a casa inteira, não só a parede).
+  // Teste de estilo pedido pelo Product Owner: parede sem acabamento em
+  // branco puro (GABLE_COLOR acima) + contorno preto sólido, igual ao
+  // estilo padrão do SketchUp — antes era um cinza-azulado (0x6F879C)
+  // translúcido (opacity 0.58), pensado pra ficar discreto sobre a
+  // parede colorida de antes. Preto puro, opaco (opacity 1), é o que dá
+  // o efeito de "desenho técnico" pedido.
+  var WALL_EDGE_COLOR = 0x000000;
   // Camada "Paredes transparentes" (ProjectLayers.paredesTransparentes)
   // — opacidade baixa o bastante pra enxergar a Planta Baixa importada
   // (DEC-82) por baixo, mas alta o bastante pra ainda reconhecer onde
@@ -1534,26 +1554,31 @@ export function hashColorHex(key: string): number {
       fp.p1b.x, y1, fp.p1b.z, fp.p2b.x, y1, fp.p2b.z
     ] : [];
     function vertical(p: any) { pts.push(p.x, y0, p.z, p.x, y1, p.z); }
-    // Uma ponta conectada e não estendida fica dentro da continuidade de
-    // outra parede. Desenhar sua vertical expõe a emenda interna depois
-    // da fusão. Só ponta LIVRE de verdade (free === true — a dobra rasa
-    // de duas paredes, sem mais ninguém cobrindo aquele canto) desenha a
-    // linha; `p1Extended` sozinho NÃO basta. A parede perpendicular de
-    // uma junção em T "disfarçada" (3 vias — ver computeWallFootprints)
-    // também fica com `extended: true`, mas com `free: false`: seu canto
-    // estendido fica sobreposto ao território das duas paredes retas que
-    // ela mesma fecha, não é uma aresta real. Contava como "ponta que
-    // fecha a quina" e ganhava uma vertical do chão ao teto bem no meio
-    // da face das paredes vizinhas — visualmente uma rachadura, mesmo com
-    // a tampa sólida (endcap, que continua usando a condição mais ampla
-    // de propósito — ela SIM precisa fechar o volume ali) sem buraco
-    // nenhum por baixo. Bug relatado como "quina aberta, sem tampinha"
-    // depois que a DEC-91/92 já tinham fechado o volume de verdade.
-    if (fp.p1Free === true) {
+    // `p1Corner`/`p2Corner` (Core.computeWallFootprints) é um sinal À
+    // PARTE de `p1Free`/`p1Extended` (que continuam controlando só a
+    // tampa/endcap — ver buildWallEndCapMesh e os caps de banda). Ele
+    // marca toda ponta que é uma quina VISUAL real — quina de mitre comum
+    // (duas paredes se encontrando num ângulo, o L de qualquer casa) E
+    // ponta livre/dobra rasa — mas fica false nas duas situações que já
+    // causaram rachadura antes: uma parede reta dividida ao meio (Quebrar
+    // Parede) e o pé/passagem de uma junção em T "disfarçada", onde o
+    // ponto calculado fica sobreposto ao território de outra parede em
+    // vez de ser uma aresta real da própria malha ali.
+    //
+    // `showTop === false` (parede de oitão — ver wallSupportsRoofGable no
+    // call site) também precisa apagar as verticais desta parede, pelo
+    // mesmo motivo que já apaga a borda superior: `height`/`y1` aqui é só
+    // a altura BASE do oitão (yOffset + baseHeightM), não o pico — o
+    // triângulo/extensão que sobe até a cumeeira é uma malha separada
+    // (buildAtticWallExtensions). Sem essa condição, a vertical desta
+    // parede parava exatamente na emenda entre a parede baixa e a
+    // extensão do telhado — lendo como um traço marcando a emenda, que é
+    // exatamente o que NÃO pode acontecer ali.
+    if (showTop && fp.p1Corner === true) {
       vertical(fp.p1a);
       vertical(fp.p1b);
     }
-    if (fp.p2Free === true) {
+    if (showTop && fp.p2Corner === true) {
       vertical(fp.p2a);
       vertical(fp.p2b);
     }
@@ -1562,7 +1587,7 @@ export function hashColorHex(key: string): number {
     var lines = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({
       color: WALL_EDGE_COLOR,
       transparent: true,
-      opacity: 0.58,
+      opacity: 1,
       depthWrite: false
     }));
     lines.renderOrder = 2;
@@ -1730,7 +1755,7 @@ export function hashColorHex(key: string): number {
     var arcoRevealMat = new THREE.MeshStandardMaterial({
       color: isSelected ? SELECTED_ACCENT : arcoWallColorHex,
       map: arcoCeramicMap,
-      roughness: 0.92,
+      roughness: 1,
       flatShading: true
     });
 
@@ -2105,7 +2130,7 @@ export function hashColorHex(key: string): number {
   function buildParapetSegmentMaterial(color: any, thickness: any, height: any, length: any) {
     return new THREE.MeshStandardMaterial({
       color: color,
-      roughness: 0.92,
+      roughness: 1,
       flatShading: true
     });
   }
@@ -2257,6 +2282,30 @@ export function hashColorHex(key: string): number {
   // (arrastar a inclinação, girar a câmera com highlight etc.) recriaria
   // e recarregaria as 4 imagens do zero, toda vez.
   var roofTextureCache: Record<string, any> = {};
+
+  // Telha ceramica PBR usada por todo telhado que ainda nao recebeu um
+  // acabamento escolhido no Catalogo. Os mapas foram fornecidos pelo
+  // Product Owner (ambientCG RoofingTiles012A) e ficam em arquivos
+  // estaticos, em vez de base64 dentro de Catalog.ts, para aproveitarem o
+  // cache HTTP do navegador. NormalGL e a convencao correta para o
+  // Three.js; displacement e opacity nao entram porque a geometria do
+  // telhado nao tem subdivisoes para displacement e a telha e opaca.
+  function getDefaultRoofFinish() {
+    var base = import.meta.env.BASE_URL;
+    return {
+      id: 'esboce.padrao.telha-ceramica-pbr',
+      assets: {
+        tileMeters: 2.6,
+        textures: {
+          map: base + 'textures/telhado/telha-ceramica/color.jpg',
+          normalMap: base + 'textures/telhado/telha-ceramica/normal.jpg',
+          roughnessMap: base + 'textures/telhado/telha-ceramica/roughness.jpg',
+          aoMap: base + 'textures/telhado/telha-ceramica/ambient-occlusion.jpg'
+        }
+      }
+    };
+  }
+
   function buildRoofTileMaterial(product: any, viewState: any) {
     var tex = product.assets.textures!;
     if (!roofTextureCache[product.id]) {
@@ -2343,7 +2392,7 @@ export function hashColorHex(key: string): number {
     var color = product ? parseInt(product.assets.colorHex.slice(1), 16) : GABLE_COLOR;
     return new THREE.MeshStandardMaterial({
       color: pickColor(color, 'paredesTerreo', viewState),
-      roughness: 0.92,
+      roughness: 1,
       side: THREE.DoubleSide
     });
   }
@@ -2380,8 +2429,10 @@ export function hashColorHex(key: string): number {
     var roofColor;
     if (roofFinish && roofFinish.assets.textures) {
       roofColor = buildRoofTileMaterial(roofFinish, viewState);
+    } else if (!roofFinish) {
+      roofColor = buildRoofTileMaterial(getDefaultRoofFinish(), viewState);
     } else {
-      var roofBaseColor = roofFinish ? parseInt(roofFinish.assets.colorHex.slice(1), 16) : ROOF_COLOR;
+      var roofBaseColor = parseInt(roofFinish.assets.colorHex.slice(1), 16);
       roofColor = pickColor(roofBaseColor, 'telhado', viewState);
     }
     // Oitão (a parede triangular da empena, encostada na parede de
@@ -4598,7 +4649,7 @@ export function hashColorHex(key: string): number {
           // pro mesmo espaço de tela usado por x1,z1,x2,z2 acima.
           var fpModel = wallFootprints[w.id]!;
           function toScene(p: any) { return { x: (p.x - offsetX) * scale, z: (p.y - offsetY) * scale }; }
-          var fp = { p1a: toScene(fpModel.p1a), p1b: toScene(fpModel.p1b), p2a: toScene(fpModel.p2a), p2b: toScene(fpModel.p2b), p1Free: fpModel.p1Free, p2Free: fpModel.p2Free, p1Extended: fpModel.p1Extended, p2Extended: fpModel.p2Extended };
+          var fp = { p1a: toScene(fpModel.p1a), p1b: toScene(fpModel.p1b), p2a: toScene(fpModel.p2a), p2b: toScene(fpModel.p2b), p1Free: fpModel.p1Free, p2Free: fpModel.p2Free, p1Extended: fpModel.p1Extended, p2Extended: fpModel.p2Extended, p1Corner: fpModel.p1Corner, p2Corner: fpModel.p2Corner };
 
           var isSelected = viewState.selectedWall && viewState.selectedWall.id === w.id;
           var isGroupSelected = viewState.roomGroupWallIds && viewState.roomGroupWallIds.indexOf(w.id) !== -1;
@@ -4756,7 +4807,7 @@ export function hashColorHex(key: string): number {
               color: highlighted ? SELECTED_ACCENT : GABLE_COLOR,
               side: THREE.DoubleSide,
               flatShading: true,
-              roughness: 0.92,
+              roughness: 1,
               transparent: true,
               opacity: highlighted ? 0.2 : 0,
               depthWrite: false
@@ -4807,7 +4858,7 @@ export function hashColorHex(key: string): number {
               normalMap: DEBUG_COLOR_MODE ? null : (hasRealTexture ? wallPbrMaps!.normalMap : null),
               roughnessMap: DEBUG_COLOR_MODE ? null : (hasRealTexture ? wallPbrMaps!.roughnessMap : null),
               aoMap: DEBUG_COLOR_MODE ? null : (hasRealTexture ? wallPbrMaps!.aoMap : null),
-              roughness: hasRealTexture ? 1 : 0.92,
+              roughness: 1,
               flatShading: true,
               side: THREE.DoubleSide,
               polygonOffset: true,

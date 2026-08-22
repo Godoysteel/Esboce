@@ -437,6 +437,8 @@ export interface WallFootprint {
   p2Free: boolean;
   p1Extended: boolean;
   p2Extended: boolean;
+  p1Corner: boolean;
+  p2Corner: boolean;
 }
 
 export interface WallOBB {

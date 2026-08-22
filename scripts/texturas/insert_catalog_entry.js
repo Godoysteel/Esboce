@@ -1,6 +1,12 @@
 import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-const catalogPath = 'C:/Users/godoy/Desktop/esboce-drag/src/core/Catalog.ts';
+// Derivado da localização do próprio script, não hardcoded — evita
+// gravar sem querer num checkout errado (já existiram pelo menos dois
+// clones esquecidos de sessões anteriores em outras pastas).
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const catalogPath = path.resolve(scriptDir, '../../src/core/Catalog.ts');
 const snippetPath = process.argv[2];
 const productId = process.argv[3];
 const productName = process.argv[4];

@@ -21,7 +21,11 @@ os.makedirs(out_dir, exist_ok=True)
 
 DATA_MAP_HINTS = ['nor', 'rough', 'ao', 'disp', 'height', 'metal', 'metalness', 'ambient']
 
-exr_files = glob.glob(os.path.join(src_dir, '*.exr'))
+# glob.escape no src_dir: sem isso, um caractere de classe de glob no
+# CAMINHO da pasta (ex.: "Texturas[" — já aconteceu com uma pasta real
+# de origem) faz o padrão nunca casar com nada, sem erro nenhum, só
+# "nenhum .exr encontrado" silencioso.
+exr_files = glob.glob(os.path.join(glob.escape(src_dir), '*.exr'))
 if not exr_files:
     print('nenhum .exr encontrado em', src_dir)
 

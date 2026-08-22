@@ -2305,7 +2305,12 @@ import {
       var btn = document.createElement('button');
       btn.className = 'fn' + (p.id === currentPaintProductId ? ' active' : '');
       btn.title = p.name;
+      btn.setAttribute('aria-label', p.name);
       btn.style.background = p.assets.colorHex;
+      if (p.assets.thumbnailUrl) {
+        btn.classList.add('has-thumbnail');
+        btn.style.backgroundImage = 'url("' + (import.meta as any).env.BASE_URL + p.assets.thumbnailUrl + '")';
+      }
       btn.dataset.product = p.id;
       swatches.appendChild(btn);
     });

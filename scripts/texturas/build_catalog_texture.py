@@ -33,7 +33,11 @@ SLOTS = {
     'aoMap': ['occlusion', '_ao', '-ao'],
 }
 
-files = glob.glob(os.path.join(folder, '*.png')) + glob.glob(os.path.join(folder, '*.jpg')) + glob.glob(os.path.join(folder, '*.jpeg'))
+# glob.escape: mesmo cuidado do blender_convert_exr.py — um caractere de
+# classe de glob no caminho da pasta (ex.: "Texturas[") faz o padrão
+# nunca casar com nada, silenciosamente.
+esc = glob.escape(folder)
+files = glob.glob(os.path.join(esc, '*.png')) + glob.glob(os.path.join(esc, '*.jpg')) + glob.glob(os.path.join(esc, '*.jpeg'))
 
 found = {}
 for slot, hints in SLOTS.items():

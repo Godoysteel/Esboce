@@ -1608,7 +1608,7 @@ export function computeWallFootprints(wallList: Wall[]): Record<string, WallFoot
 
     function endPoints(
       px: number, py: number, end: 1 | 2, touchers: { w: Wall; end: 1 | 2 }[]
-    ): { a: Point; b: Point; free: boolean; extended: boolean } {
+    ): { a: Point; b: Point; free: boolean; extended: boolean; corner: boolean } {
       if (touchers.length === 1) {
         const leave1x = end === 1 ? ux : -ux, leave1y = end === 1 ? uy : -uy;
         const left1x = -leave1y, left1y = leave1x;
@@ -1631,7 +1631,16 @@ export function computeWallFootprints(wallList: Wall[]): Record<string, WallFoot
                                         right2x * halfThick, right2y * halfThick, leave2x, leave2y);
           if (c1 && c2) {
             const rightIsA = (right1x * nx + right1y * ny) > 0;
-            return { a: rightIsA ? c1 : c2, b: rightIsA ? c2 : c1, free: false, extended: false };
+            // free/extended continuam false (endcap e caixa de referência
+            // não mudam — ver uso deles em buildWallEndCapMesh e nas
+            // bandas). `corner: true` é um sinal À PARTE, só pra decidir
+            // se a linha de aresta vertical (buildWallFootprintEdgeLines)
+            // desenha aqui: a quina de mitre comum (duas paredes se
+            // encontrando num ângulo real, o L de qualquer casa) É uma
+            // quina visual de verdade — os pontos c1/c2 já são a
+            // interseção geométrica exata das duas paredes, então a linha
+            // cai em cima da aresta real da malha, sem risco de rachadura.
+            return { a: rightIsA ? c1 : c2, b: rightIsA ? c2 : c1, free: false, extended: false, corner: true };
           }
         } else {
           // Caso especial DENTRO do "ângulo raso": as duas paredes são
@@ -1672,7 +1681,7 @@ export function computeWallFootprints(wallList: Wall[]): Record<string, WallFoot
             return {
               a: { x: px + nx * halfThick, y: py + ny * halfThick },
               b: { x: px - nx * halfThick, y: py - ny * halfThick },
-              free: false, extended: false
+              free: false, extended: false, corner: false
             };
           }
           const exShallow = halfThick;
@@ -1681,7 +1690,7 @@ export function computeWallFootprints(wallList: Wall[]): Record<string, WallFoot
           return {
             a: { x: bxShallow + nx * halfThick, y: byShallow + ny * halfThick },
             b: { x: bxShallow - nx * halfThick, y: byShallow - ny * halfThick },
-            free: true, extended: true
+            free: true, extended: true, corner: true
           };
         }
       }
@@ -1700,7 +1709,7 @@ export function computeWallFootprints(wallList: Wall[]): Record<string, WallFoot
           return {
             a: { x: bxT + nx * halfThick, y: byT + ny * halfThick },
             b: { x: bxT - nx * halfThick, y: byT - ny * halfThick },
-            free: false, extended: true
+            free: false, extended: true, corner: false
           };
         }
         const leaveMe = end === 1 ? { x: ux, y: uy } : { x: -ux, y: -uy };
@@ -1712,7 +1721,7 @@ export function computeWallFootprints(wallList: Wall[]): Record<string, WallFoot
           return {
             a: { x: px + nx * halfThick, y: py + ny * halfThick },
             b: { x: px - nx * halfThick, y: py - ny * halfThick },
-            free: false, extended: false
+            free: false, extended: false, corner: false
           };
         }
       }
@@ -1722,10 +1731,16 @@ export function computeWallFootprints(wallList: Wall[]): Record<string, WallFoot
       const ex = extend ? halfThick : 0;
       const dOutX = end === 1 ? -ux : ux, dOutY = end === 1 ? -uy : uy;
       const bx = px + dOutX * ex, by = py + dOutY * ex;
+      // 3+ vias sem par colinear (junção real de 3 ou mais paredes, não
+      // "T disfarçada") continua sem linha de aresta por enquanto —
+      // `corner: free` aqui só cobre o caso de ponta solta de verdade
+      // (touchers.length === 0); o caso de junção múltipla real é raro
+      // em planta ortogonal comum e não foi testado, fica de fora por
+      // segurança até ter um caso real pra validar contra.
       return {
         a: { x: bx + nx * halfThick, y: by + ny * halfThick },
         b: { x: bx - nx * halfThick, y: by - ny * halfThick },
-        free, extended: true
+        free, extended: true, corner: free
       };
     }
 
@@ -1734,7 +1749,8 @@ export function computeWallFootprints(wallList: Wall[]): Record<string, WallFoot
     footprints[w.id] = {
       p1a: e1.a, p1b: e1.b, p2a: e2.a, p2b: e2.b,
       p1Free: e1.free, p2Free: e2.free,
-      p1Extended: e1.extended, p2Extended: e2.extended
+      p1Extended: e1.extended, p2Extended: e2.extended,
+      p1Corner: e1.corner, p2Corner: e2.corner
     };
   });
   return footprints;

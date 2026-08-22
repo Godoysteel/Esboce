@@ -1344,7 +1344,7 @@ test('Scene3DRenderer usa Core.resolvedWallHeights (não mais Wall.heightM cru) 
 // realmente é a única coisa cobrindo o canto). O resultado era uma linha
 // cheia (chão ao teto) desenhada no meio da face das paredes vizinhas —
 // lê como rachadura, mesmo sem buraco nenhum na malha por baixo.
-test('linha de contorno vertical só aparece em ponta LIVRE de verdade (free === true) — junção em T disfarçada (free: false, extended: true) não ganha linha espúria no meio da face da vizinha (DEC-93)', () => {
+test('linha de contorno vertical usa p1Corner/p2Corner, não p1Free/p2Free — junção em T disfarçada não ganha linha espúria no meio da face da vizinha (DEC-93, revisado)', () => {
   // Tolerante a CRLF/LF de propósito — o blob local (Windows) e o checkout
   // do runner de CI (Linux) já divergiram nisso antes (ver DEC-91).
   const fnStart = scene3DRendererSource.indexOf('function buildWallFootprintEdgeLines(fp: any, height: any, yOffset: any, showTop = true) {');
@@ -1352,17 +1352,76 @@ test('linha de contorno vertical só aparece em ponta LIVRE de verdade (free ===
   const fnEndMatch = scene3DRendererSource.slice(fnStart).match(/\r?\n  \}/);
   const fnEnd = fnStart + fnEndMatch.index;
   const fnBody = scene3DRendererSource.slice(fnStart, fnEnd);
-  assert.match(fnBody, /if \(fp\.p1Free === true\) \{/);
-  assert.match(fnBody, /if \(fp\.p2Free === true\) \{/);
-  // Não pode voltar a usar a condição ampla (a mesma do endcap sólido) —
-  // essa é exatamente a regressão que causou a rachadura visual.
-  assert.doesNotMatch(fnBody, /if \(fp\.p1Free !== false \|\| fp\.p1Extended\)/);
-  assert.doesNotMatch(fnBody, /if \(fp\.p2Free !== false \|\| fp\.p2Extended\)/);
+  assert.match(fnBody, /if \(showTop && fp\.p1Corner === true\) \{/);
+  assert.match(fnBody, /if \(showTop && fp\.p2Corner === true\) \{/);
+  // free/extended isolados nunca voltam a decidir a linha — essa é
+  // exatamente a regressão que causou a rachadura visual antes.
+  assert.doesNotMatch(fnBody, /if \(fp\.p1Free/);
+  assert.doesNotMatch(fnBody, /if \(fp\.p2Free/);
 
   // O endcap SÓLIDO (tampa de verdade, DEC-91) continua usando a condição
-  // ampla de propósito — ele PRECISA fechar o volume ali, ao contrário da
-  // linha, que é só contorno cosmético.
+  // ampla de propósito (p1Free/p1Extended) — ele PRECISA fechar o volume
+  // ali, ao contrário da linha, que é só contorno cosmético e agora usa
+  // um sinal próprio (p1Corner/p2Corner).
   assert.match(scene3DRendererSource, /if \(fp\.p1Free !== false \|\| fp\.p1Extended\) \{\r?\n\s*var endCap1/, 'endcap sólido continua com a condição ampla — só a linha de contorno mudou');
+
+  // fp precisa carregar p1Corner/p2Corner até o render de verdade, não só
+  // dentro da função — senão buildWallFootprintEdgeLines sempre recebe
+  // undefined e a linha nunca aparece em nenhuma quina.
+  assert.match(scene3DRendererSource, /p1Corner: fpModel\.p1Corner, p2Corner: fpModel\.p2Corner/);
+
+  // Parede de oitão (showTop === false, vinda de !wallSupportsRoofGable no
+  // call site): a `showTop &&` na frente das duas condições acima (linha
+  // 1355-1356) já garante que a vertical desta parede fica apagada junto
+  // com a borda superior — senão a linha pararia bem na emenda entre a
+  // parede baixa e a extensão triangular do telhado, marcando a emenda
+  // que o usuário pediu explicitamente pra nunca aparecer.
+});
+
+// Cobertura de Core.computeWallFootprints em si — a decisão de ONDE
+// corner:true acontece é a parte que mais importa acertar: quina de
+// mitre comum (90°, o L de qualquer casa) precisa virar true mesmo sem
+// ser "free" (senão a quina mais comum de qualquer planta nunca ganharia
+// linha), e os dois casos que já causaram rachadura (T disfarçada e
+// parede reta dividida ao meio) precisam continuar false.
+test('computeWallFootprints: corner é true na quina de mitre comum (90°) mesmo com free:false, e continua false nos dois casos que já causaram rachadura (T disfarçada e parede reta dividida)', () => {
+  // Quina de mitre comum: duas paredes formando um L de 90°.
+  const lWalls = [
+    { id: 'a', x1: 0, y1: 0, x2: 100, y2: 0 },
+    { id: 'b', x1: 100, y1: 0, x2: 100, y2: 100 },
+  ];
+  const lfp = computeWallFootprints(lWalls);
+  assert.equal(lfp.a.p2Corner, true, 'quina de mitre (fim de a, encontro com b) deve virar corner:true');
+  assert.equal(lfp.a.p2Free, false, 'mitre comum continua free:false — não muda o endcap');
+  assert.equal(lfp.b.p1Corner, true, 'quina de mitre (início de b, encontro com a) deve virar corner:true');
+
+  // Ponta livre de verdade (sem ninguém tocando) continua corner:true,
+  // igual já era com free.
+  assert.equal(lfp.a.p1Corner, true);
+  assert.equal(lfp.b.p2Corner, true);
+
+  // Junção em T disfarçada de 3 vias: uma parede reta (through) com uma
+  // terceira encostando bem no meio dela.
+  const tWalls = [
+    { id: 'through1', x1: 0, y1: 0, x2: 50, y2: 0 },
+    { id: 'through2', x1: 50, y1: 0, x2: 100, y2: 0 },
+    { id: 'stem', x1: 50, y1: 0, x2: 50, y2: 60 },
+  ];
+  const tfp = computeWallFootprints(tWalls);
+  assert.equal(tfp.through1.p2Corner, false, 'lado through do T disfarçado não pode ganhar linha — é o caso que causou a rachadura');
+  assert.equal(tfp.through2.p1Corner, false, 'lado through do T disfarçado não pode ganhar linha — é o caso que causou a rachadura');
+  assert.equal(tfp.stem.p1Corner, false, 'pé do T (perpendicular) também não é uma quina real — seu canto fica sobreposto ao território das outras duas');
+
+  // Parede reta dividida ao meio (ex.: sobrou depois de "Quebrar Parede"
+  // remover a terceira parede do T acima) — dois trechos colineares, sem
+  // mais ninguém no meio.
+  const straightWalls = [
+    { id: 's1', x1: 0, y1: 0, x2: 50, y2: 0 },
+    { id: 's2', x1: 50, y1: 0, x2: 100, y2: 0 },
+  ];
+  const sfp = computeWallFootprints(straightWalls);
+  assert.equal(sfp.s1.p2Corner, false, 'parede reta dividida ao meio não pode ganhar linha no meio do próprio trecho reto');
+  assert.equal(sfp.s2.p1Corner, false, 'parede reta dividida ao meio não pode ganhar linha no meio do próprio trecho reto');
 });
 
 // DEC-94 — telhado fantasma (prévia, antes do primeiro clique) acompanha a

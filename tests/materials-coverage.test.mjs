@@ -87,15 +87,14 @@ test('telhas cerâmicas reais (não-teste) ganham pecaCoverageM2 — sem isso pr
   assert.match(body, /pecaCoverageM2:\s*0\.06/);
 });
 
-// Correção pós-lançamento: tileMeters é escala de repetição de TEXTURA
-// na renderização 3D — usar o mesmo campo pra cobertura física de
-// orçamento fazia telha cerâmica real mudar de escala visual sem
-// querer. pecaCoverageM2 é um campo separado, só pra orçamento.
-test('telhas cerâmicas reais NÃO ganham tileMeters — isso mudaria a escala visual da textura sem querer', () => {
+// tileMeters é escala visual e pecaCoverageM2 é cobertura comercial. Os dois
+// podem coexistir, mas o quantitativo nunca pode usar a escala da textura.
+test('telha cerâmica real declara escala visual separada da cobertura comercial', () => {
   const start = catalogSource.indexOf("id: 'vortice.telha.ceramica-natural'");
   const end = catalogSource.indexOf('} },', start);
   const body = catalogSource.slice(start, end);
-  assert.doesNotMatch(body, /tileMeters/);
+  assert.match(body, /tileMeters:\s*3\.0/);
+  assert.match(body, /pecaCoverageM2:\s*0\.06/);
 });
 
 test('produtiUnitCost/purchaseQuantity leem pecaCoverageM2, nunca tileMeters, pra calcular quantidade de peça', () => {
