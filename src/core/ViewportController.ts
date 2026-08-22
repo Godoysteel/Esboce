@@ -88,6 +88,14 @@ import {
   var placingDraw = false; // true entre o 1º e o 2º clique de Cômodo/Parede
   var drawStart: any = null, drawPreview: any = null;
   var dragElementStart: any = null, dragGroundStart: any = null;
+  // Candidato AO VIVO do arraste de "empurrar parede" (dragMode ===
+  // 'wallResize', DEC-87) — o Store só é escrito no pointerup (ver
+  // comentário ali embaixo), então a cota temporária (updateDimLabels)
+  // não pode ler Store.findWall durante o arraste, senão mostra o
+  // comprimento ANTIGO em vez de acompanhar a parede fantasma sendo
+  // arrastada. Guardado aqui a cada pointermove, lido em
+  // updateDimLabels, limpo junto do resto do estado de arraste.
+  var wallResizeLiveCandidate: { id: string; x1: number; y1: number; x2: number; y2: number } | null = null;
   // Painel de Envidraçamento em arraste (DEC-56, correção de
   // performance): referência DIRETA ao mesh Three.js do painel sendo
   // arrastado — durante o pointermove, move só ESSE objeto (mutação
@@ -508,6 +516,7 @@ import {
     wallResizePreviewMeshes = [];
     wallResizeHiddenObjects.forEach(function (object) { object.visible = true; });
     wallResizeHiddenObjects = [];
+    wallResizeLiveCandidate = null;
   }
 
   // wallHeight opcional: usado tanto pelo arraste de UMA parede (altura
@@ -1443,7 +1452,9 @@ import {
   // parede solta, mostra o comprimento. Some assim que o arraste termina.
   function updateDimLabels() {
     if (!drawPreview) {
-      var liveWall = (dragMode === 'wallResize' || dragMode === 'endpoint1' || dragMode === 'endpoint2') && selectedWallId ? Store.findWall(selectedWallId) : null;
+      var liveWall = dragMode === 'wallResize' && wallResizeLiveCandidate
+        ? wallResizeLiveCandidate
+        : (dragMode === 'endpoint1' || dragMode === 'endpoint2') && selectedWallId ? Store.findWall(selectedWallId) : null;
       var roomDimensions = liveWall ? findLiveRoomDimensions(liveWall) : [];
       if (roomDimensions.length) {
         var liveLabelY = currentFloorYOffset() + 0.12;
@@ -3221,6 +3232,11 @@ import {
         previewWallResize(wallResizeCandidate.candidateWalls, wallResizeCandidate.previewIds);
         dragElementStart.diagnosticDeltaX = wallResizeCandidate.rx1 - dragElementStart.x1;
         dragElementStart.diagnosticDeltaY = wallResizeCandidate.ry1 - dragElementStart.y1;
+        wallResizeLiveCandidate = {
+          id: selectedWallId,
+          x1: wallResizeCandidate.rx1, y1: wallResizeCandidate.ry1,
+          x2: wallResizeCandidate.rx2, y2: wallResizeCandidate.ry2,
+        };
       }
       return;
     }
