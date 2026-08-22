@@ -19,7 +19,7 @@ import type { FoundationQuantity } from './QuantityGeometry.js';
 import type { Point, Wall, Roof, Column, Laje, Project, CommercialSelection } from './types.js';
 import { constructionSystemDefinition, hasCeramicMasonryEstimate } from './ConstructionSystem.js';
 import { floorWallHeight } from './Attic.js';
-import { listCatalogProducts, listManufacturers } from './SupabaseClient.js';
+import { listCatalogOffers, listCatalogProducts, listManufacturers } from './SupabaseClient.js';
 import { classifyHydraulicJunction, destinationLabelForNetwork } from './Hydraulics.js';
 import type { HydraulicNetworkType, HydraulicNode, HydraulicSegment } from './types.js';
 
@@ -1149,6 +1149,7 @@ interface RealPriceMatch {
   value: number;
   source: string;
   productId: string;
+  offerId?: string;
   supplierId: string;
   supplierName: string;
   supplierSku?: string;
@@ -1159,6 +1160,7 @@ interface RealPriceMatch {
 }
 type MaterialPriceKey = 'cementPerKg' | 'limePerKg' | 'sandPerM3' | 'concretePerM3' | 'steelPerKg' | 'brickPerUnit' | 'woodPerM3' | 'windowPerM2' | 'nailPerKg' | 'forroPlacaSTPerM2' | 'forroPlacaRUPerM2' | 'forroPlacaRFPerM2' | 'forroPlacaCimenticiaPerM2' | 'forroF530PerM' | 'forroTabicaPerM' | 'forroPenduralPerUnit' | 'baseboardPerM' | 'woodDoorPerUnit' | 'sillPerM' | 'glazingPanelPerM2' | 'balconyRailingPerM' | 'varandaPerM2' | 'volumeBoxGenericPerM2' | 'stairPerUnit' | 'hydraulicDestinationBoxPerUnit';
 let realPrices: { [K in MaterialPriceKey]?: RealPriceMatch } = {};
+let realHydraulicPrices: Record<string, RealPriceMatch> = {};
 let realPricesFetchStarted = false;
 let onRealPricesLoaded: (() => void) | null = null;
 
@@ -1195,11 +1197,36 @@ const VORTICE_MATERIAL_SKUS: Record<MaterialPriceKey, { sku: string; unitDivisor
   hydraulicDestinationBoxPerUnit: { sku: 'vortice-caixa-hidraulica-un', unitDivisor: 1 },
 };
 
+function hydraulicPipePriceKey(productLine: HydraulicProductLine, diameterMm: number): string {
+  return 'pipe:' + productLine + ':' + diameterMm;
+}
+
+function hydraulicFittingPriceKey(productLine: HydraulicProductLine, diameterMm: number, kind: string): string {
+  return 'fitting:' + productLine + ':' + diameterMm + ':' + kind;
+}
+
+const VORTICE_HYDRAULIC_SKUS: Record<string, string> = (() => {
+  const skus: Record<string, string> = {};
+  const diameters: Record<HydraulicProductLine, number[]> = { esgoto: [40, 50, 75, 100], pluvial: [75] };
+  const fittingSku: Record<string, string> = { elbow90: 'joelho90', elbow45: 'joelho45', tee: 'te', cross: 'cruzeta' };
+  (Object.keys(diameters) as HydraulicProductLine[]).forEach(function (line) {
+    diameters[line].forEach(function (diameter) {
+      skus[hydraulicPipePriceKey(line, diameter)] = 'vortice-tubo-' + line + '-' + diameter + 'mm-6m';
+      Object.keys(fittingSku).forEach(function (kind) {
+        skus[hydraulicFittingPriceKey(line, diameter, kind)] =
+          'vortice-conexao-' + line + '-' + diameter + 'mm-' + fittingSku[kind];
+      });
+    });
+  });
+  return skus;
+})();
+
 async function ensureRealPrices(): Promise<void> {
   if (realPricesFetchStarted) return;
   realPricesFetchStarted = true;
   try {
     const [manufacturers, products] = await Promise.all([listManufacturers(), listCatalogProducts()]);
+    const offers = await listCatalogOffers(products);
     const mercador = manufacturers.find(function (m) { return m.nome === 'O Mercador'; });
     const vortice = manufacturers.find(function (m) { return m.nome === 'Vórtice Materiais'; });
 
@@ -1252,6 +1279,28 @@ async function ensureRealPrices(): Promise<void> {
             estimated: true,
           };
         }
+      });
+      Object.keys(VORTICE_HYDRAULIC_SKUS).forEach(function (key) {
+        const sku = VORTICE_HYDRAULIC_SKUS[key];
+        const product = products.find(function (p) { return p.manufacturer_id === vortice.id && p.sku === sku; });
+        if (!product) return;
+        const offer = offers.find(function (candidate) {
+          return candidate.product_id === product.id && candidate.kind === 'market_reference' && candidate.supplier_name === 'Vórtice Materiais';
+        });
+        if (!offer) return;
+        realHydraulicPrices[key] = {
+          value: offer.price,
+          source: product.nome + ' — Estimativa Vórtice; não constitui oferta comercial',
+          productId: product.id,
+          offerId: offer.id,
+          supplierId: offer.supplier_id,
+          supplierName: offer.supplier_name,
+          ...(offer.supplier_sku ? { supplierSku: offer.supplier_sku } : {}),
+          region: offer.region,
+          priceDate: offer.price_date,
+          kind: offer.kind,
+          estimated: true,
+        };
       });
     }
   } catch (err) {
@@ -1400,10 +1449,14 @@ function materialPrice(key: MaterialPriceKey): number {
 
 function materialCommercialSelection(key: MaterialPriceKey): CommercialSelection | undefined {
   const match = realPrices[key];
+  return commercialSelectionFromMatch(match, key);
+}
+
+function commercialSelectionFromMatch(match: RealPriceMatch | undefined, offerKey: string): CommercialSelection | undefined {
   if (!match) return undefined;
   return {
     productId: match.productId,
-    offerId: 'derived:' + key + ':' + match.supplierId + ':' + match.priceDate,
+    offerId: match.offerId ?? ('derived:' + offerKey + ':' + match.supplierId + ':' + match.priceDate),
     supplierId: match.supplierId,
     supplierName: match.supplierName,
     ...(match.supplierSku ? { supplierSku: match.supplierSku } : {}),
@@ -1770,14 +1823,18 @@ export function buildRows(): (string | number)[][] {
   // específico desta seção).
   const hLabel = 'Instalações hidrossanitárias';
   q.hydraulics.pipeGroups.forEach(function (group) {
-    const unitPrice = HYDRAULIC_PIPE_BAR_PRICE[group.productLine][group.diameterMm];
+    const priceKey = hydraulicPipePriceKey(group.productLine, group.diameterMm);
+    const match = realHydraulicPrices[priceKey];
+    const unitPrice = match?.value ?? HYDRAULIC_PIPE_BAR_PRICE[group.productLine][group.diameterMm];
     const item = 'Tubo PVC ' + HYDRAULIC_PRODUCT_LINE_LABEL[group.productLine] + ' ' + group.diameterMm + 'mm (barra ' + HYDRAULIC_PIPE_BAR_LENGTH_M + 'm)';
-    push(hLabel, item, group.bars, 'un', unitPrice != null ? group.bars * unitPrice : null);
+    push(hLabel, item, group.bars, 'un', unitPrice != null ? group.bars * unitPrice : null, commercialSelectionFromMatch(match, priceKey));
   });
   q.hydraulics.fittingGroups.forEach(function (group) {
-    const unitPrice = HYDRAULIC_FITTING_PRICE[group.productLine]?.[group.diameterMm]?.[group.kind];
+    const priceKey = hydraulicFittingPriceKey(group.productLine, group.diameterMm, group.kind);
+    const match = realHydraulicPrices[priceKey];
+    const unitPrice = match?.value ?? HYDRAULIC_FITTING_PRICE[group.productLine]?.[group.diameterMm]?.[group.kind];
     const item = (HYDRAULIC_FITTING_KIND_LABEL[group.kind] || group.kind) + ' PVC ' + HYDRAULIC_PRODUCT_LINE_LABEL[group.productLine] + ' ' + group.diameterMm + 'mm';
-    push(hLabel, item, group.count, 'un', unitPrice != null ? group.count * unitPrice : null);
+    push(hLabel, item, group.count, 'un', unitPrice != null ? group.count * unitPrice : null, commercialSelectionFromMatch(match, priceKey));
   });
   q.hydraulics.destinationGroups.forEach(function (group) {
     pushMaterial(hLabel, group.label, group.count, 'un', group.count * materialPrice('hydraulicDestinationBoxPerUnit'), 'hydraulicDestinationBoxPerUnit');

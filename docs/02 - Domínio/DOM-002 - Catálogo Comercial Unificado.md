@@ -55,6 +55,11 @@ cliente. Rodapés, soleiras, portas genéricas, envidraçamentos, varanda,
 volumetria, escada e caixas hidráulicas seguem essa regra, com fallback local
 apenas para indisponibilidade de rede.
 
+Tubos e conexões hidráulicas são produtos comerciais distintos por linha,
+diâmetro e tipo de peça. Na ausência de oferta oficial, cada combinação resolve
+uma Referência Vórtice regional e datada; a tabela embutida no cliente é apenas
+contingência offline e não recebe fornecedor nem participa de subtotal por loja.
+
 ## Intenção de aplicação
 
 - `place`: adicionar ao projeto objetos posicionáveis;

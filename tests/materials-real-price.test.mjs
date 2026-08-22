@@ -15,6 +15,10 @@ const generalReferencesMigration = await readFile(
   new URL('../supabase/migrations/20260822200000_seed_vortice_general_references.sql', import.meta.url),
   'utf8',
 );
+const hydraulicReferencesMigration = await readFile(
+  new URL('../supabase/migrations/20260822210000_seed_vortice_hydraulic_references.sql', import.meta.url),
+  'utf8',
+);
 
 test('referências gerais possuem produto e oferta Vórtice regionais e datados', () => {
   for (const sku of ['vortice-rodape-m', 'vortice-porta-madeira-un', 'vortice-soleira-m', 'vortice-pele-vidro-m2', 'vortice-sacada-vidro-m', 'vortice-varanda-m2', 'vortice-volumetria-m2', 'vortice-escada-un', 'vortice-caixa-hidraulica-un']) {
@@ -22,6 +26,36 @@ test('referências gerais possuem produto e oferta Vórtice regionais e datados'
   }
   assert.match(generalReferencesMigration, /'market_reference', 'to_confirm'/);
   assert.match(generalReferencesMigration, /'Brasil', date '2026-08-22'/);
+});
+
+test('tubos e conexões possuem 25 referências Vórtice regionais e datadas', () => {
+  const lines = { esgoto: [40, 50, 75, 100], pluvial: [75] };
+  const fittings = ['joelho90', 'joelho45', 'te', 'cruzeta'];
+  let count = 0;
+  for (const [line, diameters] of Object.entries(lines)) {
+    for (const diameter of diameters) {
+      assert.match(hydraulicReferencesMigration, new RegExp(`vortice-tubo-${line}-${diameter}mm-6m`));
+      count++;
+      for (const fitting of fittings) {
+        assert.match(hydraulicReferencesMigration, new RegExp(`vortice-conexao-${line}-${diameter}mm-${fitting}`));
+        count++;
+      }
+    }
+  }
+  assert.equal(count, 25);
+  assert.match(hydraulicReferencesMigration, /'market_reference', 'to_confirm'/);
+  assert.match(hydraulicReferencesMigration, /'Brasil', date '2026-08-22'/);
+});
+
+test('quantitativo hidráulico prefere catálogo rastreável e preserva tabela local como fallback offline', () => {
+  assert.match(materialsSource, /let realHydraulicPrices: Record<string, RealPriceMatch> = \{\};/);
+  assert.match(materialsSource, /match\?\.value \?\? HYDRAULIC_PIPE_BAR_PRICE/);
+  assert.match(materialsSource, /match\?\.value \?\? HYDRAULIC_FITTING_PRICE/);
+  assert.match(materialsSource, /commercialSelectionFromMatch\(match, priceKey\)/);
+  assert.match(materialsSource, /const offer = offers\.find/);
+  assert.match(materialsSource, /offerId: offer\.id/);
+  assert.match(materialsSource, /supplierId: offer\.supplier_id/);
+  assert.match(materialsSource, /value: offer\.price/);
 });
 
 // Preço real de cimento (catálogo do fornecedor "O Mercador", ver
