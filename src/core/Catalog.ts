@@ -442,6 +442,8 @@ const commercialFloorFinishes: Record<string, {
   '005813': { name: 'Eucafloor Prime Click Carvalho Maiorca', manufacturer: 'eucafloor', colorHex: '#C5A77E', tileMeters: 1.357, catalogPhoto: 'catalogo/revestimentos/005813/produto-original.jpg', textureVersion: 'staggered-2' },
   '006316': { name: 'Eucafloor Prime Click Nogueira Málaga', manufacturer: 'eucafloor', colorHex: '#73523D', tileMeters: 1.357, catalogPhoto: 'catalogo/revestimentos/006316/produto-original.jpg', textureVersion: 'staggered-2' },
   '001142': { name: 'Eucafloor Prime Click Valência', manufacturer: 'eucafloor', colorHex: '#8C6448', tileMeters: 1.357, catalogPhoto: 'catalogo/revestimentos/001142/produto-original.jpg', textureVersion: 'staggered-2' },
+  '003870': { name: 'Eucafloor LVT Basic Santa Fé', manufacturer: 'eucafloor', colorHex: '#8D6C48', tileMeters: 1.219, catalogPhoto: 'catalogo/revestimentos/003870/produto-original.jpg', textureVersion: 'vinyl-1' },
+  '006441': { name: 'Eucafloor LVT Basic Houston', manufacturer: 'eucafloor', colorHex: '#C9C7BE', tileMeters: 0.9144, catalogPhoto: 'catalogo/revestimentos/006441/produto-original.jpg', textureVersion: 'vinyl-1' },
 };
 
 export function registerCommercialProducts(rows: Array<{ id: string; sku: string | null; preco: number; unidade: string }>): void {

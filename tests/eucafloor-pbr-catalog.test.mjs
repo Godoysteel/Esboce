@@ -8,7 +8,8 @@ const unverified = ['003064', '002890', '001803', '001601', '006114', '004015', 
 const manifest = JSON.parse(readFileSync(new URL('../public/catalogo/revestimentos/manifest.json', import.meta.url), 'utf8'));
 
 test('levantamento Eucafloor fecha os 15 SKUs sem aproximar linhas ou dimensões', () => {
-  const items = manifest.filter((item) => item.manufacturer === 'Eucafloor');
+  const laminateSkus = [...verified, ...unverified];
+  const items = manifest.filter((item) => laminateSkus.includes(item.sku));
   assert.equal(items.length, verified.length + unverified.length);
   assert.deepEqual(items.filter((item) => item.status === 'official_source_verified').map((item) => item.sku).sort(), [...verified].sort());
   assert.deepEqual(items.filter((item) => item.status === 'unverified').map((item) => item.sku).sort(), [...unverified].sort());
