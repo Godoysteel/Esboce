@@ -71,10 +71,10 @@ test('buildRows() empurra uma linha "Forro" por tipo de placa (preço diferente 
   assert.notEqual(start, -1);
   const end = materialsSource.indexOf('\n  }\n\n  // Esgoto e pluvial', start);
   const body = materialsSource.slice(start, end);
-  assert.match(body, /push\('Forro', 'Placa ' \+ \(FORRO_TIPO_LABEL\[tipo\] \|\| tipo\) \+ ' \(área\)'/);
-  assert.match(body, /push\('Forro', 'Perfil F530 \(estimado\)'/);
-  assert.match(body, /push\('Forro', 'Tabica de perímetro'/);
-  assert.match(body, /push\('Forro', 'Pendural — arame e regulador \(estimado\)'/);
+  assert.match(body, /pushMaterial\('Forro', 'Placa ' \+ \(FORRO_TIPO_LABEL\[tipo\] \|\| tipo\) \+ ' \(área\)'/);
+  assert.match(body, /pushMaterial\('Forro', 'Perfil F530 \(estimado\)'/);
+  assert.match(body, /pushMaterial\('Forro', 'Tabica de perímetro'/);
+  assert.match(body, /pushMaterial\('Forro', 'Pendural — arame e regulador \(estimado\)'/);
 });
 
 test('os 4 produtos padrão apontam pra IDs reais existentes no Catalog', () => {
@@ -118,7 +118,7 @@ test('platibanda NÃO é mais excluída do madeiramento de telhado (ripa/caibro/
 test('pregos do madeiramento (SINAPI 92539: 0,03+0,05+0,07 kg/m²) viram linha de custo própria', () => {
   assert.match(materialsSource, /const ROOF_TIMBER_NAIL_KG_PER_M2 = 0\.03 \+ 0\.05 \+ 0\.07;/);
   assert.match(materialsSource, /const nailKg = q\.roofTimber\.areaM2 \* ROOF_TIMBER_NAIL_KG_PER_M2;/);
-  assert.match(materialsSource, /push\(tLabel, 'Pregos', nailKg, 'kg', nailKg \* materialPrice\('nailPerKg'\)\)/);
+  assert.match(materialsSource, /pushMaterial\(tLabel, 'Pregos', nailKg, 'kg', nailKg \* materialPrice\('nailPerKg'\), 'nailPerKg'\)/);
 });
 
 test('nailPerKg tem SKU de fallback no Vórtice e valor de emergência em REFERENCE_PRICES', () => {
@@ -145,7 +145,7 @@ test('bagsQty arredonda pra cima — cimento/cal só vêm em saco fechado, não 
 
 test('cimento/cal da alvenaria, chapisco/reboco e contrapiso aparecem em sacos (50kg/20kg), custo pela quantidade arredondada', () => {
   assert.match(materialsSource, /const masonryCementBags = bagsQty\(q\.masonry\.cementKg, 50\);/);
-  assert.match(materialsSource, /push\('Alvenaria \(ref\. SINAPI\)', 'Cimento', masonryCementBags, 'sc\(50kg\)', masonryCementBags \* 50 \* materialPrice\('cementPerKg'\)\)/);
+  assert.match(materialsSource, /pushMaterial\('Alvenaria \(ref\. SINAPI\)', 'Cimento', masonryCementBags, 'sc\(50kg\)', masonryCementBags \* 50 \* materialPrice\('cementPerKg'\), 'cementPerKg'\)/);
   assert.match(materialsSource, /const masonryCalBags = bagsQty\(q\.masonry\.calKg, 20\);/);
   assert.match(materialsSource, /const chapiscoCementBags = bagsQty\(bothFacesAreaM2 \* CHAPISCO_REF\.cementKgPerM2, 50\);/);
   assert.match(materialsSource, /const rebocoCementBags = bagsQty\(rebocoVolumeM3 \* MASONRY_REF\.cementKgPerM3, 50\);/);
@@ -154,7 +154,7 @@ test('cimento/cal da alvenaria, chapisco/reboco e contrapiso aparecem em sacos (
 });
 
 test('areia continua em m³ (unidade de compra normal em loja de material) — não vira "saco"', () => {
-  assert.match(materialsSource, /push\('Alvenaria \(ref\. SINAPI\)', 'Areia média', q\.masonry\.sandM3, 'm³'/);
+  assert.match(materialsSource, /pushMaterial\('Alvenaria \(ref\. SINAPI\)', 'Areia média', q\.masonry\.sandM3, 'm³'/);
 });
 
 test('purchaseQuantity converte tinta pra lata(s) 18L e telha/peça pra peça(s), mas mantém m² pra produto vendido assim (porcelanato/pedra)', () => {

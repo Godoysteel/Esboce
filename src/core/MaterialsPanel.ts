@@ -1145,7 +1145,18 @@ export function render(): void {
 // quando nem o Supabase responde) continua valendo, mesmo espírito de
 // resiliência da ADR-007 §7: preço indisponível nunca trava nada, só
 // degrada.
-interface RealPriceMatch { value: number; source: string; region?: string; priceDate?: string; estimated?: boolean; }
+interface RealPriceMatch {
+  value: number;
+  source: string;
+  productId: string;
+  supplierId: string;
+  supplierName: string;
+  supplierSku?: string;
+  region: string;
+  priceDate: string;
+  kind: CommercialSelection['kind'];
+  estimated?: boolean;
+}
 type MaterialPriceKey = 'cementPerKg' | 'limePerKg' | 'sandPerM3' | 'concretePerM3' | 'steelPerKg' | 'brickPerUnit' | 'woodPerM3' | 'windowPerM2' | 'nailPerKg' | 'forroPlacaSTPerM2' | 'forroPlacaRUPerM2' | 'forroPlacaRFPerM2' | 'forroPlacaCimenticiaPerM2' | 'forroF530PerM' | 'forroTabicaPerM' | 'forroPenduralPerUnit';
 let realPrices: { [K in MaterialPriceKey]?: RealPriceMatch } = {};
 let realPricesFetchStarted = false;
@@ -1192,13 +1203,21 @@ async function ensureRealPrices(): Promise<void> {
           /^CIMENTO\b/i.test(p.nome) && !/BRANCO/i.test(p.nome) &&
           p.unidade === 'SC' && /50\s*KG/i.test(p.nome);
       });
-      if (cimento) realPrices.cementPerKg = { value: cimento.preco / 50, source: cimento.nome + ' — O Mercador' };
+      if (cimento) realPrices.cementPerKg = {
+        value: cimento.preco / 50, source: cimento.nome + ' — O Mercador',
+        productId: cimento.id, supplierId: mercador.id, supplierName: 'O Mercador', ...(cimento.sku ? { supplierSku: cimento.sku } : {}),
+        region: String(cimento.specs?.regiao || 'Brasil'), priceDate: String(cimento.specs?.data_preco || '2026-08-22'), kind: 'official',
+      };
       // Chapa de 1,20x1,80m = 2,16m² — mesmo tamanho/espessura que
       // FORRO_BOARD_THICKNESS (Scene3DRenderer.ts) assume pro forro ST.
       const placaST = products.find(function (p) {
         return p.manufacturer_id === mercador.id && /^PLACA GESSO ST\b/i.test(p.nome) && p.unidade === 'PC';
       });
-      if (placaST) realPrices.forroPlacaSTPerM2 = { value: placaST.preco / 2.16, source: placaST.nome + ' — O Mercador' };
+      if (placaST) realPrices.forroPlacaSTPerM2 = {
+        value: placaST.preco / 2.16, source: placaST.nome + ' — O Mercador',
+        productId: placaST.id, supplierId: mercador.id, supplierName: 'O Mercador', ...(placaST.sku ? { supplierSku: placaST.sku } : {}),
+        region: String(placaST.specs?.regiao || 'Brasil'), priceDate: String(placaST.specs?.data_preco || '2026-08-22'), kind: 'official',
+      };
     }
 
     // Nível 2 — média de mercado (Vórtice): preenche qualquer material
@@ -1214,8 +1233,13 @@ async function ensureRealPrices(): Promise<void> {
           realPrices[key] = {
             value: product.preco / cfg.unitDivisor,
             source: product.nome + ' — Estimativa Vórtice; não constitui oferta comercial',
+            productId: product.id,
+            supplierId: vortice.id,
+            supplierName: 'Vórtice Materiais',
+            ...(product.sku ? { supplierSku: product.sku } : {}),
             region: String(specs.regiao || 'Brasil'),
             priceDate: String(specs.data_preco || '2026-08-01'),
+            kind: 'market_reference',
             estimated: true,
           };
         }
@@ -1356,6 +1380,24 @@ function materialPrice(key: MaterialPriceKey): number {
   return realPrices[key] ? realPrices[key]!.value : REFERENCE_PRICES[key];
 }
 
+function materialCommercialSelection(key: MaterialPriceKey): CommercialSelection | undefined {
+  const match = realPrices[key];
+  if (!match) return undefined;
+  return {
+    productId: match.productId,
+    offerId: 'derived:' + key + ':' + match.supplierId + ':' + match.priceDate,
+    supplierId: match.supplierId,
+    supplierName: match.supplierName,
+    ...(match.supplierSku ? { supplierSku: match.supplierSku } : {}),
+    price: match.value,
+    currency: 'BRL',
+    region: match.region,
+    priceDate: match.priceDate,
+    kind: match.kind,
+    selectedAt: match.priceDate + 'T00:00:00.000Z',
+  };
+}
+
 // Cimento e cal são vendidos em saco fechado (50kg e 20kg), não a
 // granel — não dá pra comprar "67,28kg", só sacos inteiros. Arredonda
 // pra cima; o custo usa a mesma quantidade arredondada (você paga o
@@ -1482,6 +1524,10 @@ export function buildRows(): (string | number)[][] {
     rows.push(row);
   }
 
+  function pushMaterial(cat: string, item: string, qtyNum: number, unit: string, cost: number | null, key: MaterialPriceKey) {
+    push(cat, item, qtyNum, unit, cost, materialCommercialSelection(key));
+  }
+
   push('Geral', 'Paredes (comprimento)', q.totals.wallLength, 'm', null);
   push('Geral', 'Piso (área)', q.totals.floorArea, 'm²', null);
   push('Geral', 'Rodapé (comprimento)', q.totals.baseboard, 'm', q.totals.baseboard > 0 ? q.totals.baseboard * ESTIMATED_MARKET_PRICES.rodapePerM : null);
@@ -1501,7 +1547,7 @@ export function buildRows(): (string | number)[][] {
     push('Geral', 'Porta de madeira (padrão)', q.totals.doorGenericCount, 'un', q.totals.doorGenericCount * ESTIMATED_MARKET_PRICES.woodDoorPerUnit);
   }
   if (q.totals.windowsGenericAreaM2 > 0) {
-    push('Geral', 'Janela (padrão)', q.totals.windowsGenericAreaM2, 'm²', q.totals.windowsGenericAreaM2 * materialPrice('windowPerM2'));
+    pushMaterial('Geral', 'Janela (padrão)', q.totals.windowsGenericAreaM2, 'm²', q.totals.windowsGenericAreaM2 * materialPrice('windowPerM2'), 'windowPerM2');
   }
   // Sem preço próprio: o arco é um vão sem batente/folha — a alvenaria
   // que deixa de existir ali já reduz wallAreaNet (bloco/argamassa/
@@ -1532,41 +1578,41 @@ export function buildRows(): (string | number)[][] {
     const fLabel = 'Fundação (' + f.type + ')';
     if (f.type === 'baldrame') push(fLabel, 'Viga baldrame (comprimento)', f.length, 'm', null);
     else push(fLabel, 'Área da laje', f.areaM2, 'm²', null);
-    push(fLabel, 'Concreto', f.concreteVolume, 'm³', f.concreteVolume * materialPrice('concretePerM3'));
-    push(fLabel, 'Aço (estimado)', f.steelKg, 'kg', f.steelKg * materialPrice('steelPerKg'));
+    pushMaterial(fLabel, 'Concreto', f.concreteVolume, 'm³', f.concreteVolume * materialPrice('concretePerM3'), 'concretePerM3');
+    pushMaterial(fLabel, 'Aço (estimado)', f.steelKg, 'kg', f.steelKg * materialPrice('steelPerKg'), 'steelPerKg');
   }
   if (q.totals.columnCount > 0) {
     push('Estrutura', 'Colunas (posicionadas)', q.totals.columnCount, 'un', null);
-    push('Estrutura', 'Volume de colunas', q.totals.columnVolume, 'm³', q.totals.columnVolume * materialPrice('concretePerM3'));
+    pushMaterial('Estrutura', 'Volume de colunas', q.totals.columnVolume, 'm³', q.totals.columnVolume * materialPrice('concretePerM3'), 'concretePerM3');
   }
   if (hasCeramicMasonryEstimate(q.constructionSystem) && q.structure.pilareteCount > 0) {
     push('Estrutura', 'Pilaretes em parede (estimado)', q.structure.pilareteCount, 'un', null);
-    push('Estrutura', 'Concreto — pilaretes', q.structure.pilareteVolume, 'm³', q.structure.pilareteVolume * materialPrice('concretePerM3'));
-    push('Estrutura', 'Aço — pilaretes', q.structure.pilareteSteelKg, 'kg', q.structure.pilareteSteelKg * materialPrice('steelPerKg'));
+    pushMaterial('Estrutura', 'Concreto — pilaretes', q.structure.pilareteVolume, 'm³', q.structure.pilareteVolume * materialPrice('concretePerM3'), 'concretePerM3');
+    pushMaterial('Estrutura', 'Aço — pilaretes', q.structure.pilareteSteelKg, 'kg', q.structure.pilareteSteelKg * materialPrice('steelPerKg'), 'steelPerKg');
     push('Estrutura', 'Viga de cinta/amarração (comprimento)', q.structure.beamLength, 'm', null);
-    push('Estrutura', 'Concreto — cinta', q.structure.beamVolume, 'm³', q.structure.beamVolume * materialPrice('concretePerM3'));
-    push('Estrutura', 'Aço — cinta', q.structure.beamSteelKg, 'kg', q.structure.beamSteelKg * materialPrice('steelPerKg'));
+    pushMaterial('Estrutura', 'Concreto — cinta', q.structure.beamVolume, 'm³', q.structure.beamVolume * materialPrice('concretePerM3'), 'concretePerM3');
+    pushMaterial('Estrutura', 'Aço — cinta', q.structure.beamSteelKg, 'kg', q.structure.beamSteelKg * materialPrice('steelPerKg'), 'steelPerKg');
   }
   if (hasCeramicMasonryEstimate(q.constructionSystem) && q.structure.vergaCount > 0) {
     push('Estrutura', 'Vergas acima de vãos (estimado)', q.structure.vergaCount, 'un', null);
-    push('Estrutura', 'Concreto — vergas', q.structure.vergaVolume, 'm³', q.structure.vergaVolume * materialPrice('concretePerM3'));
-    push('Estrutura', 'Aço — vergas', q.structure.vergaSteelKg, 'kg', q.structure.vergaSteelKg * materialPrice('steelPerKg'));
+    pushMaterial('Estrutura', 'Concreto — vergas', q.structure.vergaVolume, 'm³', q.structure.vergaVolume * materialPrice('concretePerM3'), 'concretePerM3');
+    pushMaterial('Estrutura', 'Aço — vergas', q.structure.vergaSteelKg, 'kg', q.structure.vergaSteelKg * materialPrice('steelPerKg'), 'steelPerKg');
   }
   if (q.laje.count > 0) {
     const lLabel = 'Laje (ref. taxa de aço 90 kg/m³)';
     push(lLabel, 'Lajes (posicionadas)', q.laje.count, 'un', null);
     push(lLabel, 'Área', q.laje.areaM2, 'm²', null);
-    push(lLabel, 'Concreto', q.laje.volumeM3, 'm³', q.laje.volumeM3 * materialPrice('concretePerM3'));
-    push(lLabel, 'Aço (estimado)', q.laje.steelKg, 'kg', q.laje.steelKg * materialPrice('steelPerKg'));
+    pushMaterial(lLabel, 'Concreto', q.laje.volumeM3, 'm³', q.laje.volumeM3 * materialPrice('concretePerM3'), 'concretePerM3');
+    pushMaterial(lLabel, 'Aço (estimado)', q.laje.steelKg, 'kg', q.laje.steelKg * materialPrice('steelPerKg'), 'steelPerKg');
   }
   if (hasCeramicMasonryEstimate(q.constructionSystem) && q.totals.wallAreaNet > 0) {
-    push('Alvenaria (ref. SINAPI)', 'Blocos/tijolos', q.masonry.blocks, 'un', q.masonry.blocks * materialPrice('brickPerUnit'));
+    pushMaterial('Alvenaria (ref. SINAPI)', 'Blocos/tijolos', q.masonry.blocks, 'un', q.masonry.blocks * materialPrice('brickPerUnit'), 'brickPerUnit');
     push('Alvenaria (ref. SINAPI)', 'Argamassa de assentamento', q.masonry.mortarM3, 'm³', null);
     const masonryCementBags = bagsQty(q.masonry.cementKg, 50);
     const masonryCalBags = bagsQty(q.masonry.calKg, 20);
-    push('Alvenaria (ref. SINAPI)', 'Cimento', masonryCementBags, 'sc(50kg)', masonryCementBags * 50 * materialPrice('cementPerKg'));
-    push('Alvenaria (ref. SINAPI)', 'Cal hidratada', masonryCalBags, 'sc(20kg)', masonryCalBags * 20 * materialPrice('limePerKg'));
-    push('Alvenaria (ref. SINAPI)', 'Areia média', q.masonry.sandM3, 'm³', q.masonry.sandM3 * materialPrice('sandPerM3'));
+    pushMaterial('Alvenaria (ref. SINAPI)', 'Cimento', masonryCementBags, 'sc(50kg)', masonryCementBags * 50 * materialPrice('cementPerKg'), 'cementPerKg');
+    pushMaterial('Alvenaria (ref. SINAPI)', 'Cal hidratada', masonryCalBags, 'sc(20kg)', masonryCalBags * 20 * materialPrice('limePerKg'), 'limePerKg');
+    pushMaterial('Alvenaria (ref. SINAPI)', 'Areia média', q.masonry.sandM3, 'm³', q.masonry.sandM3 * materialPrice('sandPerM3'), 'sandPerM3');
   }
   // Chapisco (traço 1:3) + Reboco (traço 1:2:8, 2cm) — aplicado nas DUAS
   // faces de toda parede (wallAreaNet é área de UMA face; alvenaria
@@ -1581,11 +1627,11 @@ export function buildRows(): (string | number)[][] {
     const rebocoCementBags = bagsQty(rebocoVolumeM3 * MASONRY_REF.cementKgPerM3, 50);
     const rebocoCalBags = bagsQty(rebocoVolumeM3 * MASONRY_REF.calKgPerM3, 20);
     const rebocoSandM3 = rebocoVolumeM3 * MASONRY_REF.sandM3PerM3;
-    push(rLabel, 'Cimento (chapisco)', chapiscoCementBags, 'sc(50kg)', chapiscoCementBags * 50 * materialPrice('cementPerKg'));
-    push(rLabel, 'Areia (chapisco)', chapiscoSandM3, 'm³', chapiscoSandM3 * materialPrice('sandPerM3'));
-    push(rLabel, 'Cimento (reboco)', rebocoCementBags, 'sc(50kg)', rebocoCementBags * 50 * materialPrice('cementPerKg'));
-    push(rLabel, 'Cal hidratada (reboco)', rebocoCalBags, 'sc(20kg)', rebocoCalBags * 20 * materialPrice('limePerKg'));
-    push(rLabel, 'Areia (reboco)', rebocoSandM3, 'm³', rebocoSandM3 * materialPrice('sandPerM3'));
+    pushMaterial(rLabel, 'Cimento (chapisco)', chapiscoCementBags, 'sc(50kg)', chapiscoCementBags * 50 * materialPrice('cementPerKg'), 'cementPerKg');
+    pushMaterial(rLabel, 'Areia (chapisco)', chapiscoSandM3, 'm³', chapiscoSandM3 * materialPrice('sandPerM3'), 'sandPerM3');
+    pushMaterial(rLabel, 'Cimento (reboco)', rebocoCementBags, 'sc(50kg)', rebocoCementBags * 50 * materialPrice('cementPerKg'), 'cementPerKg');
+    pushMaterial(rLabel, 'Cal hidratada (reboco)', rebocoCalBags, 'sc(20kg)', rebocoCalBags * 20 * materialPrice('limePerKg'), 'limePerKg');
+    pushMaterial(rLabel, 'Areia (reboco)', rebocoSandM3, 'm³', rebocoSandM3 * materialPrice('sandPerM3'), 'sandPerM3');
   }
   // Contrapiso (traço 1:4, 3cm) — sobre a mesma área de piso já usada
   // pro acabamento (cerâmica/porcelanato).
@@ -1593,8 +1639,8 @@ export function buildRows(): (string | number)[][] {
     const cLabel = 'Contrapiso (ref. mercado)';
     const contrapisoCementBags = bagsQty(q.totals.floorArea * CONTRAPISO_REF.cementKgPerM2, 50);
     const contrapisoSandM3 = q.totals.floorArea * CONTRAPISO_REF.sandM3PerM2;
-    push(cLabel, 'Cimento', contrapisoCementBags, 'sc(50kg)', contrapisoCementBags * 50 * materialPrice('cementPerKg'));
-    push(cLabel, 'Areia', contrapisoSandM3, 'm³', contrapisoSandM3 * materialPrice('sandPerM3'));
+    pushMaterial(cLabel, 'Cimento', contrapisoCementBags, 'sc(50kg)', contrapisoCementBags * 50 * materialPrice('cementPerKg'), 'cementPerKg');
+    pushMaterial(cLabel, 'Areia', contrapisoSandM3, 'm³', contrapisoSandM3 * materialPrice('sandPerM3'), 'sandPerM3');
   }
   if (q.roofTimber.areaM2 > 0) {
     const tLabel = 'Madeiramento (ref. SINAPI 92539)';
@@ -1608,11 +1654,11 @@ export function buildRows(): (string | number)[][] {
     const ripaPieces = Math.ceil(q.roofTimber.ripaLinearM / WOOD_PIECE_LENGTH_M);
     const caibroPieces = Math.ceil(q.roofTimber.caibroLinearM / WOOD_PIECE_LENGTH_M);
     const tercaPieces = Math.ceil(q.roofTimber.tercaLinearM / WOOD_PIECE_LENGTH_M);
-    push(tLabel, 'Ripa 1,5x5cm (peça ' + WOOD_PIECE_LENGTH_M + 'm)', ripaPieces, 'un', ripaPieces * woodPieceCost(ROOF_TIMBER_REF.ripaSectionM2));
-    push(tLabel, 'Caibro 5x6cm (peça ' + WOOD_PIECE_LENGTH_M + 'm)', caibroPieces, 'un', caibroPieces * woodPieceCost(ROOF_TIMBER_REF.caibroSectionM2));
-    push(tLabel, 'Terça 6x12cm (peça ' + WOOD_PIECE_LENGTH_M + 'm)', tercaPieces, 'un', tercaPieces * woodPieceCost(ROOF_TIMBER_REF.tercaSectionM2));
+    pushMaterial(tLabel, 'Ripa 1,5x5cm (peça ' + WOOD_PIECE_LENGTH_M + 'm)', ripaPieces, 'un', ripaPieces * woodPieceCost(ROOF_TIMBER_REF.ripaSectionM2), 'woodPerM3');
+    pushMaterial(tLabel, 'Caibro 5x6cm (peça ' + WOOD_PIECE_LENGTH_M + 'm)', caibroPieces, 'un', caibroPieces * woodPieceCost(ROOF_TIMBER_REF.caibroSectionM2), 'woodPerM3');
+    pushMaterial(tLabel, 'Terça 6x12cm (peça ' + WOOD_PIECE_LENGTH_M + 'm)', tercaPieces, 'un', tercaPieces * woodPieceCost(ROOF_TIMBER_REF.tercaSectionM2), 'woodPerM3');
     const nailKg = q.roofTimber.areaM2 * ROOF_TIMBER_NAIL_KG_PER_M2;
-    push(tLabel, 'Pregos', nailKg, 'kg', nailKg * materialPrice('nailPerKg'));
+    pushMaterial(tLabel, 'Pregos', nailKg, 'kg', nailKg * materialPrice('nailPerKg'), 'nailPerKg');
   }
   // Quantidade em unidade de COMPRA (o que dá pra pedir na loja), não na
   // unidade de cálculo interno — pedido explícito do Product Owner após
@@ -1687,15 +1733,16 @@ export function buildRows(): (string | number)[][] {
   let forroF530MTotal = 0, forroTabicaMTotal = 0, forroPenduralTotal = 0;
   Object.keys(q.totals.forroByTipo).forEach(function (tipo) {
     const t = q.totals.forroByTipo[tipo]!;
-    push('Forro', 'Placa ' + (FORRO_TIPO_LABEL[tipo] || tipo) + ' (área)', t.areaM2, 'm²', t.areaM2 * materialPrice(FORRO_TIPO_PRICE_KEY[tipo] || 'forroPlacaSTPerM2'));
+    const boardPriceKey = FORRO_TIPO_PRICE_KEY[tipo] || 'forroPlacaSTPerM2';
+    pushMaterial('Forro', 'Placa ' + (FORRO_TIPO_LABEL[tipo] || tipo) + ' (área)', t.areaM2, 'm²', t.areaM2 * materialPrice(boardPriceKey), boardPriceKey);
     forroF530MTotal += t.f530M;
     forroTabicaMTotal += t.tabicaM;
     forroPenduralTotal += t.penduralCount;
   });
   if (forroF530MTotal > 0) {
-    push('Forro', 'Perfil F530 (estimado)', forroF530MTotal, 'm', forroF530MTotal * materialPrice('forroF530PerM'));
-    push('Forro', 'Tabica de perímetro', forroTabicaMTotal, 'm', forroTabicaMTotal * materialPrice('forroTabicaPerM'));
-    push('Forro', 'Pendural — arame e regulador (estimado)', forroPenduralTotal, 'un', forroPenduralTotal * materialPrice('forroPenduralPerUnit'));
+    pushMaterial('Forro', 'Perfil F530 (estimado)', forroF530MTotal, 'm', forroF530MTotal * materialPrice('forroF530PerM'), 'forroF530PerM');
+    pushMaterial('Forro', 'Tabica de perímetro', forroTabicaMTotal, 'm', forroTabicaMTotal * materialPrice('forroTabicaPerM'), 'forroTabicaPerM');
+    pushMaterial('Forro', 'Pendural — arame e regulador (estimado)', forroPenduralTotal, 'un', forroPenduralTotal * materialPrice('forroPenduralPerUnit'), 'forroPenduralPerUnit');
   }
 
   // Esgoto e pluvial — item por item (pedido explícito do Product Owner:

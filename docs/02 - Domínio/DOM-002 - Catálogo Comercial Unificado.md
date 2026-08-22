@@ -43,6 +43,12 @@ somente as linhas vinculadas às ofertas daquele fornecedor e seu subtotal; não
 inclui itens genéricos nem valores atribuídos a outros fornecedores. Quando o
 grupo for Vórtice, o título também deve declarar que se trata de estimativa.
 
+Materiais derivados da geometria seguem a mesma regra. Quando o preço foi
+resolvido por um produto compatível do catálogo, a linha herda fornecedor,
+região, data e natureza oficial ou `market_reference`, participando do subtotal
+e do PDF correspondente. Valores fixos usados apenas como fallback de
+emergência não recebem fornecedor, pois não constituem uma oferta rastreável.
+
 ## Intenção de aplicação
 
 - `place`: adicionar ao projeto objetos posicionáveis;

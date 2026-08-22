@@ -64,7 +64,10 @@ test('placa ST do forro tem match de fornecedor real (O Mercador) além do fallb
   assert.match(body, /manufacturer_id === mercador\.id/);
   assert.match(body, /\/\^PLACA GESSO ST\\b\/i\.test\(p\.nome\)/);
   assert.match(body, /p\.unidade === 'PC'/);
-  assert.match(materialsSource, /realPrices\.forroPlacaSTPerM2 = \{ value: placaST\.preco \/ 2\.16, source: placaST\.nome \+ ' — O Mercador' \};/);
+  assert.match(materialsSource, /realPrices\.forroPlacaSTPerM2 = \{/);
+  assert.match(materialsSource, /value: placaST\.preco \/ 2\.16, source: placaST\.nome \+ ' — O Mercador'/);
+  assert.match(materialsSource, /supplierName: 'O Mercador'/);
+  assert.match(materialsSource, /kind: 'official'/);
 });
 
 test('todas as 7 chaves de preço do forro têm valor de emergência (REFERENCE_PRICES) — nunca ficam sem número nenhum', () => {
@@ -81,6 +84,15 @@ test('nível 2 (Vórtice) só preenche o que o nível 1 (fornecedor real) não r
   const end = materialsSource.indexOf('\n    }', start);
   const body = materialsSource.slice(start, end);
   assert.match(body, /if \(realPrices\[key\]\) return; \/\/ já resolvido por fornecedor real/);
+});
+
+test('preço resolvido de material derivado carrega fornecedor, região e data para orçamento por fornecedor', () => {
+  assert.match(materialsSource, /function materialCommercialSelection\(key: MaterialPriceKey\)/);
+  assert.match(materialsSource, /supplierId: match\.supplierId/);
+  assert.match(materialsSource, /region: match\.region/);
+  assert.match(materialsSource, /priceDate: match\.priceDate/);
+  assert.match(materialsSource, /kind: match\.kind/);
+  assert.match(materialsSource, /push\(cat, item, qtyNum, unit, cost, materialCommercialSelection\(key\)\)/);
 });
 
 test('materialPrice cai pro fallback de emergência (REFERENCE_PRICES) quando nada do catálogo resolveu — sem quebrar, sem travar', () => {
