@@ -381,14 +381,16 @@ export async function listCatalogOffers(products?: CatalogProduct[]): Promise<Ca
   const legacyProducts = products ?? await fetchAllProductRows() as CatalogProduct[];
   const manufacturers = await listManufacturers();
   const names = new Map(manufacturers.map(function (m) { return [m.id, m.nome]; }));
+  const mercador = manufacturers.find(function (manufacturer) { return manufacturer.nome === 'O Mercador'; });
   return legacyProducts.map(function (product) {
     const reference = product.origem === 'generico';
+    const suppliedByMercador = product.origem === 'fornecedor';
     const specs = product.specs ?? {};
     return {
       id: 'legacy:' + product.id,
       product_id: product.id,
-      supplier_id: product.manufacturer_id,
-      supplier_name: reference ? 'Vórtice Materiais' : (names.get(product.manufacturer_id) ?? 'Fornecedor não identificado'),
+      supplier_id: suppliedByMercador && mercador ? mercador.id : product.manufacturer_id,
+      supplier_name: reference ? 'Vórtice Materiais' : suppliedByMercador ? 'O Mercador' : (names.get(product.manufacturer_id) ?? 'Fornecedor não identificado'),
       supplier_sku: product.sku,
       price: product.preco,
       currency: 'BRL',
