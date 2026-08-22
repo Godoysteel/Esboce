@@ -1475,6 +1475,30 @@ import {
         });
         return;
       }
+      // Sem cômodo fechado nos dois lados (parede solta/externa, ou
+      // cômodo ainda não fechou) — findLiveRoomDimensions não acha
+      // "parede oposta" nenhuma e volta vazio. Sem esse fallback a cota
+      // simplesmente não aparecia nesses casos (reportado: "tem
+      // momentos que eu arrasto a parede e a cota não aparece"). Mostra
+      // o comprimento da PRÓPRIA parede — mesmo formato usado pra
+      // desenhar parede nova (p.tool === 'wall' mais abaixo) — garante
+      // que arrastar qualquer parede sempre mostra alguma cota.
+      if (liveWall) {
+        var wallLenM = Math.hypot(liveWall.x2 - liveWall.x1, liveWall.y2 - liveWall.y1) / Core.GRID;
+        if (wallLenM >= 0.01) {
+          var wallMid = modelToWorld((liveWall.x1 + liveWall.x2) / 2, (liveWall.y1 + liveWall.y2) / 2);
+          var wallLabelY = currentFloorYOffset() + 0.12;
+          var wallMidVisible = dimensionPointIsVisible({ x: wallMid.x, y: wallLabelY, z: wallMid.z });
+          liveRoomDimensionLineEl.style.display = 'none';
+          liveRoomDimensionLineBEl.style.display = 'none';
+          dimLabelAEl.textContent = wallLenM.toFixed(2).replace('.', ',') + ' m';
+          positionFloatingPanel(dimLabelAEl, wallMid.x, wallLabelY, wallMid.z, 0);
+          dimLabelAEl.classList.add('visible');
+          dimLabelAEl.style.display = wallMidVisible ? 'block' : 'none';
+          dimLabelBEl.classList.remove('visible');
+          return;
+        }
+      }
       dimLabelAEl.style.display = '';
       dimLabelBEl.style.display = '';
       liveRoomDimensionLineEl.style.display = 'none';
