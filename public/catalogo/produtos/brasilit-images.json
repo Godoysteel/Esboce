@@ -1,0 +1,72 @@
+[
+  {
+    "sku": "005661",
+    "manufacturer": "Brasilit",
+    "supplier": "O Mercador",
+    "model": "Telha Ondulada 6 mm",
+    "dimensions": { "lengthM": 1.53, "widthM": 1.1, "thicknessMm": 6 },
+    "status": "official_source_verified",
+    "officialPage": "https://cloud.mkt.brasilit.com.br/linha-essencial-telha-de-fibrocimento-ondulada",
+    "technicalSource": "https://www.brasilit.com.br/sites/brasilit.com.br/files/downloads/1/Catalogo_Geral_0.pdf",
+    "image": "/produtos/brasilit/telha-ondulada-153x110cm-6mm-brasilit.jpg",
+    "imageSource": "https://copafer.vtexassets.com/arquivos/ids/203078-800-auto?aspect=true&height=auto&v=638923438878030000&width=800",
+    "imagePage": "https://www.copafer.com.br/telha-de-fibrocimento-ondulada-6-mm-1-53-x-1-10-metros-brasilit/p",
+    "catalogOnly": true
+  },
+  {
+    "sku": "003761",
+    "manufacturer": "Brasilit",
+    "supplier": "O Mercador",
+    "model": "Telha Ondulada 6 mm",
+    "dimensions": { "lengthM": 1.83, "widthM": 1.1, "thicknessMm": 6 },
+    "status": "official_source_verified",
+    "officialPage": "https://cloud.mkt.brasilit.com.br/linha-essencial-telha-de-fibrocimento-ondulada",
+    "technicalSource": "https://www.brasilit.com.br/sites/brasilit.com.br/files/downloads/1/Catalogo_Geral_0.pdf",
+    "image": "/produtos/brasilit/telha-ondulada-183x110cm-6mm-brasilit.jpg",
+    "imageSource": "https://padovani.vtexassets.com/arquivos/ids/187108/TELHA-FIBROCIMENTO-ONDULADA-6MM-183X110CM---BRASILIT.jpg?v=637873761655000000",
+    "imagePage": "https://www.padovani.com.br/telha-fibrocimento-ondulada-6mm-183x110cm---brasilit/p",
+    "catalogOnly": true
+  },
+  {
+    "sku": "003649",
+    "manufacturer": "Brasilit",
+    "supplier": "O Mercador",
+    "model": "Telha Ondulada 6 mm",
+    "dimensions": { "lengthM": 2.44, "widthM": 1.1, "thicknessMm": 6 },
+    "status": "official_source_verified",
+    "officialPage": "https://cloud.mkt.brasilit.com.br/linha-essencial-telha-de-fibrocimento-ondulada",
+    "technicalSource": "https://www.brasilit.com.br/sites/brasilit.com.br/files/downloads/1/Catalogo_Geral_0.pdf",
+    "image": "/produtos/brasilit/telha-ondulada-244x110cm-6mm-brasilit.jpg",
+    "imageSource": "https://cdn.leroymerlin.com.br/products/telha_fibrocimento_2%2C44mx1%2C10mx6mm_ondulada_brasilit_89492095_5709_600x600.jpg",
+    "imagePage": "https://www.leroymerlin.com.br/telha-de-fibrocimento-ondulada-110x244cm-6mm-cinza-brasilit_89492095",
+    "catalogOnly": true
+  },
+  {
+    "sku": "003768",
+    "manufacturer": "Brasilit",
+    "supplier": "O Mercador",
+    "model": "Telha Ondulada 6 mm",
+    "dimensions": { "lengthM": 3.05, "widthM": 1.1, "thicknessMm": 6 },
+    "status": "official_source_verified",
+    "officialPage": "https://cloud.mkt.brasilit.com.br/linha-essencial-telha-de-fibrocimento-ondulada",
+    "technicalSource": "https://www.brasilit.com.br/sites/brasilit.com.br/files/downloads/1/Catalogo_Geral_0.pdf",
+    "image": "/produtos/brasilit/telha-ondulada-305x110cm-6mm-brasilit.jpg",
+    "imageSource": "https://copafer.vtexassets.com/arquivos/ids/167612-800-auto?aspect=true&height=auto&v=638748887568000000&width=800",
+    "imagePage": "https://www.copafer.com.br/telha-de-fibrocimento-ondulada-6-mm-3-05-x-1-10-metros---brasilit/p",
+    "catalogOnly": true
+  },
+  {
+    "sku": "003769",
+    "manufacturer": "Brasilit",
+    "supplier": "O Mercador",
+    "model": "Telha Ondulada 6 mm",
+    "dimensions": { "lengthM": 3.66, "widthM": 1.1, "thicknessMm": 6 },
+    "status": "official_source_verified",
+    "officialPage": "https://cloud.mkt.brasilit.com.br/linha-essencial-telha-de-fibrocimento-ondulada",
+    "technicalSource": "https://www.brasilit.com.br/sites/brasilit.com.br/files/downloads/1/Catalogo_Geral_0.pdf",
+    "image": "/produtos/brasilit/telha-ondulada-366x110cm-6mm-brasilit.jpg",
+    "imageSource": "https://cdn.leroymerlin.com.br/products/telha_de_fibrocimento_3%2C66x1%2C10mx6mm_brasilit_89712301_6543_600x600.jpg",
+    "imagePage": "https://www.leroymerlin.com.br/telha-de-fibrocimento-ondulada-366x110cm-6mm-cinza-brasilit_89712301",
+    "catalogOnly": true
+  }
+]
