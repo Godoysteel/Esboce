@@ -47,6 +47,8 @@ test('gerador Eucafloor mantém escala real por linha e todos os mapas PBR', () 
   assert.match(source, /y1 = round\(\(row \+ 1\) \* SIZE \/ rows\)/);
   assert.match(source, /plank = ImageOps\.mirror\(plank\)/);
   assert.match(source, /plank = ImageOps\.flip\(plank\)/);
+  assert.match(source, /STAGGER_OFFSETS = \(0\.00, 0\.37, 0\.74, 0\.18, 0\.55, 0\.92\)/);
+  assert.match(source, /plank = ImageChops\.offset\(plank, round\(STAGGER_OFFSETS\[row % len\(STAGGER_OFFSETS\)\] \* SIZE\), 0\)/);
   assert.doesNotMatch(source, /joint =|canvas = Image\.new\("RGB", \(SIZE, SIZE\), \(75, 66, 56\)\)/);
 });
 

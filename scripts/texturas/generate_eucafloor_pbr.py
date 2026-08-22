@@ -2,11 +2,15 @@
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageFilter, ImageOps
+from PIL import Image, ImageChops, ImageFilter, ImageOps
 
 ROOT = Path(__file__).resolve().parents[2]
 CATALOG = ROOT / "public" / "catalogo" / "revestimentos"
 SIZE = 1024
+# Frações do comprimento da régua. A sequência evita coincidência entre
+# fileiras vizinhas e também entre a última fileira de um atlas e a primeira
+# do atlas repetido ao lado.
+STAGGER_OFFSETS = (0.00, 0.37, 0.74, 0.18, 0.55, 0.92)
 PRODUCTS = {
     "003712": {"plank_width_m": 0.357, "roughness": 0.34},
     "000359": {"plank_width_m": 0.292, "roughness": 0.38},
@@ -39,6 +43,10 @@ def build_albedo(source: Image.Image, plank_width_m: float) -> Image.Image:
             plank = ImageOps.mirror(plank)
         if row % 4 >= 2:
             plank = ImageOps.flip(plank)
+        # Desencontra a emenda de topo: o wrap interno vira o encontro entre
+        # duas réguas, em posição diferente em cada fileira. ImageChops.offset
+        # preserva a repetição contínua nas bordas externas do atlas.
+        plank = ImageChops.offset(plank, round(STAGGER_OFFSETS[row % len(STAGGER_OFFSETS)] * SIZE), 0)
         canvas.paste(plank, (0, y0))
     return canvas
 
