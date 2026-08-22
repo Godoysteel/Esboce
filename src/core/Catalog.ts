@@ -423,6 +423,7 @@ const commercialFloorFinishes: Record<string, {
   tileMeters: number;
   catalogPhoto: string;
   manufacturer: string;
+  textureVersion?: string;
 }> = {
   '003230': { name: 'Ceral Arizona BG 43x43', manufacturer: 'ceral', colorHex: '#D8C69F', tileMeters: 0.43, catalogPhoto: 'catalogo/revestimentos/003230/produto-original.jpeg' },
   '003231': { name: 'Ceral Tec Silver 43x43', manufacturer: 'ceral', colorHex: '#C9CBC8', tileMeters: 0.43, catalogPhoto: 'catalogo/revestimentos/003231/produto-original.jpeg' },
@@ -433,14 +434,14 @@ const commercialFloorFinishes: Record<string, {
   '000300': { name: 'Ceral 10x10 NTLD Preto', manufacturer: 'ceral', colorHex: '#181A1B', tileMeters: 0.099, catalogPhoto: 'catalogo/revestimentos/000300/produto-original.jpeg' },
   '000287': { name: 'Ceral 10x10 NTLD Azul Royal', manufacturer: 'ceral', colorHex: '#385596', tileMeters: 0.099, catalogPhoto: 'catalogo/revestimentos/000287/produto-original.jpeg' },
   '000279': { name: 'Ceral 10x10 NTLD Azul Capri', manufacturer: 'ceral', colorHex: '#5DA7D0', tileMeters: 0.099, catalogPhoto: 'catalogo/revestimentos/000279/produto-original.jpeg' },
-  '003712': { name: 'Eucafloor Max Elegance Carvalho Chamonix', manufacturer: 'eucafloor', colorHex: '#A88A68', tileMeters: 1.357, catalogPhoto: 'catalogo/revestimentos/003712/produto-original.jpg' },
-  '000359': { name: 'Eucafloor New Evidence Smart Oak', manufacturer: 'eucafloor', colorHex: '#B69A79', tileMeters: 1.357, catalogPhoto: 'catalogo/revestimentos/000359/produto-original.jpg' },
-  '003193': { name: 'Eucafloor New Evidence Smart Oak', manufacturer: 'eucafloor', colorHex: '#B69A79', tileMeters: 1.357, catalogPhoto: 'catalogo/revestimentos/003193/produto-original.jpg' },
-  '003423': { name: 'Eucafloor Prime Click Andorra New', manufacturer: 'eucafloor', colorHex: '#B39774', tileMeters: 1.357, catalogPhoto: 'catalogo/revestimentos/003423/produto-original.jpg' },
-  '003898': { name: 'Eucafloor Prime Click Cacau', manufacturer: 'eucafloor', colorHex: '#75513A', tileMeters: 1.357, catalogPhoto: 'catalogo/revestimentos/003898/produto-original.jpg' },
-  '005813': { name: 'Eucafloor Prime Click Carvalho Maiorca', manufacturer: 'eucafloor', colorHex: '#C5A77E', tileMeters: 1.357, catalogPhoto: 'catalogo/revestimentos/005813/produto-original.jpg' },
-  '006316': { name: 'Eucafloor Prime Click Nogueira Málaga', manufacturer: 'eucafloor', colorHex: '#73523D', tileMeters: 1.357, catalogPhoto: 'catalogo/revestimentos/006316/produto-original.jpg' },
-  '001142': { name: 'Eucafloor Prime Click Valência', manufacturer: 'eucafloor', colorHex: '#8C6448', tileMeters: 1.357, catalogPhoto: 'catalogo/revestimentos/001142/produto-original.jpg' },
+  '003712': { name: 'Eucafloor Max Elegance Carvalho Chamonix', manufacturer: 'eucafloor', colorHex: '#A88A68', tileMeters: 1.357, catalogPhoto: 'catalogo/revestimentos/003712/produto-original.jpg', textureVersion: 'staggered-2' },
+  '000359': { name: 'Eucafloor New Evidence Smart Oak', manufacturer: 'eucafloor', colorHex: '#B69A79', tileMeters: 1.357, catalogPhoto: 'catalogo/revestimentos/000359/produto-original.jpg', textureVersion: 'staggered-2' },
+  '003193': { name: 'Eucafloor New Evidence Smart Oak', manufacturer: 'eucafloor', colorHex: '#B69A79', tileMeters: 1.357, catalogPhoto: 'catalogo/revestimentos/003193/produto-original.jpg', textureVersion: 'staggered-2' },
+  '003423': { name: 'Eucafloor Prime Click Andorra New', manufacturer: 'eucafloor', colorHex: '#B39774', tileMeters: 1.357, catalogPhoto: 'catalogo/revestimentos/003423/produto-original.jpg', textureVersion: 'staggered-2' },
+  '003898': { name: 'Eucafloor Prime Click Cacau', manufacturer: 'eucafloor', colorHex: '#75513A', tileMeters: 1.357, catalogPhoto: 'catalogo/revestimentos/003898/produto-original.jpg', textureVersion: 'staggered-2' },
+  '005813': { name: 'Eucafloor Prime Click Carvalho Maiorca', manufacturer: 'eucafloor', colorHex: '#C5A77E', tileMeters: 1.357, catalogPhoto: 'catalogo/revestimentos/005813/produto-original.jpg', textureVersion: 'staggered-2' },
+  '006316': { name: 'Eucafloor Prime Click Nogueira Málaga', manufacturer: 'eucafloor', colorHex: '#73523D', tileMeters: 1.357, catalogPhoto: 'catalogo/revestimentos/006316/produto-original.jpg', textureVersion: 'staggered-2' },
+  '001142': { name: 'Eucafloor Prime Click Valência', manufacturer: 'eucafloor', colorHex: '#8C6448', tileMeters: 1.357, catalogPhoto: 'catalogo/revestimentos/001142/produto-original.jpg', textureVersion: 'staggered-2' },
 };
 
 export function registerCommercialProducts(rows: Array<{ id: string; sku: string | null; preco: number; unidade: string }>): void {
@@ -448,6 +449,7 @@ export function registerCommercialProducts(rows: Array<{ id: string; sku: string
     if (!row.sku || !commercialFloorFinishes[row.sku] || products.some(function (product) { return product.id === row.id; })) return;
     const finish = commercialFloorFinishes[row.sku]!;
     const base = PUBLIC_BASE_URL + 'catalogo/revestimentos/' + row.sku + '/pbr/';
+    const textureQuery = finish.textureVersion ? '?v=' + finish.textureVersion : '';
     products.push({
       id: row.id,
       name: finish.name,
@@ -460,10 +462,10 @@ export function registerCommercialProducts(rows: Array<{ id: string; sku: string
         thumbnailUrl: finish.catalogPhoto,
         tileMeters: finish.tileMeters,
         textures: {
-          map: base + 'albedo.jpg',
-          normalMap: base + 'normal.jpg',
-          roughnessMap: base + 'roughness.jpg',
-          aoMap: base + 'ao.jpg',
+          map: base + 'albedo.jpg' + textureQuery,
+          normalMap: base + 'normal.jpg' + textureQuery,
+          roughnessMap: base + 'roughness.jpg' + textureQuery,
+          aoMap: base + 'ao.jpg' + textureQuery,
         },
       },
     });

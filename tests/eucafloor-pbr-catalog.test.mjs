@@ -27,6 +27,7 @@ test('SKUs Eucafloor são aplicáveis e preservam fabricante separado do fornece
     assert.ok(product);
     assert.equal(product.manufacturer, 'eucafloor');
     assert.equal(product.commercial.sku, sku);
+    assert.match(product.assets.textures.map, /albedo\.jpg\?v=staggered-2$/);
     assert.match(Catalog.getCommercialCatalogPhoto(sku), new RegExp(`${sku}/produto-original\\.jpg$`));
   }
 });
