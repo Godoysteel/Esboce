@@ -11,6 +11,18 @@ const materialsSource = await readFile(
   new URL('../src/core/MaterialsPanel.ts', import.meta.url),
   'utf8',
 );
+const generalReferencesMigration = await readFile(
+  new URL('../supabase/migrations/20260822200000_seed_vortice_general_references.sql', import.meta.url),
+  'utf8',
+);
+
+test('referências gerais possuem produto e oferta Vórtice regionais e datados', () => {
+  for (const sku of ['vortice-rodape-m', 'vortice-porta-madeira-un', 'vortice-soleira-m', 'vortice-pele-vidro-m2', 'vortice-sacada-vidro-m', 'vortice-varanda-m2', 'vortice-volumetria-m2', 'vortice-escada-un', 'vortice-caixa-hidraulica-un']) {
+    assert.match(generalReferencesMigration, new RegExp(sku), `falta referência ${sku}`);
+  }
+  assert.match(generalReferencesMigration, /'market_reference', 'to_confirm'/);
+  assert.match(generalReferencesMigration, /'Brasil', date '2026-08-22'/);
+});
 
 // Preço real de cimento (catálogo do fornecedor "O Mercador", ver
 // DEC-88): primeira ligação entre o quantitativo e o preço real do
@@ -195,7 +207,7 @@ test('porta/janela de vidro vira addProductRows (mesmo padrão de Pintura/Piso/T
   const body = materialsSource.slice(start, materialsSource.indexOf('\n  }', end));
   assert.match(body, /addProductRows\('Esquadrias de vidro', q\.doorProducts, q\.doorProductsCommercial\);/);
   assert.match(body, /addProductRows\('Esquadrias de vidro', q\.windowProducts, q\.windowProductsCommercial\);/);
-  assert.match(body, /q\.totals\.doorGenericCount \* ESTIMATED_MARKET_PRICES\.woodDoorPerUnit/);
+  assert.match(body, /q\.totals\.doorGenericCount \* materialPrice\('woodDoorPerUnit'\)/);
   assert.match(body, /q\.totals\.windowsGenericAreaM2 \* materialPrice\('windowPerM2'\)/);
 });
 

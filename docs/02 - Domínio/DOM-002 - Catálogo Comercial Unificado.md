@@ -49,6 +49,12 @@ região, data e natureza oficial ou `market_reference`, participando do subtotal
 e do PDF correspondente. Valores fixos usados apenas como fallback de
 emergência não recebem fornecedor, pois não constituem uma oferta rastreável.
 
+Referências recorrentes usadas por elementos genéricos também devem existir no
+catálogo e em `product_offers`; não basta manter uma constante anônima no
+cliente. Rodapés, soleiras, portas genéricas, envidraçamentos, varanda,
+volumetria, escada e caixas hidráulicas seguem essa regra, com fallback local
+apenas para indisponibilidade de rede.
+
 ## Intenção de aplicação
 
 - `place`: adicionar ao projeto objetos posicionáveis;

@@ -1157,7 +1157,7 @@ interface RealPriceMatch {
   kind: CommercialSelection['kind'];
   estimated?: boolean;
 }
-type MaterialPriceKey = 'cementPerKg' | 'limePerKg' | 'sandPerM3' | 'concretePerM3' | 'steelPerKg' | 'brickPerUnit' | 'woodPerM3' | 'windowPerM2' | 'nailPerKg' | 'forroPlacaSTPerM2' | 'forroPlacaRUPerM2' | 'forroPlacaRFPerM2' | 'forroPlacaCimenticiaPerM2' | 'forroF530PerM' | 'forroTabicaPerM' | 'forroPenduralPerUnit';
+type MaterialPriceKey = 'cementPerKg' | 'limePerKg' | 'sandPerM3' | 'concretePerM3' | 'steelPerKg' | 'brickPerUnit' | 'woodPerM3' | 'windowPerM2' | 'nailPerKg' | 'forroPlacaSTPerM2' | 'forroPlacaRUPerM2' | 'forroPlacaRFPerM2' | 'forroPlacaCimenticiaPerM2' | 'forroF530PerM' | 'forroTabicaPerM' | 'forroPenduralPerUnit' | 'baseboardPerM' | 'woodDoorPerUnit' | 'sillPerM' | 'glazingPanelPerM2' | 'balconyRailingPerM' | 'varandaPerM2' | 'volumeBoxGenericPerM2' | 'stairPerUnit' | 'hydraulicDestinationBoxPerUnit';
 let realPrices: { [K in MaterialPriceKey]?: RealPriceMatch } = {};
 let realPricesFetchStarted = false;
 let onRealPricesLoaded: (() => void) | null = null;
@@ -1184,6 +1184,15 @@ const VORTICE_MATERIAL_SKUS: Record<MaterialPriceKey, { sku: string; unitDivisor
   forroF530PerM: { sku: 'vortice-forro-perfil-f530-m', unitDivisor: 1 },
   forroTabicaPerM: { sku: 'vortice-forro-tabica-m', unitDivisor: 1 },
   forroPenduralPerUnit: { sku: 'vortice-forro-pendural-un', unitDivisor: 1 },
+  baseboardPerM: { sku: 'vortice-rodape-m', unitDivisor: 1 },
+  woodDoorPerUnit: { sku: 'vortice-porta-madeira-un', unitDivisor: 1 },
+  sillPerM: { sku: 'vortice-soleira-m', unitDivisor: 1 },
+  glazingPanelPerM2: { sku: 'vortice-pele-vidro-m2', unitDivisor: 1 },
+  balconyRailingPerM: { sku: 'vortice-sacada-vidro-m', unitDivisor: 1 },
+  varandaPerM2: { sku: 'vortice-varanda-m2', unitDivisor: 1 },
+  volumeBoxGenericPerM2: { sku: 'vortice-volumetria-m2', unitDivisor: 1 },
+  stairPerUnit: { sku: 'vortice-escada-un', unitDivisor: 1 },
+  hydraulicDestinationBoxPerUnit: { sku: 'vortice-caixa-hidraulica-un', unitDivisor: 1 },
 };
 
 async function ensureRealPrices(): Promise<void> {
@@ -1272,6 +1281,15 @@ const REFERENCE_PRICES = {
   forroF530PerM: 9.00,
   forroTabicaPerM: 3.00,
   forroPenduralPerUnit: 1.75,
+  baseboardPerM: 18.00,
+  woodDoorPerUnit: 450.00,
+  sillPerM: 90.00,
+  glazingPanelPerM2: 580.00,
+  balconyRailingPerM: 420.00,
+  varandaPerM2: 320.00,
+  volumeBoxGenericPerM2: 260.00,
+  stairPerUnit: 3500.00,
+  hydraulicDestinationBoxPerUnit: 115.00,
 };
 
 // Preços médios ESTIMADOS de mercado (Brasil, referência 2025-2026)
@@ -1530,7 +1548,7 @@ export function buildRows(): (string | number)[][] {
 
   push('Geral', 'Paredes (comprimento)', q.totals.wallLength, 'm', null);
   push('Geral', 'Piso (área)', q.totals.floorArea, 'm²', null);
-  push('Geral', 'Rodapé (comprimento)', q.totals.baseboard, 'm', q.totals.baseboard > 0 ? q.totals.baseboard * ESTIMATED_MARKET_PRICES.rodapePerM : null);
+  pushMaterial('Geral', 'Rodapé (comprimento)', q.totals.baseboard, 'm', q.totals.baseboard > 0 ? q.totals.baseboard * materialPrice('baseboardPerM') : null, 'baseboardPerM');
   push('Geral', 'Telhado (área real da água)', q.totals.roofArea, 'm²', null);
   // Porta/janela de VIDRO (produto real de catálogo escolhido) — item
   // por PRODUTO, quantidade em m² real da abertura (convenção de
@@ -1544,7 +1562,7 @@ export function buildRows(): (string | number)[][] {
   addProductRows('Esquadrias de vidro', q.doorProducts, q.doorProductsCommercial);
   addProductRows('Esquadrias de vidro', q.windowProducts, q.windowProductsCommercial);
   if (q.totals.doorGenericCount > 0) {
-    push('Geral', 'Porta de madeira (padrão)', q.totals.doorGenericCount, 'un', q.totals.doorGenericCount * ESTIMATED_MARKET_PRICES.woodDoorPerUnit);
+    pushMaterial('Geral', 'Porta de madeira (padrão)', q.totals.doorGenericCount, 'un', q.totals.doorGenericCount * materialPrice('woodDoorPerUnit'), 'woodDoorPerUnit');
   }
   if (q.totals.windowsGenericAreaM2 > 0) {
     pushMaterial('Geral', 'Janela (padrão)', q.totals.windowsGenericAreaM2, 'm²', q.totals.windowsGenericAreaM2 * materialPrice('windowPerM2'), 'windowPerM2');
@@ -1560,18 +1578,18 @@ export function buildRows(): (string | number)[][] {
   // linha de comprimento, "unidades" fica informativo (evita contar
   // o mesmo material duas vezes).
   push('Geral', 'Soleiras externas (unidades)', q.totals.soleiraCount, 'un', null);
-  push('Geral', 'Soleiras externas (comprimento)', q.totals.soleiraLength, 'm', q.totals.soleiraLength > 0 ? q.totals.soleiraLength * ESTIMATED_MARKET_PRICES.soleiraPerM : null);
+  pushMaterial('Geral', 'Soleiras externas (comprimento)', q.totals.soleiraLength, 'm', q.totals.soleiraLength > 0 ? q.totals.soleiraLength * materialPrice('sillPerM') : null, 'sillPerM');
   // Pele de vidro, Sacada de vidro e Varanda não têm produto de
   // catálogo próprio — sempre média de mercado (ESTIMATED_MARKET_PRICES,
   // ver comentário completo ali).
   if (q.totals.glazingPanelAreaM2 > 0) {
-    push('Geral', 'Pele de vidro (área)', q.totals.glazingPanelAreaM2, 'm²', q.totals.glazingPanelAreaM2 * ESTIMATED_MARKET_PRICES.glazingPanelPerM2);
+    pushMaterial('Geral', 'Pele de vidro (área)', q.totals.glazingPanelAreaM2, 'm²', q.totals.glazingPanelAreaM2 * materialPrice('glazingPanelPerM2'), 'glazingPanelPerM2');
   }
   if (q.totals.balconyRailingLengthM > 0) {
-    push('Geral', 'Sacada de vidro (comprimento)', q.totals.balconyRailingLengthM, 'm', q.totals.balconyRailingLengthM * ESTIMATED_MARKET_PRICES.balconyRailingPerM);
+    pushMaterial('Geral', 'Sacada de vidro (comprimento)', q.totals.balconyRailingLengthM, 'm', q.totals.balconyRailingLengthM * materialPrice('balconyRailingPerM'), 'balconyRailingPerM');
   }
   if (q.totals.varandaAreaM2 > 0) {
-    push('Geral', 'Varanda (área)', q.totals.varandaAreaM2, 'm²', q.totals.varandaAreaM2 * ESTIMATED_MARKET_PRICES.varandaPerM2);
+    pushMaterial('Geral', 'Varanda (área)', q.totals.varandaAreaM2, 'm²', q.totals.varandaAreaM2 * materialPrice('varandaPerM2'), 'varandaPerM2');
   }
   if (q.foundation) {
     const f = q.foundation;
@@ -1702,13 +1720,13 @@ export function buildRows(): (string | number)[][] {
   // sempre mostrada, seja qual for a origem do preço.
   addProductRows('Volumetria', {}, q.volumeBoxCommercial);
   if (q.totals.volumeBoxGenericAreaM2 > 0) {
-    push('Volumetria', 'Bloco de Volumetria (sem acabamento)', q.totals.volumeBoxGenericAreaM2, 'm²', q.totals.volumeBoxGenericAreaM2 * ESTIMATED_MARKET_PRICES.volumeBoxGenericPerM2);
+    pushMaterial('Volumetria', 'Bloco de Volumetria (sem acabamento)', q.totals.volumeBoxGenericAreaM2, 'm²', q.totals.volumeBoxGenericAreaM2 * materialPrice('volumeBoxGenericPerM2'), 'volumeBoxGenericPerM2');
   }
   // Escada: contagem + preço de referência único (ver
   // ESTIMATED_MARKET_PRICES.stairPerUnit) — mesmo nível de detalhe que
   // Bloco de Volumetria/Varanda hoje.
   if (q.totals.stairCount > 0) {
-    push('Estrutura', 'Escada (posicionada)', q.totals.stairCount, 'un', q.totals.stairCount * ESTIMATED_MARKET_PRICES.stairPerUnit);
+    pushMaterial('Estrutura', 'Escada (posicionada)', q.totals.stairCount, 'un', q.totals.stairCount * materialPrice('stairPerUnit'), 'stairPerUnit');
   }
   // Móveis: preço do próprio produto do Catálogo (Furniture.productId),
   // já somado em compute() — sem média de mercado nova (ver comentário
@@ -1762,7 +1780,7 @@ export function buildRows(): (string | number)[][] {
     push(hLabel, item, group.count, 'un', unitPrice != null ? group.count * unitPrice : null);
   });
   q.hydraulics.destinationGroups.forEach(function (group) {
-    push(hLabel, group.label, group.count, 'un', group.count * ESTIMATED_MARKET_PRICES.hydraulicDestinationBoxUnit);
+    pushMaterial(hLabel, group.label, group.count, 'un', group.count * materialPrice('hydraulicDestinationBoxPerUnit'), 'hydraulicDestinationBoxPerUnit');
   });
 
   Array.from(supplierTotals.values())

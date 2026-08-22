@@ -238,13 +238,13 @@ test('cobertura de quantitativo: TODO array de entidade de Floor (types.ts) apar
   });
 });
 
-test('Pele de vidro, Sacada de vidro e Varanda viram linha de custo real em buildRows(), pela média de mercado (ESTIMATED_MARKET_PRICES)', () => {
+test('Pele de vidro, Sacada de vidro e Varanda usam referências Vórtice rastreáveis', () => {
   assert.match(materialsSource, /totals\.glazingPanelAreaM2 \+= p\.widthM \* p\.heightM;/);
   assert.match(materialsSource, /totals\.balconyRailingLengthM \+= r\.widthM;/);
   assert.match(materialsSource, /totals\.varandaAreaM2 \+= Math\.abs\(\(v\.x2 - v\.x1\) \* \(v\.y2 - v\.y1\)\) \/ \(Core\.GRID \* Core\.GRID\);/);
-  assert.match(materialsSource, /push\('Geral', 'Pele de vidro \(área\)', q\.totals\.glazingPanelAreaM2, 'm²', q\.totals\.glazingPanelAreaM2 \* ESTIMATED_MARKET_PRICES\.glazingPanelPerM2\)/);
-  assert.match(materialsSource, /push\('Geral', 'Sacada de vidro \(comprimento\)', q\.totals\.balconyRailingLengthM, 'm', q\.totals\.balconyRailingLengthM \* ESTIMATED_MARKET_PRICES\.balconyRailingPerM\)/);
-  assert.match(materialsSource, /push\('Geral', 'Varanda \(área\)', q\.totals\.varandaAreaM2, 'm²', q\.totals\.varandaAreaM2 \* ESTIMATED_MARKET_PRICES\.varandaPerM2\)/);
+  assert.match(materialsSource, /pushMaterial\('Geral', 'Pele de vidro \(área\)'.*'glazingPanelPerM2'\)/);
+  assert.match(materialsSource, /pushMaterial\('Geral', 'Sacada de vidro \(comprimento\)'.*'balconyRailingPerM'\)/);
+  assert.match(materialsSource, /pushMaterial\('Geral', 'Varanda \(área\)'.*'varandaPerM2'\)/);
 });
 
 test('ESTIMATED_MARKET_PRICES tem os 4 valores de referência esperados (m² de vidro, m linear de guarda-corpo, m² de varanda, m² de volumetria genérica)', () => {
@@ -268,7 +268,7 @@ test('Bloco de Volumetria: custo usa o produto pintado (Lata de tinta) quando ex
   assert.match(body, /const surfaceAreaM2 = 2 \* \(b\.widthM \* b\.heightM \+ b\.widthM \* b\.depthM \+ b\.heightM \* b\.depthM\);/);
   assert.match(body, /productUnitCost\(b\.finishProductId, surfaceAreaM2, selection\?\.price\)/);
   assert.match(body, /addCommercialQuantity\(volumeBoxCommercial, b\.finishProductId, surfaceAreaM2, selection\)/);
-  assert.match(materialsSource, /push\('Volumetria', 'Bloco de Volumetria \(sem acabamento\)'/);
+  assert.match(materialsSource, /pushMaterial\('Volumetria', 'Bloco de Volumetria \(sem acabamento\)'/);
 });
 
 // Móveis: soma o preço já cadastrado no PRÓPRIO produto do Catálogo
