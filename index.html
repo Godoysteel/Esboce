@@ -191,9 +191,9 @@
     font-size: 14px;
   }
   button:hover { background: #F1EFE8; }
-  /* #dimensionsToggleBtn.active / #gridToggleBtn.active — ver bloco
-     .bottom-bar mais abaixo (junto com #layersToggleBtn.active, os
-     três moram na barra inferior a partir da fase 3). */
+  /* #gridToggleBtn.active — ver bloco .bottom-bar mais abaixo (junto
+     com #layersToggleBtn.active, moram na barra inferior a partir da
+     fase 3). */
 
   .floor-row { display: flex; gap: 8px; align-items: center; flex-wrap: nowrap; margin: 0; }
   .floor-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -241,6 +241,12 @@
   .scene2d-room-preview { fill: rgba(83,74,183,.08); stroke: #534ab7; stroke-width: 1.4; stroke-dasharray: 5 3; }
   .scene2d-drag-preview { opacity: .52; pointer-events: none; }
   .scene2d-drag-preview .scene2d-wall { stroke: #534ab7; stroke-dasharray: 5 3; }
+  .scene2d-dim-preview { pointer-events: none; }
+  .scene2d-dim-line { stroke: #534ab7; stroke-width: 1; stroke-dasharray: 4 3; }
+  .scene2d-dim-text {
+    fill: #534ab7; font-size: 11px; text-anchor: middle; dominant-baseline: middle;
+    paint-order: stroke; stroke: #FFFFFF; stroke-width: 3px;
+  }
   .scene2d-wall-handle { fill: #fff; stroke: #534ab7; stroke-width: 1.4; cursor: move; }
   .scene2d-muro { stroke: #626b75; }
   .scene2d-opening-gap { stroke: #fff; }
@@ -707,12 +713,11 @@
   .live-room-dimension-line::before { left: 0; }
   .live-room-dimension-line::after { right: 0; }
 
-  /* Cotas persistentes (largura da base + altura da parede),
-     vermelhas, ligadas/desligadas por botão — ver ViewportController.
-     toggleDimensions. A camada cobre o viewport inteiro mas não
-     intercepta clique/arraste nenhum (pointer-events: none); cada
-     pílula em si também não, então nunca atrapalha desenhar/selecionar
-     por baixo delas. */
+  /* Camada de cotas temporárias (hoje só a do arraste de ponto
+     hidráulico, ver showHydraulicDragCotas em ViewportController.ts) —
+     cobre o viewport inteiro mas não intercepta clique/arraste nenhum
+     (pointer-events: none); cada pílula em si também não, então nunca
+     atrapalha desenhar/selecionar por baixo delas. */
   .dim-cota-layer {
     position: absolute;
     inset: 0;
@@ -760,7 +765,6 @@
   .bottom-toggle-btn:hover { background: #F1EFE8; }
   .bottom-toggle-btn:disabled { opacity: .4; cursor: not-allowed; }
   .bottom-toggle-btn:disabled:hover { background: #FFFFFF; }
-  #dimensionsToggleBtn.active { background: #D7263D; border-color: #D7263D; color: #FFFFFF; }
   #gridToggleBtn.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
   #layersToggleBtn.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
 
@@ -2091,7 +2095,6 @@ Mova uma parede para registrar a operação.</pre>
   <div id="dimLabelB" class="dim-label"></div>
   <div id="liveRoomDimensionLine" class="live-room-dimension-line"></div>
   <div id="liveRoomDimensionLineB" class="live-room-dimension-line"></div>
-  <div id="dimCotaLayer" class="dim-cota-layer"></div>
   <div id="hydraulicDragCotaLayer" class="dim-cota-layer"></div>
 </div>
 
@@ -2104,7 +2107,6 @@ Mova uma parede para registrar a operação.</pre>
 <div class="bottom-bar">
   <div class="tb-pill bottom-toggle-group">
     <button id="gridToggleBtn" class="bottom-toggle-btn" title="Mostrar ou ocultar o grid do terreno">▦ Grid</button>
-    <button id="dimensionsToggleBtn" class="bottom-toggle-btn" title="Mostrar/ocultar cotas de parede (largura e altura)">📏 Cotas</button>
     <button id="settingsToggleBtn" class="bottom-toggle-btn" disabled title="Ajustes — ainda não disponível">⚙️ Ajustes</button>
     <button id="layersToggleBtn" class="bottom-toggle-btn" title="Camadas visíveis (fundação, telhado, varanda...) — mesmo menu de antes, agora também aberto por aqui, não só clique direito">🗂️ Visualização</button>
   </div>

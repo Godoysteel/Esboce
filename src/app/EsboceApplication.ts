@@ -511,10 +511,6 @@ export class EsboceApplication {
       this.terrainGrid.visible = !this.terrainGrid.visible;
       (event.currentTarget as HTMLElement).classList.toggle("active", this.terrainGrid.visible);
     });
-    this.requireElement("dimensionsToggleBtn").addEventListener("click", (event) => {
-      const isVisible = ViewportController.toggleDimensions();
-      (event.currentTarget as HTMLElement).classList.toggle("active", isVisible);
-    });
     this.requireElement("wallDiagnosticsToggleBtn").addEventListener("click", (event) => {
       const isVisible = ViewportController.toggleWallDiagnostics();
       (event.currentTarget as HTMLElement).classList.toggle("active", isVisible);

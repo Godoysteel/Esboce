@@ -178,16 +178,8 @@ import {
   var hydraulicWallElevationState: { wallId: string; fixtureKey: string } | null = null;
   var terrenoModalOverlayEl: any, terrenoLarguraInputEl: any, terrenoComprimentoInputEl: any, terrenoErrorEl: any;
   var dimLabelAEl: any, dimLabelBEl: any, liveRoomDimensionLineEl: any, liveRoomDimensionLineBEl: any;
-  // Cotas persistentes de largura/altura de parede (ligar/desligar) —
-  // ver rebuildDimensionCotas mais abaixo. Diferente do dimLabelA/B
-  // (que só aparece durante o arraste de criação), essas ficam na tela
-  // o tempo todo enquanto ativas, então vivem numa camada própria
-  // (dimCotaLayerEl) em vez de dois elementos fixos.
-  var dimensionsVisible = false;
-  var dimCotaLayerEl: any;
   var hydraulicDragCotaLayerEl: any;
   var hydraulicDragCotaEntries: any[] = [];
-  var dimCotaEntries: any[] = [];
   var wallDiagnosticsVisible = false;
   var wallDiagnosticsPanelEl: any;
   var wallDiagnosticsOutputEl: any;
@@ -1008,21 +1000,6 @@ import {
     el.style.left = (refRect.left - gapPx - elRect.width / 2) + 'px';
   }
 
-  // ---- Cotas de parede (largura na base + altura), vermelhas,
-  // ligar/desligar ----
-  function clearDimensionCotas() {
-    dimCotaEntries.forEach(function (entry) { entry.el.remove(); });
-    dimCotaEntries = [];
-  }
-
-  function addDimCota(worldX: any, worldY: any, worldZ: any, text: any) {
-    var el = document.createElement('div');
-    el.className = 'dim-cota';
-    el.textContent = text;
-    dimCotaLayerEl.appendChild(el);
-    dimCotaEntries.push({ el: el, x: worldX, y: worldY, z: worldZ });
-  }
-
   // ---- Cotas temporárias durante o arraste de um ponto hidráulico
   // (altura + distância até cada ponta da parede) — independentes das
   // cotas persistentes acima: aparecem mesmo com o toggle "Cotas"
@@ -1060,29 +1037,6 @@ import {
     hydraulicDragCotaEntries.forEach(function (entry) { positionFloatingPanel(entry.el, entry.x, entry.y, entry.z, 0); });
   }
 
-  // Reconstrói as cotas do pavimento em edição — chamada sempre que o
-  // modelo muda (onModelChanged), pra acompanhar parede criada/movida/
-  // apagada. Uma cota de LARGURA no meio da base de cada parede (altura
-  // Y = base) e uma cota de ALTURA perto de uma ponta, subindo até a
-  // metade do pé-direito (a altura é a mesma pra toda parede do
-  // pavimento — Scene3DRenderer.WALL_HEIGHT_GETTER — então a cota mostra
-  // esse valor único por parede, não recalcula nada novo por parede).
-  function rebuildDimensionCotas() {
-    clearDimensionCotas();
-    if (!dimensionsVisible || !dimCotaLayerEl) return;
-    var yOffset = currentFloorYOffset();
-    var wallHeight = Scene3DRenderer.WALL_HEIGHT_GETTER();
-    Store.currentWalls().forEach(function (w) {
-      var lenM = Core.wallLengthMeters(w);
-      if (lenM < 0.05) return;
-      var mid = modelToWorld((w.x1 + w.x2) / 2, (w.y1 + w.y2) / 2);
-      addDimCota(mid.x, yOffset + 0.04, mid.z, lenM.toFixed(2).replace('.', ',') + ' m');
-      var p1 = modelToWorld(w.x1, w.y1);
-      addDimCota(p1.x, yOffset + wallHeight / 2, p1.z, wallHeight.toFixed(2).replace('.', ',') + ' m');
-    });
-    repositionDimensionCotas();
-  }
-
   function dimensionPointIsVisible(entry: any) {
     var target = new THREE.Vector3(entry.x, entry.y, entry.z);
     var projected = target.clone().project(camera);
@@ -1105,26 +1059,6 @@ import {
     // ponto central. A tolerância aceita essa face, mas não uma parede
     // distinta situada entre a câmera e a medida.
     return !hit || hit.distance >= targetDistance - 0.22;
-  }
-
-  // Chamada a cada frame do loop de animação (ver animate() no fim do
-  // arquivo) — só projeta em tela, não recalcula nada do modelo, então
-  // é barato mesmo rodando 60x/s; sai de imediato se a camada estiver
-  // vazia/desligada.
-  function repositionDimensionCotas() {
-    if (!dimensionsVisible || !dimCotaEntries.length) return;
-    dimCotaEntries.forEach(function (entry) {
-      var visible = dimensionPointIsVisible(entry);
-      entry.el.style.display = visible ? 'block' : 'none';
-      if (!visible) return;
-      positionFloatingPanel(entry.el, entry.x, entry.y, entry.z, 0);
-    });
-  }
-
-  function toggleDimensions() {
-    dimensionsVisible = !dimensionsVisible;
-    rebuildDimensionCotas();
-    return dimensionsVisible;
   }
 
   function findLiveRoomDimensions(wall: any) {
@@ -1509,7 +1443,7 @@ import {
   // parede solta, mostra o comprimento. Some assim que o arraste termina.
   function updateDimLabels() {
     if (!drawPreview) {
-      var liveWall = dragMode === 'wallResize' && selectedWallId ? Store.findWall(selectedWallId) : null;
+      var liveWall = (dragMode === 'wallResize' || dragMode === 'endpoint1' || dragMode === 'endpoint2') && selectedWallId ? Store.findWall(selectedWallId) : null;
       var roomDimensions = liveWall ? findLiveRoomDimensions(liveWall) : [];
       if (roomDimensions.length) {
         var liveLabelY = currentFloorYOffset() + 0.12;
@@ -1571,6 +1505,19 @@ import {
     }
   }
 
+  // Chamada a cada frame do loop de animação (ver animate() em
+  // EsboceApplication.ts) — reprojeta as cotas temporárias ativas
+  // (arraste de parede e de ponto hidráulico) na tela conforme a
+  // câmera orbita, mesmo sem nenhuma mudança no modelo. Sem isso, girar
+  // a câmera no meio de um arraste deixa a cota/linha "presa" na
+  // posição de tela antiga, descolada da parede. updateDimLabels já sai
+  // rápido quando nada está sendo arrastado (dragMode não bate com
+  // nenhum caso e drawPreview é nulo), então é barato rodar sempre.
+  function repositionLiveDimensions() {
+    updateDimLabels();
+    repositionHydraulicDragCotas();
+  }
+
   function render() {
     if (selectedHydraulicNodeId && (selectedWallId || selectedColumnId || selectedRoofId || selectedOpeningId || selectedVarandaId || selectedLajeId || selectedFurnitureId || selectedGlazingPanelId || selectedBalconyRailingId || selectedVolumeBoxId || selectedRoomWallIds)) selectedHydraulicNodeId = null;
     var project = Store.getProject();
@@ -1625,7 +1572,6 @@ import {
       if (!selectedRoomWallIds.length) selectedRoomWallIds = null;
     }
     updateWallGridOverlay();
-    rebuildDimensionCotas();
     render();
   }
 
@@ -5132,7 +5078,6 @@ import {
     dimLabelBEl = document.getElementById('dimLabelB');
     liveRoomDimensionLineEl = document.getElementById('liveRoomDimensionLine');
     liveRoomDimensionLineBEl = document.getElementById('liveRoomDimensionLineB');
-    dimCotaLayerEl = document.getElementById('dimCotaLayer');
     hydraulicDragCotaLayerEl = document.getElementById('hydraulicDragCotaLayer');
 
     terrenoModalOverlayEl = document.getElementById('terrenoModalOverlay');
@@ -5356,11 +5301,11 @@ export const ViewportController = {
   select, selectColumn, selectRoof, selectOpening, selectVaranda, selectFurniture, selectGlazingPanel, selectVolumeBox, selectStair, selectForro, selectPlanUnderlay, selectHydraulicNode, beginHydraulicRouteDraw,
   getSelectedWallId, getSelectedColumnId, getSelectedRoofId,
   getSelectedOpeningId, getSelectedVarandaId, getSelectedLajeId, getSelectedFurnitureId, getSelectedGlazingPanelId, getSelectedBalconyRailingId, getSelectedVolumeBoxId, getSelectedStairId, getSelectedForroRoomKey, getSelectedPlanUnderlay, getSelectedHydraulicNodeId, getSelectedRoomWallIds,
-  setNextRoofAtticMode, setNextRoofType, armHeightAdjust, toggleDimensions,
+  setNextRoofAtticMode, setNextRoofType, armHeightAdjust,
   toggleWallDiagnostics,
   resetCamera,
   toggleTouchCameraMode,
   getZoomPercent, zoomIn, zoomOut, setOnZoomChanged,
   toggleLayersMenuAtElement,
-  repositionDimensions: repositionDimensionCotas,
+  repositionDimensions: repositionLiveDimensions,
 };
