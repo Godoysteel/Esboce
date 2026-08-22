@@ -33,6 +33,11 @@ aplicado com fornecedores diferentes, cada combinação permanece em uma linha
 própria na planilha, no CSV e no PDF, identificada por fornecedor, região e data
 do preço. A área visual resumida pode continuar agrupada apenas por produto.
 
+O orçamento apresenta também subtotais por fornecedor para as ofertas salvas.
+Itens sem uma escolha explícita continuam compondo o total geral, mas não são
+atribuídos a uma loja. Referências Vórtice podem ter subtotal próprio desde que
+permaneçam identificadas como estimativa, sem aparência de proposta comercial.
+
 ## Intenção de aplicação
 
 - `place`: adicionar ao projeto objetos posicionáveis;

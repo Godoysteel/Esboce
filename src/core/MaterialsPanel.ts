@@ -1436,11 +1436,21 @@ export function buildRows(): (string | number)[][] {
   const rows: (string | number)[][] = [];
   let grandTotal = 0;
   let hasCost = false;
+  const supplierTotals = new Map<string, { supplierName: string; kind: CommercialSelection['kind']; cost: number }>();
 
-  function push(cat: string, item: string, qtyNum: number | string, unit: string, cost: number | null) {
+  function push(cat: string, item: string, qtyNum: number | string, unit: string, cost: number | null, selection?: CommercialSelection) {
     const qtyDisplay = typeof qtyNum === 'number' ? qtyNum.toFixed(qtyNum % 1 === 0 ? 0 : 2) : qtyNum;
     const avgPrice = (cost != null && typeof qtyNum === 'number' && qtyNum > 0) ? cost / qtyNum : null;
     if (cost != null) { grandTotal += cost; hasCost = true; }
+    if (cost != null && selection) {
+      const existing = supplierTotals.get(selection.supplierId) || {
+        supplierName: selection.supplierName,
+        kind: selection.kind,
+        cost: 0,
+      };
+      existing.cost += cost;
+      supplierTotals.set(selection.supplierId, existing);
+    }
     rows.push([cat, item, qtyDisplay, unit, avgPrice != null ? fmtBRL(avgPrice) : '—', cost != null ? fmtBRL(cost) : '—']);
   }
 
@@ -1603,7 +1613,7 @@ export function buildRows(): (string | number)[][] {
       const trace = selection
         ? ' — ' + selection.supplierName + ' — ' + selection.region + ' — ' + selection.priceDate
         : '';
-      push(category, (p ? p.name : line.productId) + trace, qty, unit, productUnitCost(line.productId, areaM2, selection?.price));
+      push(category, (p ? p.name : line.productId) + trace, qty, unit, productUnitCost(line.productId, areaM2, selection?.price), selection);
     });
   }
   addProductRows('Pintura', q.paint, q.paintCommercial);
@@ -1636,7 +1646,7 @@ export function buildRows(): (string | number)[][] {
       ? ' — ' + selection.supplierName + ' — ' + selection.region + ' — ' + selection.priceDate
       : '';
     const unitPrice = selection?.price ?? p?.commercial?.price ?? null;
-    push('Mobiliário', (p ? p.name : line.productId) + trace, line.quantity, 'un', unitPrice != null ? line.quantity * unitPrice : null);
+    push('Mobiliário', (p ? p.name : line.productId) + trace, line.quantity, 'un', unitPrice != null ? line.quantity * unitPrice : null, selection);
   });
 
   // Forro de drywall — uma linha de placa por TIPO (preço difere por
@@ -1680,6 +1690,12 @@ export function buildRows(): (string | number)[][] {
     push(hLabel, group.label, group.count, 'un', group.count * ESTIMATED_MARKET_PRICES.hydraulicDestinationBoxUnit);
   });
 
+  Array.from(supplierTotals.values())
+    .sort((a, b) => a.supplierName.localeCompare(b.supplierName))
+    .forEach(function (supplier) {
+      const qualifier = supplier.kind === 'market_reference' ? ' (estimativa, não constitui oferta comercial)' : '';
+      rows.push(['Orçamento por fornecedor', 'Subtotal — ' + supplier.supplierName + qualifier, '', '', '', fmtBRL(supplier.cost)]);
+    });
   if (hasCost) rows.push(['TOTAL', 'Custo estimado (soma dos itens com preço)', '', '', '', fmtBRL(grandTotal)]);
   return rows;
 }

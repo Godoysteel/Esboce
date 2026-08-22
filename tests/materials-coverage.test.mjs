@@ -184,6 +184,14 @@ test('quantitativo comercial separa o mesmo produto por oferta e só aceita snap
   assert.match(materialsSource, /return selection\?\.productId === productId \? selection : undefined;/);
 });
 
+test('orçamento soma ofertas escolhidas por fornecedor sem atribuir fallback a uma loja', () => {
+  assert.match(materialsSource, /const supplierTotals = new Map/);
+  assert.match(materialsSource, /if \(cost != null && selection\)/);
+  assert.match(materialsSource, /supplierTotals\.get\(selection\.supplierId\)/);
+  assert.match(materialsSource, /'Subtotal — ' \+ supplier\.supplierName/);
+  assert.match(materialsSource, /estimativa, não constitui oferta comercial/);
+});
+
 test('Chapisco+Reboco vira categoria própria, aplicado nas DUAS faces de toda parede (wallAreaNet × 2)', () => {
   assert.match(materialsSource, /const CHAPISCO_REF = \{ cementKgPerM2: 2\.25, sandM3PerM2: 0\.0053 \};/);
   assert.match(materialsSource, /const REBOCO_THICKNESS_M = 0\.02;/);
