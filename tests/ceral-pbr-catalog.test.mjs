@@ -3,8 +3,15 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { Catalog } from '../src/core/Catalog.ts';
 
-const verified = ['003230', '003231', '003229', '000317', '000291', '000300', '000280', '000284'];
-const unverified = ['000290', '003135', '000852'];
+const verified = ['003230', '003231', '003229', '000317', '000291', '000300', '000280', '000284', '000287', '000279'];
+const unverified = ['000290', '003135', '000852', '000356', '000348', '000419', '000435', '000436', '000437', '000260'];
+const manifest = JSON.parse(readFileSync(new URL('../public/catalogo/revestimentos/manifest.json', import.meta.url), 'utf8'));
+
+test('levantamento Ceral fecha os 20 SKUs em dez verificados e dez preservados como unverified', () => {
+  assert.equal(manifest.length, 20);
+  assert.deepEqual(manifest.filter((item) => item.status === 'official_source_verified').map((item) => item.sku).sort(), [...verified].sort());
+  assert.deepEqual(manifest.filter((item) => item.status === 'unverified').map((item) => item.sku).sort(), [...unverified].sort());
+});
 
 test('catálogo visual registra somente os SKUs Ceral verificados pelos UUIDs dinâmicos do Supabase', () => {
   const rows = [...verified, ...unverified].map((sku) => ({

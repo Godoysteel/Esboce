@@ -23,6 +23,8 @@ PRODUCTS = {
     "000300": {"width_m": 0.099, "height_m": 0.099, "roughness": 0.18},
     "000280": {"width_m": 0.099, "height_m": 0.099, "roughness": 0.12},
     "000284": {"width_m": 0.099, "height_m": 0.099, "roughness": 0.12, "source_grid": 3},
+    "000287": {"width_m": 0.099, "height_m": 0.099, "roughness": 0.12},
+    "000279": {"width_m": 0.099, "height_m": 0.099, "roughness": 0.12},
 }
 
 
