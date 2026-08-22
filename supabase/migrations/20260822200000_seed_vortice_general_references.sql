@@ -3,7 +3,7 @@
 -- ficam explícitas para rastreabilidade e para os PDFs por fornecedor.
 
 insert into public.products (id, manufacturer_id, categoria, nome, sku, preco, unidade, specs, foto_url, origem, ativo)
-select gen_random_uuid(), m.id, v.categoria, v.nome, v.sku, v.preco, v.unidade,
+select gen_random_uuid()::text, m.id, v.categoria, v.nome, v.sku, v.preco, v.unidade,
        jsonb_build_object(
          'fonte', 'preço médio de mercado nacional, pesquisa 2025-2026',
          'regiao', 'Brasil',

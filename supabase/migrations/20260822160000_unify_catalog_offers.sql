@@ -3,7 +3,7 @@
 -- clientes publicados. Novos consumidores devem ler product_offers.
 
 create table if not exists public.suppliers (
-  id uuid primary key default gen_random_uuid(),
+  id text primary key default gen_random_uuid()::text,
   nome text not null unique,
   kind text not null default 'official' check (kind in ('official', 'market_reference')),
   regions text[] not null default array['Brasil']::text[],
@@ -14,9 +14,9 @@ create table if not exists public.suppliers (
 );
 
 create table if not exists public.product_offers (
-  id uuid primary key default gen_random_uuid(),
-  product_id uuid not null references public.products(id) on delete cascade,
-  supplier_id uuid not null references public.suppliers(id),
+  id text primary key default gen_random_uuid()::text,
+  product_id text not null references public.products(id) on delete cascade,
+  supplier_id text not null references public.suppliers(id),
   supplier_sku text,
   price numeric(12,2) not null check (price >= 0),
   currency char(3) not null default 'BRL',

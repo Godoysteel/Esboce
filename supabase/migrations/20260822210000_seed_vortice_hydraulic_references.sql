@@ -3,7 +3,7 @@
 -- locais do aplicativo permanecem apenas como fallback offline.
 
 insert into public.products (id, manufacturer_id, categoria, nome, sku, preco, unidade, specs, foto_url, origem, ativo)
-select gen_random_uuid(), m.id, 'Hidráulica', v.nome, v.sku, v.preco, 'UN',
+select gen_random_uuid()::text, m.id, 'Hidráulica', v.nome, v.sku, v.preco, 'UN',
        jsonb_build_object(
          'fonte', 'preço médio de mercado nacional, pesquisa 2025-2026',
          'regiao', 'Brasil',
