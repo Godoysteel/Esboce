@@ -21,12 +21,18 @@ PRODUCTS = {
 
 def build_albedo(source: Image.Image, plank_width_m: float) -> Image.Image:
     rows = max(1, round(1.357 / plank_width_m))
-    row_height = SIZE // rows
-    joint = max(1, round(SIZE * 0.0015 / 1.357))
-    source = source.resize((SIZE, row_height - joint), Image.Resampling.LANCZOS)
-    canvas = Image.new("RGB", (SIZE, SIZE), (75, 66, 56))
+    # As imagens oficiais incluem uma borda técnica escura. Quando ela entra no
+    # atlas, a repetição parece uma fuga preta no piso. Removemos somente 2% das
+    # extremidades e não desenhamos junta artificial: o laminado é encaixado.
+    inset_x = max(1, round(source.width * 0.02))
+    inset_y = max(1, round(source.height * 0.02))
+    source = source.crop((inset_x, inset_y, source.width - inset_x, source.height - inset_y))
+    canvas = Image.new("RGB", (SIZE, SIZE))
     for row in range(rows):
-        canvas.paste(source, (0, row * row_height + joint // 2))
+        y0 = round(row * SIZE / rows)
+        y1 = round((row + 1) * SIZE / rows)
+        plank = source.resize((SIZE, y1 - y0), Image.Resampling.LANCZOS)
+        canvas.paste(plank, (0, y0))
     return canvas
 
 
