@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { Catalog } from '../src/core/Catalog.ts';
 
-const verified = ['003230', '003231', '003229', '000317', '000291', '000300'];
+const verified = ['003230', '003231', '003229', '000317', '000291', '000300', '000280'];
 const unverified = ['000290', '003135', '000852'];
 
-test('catálogo visual registra somente os seis SKUs Ceral verificados pelos UUIDs dinâmicos do Supabase', () => {
+test('catálogo visual registra somente os SKUs Ceral verificados pelos UUIDs dinâmicos do Supabase', () => {
   const rows = [...verified, ...unverified].map((sku) => ({
     id: `supabase-${sku}`, sku, preco: 23.82, unidade: 'M2',
   }));

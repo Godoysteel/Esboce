@@ -430,6 +430,7 @@ const commercialFloorFinishes: Record<string, {
   '000317': { name: 'Ceral 10x20 Cinza', colorHex: '#929491', tileMeters: 0.203, catalogPhoto: 'catalogo/revestimentos/000317/produto-original.jpeg' },
   '000291': { name: 'Ceral 10x10 NTLD Branco', colorHex: '#F6F6F3', tileMeters: 0.099, catalogPhoto: 'catalogo/revestimentos/000291/produto-original.jpeg' },
   '000300': { name: 'Ceral 10x10 NTLD Preto', colorHex: '#181A1B', tileMeters: 0.099, catalogPhoto: 'catalogo/revestimentos/000300/produto-original.jpeg' },
+  '000280': { name: 'Ceral 10x10 Azul Cobalto', colorHex: '#17176F', tileMeters: 0.099, catalogPhoto: 'catalogo/revestimentos/000280/produto-original.jpeg' },
 };
 
 export function registerCommercialProducts(rows: Array<{ id: string; sku: string | null; preco: number; unidade: string }>): void {
