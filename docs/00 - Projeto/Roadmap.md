@@ -77,6 +77,7 @@ Critérios para iniciar um piloto com usuários convidados:
 - editor 2D sincronizado com o modelo paramétrico 3D, conforme ADR-009;
 - sistema hidráulico paramétrico para água fria, esgoto sanitário e ventilação, com roteamento assistido, modo raio X, regras técnicas versionadas e quantitativos, conforme SPEC-002;
 - edição de planta com grid técnico, câmera ortográfica, simbologia arquitetônica, cotas e pavimentos;
+- módulo de análise ambiental e desempenho da edificação (sol, ventilação natural, temperatura, umidade e ação do vento sobre a edificação), sem dimensionamento estrutural em nenhuma fase, conforme SPEC-004;
 - exportação vetorial de planta em PDF nas escalas iniciais 1:50 e 1:100;
 - importação de PDF como referência local calibrável, posicionável, rotacionável, bloqueável e com transparência ajustável;
 - composições de quantitativo próprias para bloco estrutural e Light Steel Frame;
