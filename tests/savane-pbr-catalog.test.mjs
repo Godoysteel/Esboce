@@ -5,6 +5,18 @@ import { Catalog } from '../src/core/Catalog.ts';
 
 const manifest = JSON.parse(readFileSync(new URL('../public/catalogo/revestimentos/manifest.json', import.meta.url), 'utf8'));
 
+test('levantamento Savane fecha seis SKUs sem remover as três referências divergentes', () => {
+  const savane = manifest.filter((item) => item.manufacturer === 'Savane');
+  assert.equal(savane.length, 6);
+  assert.deepEqual(savane.filter((item) => item.status === 'active').map((item) => item.sku).sort(), ['000253', '000333', '006558']);
+  assert.deepEqual(savane.filter((item) => item.status === 'unverified').map((item) => item.sku).sort(), ['000243', '000265', '006617']);
+  for (const item of savane.filter((candidate) => candidate.status === 'unverified')) {
+    assert.equal(item.catalogPhoto, null);
+    assert.equal(item.pbr, null);
+    assert.match(item.verificationNote, /Mercador/);
+  }
+});
+
 test('Urban Branco 91x91 registra identidade, fontes e escala física', () => {
   const item = manifest.find((candidate) => candidate.sku === '000333');
   assert.equal(item.manufacturer, 'Savane');
