@@ -27,8 +27,10 @@ const rendererSource = await readFile(
 // telhado sem acabamento escolhido no editor não podem ficar de fora do
 // orçamento silenciosamente — cada um cai num produto padrão de mercado.
 test('parede sem acabamento (finishA/finishB) usa DEFAULT_PAINT_PRODUCT_ID como fallback', () => {
-  assert.match(materialsSource, /addTo\(paint, w\.finishA \|\| DEFAULT_PAINT_PRODUCT_ID, faceArea\)/);
-  assert.match(materialsSource, /addTo\(paint, w\.finishB \|\| DEFAULT_PAINT_PRODUCT_ID, faceArea\)/);
+  assert.match(materialsSource, /const finishA = w\.finishA \|\| DEFAULT_PAINT_PRODUCT_ID;/);
+  assert.match(materialsSource, /const finishB = w\.finishB \|\| DEFAULT_PAINT_PRODUCT_ID;/);
+  assert.match(materialsSource, /addTo\(paint, finishA, faceArea\)/);
+  assert.match(materialsSource, /addTo\(paint, finishB, faceArea\)/);
 });
 
 test('cômodo sem piso escolhido usa DEFAULT_FLOOR_TILE_PRODUCT_ID (porcelanato padrão) como fallback', () => {
@@ -43,8 +45,10 @@ test('telhado sem acabamento escolhido usa eternit pra platibanda e cerâmica pr
 });
 
 test('oitão (empena) sem acabamento também usa o padrão de tinta, nas duas faces', () => {
-  assert.match(materialsSource, /addTo\(paint, roof\.gableFinishA \|\| DEFAULT_PAINT_PRODUCT_ID, oneGableArea\)/);
-  assert.match(materialsSource, /addTo\(paint, roof\.gableFinishB \|\| DEFAULT_PAINT_PRODUCT_ID, oneGableArea\)/);
+  assert.match(materialsSource, /const gableFinishA = roof\.gableFinishA \|\| DEFAULT_PAINT_PRODUCT_ID;/);
+  assert.match(materialsSource, /const gableFinishB = roof\.gableFinishB \|\| DEFAULT_PAINT_PRODUCT_ID;/);
+  assert.match(materialsSource, /addTo\(paint, gableFinishA, oneGableArea\)/);
+  assert.match(materialsSource, /addTo\(paint, gableFinishB, oneGableArea\)/);
 });
 
 // Forro de drywall não entrava em NENHUM quantitativo até esta versão —
@@ -164,12 +168,20 @@ test('purchaseQuantity converte tinta pra lata(s) 18L e telha/peça pra peça(s)
   assert.match(body, /return \{ qty: areaM2, unit: 'm²' \};/);
 });
 
-test('addProductRows usa purchaseQuantity pra exibir (não mais sempre m² cru), mas o custo continua vindo de productUnitCost sobre a área real', () => {
+test('addProductRows usa purchaseQuantity e prioriza o preço congelado da oferta sobre o catálogo atual', () => {
   const start = materialsSource.indexOf('function addProductRows(');
   const end = materialsSource.indexOf('\n  }', start);
   const body = materialsSource.slice(start, end);
   assert.match(body, /const \{ qty, unit \} = purchaseQuantity\(p, areaM2\);/);
-  assert.match(body, /push\(category, p \? p\.name : id, qty, unit, productUnitCost\(id, areaM2\)\)/);
+  assert.match(body, /productUnitCost\(line\.productId, areaM2, selection\?\.price\)/);
+  assert.match(body, /selection\.supplierName/);
+  assert.match(body, /selection\.region/);
+  assert.match(body, /selection\.priceDate/);
+});
+
+test('quantitativo comercial separa o mesmo produto por oferta e só aceita snapshot do produto aplicado', () => {
+  assert.match(materialsSource, /const key = productId \+ '::' \+ \(validSelection \? validSelection\.offerId : 'catalog'\);/);
+  assert.match(materialsSource, /return selection\?\.productId === productId \? selection : undefined;/);
 });
 
 test('Chapisco+Reboco vira categoria própria, aplicado nas DUAS faces de toda parede (wallAreaNet × 2)', () => {
@@ -246,18 +258,20 @@ test('Bloco de Volumetria: custo usa o produto pintado (Lata de tinta) quando ex
   const end = materialsSource.indexOf('\n    });', start);
   const body = materialsSource.slice(start, end);
   assert.match(body, /const surfaceAreaM2 = 2 \* \(b\.widthM \* b\.heightM \+ b\.widthM \* b\.depthM \+ b\.heightM \* b\.depthM\);/);
-  assert.match(body, /const cost = b\.finishProductId \? productUnitCost\(b\.finishProductId, surfaceAreaM2\) : null;/);
-  assert.match(materialsSource, /const volumeBoxCost = q\.totals\.volumeBoxProductCost \+ q\.totals\.volumeBoxGenericAreaM2 \* ESTIMATED_MARKET_PRICES\.volumeBoxGenericPerM2;/);
+  assert.match(body, /productUnitCost\(b\.finishProductId, surfaceAreaM2, selection\?\.price\)/);
+  assert.match(body, /addCommercialQuantity\(volumeBoxCommercial, b\.finishProductId, surfaceAreaM2, selection\)/);
+  assert.match(materialsSource, /push\('Volumetria', 'Bloco de Volumetria \(sem acabamento\)'/);
 });
 
 // Móveis: soma o preço já cadastrado no PRÓPRIO produto do Catálogo
 // (Furniture.productId) — sem estimativa nova inventada aqui (os
 // móveis de exemplo do Catálogo estão com preço 0 hoje; é uma tarefa
 // separada de dados de catálogo, não deste quantitativo).
-test('Móveis somam o preço do produto do Catálogo (Furniture.productId), sem estimativa nova pra móvel', () => {
+test('Móveis usam o snapshot da oferta e caem no preço do produto quando ele não existe', () => {
   assert.match(materialsSource, /const product = Catalog\.getProduct\(f\.productId\);/);
-  assert.match(materialsSource, /if \(product && product\.commercial && product\.commercial\.price\) totals\.furnitureCost \+= product\.commercial\.price;/);
-  assert.match(materialsSource, /push\('Mobiliário', 'Móveis posicionados', q\.totals\.furnitureCount, 'un', q\.totals\.furnitureCost > 0 \? q\.totals\.furnitureCost : null\)/);
+  assert.match(materialsSource, /const price = selection\?\.price \?\? product\?\.commercial\?\.price;/);
+  assert.match(materialsSource, /addCommercialQuantity\(furnitureCommercial, f\.productId, 1, selection\)/);
+  assert.match(materialsSource, /push\('Mobiliário', \(p \? p\.name : line\.productId\) \+ trace, line\.quantity, 'un'/);
 });
 
 // Product Owner, depois de conferir a auditoria de quantitativo: "está

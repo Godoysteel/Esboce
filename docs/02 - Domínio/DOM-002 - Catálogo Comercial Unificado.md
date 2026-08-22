@@ -21,6 +21,18 @@ Vários fornecedores podem ofertar o mesmo produto sem duplicar aparência ou
 especificação. O vínculo aplicado ao projeto é o ID do produto; a escolha de
 oferta pertence ao projeto e pode mudar sem alterar o acabamento visual.
 
+## Quantitativo e orçamento
+
+Ao aplicar um produto, o projeto guarda um snapshot da oferta escolhida. O
+quantitativo usa primeiro o preço desse snapshot e só recorre ao preço atual do
+catálogo quando o elemento não possui oferta salva. Assim, uma atualização
+posterior do catálogo não reescreve silenciosamente o orçamento do projeto.
+
+O agrupamento comercial é feito por produto e oferta. Se o mesmo produto foi
+aplicado com fornecedores diferentes, cada combinação permanece em uma linha
+própria na planilha, no CSV e no PDF, identificada por fornecedor, região e data
+do preço. A área visual resumida pode continuar agrupada apenas por produto.
+
 ## Intenção de aplicação
 
 - `place`: adicionar ao projeto objetos posicionáveis;

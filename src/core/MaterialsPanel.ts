@@ -16,7 +16,7 @@ import {
   umaAguaBackWallAreaMeters as calculateUmaAguaBackWallAreaMeters,
 } from './QuantityGeometry.js';
 import type { FoundationQuantity } from './QuantityGeometry.js';
-import type { Point, Wall, Roof, Column, Laje, Project } from './types.js';
+import type { Point, Wall, Roof, Column, Laje, Project, CommercialSelection } from './types.js';
 import { constructionSystemDefinition, hasCeramicMasonryEstimate } from './ConstructionSystem.js';
 import { floorWallHeight } from './Attic.js';
 import { listCatalogProducts, listManufacturers } from './SupabaseClient.js';
@@ -61,6 +61,26 @@ function countWallJunctions(walls: Wall[]): number {
 
 function addTo(map: Record<string, number>, key: string, value: number): void {
   map[key] = (map[key] || 0) + value;
+}
+
+interface CommercialQuantityLine {
+  productId: string;
+  quantity: number;
+  selection: CommercialSelection | undefined;
+}
+type CommercialQuantityMap = Record<string, CommercialQuantityLine>;
+
+function addCommercialQuantity(map: CommercialQuantityMap, productId: string, value: number, selection?: CommercialSelection): void {
+  const validSelection = selection && selection.productId === productId ? selection : undefined;
+  const key = productId + '::' + (validSelection ? validSelection.offerId : 'catalog');
+  const line = map[key] || { productId, quantity: 0, selection: validSelection };
+  line.quantity += value;
+  map[key] = line;
+}
+
+function selectedOffer(project: Project, targetKey: string, productId: string): CommercialSelection | undefined {
+  const selection = project.commercialSelections?.[targetKey];
+  return selection?.productId === productId ? selection : undefined;
 }
 
 // Área REAL da água do telhado (a que a telha de fato cobre) — footprint
@@ -377,6 +397,9 @@ type Foundation = FoundationQuantity;
 interface ComputeResult {
   totals: Totals; paint: Record<string, number>; floorTile: Record<string, number>; roofTile: Record<string, number>;
   doorProducts: Record<string, number>; windowProducts: Record<string, number>;
+  paintCommercial: CommercialQuantityMap; floorTileCommercial: CommercialQuantityMap; roofTileCommercial: CommercialQuantityMap;
+  doorProductsCommercial: CommercialQuantityMap; windowProductsCommercial: CommercialQuantityMap;
+  volumeBoxCommercial: CommercialQuantityMap; furnitureCommercial: CommercialQuantityMap;
   masonry: Masonry; structure: Structure; foundation: Foundation; laje: LajeQuantities; roofTimber: RoofTimber;
   hydraulics: HydraulicsQuantities;
   constructionSystem: Project['constructionSystem'];
@@ -436,6 +459,9 @@ export function compute(): ComputeResult {
   };
   const paint: Record<string, number> = {}, floorTile: Record<string, number> = {}, roofTile: Record<string, number> = {};
   const doorProducts: Record<string, number> = {}, windowProducts: Record<string, number> = {};
+  const paintCommercial: CommercialQuantityMap = {}, floorTileCommercial: CommercialQuantityMap = {}, roofTileCommercial: CommercialQuantityMap = {};
+  const doorProductsCommercial: CommercialQuantityMap = {}, windowProductsCommercial: CommercialQuantityMap = {};
+  const volumeBoxCommercial: CommercialQuantityMap = {}, furnitureCommercial: CommercialQuantityMap = {};
 
   project.floors.forEach(function (floor) {
     const currentWallHeight = floorWallHeight(floor, standardWallHeight);
@@ -463,8 +489,12 @@ export function compute(): ComputeResult {
       // do orçamento — cai no padrão de mercado (mesma tinta já
       // cadastrada, ver DEFAULT_PAINT_PRODUCT_ID), pra nenhuma face ficar
       // sem custo só porque ninguém clicou nela ainda.
-      addTo(paint, w.finishA || DEFAULT_PAINT_PRODUCT_ID, faceArea);
-      addTo(paint, w.finishB || DEFAULT_PAINT_PRODUCT_ID, faceArea);
+      const finishA = w.finishA || DEFAULT_PAINT_PRODUCT_ID;
+      const finishB = w.finishB || DEFAULT_PAINT_PRODUCT_ID;
+      addTo(paint, finishA, faceArea);
+      addTo(paint, finishB, faceArea);
+      addCommercialQuantity(paintCommercial, finishA, faceArea, selectedOffer(project, floor.id + ':wall:' + w.id + ':A', finishA));
+      addCommercialQuantity(paintCommercial, finishB, faceArea, selectedOffer(project, floor.id + ':wall:' + w.id + ':B', finishB));
     });
 
     // Portas, janelas e arcos — e a verga (reforço acima do vão), que
@@ -480,14 +510,20 @@ export function compute(): ComputeResult {
       if (op.kind === 'door') {
         totals.doors++;
         const product = op.productId ? Catalog.getProduct(op.productId) : null;
-        if (product) addTo(doorProducts, op.productId!, openingAreaM2);
+        if (product) {
+          addTo(doorProducts, op.productId!, openingAreaM2);
+          addCommercialQuantity(doorProductsCommercial, op.productId!, openingAreaM2, selectedOffer(project, floor.id + ':opening:' + op.id, op.productId!));
+        }
         else totals.doorGenericCount++;
       } else if (op.kind === 'arco') {
         totals.arcos++;
       } else {
         totals.windows++;
         const product = op.productId ? Catalog.getProduct(op.productId) : null;
-        if (product) addTo(windowProducts, op.productId!, openingAreaM2);
+        if (product) {
+          addTo(windowProducts, op.productId!, openingAreaM2);
+          addCommercialQuantity(windowProductsCommercial, op.productId!, openingAreaM2, selectedOffer(project, floor.id + ':opening:' + op.id, op.productId!));
+        }
         else totals.windowsGenericAreaM2 += openingAreaM2;
       }
       totals.vergaCount++;
@@ -524,6 +560,8 @@ export function compute(): ComputeResult {
       // orçamento — cai no padrão de mercado (porcelanato médio, ver
       // DEFAULT_FLOOR_TILE_PRODUCT_ID).
       addTo(floorTile, finishId || DEFAULT_FLOOR_TILE_PRODUCT_ID, areaM2);
+      const floorProductId = finishId || DEFAULT_FLOOR_TILE_PRODUCT_ID;
+      addCommercialQuantity(floorTileCommercial, floorProductId, areaM2, selectedOffer(project, floor.id + ':room:' + roomKey, floorProductId));
     });
 
     // Telhado: área REAL da água (considerando a inclinação de cada
@@ -543,6 +581,8 @@ export function compute(): ComputeResult {
       // — platibanda usa eternit/fibrocimento (telhado embutido atrás do
       // parapeito), os demais usam cerâmica comum.
       addTo(roofTile, roof.finishProductId || (roof.type === 'platibanda' ? DEFAULT_ETERNIT_PRODUCT_ID : DEFAULT_CERAMIC_TILE_PRODUCT_ID), areaM2);
+      const roofProductId = roof.finishProductId || (roof.type === 'platibanda' ? DEFAULT_ETERNIT_PRODUCT_ID : DEFAULT_CERAMIC_TILE_PRODUCT_ID);
+      addCommercialQuantity(roofTileCommercial, roofProductId, areaM2, selectedOffer(project, floor.id + ':roof:' + roof.id, roofProductId));
       // Muretinha da platibanda — alvenaria de VERDADE (mesmo material
       // das paredes, confirmado em pesquisa: platibanda é sempre
       // construída com o mesmo bloco/tijolo da parede) que fica de fora
@@ -562,6 +602,8 @@ export function compute(): ComputeResult {
         totals.wallAreaNet += parapetAreaM2;
         addTo(paint, DEFAULT_PAINT_PRODUCT_ID, parapetAreaM2);
         addTo(paint, DEFAULT_PAINT_PRODUCT_ID, parapetAreaM2);
+        addCommercialQuantity(paintCommercial, DEFAULT_PAINT_PRODUCT_ID, parapetAreaM2);
+        addCommercialQuantity(paintCommercial, DEFAULT_PAINT_PRODUCT_ID, parapetAreaM2);
       }
       // O oitão/fechamento lateral é alvenaria derivada do telhado: entra
       // como parede, mas não participa do contorno dos cômodos. Duas
@@ -571,8 +613,12 @@ export function compute(): ComputeResult {
       if ((roof.type === 'duasAguas' || roof.type === 'umaAgua') && roof.atticMode !== 'generated') {
         const oneGableArea = gableAreaMeters(roof);
         totals.wallAreaNet += oneGableArea * 2;
-        addTo(paint, roof.gableFinishA || DEFAULT_PAINT_PRODUCT_ID, oneGableArea);
-        addTo(paint, roof.gableFinishB || DEFAULT_PAINT_PRODUCT_ID, oneGableArea);
+        const gableFinishA = roof.gableFinishA || DEFAULT_PAINT_PRODUCT_ID;
+        const gableFinishB = roof.gableFinishB || DEFAULT_PAINT_PRODUCT_ID;
+        addTo(paint, gableFinishA, oneGableArea);
+        addTo(paint, gableFinishB, oneGableArea);
+        addCommercialQuantity(paintCommercial, gableFinishA, oneGableArea, selectedOffer(project, floor.id + ':gable:' + roof.id + ':a', gableFinishA));
+        addCommercialQuantity(paintCommercial, gableFinishB, oneGableArea, selectedOffer(project, floor.id + ':gable:' + roof.id + ':b', gableFinishB));
       }
       // Painel de trás do uma-água (lado alto do caimento, ver
       // buildRoofUmaAgua) — parede de verdade se estendendo pra fechar o
@@ -582,6 +628,7 @@ export function compute(): ComputeResult {
         const backWallArea = umaAguaBackWallAreaMeters(roof);
         totals.wallAreaNet += backWallArea;
         addTo(paint, DEFAULT_PAINT_PRODUCT_ID, backWallArea);
+        addCommercialQuantity(paintCommercial, DEFAULT_PAINT_PRODUCT_ID, backWallArea);
       }
     });
 
@@ -623,7 +670,11 @@ export function compute(): ComputeResult {
     (floor.volumeBoxes || []).forEach(function (b) {
       const surfaceAreaM2 = 2 * (b.widthM * b.heightM + b.widthM * b.depthM + b.heightM * b.depthM);
       totals.volumeBoxAreaM2 += surfaceAreaM2;
-      const cost = b.finishProductId ? productUnitCost(b.finishProductId, surfaceAreaM2) : null;
+      const selection = b.finishProductId
+        ? selectedOffer(project, floor.id + ':volume:' + b.id, b.finishProductId)
+        : undefined;
+      const cost = b.finishProductId ? productUnitCost(b.finishProductId, surfaceAreaM2, selection?.price) : null;
+      if (b.finishProductId) addCommercialQuantity(volumeBoxCommercial, b.finishProductId, surfaceAreaM2, selection);
       if (cost != null) totals.volumeBoxProductCost += cost;
       else totals.volumeBoxGenericAreaM2 += surfaceAreaM2;
     });
@@ -644,7 +695,10 @@ export function compute(): ComputeResult {
     (floor.furniture || []).forEach(function (f) {
       totals.furnitureCount++;
       const product = Catalog.getProduct(f.productId);
-      if (product && product.commercial && product.commercial.price) totals.furnitureCost += product.commercial.price;
+      const selection = selectedOffer(project, floor.id + ':furniture:' + f.id, f.productId);
+      const price = selection?.price ?? product?.commercial?.price;
+      if (price) totals.furnitureCost += price;
+      addCommercialQuantity(furnitureCommercial, f.productId, 1, selection);
     });
 
     // Laje: passou a nascer automática por cômodo fechado, exatamente
@@ -884,7 +938,12 @@ export function compute(): ComputeResult {
     .filter((group) => group.count > 0);
   const hydraulics: HydraulicsQuantities = { pipeGroups, fittingGroups, destinationGroups };
 
-  return { totals, paint, floorTile, roofTile, doorProducts, windowProducts, masonry, structure, foundation, laje, roofTimber, hydraulics, constructionSystem: project.constructionSystem };
+  return {
+    totals, paint, floorTile, roofTile, doorProducts, windowProducts,
+    paintCommercial, floorTileCommercial, roofTileCommercial, doorProductsCommercial, windowProductsCommercial,
+    volumeBoxCommercial, furnitureCommercial,
+    masonry, structure, foundation, laje, roofTimber, hydraulics, constructionSystem: project.constructionSystem
+  };
 }
 
 function productLine(productId: string, areaM2: number): string {
@@ -1308,10 +1367,10 @@ function priceSourceLine(key: MaterialPriceKey, unitSuffix: string): string {
 // a unidade comercial DO PRÓPRIO PRODUTO (commercial.price/unit), nunca
 // um valor solto aqui. Retorna null quando não dá pra converter (unidade
 // comercial desconhecida).
-function productUnitCost(productId: string, areaM2: number): number | null {
+function productUnitCost(productId: string, areaM2: number, selectedPrice?: number): number | null {
   const p = Catalog.getProduct(productId);
-  if (!p || !p.commercial || p.commercial.price == null) return null;
-  const price = p.commercial.price;
+  if (!p || !p.commercial || (p.commercial.price == null && selectedPrice == null)) return null;
+  const price = selectedPrice ?? p.commercial.price;
   if (p.commercial.unit === 'm2' || p.commercial.unit === 'un') return areaM2 * price;
   if (p.commercial.unit === 'peca') {
     if (p.assets && p.assets.pecaCoverageM2) return Math.ceil(areaM2 / p.assets.pecaCoverageM2) * price;
@@ -1398,8 +1457,8 @@ export function buildRows(): (string | number)[][] {
   // porta de madeira no catálogo ainda). Janela sem produto continua
   // por m² genérico, média Vórtice — não existe "janela de madeira" no
   // catálogo, toda janela aqui é esquadria de vidro.
-  addProductRows('Esquadrias de vidro', q.doorProducts);
-  addProductRows('Esquadrias de vidro', q.windowProducts);
+  addProductRows('Esquadrias de vidro', q.doorProducts, q.doorProductsCommercial);
+  addProductRows('Esquadrias de vidro', q.windowProducts, q.windowProductsCommercial);
   if (q.totals.doorGenericCount > 0) {
     push('Geral', 'Porta de madeira (padrão)', q.totals.doorGenericCount, 'un', q.totals.doorGenericCount * ESTIMATED_MARKET_PRICES.woodDoorPerUnit);
   }
@@ -1532,17 +1591,24 @@ export function buildRows(): (string | number)[][] {
     }
     return { qty: areaM2, unit: 'm²' };
   }
-  function addProductRows(category: string, map: Record<string, number>) {
-    Object.keys(map).forEach(function (id) {
-      const p = Catalog.getProduct(id);
-      const areaM2 = map[id]!;
+  function addProductRows(category: string, map: Record<string, number>, commercialMap?: CommercialQuantityMap) {
+    const lines: CommercialQuantityLine[] = commercialMap
+      ? Object.values(commercialMap)
+      : Object.keys(map).map((productId) => ({ productId, quantity: map[productId]!, selection: undefined }));
+    lines.forEach(function (line) {
+      const p = Catalog.getProduct(line.productId);
+      const areaM2 = line.quantity;
       const { qty, unit } = purchaseQuantity(p, areaM2);
-      push(category, p ? p.name : id, qty, unit, productUnitCost(id, areaM2));
+      const selection = line.selection;
+      const trace = selection
+        ? ' — ' + selection.supplierName + ' — ' + selection.region + ' — ' + selection.priceDate
+        : '';
+      push(category, (p ? p.name : line.productId) + trace, qty, unit, productUnitCost(line.productId, areaM2, selection?.price));
     });
   }
-  addProductRows('Pintura', q.paint);
-  addProductRows('Piso', q.floorTile);
-  addProductRows('Telhado', q.roofTile);
+  addProductRows('Pintura', q.paint, q.paintCommercial);
+  addProductRows('Piso', q.floorTile, q.floorTileCommercial);
+  addProductRows('Telhado', q.roofTile, q.roofTileCommercial);
 
   // Bloco de Volumetria: mesmo padrão fornecedor-real > média já usado
   // em portas/janelas — a fração com finishProductId escolhido (Lata de
@@ -1550,9 +1616,9 @@ export function buildRows(): (string | number)[][] {
   // já resolvido em compute()); a fração sem acabamento cai na média de
   // mercado genérica. Área de superfície total (as 6 faces do box)
   // sempre mostrada, seja qual for a origem do preço.
-  if (q.totals.volumeBoxAreaM2 > 0) {
-    const volumeBoxCost = q.totals.volumeBoxProductCost + q.totals.volumeBoxGenericAreaM2 * ESTIMATED_MARKET_PRICES.volumeBoxGenericPerM2;
-    push('Volumetria', 'Bloco de Volumetria (área de superfície)', q.totals.volumeBoxAreaM2, 'm²', volumeBoxCost);
+  addProductRows('Volumetria', {}, q.volumeBoxCommercial);
+  if (q.totals.volumeBoxGenericAreaM2 > 0) {
+    push('Volumetria', 'Bloco de Volumetria (sem acabamento)', q.totals.volumeBoxGenericAreaM2, 'm²', q.totals.volumeBoxGenericAreaM2 * ESTIMATED_MARKET_PRICES.volumeBoxGenericPerM2);
   }
   // Escada: contagem + preço de referência único (ver
   // ESTIMATED_MARKET_PRICES.stairPerUnit) — mesmo nível de detalhe que
@@ -1563,9 +1629,15 @@ export function buildRows(): (string | number)[][] {
   // Móveis: preço do próprio produto do Catálogo (Furniture.productId),
   // já somado em compute() — sem média de mercado nova (ver comentário
   // em Totals).
-  if (q.totals.furnitureCount > 0) {
-    push('Mobiliário', 'Móveis posicionados', q.totals.furnitureCount, 'un', q.totals.furnitureCost > 0 ? q.totals.furnitureCost : null);
-  }
+  Object.values(q.furnitureCommercial).forEach(function (line) {
+    const p = Catalog.getProduct(line.productId);
+    const selection = line.selection;
+    const trace = selection
+      ? ' — ' + selection.supplierName + ' — ' + selection.region + ' — ' + selection.priceDate
+      : '';
+    const unitPrice = selection?.price ?? p?.commercial?.price ?? null;
+    push('Mobiliário', (p ? p.name : line.productId) + trace, line.quantity, 'un', unitPrice != null ? line.quantity * unitPrice : null);
+  });
 
   // Forro de drywall — uma linha de placa por TIPO (preço difere por
   // tipo), mais uma linha combinada de perfil/tabica/pendural (preço

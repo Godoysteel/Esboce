@@ -178,11 +178,11 @@ test('contagem de aberturas usa a ÁREA REAL de cada porta/janela (largura×altu
 });
 
 test('porta/janela de vidro vira addProductRows (mesmo padrão de Pintura/Piso/Telhado), porta genérica vira porta de madeira por unidade, janela genérica continua m² pela média Vórtice', () => {
-  const start = materialsSource.indexOf("addProductRows('Esquadrias de vidro', q.doorProducts);");
+  const start = materialsSource.indexOf("addProductRows('Esquadrias de vidro', q.doorProducts, q.doorProductsCommercial);");
   const end = materialsSource.indexOf("if (q.totals.windowsGenericAreaM2 > 0)", start);
   const body = materialsSource.slice(start, materialsSource.indexOf('\n  }', end));
-  assert.match(body, /addProductRows\('Esquadrias de vidro', q\.doorProducts\);/);
-  assert.match(body, /addProductRows\('Esquadrias de vidro', q\.windowProducts\);/);
+  assert.match(body, /addProductRows\('Esquadrias de vidro', q\.doorProducts, q\.doorProductsCommercial\);/);
+  assert.match(body, /addProductRows\('Esquadrias de vidro', q\.windowProducts, q\.windowProductsCommercial\);/);
   assert.match(body, /q\.totals\.doorGenericCount \* ESTIMATED_MARKET_PRICES\.woodDoorPerUnit/);
   assert.match(body, /q\.totals\.windowsGenericAreaM2 \* materialPrice\('windowPerM2'\)/);
 });
