@@ -1072,7 +1072,7 @@ export function render(): void {
 // quando nem o Supabase responde) continua valendo, mesmo espírito de
 // resiliência da ADR-007 §7: preço indisponível nunca trava nada, só
 // degrada.
-interface RealPriceMatch { value: number; source: string; }
+interface RealPriceMatch { value: number; source: string; region?: string; priceDate?: string; estimated?: boolean; }
 type MaterialPriceKey = 'cementPerKg' | 'limePerKg' | 'sandPerM3' | 'concretePerM3' | 'steelPerKg' | 'brickPerUnit' | 'woodPerM3' | 'windowPerM2' | 'nailPerKg' | 'forroPlacaSTPerM2' | 'forroPlacaRUPerM2' | 'forroPlacaRFPerM2' | 'forroPlacaCimenticiaPerM2' | 'forroF530PerM' | 'forroTabicaPerM' | 'forroPenduralPerUnit';
 let realPrices: { [K in MaterialPriceKey]?: RealPriceMatch } = {};
 let realPricesFetchStarted = false;
@@ -1136,7 +1136,16 @@ async function ensureRealPrices(): Promise<void> {
         if (realPrices[key]) return; // já resolvido por fornecedor real
         const cfg = VORTICE_MATERIAL_SKUS[key];
         const product = products.find(function (p) { return p.manufacturer_id === vortice.id && p.sku === cfg.sku; });
-        if (product) realPrices[key] = { value: product.preco / cfg.unitDivisor, source: product.nome + ' — preço médio de mercado' };
+        if (product) {
+          const specs = product.specs || {};
+          realPrices[key] = {
+            value: product.preco / cfg.unitDivisor,
+            source: product.nome + ' — Estimativa Vórtice; não constitui oferta comercial',
+            region: String(specs.regiao || 'Brasil'),
+            priceDate: String(specs.data_preco || '2026-08-01'),
+            estimated: true,
+          };
+        }
       });
     }
   } catch (err) {
@@ -1291,7 +1300,8 @@ function bagsQty(kg: number, bagKg: number): number {
 function priceSourceLine(key: MaterialPriceKey, unitSuffix: string): string {
   const match = realPrices[key];
   if (!match) return '';
-  return '<div class="materials-line" style="color:#77746C; font-size:11px;"><span>↳ R$ ' + match.value.toFixed(2).replace('.', ',') + unitSuffix + '</span><span>' + match.source + '</span></div>';
+  const trace = [match.source, match.region, match.priceDate].filter(Boolean).join(' — ');
+  return '<div class="materials-line" style="color:#77746C; font-size:11px;"><span>↳ R$ ' + match.value.toFixed(2).replace('.', ',') + unitSuffix + '</span><span>' + trace + '</span></div>';
 }
 
 // Custo de um produto do Catalog pra uma área/quantidade — lê o preço e

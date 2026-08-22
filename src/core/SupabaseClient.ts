@@ -269,6 +269,25 @@ export interface CatalogProduct {
   origem: 'generico' | 'fornecedor' | 'oficial';
 }
 
+export type CatalogOfferKind = 'official' | 'market_reference';
+export interface CatalogOffer {
+  id: string;
+  product_id: string;
+  supplier_id: string;
+  supplier_name: string;
+  supplier_sku: string | null;
+  price: number;
+  currency: string;
+  region: string;
+  price_date: string;
+  price_min: number | null;
+  price_max: number | null;
+  kind: CatalogOfferKind;
+  stock_status: 'available' | 'unavailable' | 'to_confirm';
+  source: string | null;
+  is_official: boolean;
+}
+
 export async function listDepartments(): Promise<CatalogDepartment[]> {
   const { data, error } = await supabase.from('departments').select('id, nome, ordem').order('ordem');
   if (error) throw error;
@@ -343,4 +362,44 @@ export async function recordCurrentLegalAcceptance(userId: string): Promise<void
     privacy_version: CURRENT_LEGAL_ACCEPTANCE.privacyVersion,
   }, { onConflict: 'user_id,terms_version,privacy_version', ignoreDuplicates: true });
   if (error) throw error;
+}
+
+// Ofertas são a camada comercial do catálogo único. Durante a transição,
+// instalações que ainda não receberam a migration de product_offers usam o
+// preço legado de products sem deixar o catálogo indisponível.
+export async function listCatalogOffers(products?: CatalogProduct[]): Promise<CatalogOffer[]> {
+  const { data, error } = await supabase
+    .from('product_offers')
+    .select('id, product_id, supplier_id, supplier_sku, price, currency, region, price_date, price_min, price_max, kind, stock_status, source, is_official, suppliers(nome)')
+    .eq('active', true);
+  if (!error) {
+    return (data ?? []).map(function (row: any) {
+      return { ...row, supplier_name: row.suppliers?.nome ?? 'Fornecedor não identificado' } as CatalogOffer;
+    });
+  }
+
+  const legacyProducts = products ?? await fetchAllProductRows() as CatalogProduct[];
+  const manufacturers = await listManufacturers();
+  const names = new Map(manufacturers.map(function (m) { return [m.id, m.nome]; }));
+  return legacyProducts.map(function (product) {
+    const reference = product.origem === 'generico';
+    const specs = product.specs ?? {};
+    return {
+      id: 'legacy:' + product.id,
+      product_id: product.id,
+      supplier_id: product.manufacturer_id,
+      supplier_name: reference ? 'Vórtice Materiais' : (names.get(product.manufacturer_id) ?? 'Fornecedor não identificado'),
+      supplier_sku: product.sku,
+      price: product.preco,
+      currency: 'BRL',
+      region: String(specs.regiao ?? 'Brasil'),
+      price_date: String(specs.data_preco ?? '2026-08-01'),
+      price_min: typeof specs.preco_min === 'number' ? specs.preco_min : null,
+      price_max: typeof specs.preco_max === 'number' ? specs.preco_max : null,
+      kind: reference ? 'market_reference' : 'official',
+      stock_status: reference ? 'to_confirm' : 'available',
+      source: typeof specs.fonte === 'string' ? specs.fonte : null,
+      is_official: !reference,
+    };
+  });
 }

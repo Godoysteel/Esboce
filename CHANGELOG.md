@@ -1,5 +1,13 @@
 # Changelog
 
+## Em desenvolvimento — catálogo comercial unificado
+
+- Formalizado o catálogo único para o usuário, mantendo aparência PBR,
+  especificação técnica, fornecedores e ofertas separados internamente.
+- Criado o contrato de ofertas oficiais e referências regionais Vórtice,
+  sempre datadas e identificadas como estimativa, não como venda.
+- Mantida compatibilidade temporária com os preços legados de `products`.
+
 > Corrigido: Escada — mesmo com a fresta fina eliminada (correção anterior), ainda restava uma faixa de laje atravessando o vão em certos casos. Causa: o corte gerava vários retângulos de lance que se TOCAM entre si (bordas adjacentes), cada um como um furo separado — e o motor de triangulação (earcut) não garante que furos vizinhos que só se tocam virem uma única região aberta, podendo deixar uma costura sólida na aresta compartilhada. Agora cada escada gera UM furo só, traçado pelo contorno real da união dos lances (formato L/U exato), sem furos vizinhos se tocando. Ver DEC-148 (8ª correção pós-lançamento da DEC-140).
 
 > Corrigido: Escada — descartar a fresta fina do corte na laje (correção anterior) resolvia a malha quebrada mas literalmente deixava aquele pedaço de laje intocado, aparecendo como uma faixa sólida atravessando o vão da escada. Agora as bordas quase-coincidentes de lances vizinhos (L/U) são unidas ANTES do recorte, em vez de descartadas depois — elimina a fresta na origem sem perder nenhuma área do corte. Ver DEC-147 (7ª correção pós-lançamento da DEC-140).

@@ -121,3 +121,38 @@ O catálogo de produtos passará a distinguir três entidades — **Produto**, *
 O catálogo do Supabase (preço/loja/foto) e o catálogo local `Catalog.ts` (modelos 3D) permanecem fontes de dados **separadas**, ligadas por id compartilhado — por resiliência (o posicionamento de um produto na casa não deve depender de disponibilidade de rede). Produtos de departamentos de **acabamento** sempre têm par no catálogo local com modelo 3D; produtos **construtivos/estruturais** nunca têm.
 
 O fluxo de finalização de projeto gera um quantitativo onde itens de acabamento já chegam precificados (escolhidos no momento da colocação) e itens construtivos chegam sem preço, resolvidos um a um pelo usuário via catálogo. O resultado final é agrupado por loja, gerando um orçamento por loja — artefato de saída da plataforma, sem carrinho, checkout ou pagamento: a negociação acontece diretamente entre usuário e loja, fora do Esboce.
+
+---
+
+## Emenda de 22/08/2026 — catálogo único e Referência Vórtice
+
+Esta emenda substitui a orientação de que itens construtivos derivados devem
+necessariamente chegar sem preço. Para o usuário existe **um único catálogo
+comercial**. A separação entre aparência visual, especificação técnica e
+ofertas permanece interna e não deve fragmentar a experiência.
+
+Cada produto pode reunir aparência PBR, miniatura e escala real; dimensões,
+rendimento, embalagem, superfícies compatíveis e perda; e zero ou mais ofertas
+oficiais, sem duplicar aparência ou especificação.
+
+A ação principal depende da natureza do produto:
+
+- **Adicionar ao projeto** para objetos posicionáveis;
+- **Aplicar na superfície** para pisos, paredes, tintas e telhas;
+- **Usar na construção** para itens incorporados pelos estimadores.
+
+Quando não existir oferta oficial compatível, o catálogo deve criar ou
+resolver uma **Referência Vórtice** para o mesmo produto. Ela contém preço
+médio, região, data da pesquisa, fonte e, quando disponível, faixa de preço.
+Deve aparecer como **“Estimativa Vórtice — não constitui oferta comercial”**.
+Estoque, frete e prazo ficam “a confirmar”; não existe ação de compra.
+
+A Vórtice Materiais não é fabricante nessa relação. É um fornecedor do tipo
+`market_reference`. Quando uma oferta oficial surgir, ela será acrescentada
+ao produto existente sem substituir sua especificação, aparência ou vínculos
+salvos em projetos. O usuário poderá escolher oferta oficial, fornecedor
+específico, Referência Vórtice ou orçamento apenas quantitativo.
+
+O contrato de transição preserva os campos legados de preço em `products`,
+mas a fonte comercial definitiva passa a ser `product_offers`. Nenhuma nova
+funcionalidade deve voltar a tratar fabricante e fornecedor como sinônimos.
