@@ -19,9 +19,10 @@ test('clique no cartão aplicável carrega a melhor oferta e fecha o catálogo',
   assert.match(app, /this\.requireElement\("catalogOverlay"\)\.classList\.remove\("visible"\)/);
 });
 
-test('primeiro clique na face aplica imediatamente sem seleção e confirmação intermediárias', () => {
-  assert.match(viewport, /paintProduct\.category === 'floor_tile' && paintHit && paintHit\.object\.userData\.roomKey/);
+test('pinturas e revestimentos aplicam imediatamente na parede ou no piso clicado', () => {
+  assert.match(viewport, /canPaintSurface && paintHit && paintHit\.object\.userData\.roomKey/);
   assert.match(viewport, /Store\.commands\.setRoomFinish\(roomKey, currentPaintProductId, floorFinishScale, floorFinishRotation\)/);
-  assert.match(viewport, /paintProduct\.category === 'paint' \|\| paintProduct\.category === 'floor_tile'/);
+  assert.match(viewport, /var canPaintSurface = paintProduct && \(paintProduct\.category === 'paint' \|\| paintProduct\.category === 'floor_tile'\)/);
+  assert.match(viewport, /o\.userData\.category !== 'laje' \|\| currentTool === 'paintBucket'/);
   assert.doesNotMatch(viewport, /Piso selecionado\. Escolha o material, ajuste escala e rotação e clique em Aplicar/);
 });

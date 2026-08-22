@@ -816,7 +816,7 @@ import {
     raycaster.setFromCamera(mouse, camera);
     var targets = scene.children.filter(function (o: any) {
       return o.isMesh && o.userData && o.userData.category &&
-        (o.userData.category !== 'laje' || (currentTool === 'paintBucket' && (currentPaintSurface === 'floors' || currentPaintSurface === 'ceilings')));
+        (o.userData.category !== 'laje' || currentTool === 'paintBucket');
     });
     var hits = raycaster.intersectObjects(targets, false);
     return hits.length ? hits[0] : null;
@@ -2835,15 +2835,15 @@ import {
     if (currentTool === 'paintBucket') {
       var paintHit = pickMeshHit(e.clientX, e.clientY);
       var paintProduct = currentPaintProductId ? Catalog.getProduct(currentPaintProductId) : null;
-      var canPaintWall = paintProduct && (paintProduct.category === 'paint' || paintProduct.category === 'floor_tile');
-      if (canPaintWall && paintHit && paintHit.object.userData.wallId && currentPaintProductId) {
+      var canPaintSurface = paintProduct && (paintProduct.category === 'paint' || paintProduct.category === 'floor_tile');
+      if (canPaintSurface && paintHit && paintHit.object.userData.wallId && currentPaintProductId) {
         var faceHit = wallFaceAtPoint(paintHit.object.userData.wallId, paintHit.point);
         Store.commands.setWallFinishFace(paintHit.object.userData.wallId, faceHit as any, currentPaintProductId);
         if (pendingCommercialSelection) Store.commands.setCommercialSelection(Store.currentFloor().id + ':wall:' + paintHit.object.userData.wallId + ':' + faceHit, pendingCommercialSelection);
         hintEl.textContent = 'Lado ' + faceHit.toUpperCase() + ' pintado. Clique em outra pra continuar.';
         return;
       }
-      if (canPaintWall && paintHit && paintHit.object.userData.gableSide && paintHit.object.userData.roofId && currentPaintProductId) {
+      if (canPaintSurface && paintHit && paintHit.object.userData.gableSide && paintHit.object.userData.roofId && currentPaintProductId) {
         Store.commands.setRoofGableFinish(paintHit.object.userData.roofId, paintHit.object.userData.gableSide, currentPaintProductId);
         if (pendingCommercialSelection) Store.commands.setCommercialSelection(Store.currentFloor().id + ':gable:' + paintHit.object.userData.roofId + ':' + paintHit.object.userData.gableSide, pendingCommercialSelection);
         hintEl.textContent = 'Acabamento aplicado somente à face clicada do oitão.';
@@ -2853,13 +2853,13 @@ import {
       // (Product Owner: "ele deve poder ser pintado como as paredes")
       // — o box inteiro usa o mesmo acabamento nas 6 faces, sem
       // distinção de lado A/B como a parede tem.
-      if (canPaintWall && paintHit && paintHit.object.userData.volumeBoxId && currentPaintProductId) {
+      if (canPaintSurface && paintHit && paintHit.object.userData.volumeBoxId && currentPaintProductId) {
         Store.commands.setVolumeBoxFinish(paintHit.object.userData.volumeBoxId, currentPaintProductId);
         if (pendingCommercialSelection) Store.commands.setCommercialSelection(Store.currentFloor().id + ':volume:' + paintHit.object.userData.volumeBoxId, pendingCommercialSelection);
         hintEl.textContent = 'Bloco pintado. Clique em outro pra continuar.';
         return;
       }
-      if (paintProduct && paintProduct.category === 'floor_tile' && paintHit && paintHit.object.userData.roomKey && currentPaintProductId) {
+      if (canPaintSurface && paintHit && paintHit.object.userData.roomKey && currentPaintProductId) {
         var roomKey = paintHit.object.userData.roomKey;
         Store.commands.setRoomFinish(roomKey, currentPaintProductId, floorFinishScale, floorFinishRotation);
         if (pendingCommercialSelection) Store.commands.setCommercialSelection(Store.currentFloor().id + ':room:' + roomKey, pendingCommercialSelection);
