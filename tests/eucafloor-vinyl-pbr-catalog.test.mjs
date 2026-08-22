@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { Catalog } from '../src/core/Catalog.ts';
 
-const verified = ['003870', '006441'];
-const unverified = ['004883', '002227', '002228', '003470', '002509', '002088', '000042', '002884', '001927', '003869', '002680'];
+const eucafloorVerified = ['003870', '006441'];
+const verified = [...eucafloorVerified, '000042'];
+const unverified = ['004883', '002227', '002228', '003470', '002509', '002088', '002884', '001927', '003869', '002680'];
 const manifest = JSON.parse(readFileSync(new URL('../public/catalogo/revestimentos/manifest.json', import.meta.url), 'utf8'));
 
 test('levantamento vinílico fecha os 13 SKUs sem usar produto semelhante', () => {
@@ -16,8 +17,8 @@ test('levantamento vinílico fecha os 13 SKUs sem usar produto semelhante', () =
 });
 
 test('primeiro lote vinílico Eucafloor registra somente modelos oficiais exatos', () => {
-  const items = manifest.filter((item) => verified.includes(item.sku));
-  assert.equal(items.length, verified.length);
+  const items = manifest.filter((item) => eucafloorVerified.includes(item.sku));
+  assert.equal(items.length, eucafloorVerified.length);
   for (const item of items) {
     assert.equal(item.manufacturer, 'Eucafloor');
     assert.equal(item.status, 'official_source_verified');
@@ -32,7 +33,7 @@ test('vinílicos Eucafloor são aplicáveis com fabricante e escala física corr
   Catalog.registerCommercialProducts([...verified, ...unverified].map((sku) => ({ id: `vinyl-${sku}`, sku, preco: 100, unidade: 'M2' })));
   assert.equal(Catalog.getProduct('vinyl-003870').assets.tileMeters, 1.219);
   assert.equal(Catalog.getProduct('vinyl-006441').assets.tileMeters, 0.9144);
-  for (const sku of verified) {
+  for (const sku of eucafloorVerified) {
     const product = Catalog.getProduct(`vinyl-${sku}`);
     assert.equal(product.manufacturer, 'eucafloor');
     assert.match(product.assets.textures.map, /albedo\.jpg\?v=vinyl-1$/);
