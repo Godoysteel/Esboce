@@ -45,5 +45,14 @@ test('gerador Eucafloor mantém escala real por linha e todos os mapas PBR', () 
   assert.match(source, /"003423": \{"plank_width_m": 0\.217/);
   assert.match(source, /source\.crop\(\(inset_x, inset_y, source\.width - inset_x, source\.height - inset_y\)\)/);
   assert.match(source, /y1 = round\(\(row \+ 1\) \* SIZE \/ rows\)/);
+  assert.match(source, /plank = ImageOps\.mirror\(plank\)/);
+  assert.match(source, /plank = ImageOps\.flip\(plank\)/);
   assert.doesNotMatch(source, /joint =|canvas = Image\.new\("RGB", \(SIZE, SIZE\), \(75, 66, 56\)\)/);
+});
+
+test('renderização varia a posição da textura por superfície sem mudar sua escala física', () => {
+  const source = readFileSync(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
+  assert.match(source, /function textureOffsetForSurface\(surfaceKey: string\)/);
+  assert.match(source, /c\.offset\.set\(textureOffset\.x, textureOffset\.y\)/);
+  assert.match(source, /buildFloorTileMaterial\(effectiveFinish, roomFinishSettings\.scale, roomFinishSettings\.rotation, roomKey\)/);
 });

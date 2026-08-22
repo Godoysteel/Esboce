@@ -104,7 +104,7 @@ test('Catalog: produto de piso laminado (teste PBR) existe com os mapas certos, 
 
 test('Scene3DRenderer: piso usa a textura PBR de verdade (buildFloorTileMaterial, UV em metros reais) quando o produto tem assets.textures — cai no padrão procedural de cerâmica só quando não tem', () => {
   const source = readFileSync(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
-  assert.match(source, /function buildFloorTileMaterial\(product: any, scale: number, rotationDeg: number\) \{/);
+  assert.match(source, /function buildFloorTileMaterial\(product: any, scale: number, rotationDeg: number, surfaceKey: string\) \{/);
   // Cache por produto (evita recarregar a imagem a cada rebuild da cena,
   // igual buildRoofTileMaterial já faz), clone por cômodo (cada um pode
   // ter escala/rotação própria em cima do mesmo produto).
@@ -119,7 +119,7 @@ test('Scene3DRenderer: piso usa a textura PBR de verdade (buildFloorTileMaterial
   // sempre (cor sólida + linha de rejunte) — comportamento antigo
   // preservado pra todo produto que não tem assets.textures.
   assert.match(source, /var pisoHasRealTexture = !!\(effectiveFinish && effectiveFinish\.assets\.textures\);/);
-  assert.match(source, /var pisoMaterial = pisoHasRealTexture\s*\n\s*\? buildFloorTileMaterial\(effectiveFinish, roomFinishSettings\.scale, roomFinishSettings\.rotation\)\s*\n\s*: null;/);
+  assert.match(source, /var pisoMaterial = pisoHasRealTexture\s*\n\s*\? buildFloorTileMaterial\(effectiveFinish, roomFinishSettings\.scale, roomFinishSettings\.rotation, roomKey\)\s*\n\s*: null;/);
 });
 
 // DEC-98 — parede ganha o mesmo tratamento do piso (DEC-97): Product

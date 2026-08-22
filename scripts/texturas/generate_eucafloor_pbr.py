@@ -2,7 +2,7 @@
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageFilter
+from PIL import Image, ImageFilter, ImageOps
 
 ROOT = Path(__file__).resolve().parents[2]
 CATALOG = ROOT / "public" / "catalogo" / "revestimentos"
@@ -32,6 +32,13 @@ def build_albedo(source: Image.Image, plank_width_m: float) -> Image.Image:
         y0 = round(row * SIZE / rows)
         y1 = round((row + 1) * SIZE / rows)
         plank = source.resize((SIZE, y1 - y0), Image.Resampling.LANCZOS)
+        # A amostra oficial representa uma régua. Invertemos sua direção de
+        # forma determinística para que os nós da madeira não se alinhem em
+        # todas as fileiras, sem inventar cor ou alterar a escala do produto.
+        if row % 2:
+            plank = ImageOps.mirror(plank)
+        if row % 4 >= 2:
+            plank = ImageOps.flip(plank)
         canvas.paste(plank, (0, y0))
     return canvas
 

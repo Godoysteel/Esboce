@@ -3625,7 +3625,16 @@ export function hashColorHex(key: string): number {
   // download/decode), porque cada cômodo pode ter escala/rotação própria
   // (roomFinishSettings) sobre o mesmo produto.
   var floorTextureCache: Record<string, any> = {};
-  function buildFloorTileMaterial(product: any, scale: number, rotationDeg: number) {
+  function textureOffsetForSurface(surfaceKey: string) {
+    var hash = 2166136261;
+    for (var i = 0; i < surfaceKey.length; i++) {
+      hash ^= surfaceKey.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    return { x: ((hash >>> 0) & 0xffff) / 0x10000, y: ((hash >>> 16) & 0xffff) / 0x10000 };
+  }
+
+  function buildFloorTileMaterial(product: any, scale: number, rotationDeg: number, surfaceKey: string) {
     var tex = product.assets.textures!;
     if (!floorTextureCache[product.id]) {
       var loader = new THREE.TextureLoader();
@@ -3644,6 +3653,7 @@ export function hashColorHex(key: string): number {
       };
     }
     var maps = floorTextureCache[product.id];
+    var textureOffset = textureOffsetForSurface(surfaceKey || product.id);
     function cloneMap(t: any) {
       if (!t) return null;
       var c = t.clone();
@@ -3651,6 +3661,7 @@ export function hashColorHex(key: string): number {
       c.colorSpace = t.colorSpace;
       c.center.set(0.5, 0.5);
       c.rotation = (rotationDeg || 0) * Math.PI / 180;
+      c.offset.set(textureOffset.x, textureOffset.y);
       return c;
     }
     var mat = new THREE.MeshStandardMaterial({
@@ -5222,7 +5233,7 @@ export function hashColorHex(key: string): number {
           ? buildCeramicTexture(effectiveFinish.assets.colorHex, roomFinishSettings.scale, roomFinishSettings.rotation)
           : null;
         var pisoMaterial = pisoHasRealTexture
-          ? buildFloorTileMaterial(effectiveFinish, roomFinishSettings.scale, roomFinishSettings.rotation)
+          ? buildFloorTileMaterial(effectiveFinish, roomFinishSettings.scale, roomFinishSettings.rotation, roomKey)
           : null;
         var pisoUvTileMeters = pisoMaterial ? pisoMaterial.userData.tileMeters : null;
         var mesh = tagCategory(makeSlabMesh(shape, thickness, pisoTopY, color, 1, true, pisoTexture, pisoMaterial, pisoUvTileMeters), 'laje');
