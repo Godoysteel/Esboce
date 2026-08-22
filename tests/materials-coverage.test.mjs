@@ -47,6 +47,32 @@ test('oitão (empena) sem acabamento também usa o padrão de tinta, nas duas fa
   assert.match(materialsSource, /addTo\(paint, roof\.gableFinishB \|\| DEFAULT_PAINT_PRODUCT_ID, oneGableArea\)/);
 });
 
+// Forro de drywall não entrava em NENHUM quantitativo até esta versão —
+// mesmo padrão condicional da laje (roomLajeGenerated), agrupado por
+// tipo de placa porque cada tipo tem preço e espaçamento de perfil
+// diferentes (ST 60cm, RU/RF/cimentícia 40cm — ver Scene3DRenderer.ts
+// FORRO_RUNNER_SPACING_M/_TIGHT_M).
+test('compute() soma o forro por cômodo condicionado a roomForroGenerated, agrupado por roomForroTipo (padrão ST se ausente)', () => {
+  const start = materialsSource.indexOf("if (!(floor.roomForroGenerated || {})[roomKey]) return;");
+  assert.notEqual(start, -1);
+  const end = materialsSource.indexOf('});', start);
+  const body = materialsSource.slice(start, end);
+  assert.match(body, /const tipo = \(floor\.roomForroTipo \|\| \{\}\)\[roomKey\] \|\| 'ST';/);
+  assert.match(body, /const spacingM = tipo === 'ST' \? 0\.6 : 0\.4;/);
+  assert.match(body, /const perimeterM = polygonPerimeterMeters\(room\.points\);/);
+});
+
+test('buildRows() empurra uma linha "Forro" por tipo de placa (preço diferente cada) e uma linha combinada de F530/tabica/pendural (preço igual pra qualquer tipo)', () => {
+  const start = materialsSource.indexOf('Object.keys(q.totals.forroByTipo).forEach(function (tipo) {');
+  assert.notEqual(start, -1);
+  const end = materialsSource.indexOf('\n  }\n\n  // Esgoto e pluvial', start);
+  const body = materialsSource.slice(start, end);
+  assert.match(body, /push\('Forro', 'Placa ' \+ \(FORRO_TIPO_LABEL\[tipo\] \|\| tipo\) \+ ' \(área\)'/);
+  assert.match(body, /push\('Forro', 'Perfil F530 \(estimado\)'/);
+  assert.match(body, /push\('Forro', 'Tabica de perímetro'/);
+  assert.match(body, /push\('Forro', 'Pendural — arame e regulador \(estimado\)'/);
+});
+
 test('os 4 produtos padrão apontam pra IDs reais existentes no Catalog', () => {
   const ids = ['vortice.tinta.fosco-branco-gelo', 'vortice.piso.porcelanato-padrao', 'vortice.telha.ceramica-natural', 'vortice.telha.eternit-6mm'];
   for (const id of ids) {

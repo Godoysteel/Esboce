@@ -315,6 +315,15 @@ interface Totals {
   doorGenericCount: number; windowsGenericAreaM2: number;
   columnCount: number; columnVolume: number; estimatedColumnCount: number;
   lajeCount: number; lajeAreaM2: number;
+  // Forro de drywall — mesmo padrão condicional da laje acima
+  // (roomForroGenerated), agrupado por tipo de placa (ST/RU/RF/
+  // cimenticia) porque cada um tem preço e espaçamento de perfil
+  // diferentes (ver Scene3DRenderer.ts FORRO_RUNNER_SPACING_M/_TIGHT_M).
+  // Quantidades de perfil/pendural são ESTIMADAS por área/comprimento
+  // (não replica o recorte exato clipRunnerLinesXZ/forroSpacedPositions
+  // do 3D) — mesmo espírito de outras estimativas já existentes aqui
+  // (ex.: pilarete em parede).
+  forroByTipo: Record<string, { areaM2: number; f530M: number; tabicaM: number; penduralCount: number }>;
   vergaCount: number; vergaSpanM: number;
   roofTimberAreaM2: number;
   // Peças que não tinham NENHUMA linha no quantitativo até esta versão
@@ -417,6 +426,7 @@ export function compute(): ComputeResult {
     doorGenericCount: 0, windowsGenericAreaM2: 0,
     columnCount: 0, columnVolume: 0, estimatedColumnCount: 0,
     lajeCount: 0, lajeAreaM2: 0,
+    forroByTipo: {},
     vergaCount: 0, vergaSpanM: 0,
     roofTimberAreaM2: 0,
     glazingPanelAreaM2: 0, balconyRailingLengthM: 0, varandaAreaM2: 0,
@@ -662,6 +672,31 @@ export function compute(): ComputeResult {
       if (!(floor.roomLajeGenerated || {})[roomKey]) return;
       totals.lajeCount++;
       totals.lajeAreaM2 += room.area / (Core.GRID * Core.GRID);
+    });
+
+    // Forro de drywall — mesmo padrão condicional da laje acima
+    // (roomForroGenerated), mas agrupado por tipo de placa (roomForroTipo,
+    // ausente = ST). Quantidade de perfil F530 e pendural são ESTIMADAS
+    // por área/espaçamento (não replicam o recorte exato por parede que
+    // o 3D faz em Scene3DRenderer.buildForroDrywallPiece) — mesmo
+    // espírito de outras estimativas já existentes neste arquivo (ex.:
+    // pilarete em parede). Tabica usa o perímetro REAL do polígono do
+    // cômodo (room.points), mesma fonte que a laje já usa pra área,
+    // sem inset de face de parede.
+    rooms.forEach(function (room) {
+      const roomKey = Core.findRoomWallIds(floor.walls, room).slice().sort().join(',');
+      if (!(floor.roomForroGenerated || {})[roomKey]) return;
+      const tipo = (floor.roomForroTipo || {})[roomKey] || 'ST';
+      const areaM2 = room.area / (Core.GRID * Core.GRID);
+      const spacingM = tipo === 'ST' ? 0.6 : 0.4; // Scene3DRenderer FORRO_RUNNER_SPACING_M / FORRO_RUNNER_SPACING_TIGHT_M
+      const f530M = areaM2 / spacingM;
+      const perimeterM = polygonPerimeterMeters(room.points);
+      totals.forroByTipo[tipo] = totals.forroByTipo[tipo] || { areaM2: 0, f530M: 0, tabicaM: 0, penduralCount: 0 };
+      const t = totals.forroByTipo[tipo]!;
+      t.areaM2 += areaM2;
+      t.f530M += f530M;
+      t.tabicaM += perimeterM;
+      t.penduralCount += Math.ceil(f530M / 1.2);
     });
 
     // Platibanda avançando pra fora das paredes: o retângulo do telhado
@@ -1038,7 +1073,7 @@ export function render(): void {
 // resiliência da ADR-007 §7: preço indisponível nunca trava nada, só
 // degrada.
 interface RealPriceMatch { value: number; source: string; }
-type MaterialPriceKey = 'cementPerKg' | 'limePerKg' | 'sandPerM3' | 'concretePerM3' | 'steelPerKg' | 'brickPerUnit' | 'woodPerM3' | 'windowPerM2' | 'nailPerKg';
+type MaterialPriceKey = 'cementPerKg' | 'limePerKg' | 'sandPerM3' | 'concretePerM3' | 'steelPerKg' | 'brickPerUnit' | 'woodPerM3' | 'windowPerM2' | 'nailPerKg' | 'forroPlacaSTPerM2' | 'forroPlacaRUPerM2' | 'forroPlacaRFPerM2' | 'forroPlacaCimenticiaPerM2' | 'forroF530PerM' | 'forroTabicaPerM' | 'forroPenduralPerUnit';
 let realPrices: { [K in MaterialPriceKey]?: RealPriceMatch } = {};
 let realPricesFetchStarted = false;
 let onRealPricesLoaded: (() => void) | null = null;
@@ -1058,6 +1093,13 @@ const VORTICE_MATERIAL_SKUS: Record<MaterialPriceKey, { sku: string; unitDivisor
   woodPerM3: { sku: 'vortice-madeira-telhado-m3', unitDivisor: 1 },
   windowPerM2: { sku: 'vortice-janela-aluminio-m2', unitDivisor: 1 },
   nailPerKg: { sku: 'vortice-prego-kg', unitDivisor: 1 },
+  forroPlacaSTPerM2: { sku: 'vortice-forro-placa-st-m2', unitDivisor: 1 },
+  forroPlacaRUPerM2: { sku: 'vortice-forro-placa-ru-m2', unitDivisor: 1 },
+  forroPlacaRFPerM2: { sku: 'vortice-forro-placa-rf-m2', unitDivisor: 1 },
+  forroPlacaCimenticiaPerM2: { sku: 'vortice-forro-placa-cimenticia-m2', unitDivisor: 1 },
+  forroF530PerM: { sku: 'vortice-forro-perfil-f530-m', unitDivisor: 1 },
+  forroTabicaPerM: { sku: 'vortice-forro-tabica-m', unitDivisor: 1 },
+  forroPenduralPerUnit: { sku: 'vortice-forro-pendural-un', unitDivisor: 1 },
 };
 
 async function ensureRealPrices(): Promise<void> {
@@ -1068,8 +1110,9 @@ async function ensureRealPrices(): Promise<void> {
     const mercador = manufacturers.find(function (m) { return m.nome === 'O Mercador'; });
     const vortice = manufacturers.find(function (m) { return m.nome === 'Vórtice Materiais'; });
 
-    // Nível 1 — fornecedor real: só cimento, por enquanto (ver DEC-88
-    // pra o motivo dos demais não terem match seguro no Mercador).
+    // Nível 1 — fornecedor real: cimento e placa de gesso ST (ver DEC-88
+    // pra o motivo dos demais materiais não terem match seguro no
+    // Mercador ainda).
     if (mercador) {
       const cimento = products.find(function (p) {
         return p.manufacturer_id === mercador.id && p.categoria === 'Cimento e Argamassa' &&
@@ -1077,6 +1120,12 @@ async function ensureRealPrices(): Promise<void> {
           p.unidade === 'SC' && /50\s*KG/i.test(p.nome);
       });
       if (cimento) realPrices.cementPerKg = { value: cimento.preco / 50, source: cimento.nome + ' — O Mercador' };
+      // Chapa de 1,20x1,80m = 2,16m² — mesmo tamanho/espessura que
+      // FORRO_BOARD_THICKNESS (Scene3DRenderer.ts) assume pro forro ST.
+      const placaST = products.find(function (p) {
+        return p.manufacturer_id === mercador.id && /^PLACA GESSO ST\b/i.test(p.nome) && p.unidade === 'PC';
+      });
+      if (placaST) realPrices.forroPlacaSTPerM2 = { value: placaST.preco / 2.16, source: placaST.nome + ' — O Mercador' };
     }
 
     // Nível 2 — média de mercado (Vórtice): preenche qualquer material
@@ -1109,7 +1158,14 @@ const REFERENCE_PRICES = {
   brickPerUnit: 1.20,
   woodPerM3: 5000.00,
   windowPerM2: 150.00,
-  nailPerKg: 14.00
+  nailPerKg: 14.00,
+  forroPlacaSTPerM2: 41.81,
+  forroPlacaRUPerM2: 50.00,
+  forroPlacaRFPerM2: 52.00,
+  forroPlacaCimenticiaPerM2: 100.00,
+  forroF530PerM: 9.00,
+  forroTabicaPerM: 3.00,
+  forroPenduralPerUnit: 1.75,
 };
 
 // Preços médios ESTIMADOS de mercado (Brasil, referência 2025-2026)
@@ -1501,6 +1557,27 @@ export function buildRows(): (string | number)[][] {
     push('Mobiliário', 'Móveis posicionados', q.totals.furnitureCount, 'un', q.totals.furnitureCost > 0 ? q.totals.furnitureCost : null);
   }
 
+  // Forro de drywall — uma linha de placa por TIPO (preço difere por
+  // tipo), mais uma linha combinada de perfil/tabica/pendural (preço
+  // igual pra qualquer tipo de placa por cima).
+  const FORRO_TIPO_LABEL: Record<string, string> = { ST: 'ST', RU: 'RU', RF: 'RF', cimenticia: 'Cimentícia' };
+  const FORRO_TIPO_PRICE_KEY: Record<string, MaterialPriceKey> = {
+    ST: 'forroPlacaSTPerM2', RU: 'forroPlacaRUPerM2', RF: 'forroPlacaRFPerM2', cimenticia: 'forroPlacaCimenticiaPerM2',
+  };
+  let forroF530MTotal = 0, forroTabicaMTotal = 0, forroPenduralTotal = 0;
+  Object.keys(q.totals.forroByTipo).forEach(function (tipo) {
+    const t = q.totals.forroByTipo[tipo]!;
+    push('Forro', 'Placa ' + (FORRO_TIPO_LABEL[tipo] || tipo) + ' (área)', t.areaM2, 'm²', t.areaM2 * materialPrice(FORRO_TIPO_PRICE_KEY[tipo] || 'forroPlacaSTPerM2'));
+    forroF530MTotal += t.f530M;
+    forroTabicaMTotal += t.tabicaM;
+    forroPenduralTotal += t.penduralCount;
+  });
+  if (forroF530MTotal > 0) {
+    push('Forro', 'Perfil F530 (estimado)', forroF530MTotal, 'm', forroF530MTotal * materialPrice('forroF530PerM'));
+    push('Forro', 'Tabica de perímetro', forroTabicaMTotal, 'm', forroTabicaMTotal * materialPrice('forroTabicaPerM'));
+    push('Forro', 'Pendural — arame e regulador (estimado)', forroPenduralTotal, 'un', forroPenduralTotal * materialPrice('forroPenduralPerUnit'));
+  }
+
   // Esgoto e pluvial — item por item (pedido explícito do Product Owner:
   // "01 joelho de PVC 50mm linha esgoto...", pra dar pra levar direto na
   // loja). Sem inclinação (traçado esquemático, ver Hydraulics.ts). Água
@@ -1616,23 +1693,54 @@ function escapeCell(s: unknown): string {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function exportPdf(): void {
-  const rows = buildRows();
+// Genérico o bastante pra servir tanto o PDF do orçamento completo
+// (exportPdf, título fixo "Orçamento Estimado") quanto um PDF ISOLADO
+// de uma categoria só (exportCategoryPdf — Forro/Hidráulica/Pintura),
+// que passa uma fatia filtrada de buildRows() com o mesmo formato.
+function exportPdfRows(rows: (string | number)[][], title: string): void {
   const totalRow = rows.length && rows[rows.length - 1]![0] === 'TOTAL' ? rows[rows.length - 1]! : null;
   const win = window.open('', 'esboce-orcamento-pdf');
   if (!win) return; // pop-up bloqueado pelo navegador
   const today = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
-  win.document.title = 'Orçamento — Esboce';
+  win.document.title = title + ' — Esboce';
   win.document.head.innerHTML = '<meta charset="UTF-8"><style>' + PDF_STYLE + '</style>';
   win.document.body.innerHTML =
     '<div class="pdf-noprint"><button onclick="window.print()">Imprimir / Salvar como PDF</button></div>' +
-    '<div class="pdf-header"><h1>Orçamento Estimado</h1><span class="date">' + today + '</span></div>' +
+    '<div class="pdf-header"><h1>' + escapeCell(title) + '</h1><span class="date">' + today + '</span></div>' +
     '<div class="pdf-disclaimer">' + PDF_DISCLAIMER + '</div>' +
     pdfSections(rows) +
     (totalRow ? '<div class="pdf-total"><span class="label">Total estimado</span><span class="value">' + totalRow[5] + '</span></div>' : '') +
     '<div class="pdf-footer">Orçamento gerado por esboce.com.br</div>';
   win.focus();
   setTimeout(function () { win.print(); }, 300); // dá tempo do layout assentar antes do diálogo abrir
+}
+
+function exportPdf(): void {
+  exportPdfRows(buildRows(), 'Orçamento Estimado');
+}
+
+// Orçamento individual por categoria (Forro/Hidráulica/Pintura, ver
+// coluna do botão "Quantitativo") — reaproveita buildRows() (mesma
+// fonte de dados de sempre, nunca uma leitura própria) filtrado pela
+// categoria pedida, com um TOTAL próprio (só a soma daquela fatia, não
+// do orçamento inteiro). r[5] já vem formatado em BRL por push() —
+// reconverte pra número só pra somar de novo, não existe custo cru
+// separado nas linhas.
+function parseBRL(cell: string | number): number {
+  if (typeof cell !== 'string' || cell === '—') return 0;
+  const n = parseFloat(cell.replace('R$', '').replace(',', '.').trim());
+  return isNaN(n) ? 0 : n;
+}
+
+function exportCategoryPdf(categoryLabel: string, title: string): void {
+  const filtered = buildRows().filter(function (r) { return r[0] === categoryLabel; });
+  if (!filtered.length) {
+    window.alert('Nada gerado ainda nessa categoria — não há o que colocar no orçamento.');
+    return;
+  }
+  const subtotal = filtered.reduce(function (sum, r) { return sum + parseBRL(r[5]!); }, 0);
+  if (subtotal > 0) filtered.push(['TOTAL', 'Custo estimado (soma dos itens com preço)', '', '', '', fmtBRL(subtotal)]);
+  exportPdfRows(filtered, title);
 }
 
 export function init(): void {
@@ -1643,13 +1751,50 @@ export function init(): void {
   const exportBtn = document.getElementById('materialsExportBtn');
   const sheetBtn = document.getElementById('materialsSheetBtn');
   const pdfBtn = document.getElementById('materialsPdfBtn');
+  const categoryMenuEl = document.getElementById('materialsCategoryMenu');
   if (exportBtn) exportBtn.addEventListener('click', exportCsv);
   if (sheetBtn) sheetBtn.addEventListener('click', function () { MaterialsSheet.open(); });
   if (pdfBtn) pdfBtn.addEventListener('click', exportPdf);
-  if (toggleBtn) toggleBtn.addEventListener('click', function () {
-    panelEl!.classList.toggle('visible');
-    if (panelEl!.classList.contains('visible')) render();
-  });
+  // "Quantitativo" deixa de abrir o painel geral direto — abre uma
+  // coluna de categorias (Geral/Forro/Hidráulica/Elétrica/Pintura)
+  // primeiro; só "Geral" abre o painel rico de sempre (CSV/planilha/
+  // totais). Forro/Hidráulica/Pintura abrem cada um seu PDF isolado
+  // (exportCategoryPdf), sem passar pelo painel.
+  if (toggleBtn && categoryMenuEl) {
+    toggleBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (categoryMenuEl.classList.contains('visible')) {
+        categoryMenuEl.classList.remove('visible');
+        return;
+      }
+      const rect = toggleBtn.getBoundingClientRect();
+      categoryMenuEl.style.left = rect.left + 'px';
+      categoryMenuEl.style.top = (rect.bottom + 6) + 'px';
+      categoryMenuEl.classList.add('visible');
+    });
+    categoryMenuEl.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+    categoryMenuEl.addEventListener('click', function (e: any) {
+      const btn = e.target.closest('[data-materials-category]');
+      if (!btn) return;
+      categoryMenuEl.classList.remove('visible');
+      const category = btn.dataset.materialsCategory;
+      if (category === 'geral') {
+        panelEl!.classList.add('visible');
+        render();
+      } else if (category === 'forro') {
+        exportCategoryPdf('Forro', 'Orçamento — Forro de Drywall');
+      } else if (category === 'hidraulica') {
+        exportCategoryPdf('Instalações hidrossanitárias', 'Orçamento — Hidráulica');
+      } else if (category === 'pintura') {
+        exportCategoryPdf('Pintura', 'Orçamento — Pintura');
+      }
+    });
+    document.addEventListener('click', function (e: any) {
+      if (!categoryMenuEl.classList.contains('visible')) return;
+      if (categoryMenuEl.contains(e.target) || e.target === toggleBtn || toggleBtn.contains(e.target)) return;
+      categoryMenuEl.classList.remove('visible');
+    });
+  }
   if (closeBtn) closeBtn.addEventListener('click', function () { panelEl!.classList.remove('visible'); });
   render();
 }

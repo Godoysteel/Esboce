@@ -288,6 +288,11 @@
   .ctx-menu label:hover { background: #F4F1EA; }
   .ctx-menu input[type="checkbox"] { width: 15px; height: 15px; flex-shrink: 0; }
   .ctx-menu-sep { height: 1px; background: #EDEAE1; margin: 6px 8px; }
+  .ctx-menu-btn { display: flex; align-items: center; justify-content: space-between; gap: 9px; width: 100%; padding: 7px 12px; font-size: 14px; color: #2C2C2A; cursor: pointer; border-radius: 6px; background: none; border: none; text-align: left; font-family: inherit; }
+  .ctx-menu-btn:hover { background: #F4F1EA; }
+  .ctx-menu-btn.ts-disabled { color: #ABA89E; cursor: default; }
+  .ctx-menu-btn.ts-disabled:hover { background: none; }
+  .ctx-menu-btn .ts-badge-soon { font-size: 10px; color: #ABA89E; }
 
   .gizmo {
     position: absolute;
@@ -1333,6 +1338,20 @@
     <label><input type="checkbox" id="marquiseToggle"> Marquise</label>
     <label><input type="checkbox" id="telhadoToggle" checked> Telhado</label>
     <label hidden><input type="checkbox" id="varandaToggle" checked> Varanda (projetos antigos)</label>
+  </div>
+  <!-- Coluna de categorias do botão "Quantitativo" — Geral abre o
+       painel completo de sempre (CSV/planilha/totais); Forro/Hidráulica/
+       Pintura abrem cada um um PDF isolado de visualizar/baixar (ver
+       MaterialsPanel.exportCategoryPdf). Elétrica ainda não existe no
+       app (nenhuma ferramenta elétrica) — fica "em breve", mesmo padrão
+       de outros recursos não prontos. -->
+  <div id="materialsCategoryMenu" class="ctx-menu">
+    <div class="ctx-menu-title">Quantitativo</div>
+    <button class="ctx-menu-btn" data-materials-category="geral">Geral</button>
+    <button class="ctx-menu-btn" data-materials-category="forro">Forro</button>
+    <button class="ctx-menu-btn" data-materials-category="hidraulica">Hidráulica</button>
+    <button class="ctx-menu-btn ts-disabled" data-disabled-label="Elétrica" title="Elétrica — em breve">Elétrica <span class="ts-badge-soon">em breve</span></button>
+    <button class="ctx-menu-btn" data-materials-category="pintura">Pintura</button>
   </div>
   <!-- Reforma da navegação (rail de categorias + 1 painel por vez, ver
        Registro de Decisões Técnicas) — substitui a lista única e rolável

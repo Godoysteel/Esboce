@@ -45,6 +45,37 @@ test('todo material do quantitativo (cimento/cal/areia/concreto/aço/tijolo) tem
   }
 });
 
+// Forro de drywall (placa ST/RU/RF/cimentícia, F530, tabica, pendural)
+// — mesmo padrão de "nenhum material sem preço garantido" acima,
+// estendido pros 7 insumos novos do orçamento de forro.
+test('todo material do forro (placa ST/RU/RF/cimentícia, F530, tabica, pendural) tem SKU de fallback no Vórtice Materiais', () => {
+  const start = materialsSource.indexOf('const VORTICE_MATERIAL_SKUS');
+  const end = materialsSource.indexOf('};', start);
+  const body = materialsSource.slice(start, end);
+  for (const key of ['forroPlacaSTPerM2', 'forroPlacaRUPerM2', 'forroPlacaRFPerM2', 'forroPlacaCimenticiaPerM2', 'forroF530PerM', 'forroTabicaPerM', 'forroPenduralPerUnit']) {
+    assert.match(body, new RegExp(key + ":\\s*\\{\\s*sku:"), `falta SKU de fallback pra ${key}`);
+  }
+});
+
+test('placa ST do forro tem match de fornecedor real (O Mercador) além do fallback Vórtice — mesmo padrão de dois níveis do cimento', () => {
+  const start = materialsSource.indexOf('const placaST = products.find(function (p) {');
+  const end = materialsSource.indexOf('});', start);
+  const body = materialsSource.slice(start, end);
+  assert.match(body, /manufacturer_id === mercador\.id/);
+  assert.match(body, /\/\^PLACA GESSO ST\\b\/i\.test\(p\.nome\)/);
+  assert.match(body, /p\.unidade === 'PC'/);
+  assert.match(materialsSource, /realPrices\.forroPlacaSTPerM2 = \{ value: placaST\.preco \/ 2\.16, source: placaST\.nome \+ ' — O Mercador' \};/);
+});
+
+test('todas as 7 chaves de preço do forro têm valor de emergência (REFERENCE_PRICES) — nunca ficam sem número nenhum', () => {
+  const start = materialsSource.indexOf('const REFERENCE_PRICES');
+  const end = materialsSource.indexOf('};', start);
+  const body = materialsSource.slice(start, end);
+  for (const key of ['forroPlacaSTPerM2', 'forroPlacaRUPerM2', 'forroPlacaRFPerM2', 'forroPlacaCimenticiaPerM2', 'forroF530PerM', 'forroTabicaPerM', 'forroPenduralPerUnit']) {
+    assert.match(body, new RegExp(key + ':\\s*[\\d.]+'), `falta REFERENCE_PRICES pra ${key}`);
+  }
+});
+
 test('nível 2 (Vórtice) só preenche o que o nível 1 (fornecedor real) não resolveu — não sobrescreve', () => {
   const start = materialsSource.indexOf('if (vortice) {');
   const end = materialsSource.indexOf('\n    }', start);
