@@ -124,6 +124,20 @@ test('Opening sem productId continua sem o campo depois da ida e volta (nunca vi
   assert.equal('productId' in restored.project.floors[0].openings[0], false);
 });
 
+test('seleção comercial preserva snapshot de fornecedor e preço no projeto', () => {
+  const project = createProject();
+  project.commercialSelections = {
+    'floor_1:room:sala': {
+      productId: 'produto-1', offerId: 'oferta-1', supplierId: 'fornecedor-1',
+      supplierName: 'Loja Exemplo', supplierSku: 'SKU-9', price: 129.90,
+      currency: 'BRL', region: 'São Paulo/SP', priceDate: '2026-08-22',
+      kind: 'official', selectedAt: '2026-08-22T12:00:00.000Z',
+    },
+  };
+  const restored = decodeProjectDocument(encodeProjectDocument(project)).project;
+  assert.deepEqual(restored.commercialSelections, project.commercialSelections);
+});
+
 // DEC-90 — botão "Gerar Laje": Floor.roomLajeGenerated marca por roomKey
 // quais cômodos já tiveram a laje gerada; precisa sobreviver ao
 // salvar/carregar como qualquer outro dado do projeto.

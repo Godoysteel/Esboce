@@ -1168,9 +1168,10 @@
   .catalog-detail-specs td:first-child { color: #5F5E5A; width: 45%; }
   .catalog-offers-title { margin: 16px 0 8px; font-size: 14px; }
   .catalog-offers { display:flex; flex-direction:column; gap:7px; }
-  .catalog-offer { border:1px solid #D3D1C7; border-radius:8px; padding:9px 10px; display:grid; grid-template-columns:1fr auto; gap:2px 8px; }
+  .catalog-offer { border:1px solid #D3D1C7; border-radius:8px; padding:9px 10px; display:grid; grid-template-columns:auto 1fr auto; gap:2px 8px; cursor:pointer; }
+  .catalog-offer input { margin:2px 0 0; }
   .catalog-offer span { font-weight:700; }
-  .catalog-offer small { grid-column:1 / -1; color:#77746C; line-height:1.35; }
+  .catalog-offer small { grid-column:2 / -1; color:#77746C; line-height:1.35; }
   .catalog-offer.market_reference { background:#F7F5EE; border-style:dashed; }
   .catalog-apply { margin-top:14px; }
   .catalog-apply:disabled { opacity:.55; cursor:not-allowed; }

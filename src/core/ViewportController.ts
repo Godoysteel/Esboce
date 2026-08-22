@@ -22,6 +22,7 @@ import { NavGizmo } from './NavGizmo.js';
 import { touchCameraAnchor, updateTouchCamera, type TouchCameraAnchor } from './TouchCamera.js';
 import { DEFAULT_GLAZING_GLASS_MATERIAL } from './Glazing.js';
 import { hydraulicFixtureTemplate, hydraulicFixtureVisualPosition, hydraulicNodeWallOffsetsMeters, hydraulicPositionFromWallOffset, resolveHydraulicFixturePosition } from './Hydraulics.js';
+import type { CommercialSelection } from './types.js';
 import {
   analyzeWallResize,
   cloneWallsForDiagnostics,
@@ -60,6 +61,7 @@ import {
   // paintPickerPanelEl). Começa na primeira tinta do catálogo pra já
   // ter algo selecionado no primeiro clique.
   var currentPaintProductId = Catalog.getProductsByCategory('paint')[0] ? Catalog.getProductsByCategory('paint')[0]!.id : null;
+  var pendingCommercialSelection: CommercialSelection | null = null;
   var currentPaintSurface: any = null;
   var selectedPaintRoomKey: any = null;
   var floorFinishScale = 1;
@@ -2801,7 +2803,10 @@ import {
           ? { productId: pendingProduct.id, widthM: pendingProduct.assets.nominalWidthM, heightM: pendingProduct.assets.nominalHeightM }
           : undefined;
         var newOpening = Store.commands.insertOpening(mesh.userData.wallId, currentTool, gpIns.x, gpIns.y, productOverride);
-        if (newOpening) selectOpening(newOpening.id);
+        if (newOpening) {
+          if (pendingCommercialSelection) Store.commands.setCommercialSelection(Store.currentFloor().id + ':opening:' + newOpening.id, pendingCommercialSelection);
+          selectOpening(newOpening.id);
+        }
         else {
           var openingLabel = currentTool === 'door' ? 'porta' : currentTool === 'window' ? 'janela' : 'arco';
           hintEl.textContent = 'Não cabe um' + (currentTool === 'window' ? 'a' : '') + ' ' + openingLabel + ' aqui — parede curta demais ou sem espaço livre.';
@@ -2834,11 +2839,13 @@ import {
       if (currentPaintSurface === 'walls' && paintHit && paintHit.object.userData.wallId && currentPaintProductId) {
         var faceHit = wallFaceAtPoint(paintHit.object.userData.wallId, paintHit.point);
         Store.commands.setWallFinishFace(paintHit.object.userData.wallId, faceHit as any, currentPaintProductId);
+        if (pendingCommercialSelection) Store.commands.setCommercialSelection(Store.currentFloor().id + ':wall:' + paintHit.object.userData.wallId + ':' + faceHit, pendingCommercialSelection);
         hintEl.textContent = 'Lado ' + faceHit.toUpperCase() + ' pintado. Clique em outra pra continuar.';
         return;
       }
       if (currentPaintSurface === 'walls' && paintHit && paintHit.object.userData.gableSide && paintHit.object.userData.roofId && currentPaintProductId) {
         Store.commands.setRoofGableFinish(paintHit.object.userData.roofId, paintHit.object.userData.gableSide, currentPaintProductId);
+        if (pendingCommercialSelection) Store.commands.setCommercialSelection(Store.currentFloor().id + ':gable:' + paintHit.object.userData.roofId + ':' + paintHit.object.userData.gableSide, pendingCommercialSelection);
         hintEl.textContent = 'Acabamento aplicado somente à face clicada do oitão.';
         return;
       }
@@ -2848,6 +2855,7 @@ import {
       // distinção de lado A/B como a parede tem.
       if (currentPaintSurface === 'walls' && paintHit && paintHit.object.userData.volumeBoxId && currentPaintProductId) {
         Store.commands.setVolumeBoxFinish(paintHit.object.userData.volumeBoxId, currentPaintProductId);
+        if (pendingCommercialSelection) Store.commands.setCommercialSelection(Store.currentFloor().id + ':volume:' + paintHit.object.userData.volumeBoxId, pendingCommercialSelection);
         hintEl.textContent = 'Bloco pintado. Clique em outro pra continuar.';
         return;
       }
@@ -2859,6 +2867,7 @@ import {
       }
       if (currentPaintSurface === 'roofs' && paintHit && paintHit.object.userData.roofId && currentPaintProductId) {
         Store.commands.setRoofFinish(paintHit.object.userData.roofId, currentPaintProductId);
+        if (pendingCommercialSelection) Store.commands.setCommercialSelection(Store.currentFloor().id + ':roof:' + paintHit.object.userData.roofId, pendingCommercialSelection);
         hintEl.textContent = 'Revestimento aplicado somente ao telhado clicado.';
         return;
       }
@@ -5283,6 +5292,7 @@ import {
       var applyBtn = e.target.closest('button.paint-apply');
       if (applyBtn && selectedPaintRoomKey && currentPaintProductId) {
         Store.commands.setRoomFinish(selectedPaintRoomKey, currentPaintProductId, floorFinishScale, floorFinishRotation);
+        if (pendingCommercialSelection) Store.commands.setCommercialSelection(Store.currentFloor().id + ':room:' + selectedPaintRoomKey, pendingCommercialSelection);
         hintEl.textContent = 'Revestimento aplicado somente ao piso do cômodo selecionado.';
         return;
       }
@@ -5402,9 +5412,10 @@ import {
   // Ático/Normal (`atticModeOverlay`) — só pré-seleciona qual tipo vale
   // se a pessoa escolher "Normal" ali.
   export function setNextRoofType(type: any) { pendingRoofType = type; }
-  export function activateCatalogProduct(productId: string): boolean {
+  export function activateCatalogProduct(productId: string, selection: CommercialSelection): boolean {
     var product = Catalog.getProduct(productId);
     if (!product) return false;
+    pendingCommercialSelection = selection;
     if (product.category === 'paint') {
       currentPaintSurface = 'walls'; currentPaintProductId = productId; setTool('paintBucket');
       hintEl.textContent = 'Produto carregado. Clique somente nas paredes compatíveis.';
@@ -5427,6 +5438,7 @@ import {
     }
     if (product.category === 'furniture') {
       var item = Store.commands.createFurniture(camTarget.x * Core.GRID, camTarget.z * Core.GRID, productId, 0, 0);
+      Store.commands.setCommercialSelection(Store.currentFloor().id + ':furniture:' + item.id, selection);
       selectFurniture(item.id);
       hintEl.textContent = 'Produto adicionado no centro da vista. Arraste para posicionar.';
       render();

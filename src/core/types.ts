@@ -412,6 +412,20 @@ export interface HydraulicSystem {
 export type FoundationType = 'radier' | 'baldrame';
 export type ConstructionSystem = 'ceramic_masonry' | 'structural_block' | 'light_steel_frame';
 
+export interface CommercialSelection {
+  productId: string;
+  offerId: string;
+  supplierId: string;
+  supplierName: string;
+  supplierSku?: string;
+  price: number;
+  currency: string;
+  region: string;
+  priceDate: string;
+  kind: 'official' | 'market_reference';
+  selectedAt: string;
+}
+
 export interface Project {
   floors: Floor[];
   currentFloorIndex: number;
@@ -419,6 +433,8 @@ export interface Project {
   foundationType: FoundationType;
   constructionSystem: ConstructionSystem;
   hydraulics: HydraulicSystem;
+  /** Snapshot comercial por alvo aplicado; preço histórico não muda com o catálogo. */
+  commercialSelections?: Record<string, CommercialSelection>;
   // Opcional: ausente até o usuário definir o tamanho do terreno.
   terreno?: Terreno;
 }

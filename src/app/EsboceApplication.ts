@@ -22,7 +22,7 @@ import {
   exportProjectBackup,
   importProjectBackup,
 } from "../core/ProjectPersistence.js";
-import type { ConstructionSystem } from "../core/types.js";
+import type { ConstructionSystem, CommercialSelection } from "../core/types.js";
 import { constructionSystemDefinition } from "../core/ConstructionSystem.js";
 
 export class EsboceApplication {
@@ -1634,11 +1634,11 @@ export class EsboceApplication {
     return offer.kind === "market_reference" ? "Estimativa Vórtice" : "Oferta oficial";
   }
 
-  private formatOffer(offer: CatalogOffer, unit: string): string {
+  private formatOffer(offer: CatalogOffer, unit: string, selected: boolean): string {
     const price = offer.price > 0 ? `R$ ${offer.price.toFixed(2).replace(".", ",")} / ${unit}` : "Sob consulta";
     const trace = `${offer.region} · ${offer.price_date}`;
     const warning = offer.kind === "market_reference" ? " · não constitui oferta comercial" : "";
-    return `<div class="catalog-offer ${offer.kind}"><strong>${offer.supplier_name}</strong><span>${price}</span><small>${trace}${warning}</small></div>`;
+    return `<label class="catalog-offer ${offer.kind}"><input type="radio" name="catalogOffer" value="${offer.id}" ${selected ? "checked" : ""}><strong>${offer.supplier_name}</strong><span>${price}</span><small>${trace}${warning}</small></label>`;
   }
 
   private catalogActionFor(product: CatalogProductWithDepartment): { label: string; enabled: boolean } {
@@ -1667,14 +1667,22 @@ export class EsboceApplication {
       <p class="auth-sub" style="margin-bottom:8px;">Fabricante: ${manufacturer?.nome ?? "não informado"}</p>
       ${specsRows ? `<div class="catalog-detail-specs"><table>${specsRows}</table></div>` : ""}
       <h3 class="catalog-offers-title">Ofertas</h3>
-      <div class="catalog-offers">${offers.length ? offers.map((offer) => this.formatOffer(offer, product.unidade)).join("") : '<p class="auth-sub">Nenhuma oferta disponível.</p>'}</div>
-      <button class="auth-submit catalog-apply" id="catalogApplyProduct" ${action.enabled ? "" : "disabled"}>${action.label}</button>
+      <div class="catalog-offers">${offers.length ? offers.map((offer, index) => this.formatOffer(offer, product.unidade, index === 0)).join("") : '<p class="auth-sub">Nenhuma oferta disponível.</p>'}</div>
+      <button class="auth-submit catalog-apply" id="catalogApplyProduct" ${action.enabled && offers.length ? "" : "disabled"}>${action.label}</button>
       ${action.enabled ? "" : '<p class="catalog-action-help">Este item entra automaticamente no quantitativo. A aplicação visual ainda não se aplica a esta categoria.</p>'}
     `;
     const applyButton = document.getElementById("catalogApplyProduct") as HTMLButtonElement | null;
-    if (applyButton && action.enabled) {
+    if (applyButton && action.enabled && offers.length) {
       applyButton.addEventListener("click", () => {
-        if (!ViewportController.activateCatalogProduct(product.id)) return;
+        const selectedId = (body.querySelector('input[name="catalogOffer"]:checked') as HTMLInputElement | null)?.value;
+        const offer = offers.find((item) => item.id === selectedId) ?? offers[0]!;
+        const selection: CommercialSelection = {
+          productId: product.id, offerId: offer.id, supplierId: offer.supplier_id,
+          supplierName: offer.supplier_name, ...(offer.supplier_sku ? { supplierSku: offer.supplier_sku } : {}),
+          price: offer.price, currency: offer.currency, region: offer.region,
+          priceDate: offer.price_date, kind: offer.kind, selectedAt: new Date().toISOString(),
+        };
+        if (!ViewportController.activateCatalogProduct(product.id, selection)) return;
         this.requireElement("catalogDetailOverlay").style.display = "none";
         this.requireElement("catalogOverlay").classList.remove("visible");
         this.setCatalogEntryButtonsActive(false);

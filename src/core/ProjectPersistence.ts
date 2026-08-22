@@ -1,5 +1,5 @@
 import type {
-  Column, Floor, Furniture, GlazingPanel, BalconyRailing, VolumeBox, Stair, PlanUnderlay, HydraulicNode, HydraulicSegment, Laje, Opening, Project, ProjectLayers, Roof, Terreno, Varanda, Wall, ForroBoardType,
+  Column, Floor, Furniture, GlazingPanel, BalconyRailing, VolumeBox, Stair, PlanUnderlay, HydraulicNode, HydraulicSegment, Laje, Opening, Project, ProjectLayers, Roof, Terreno, Varanda, Wall, ForroBoardType, CommercialSelection,
 } from './types.js';
 
 // v6: adiciona `project.terreno` (opcional) — tamanho do lote e muros de
@@ -52,7 +52,9 @@ import type {
 // por roomKey (ST/RU/RF/cimenticia), escolhido no painel que aparece ao
 // selecionar o forro. Documentos v16 e anteriores abrem normalmente; sem
 // o campo, todo forro usa o tipo padrão ST.
-export const CURRENT_PROJECT_SCHEMA_VERSION = 17;
+// v18: adiciona `Project.commercialSelections`, snapshots das ofertas
+// escolhidas por alvo aplicado. Projetos anteriores seguem sem escolhas.
+export const CURRENT_PROJECT_SCHEMA_VERSION = 18;
 
 export interface StoredProjectDocument {
   schemaVersion: number;
@@ -460,6 +462,30 @@ function settingsMap(value: unknown, path: string): Record<string, { scale: numb
   return result;
 }
 
+function commercialSelectionsMap(value: unknown, path: string): Record<string, CommercialSelection> {
+  if (value == null) return {};
+  const source = record(value, path);
+  const result: Record<string, CommercialSelection> = {};
+  for (const [key, item] of Object.entries(source)) {
+    const v = record(item, `${path}.${key}`);
+    const supplierSku = optionalString(v.supplierSku, `${path}.${key}.supplierSku`);
+    result[key] = {
+      productId: string(v.productId, `${path}.${key}.productId`),
+      offerId: string(v.offerId, `${path}.${key}.offerId`),
+      supplierId: string(v.supplierId, `${path}.${key}.supplierId`),
+      supplierName: string(v.supplierName, `${path}.${key}.supplierName`),
+      ...(supplierSku ? { supplierSku } : {}),
+      price: number(v.price, `${path}.${key}.price`),
+      currency: string(v.currency, `${path}.${key}.currency`),
+      region: string(v.region, `${path}.${key}.region`),
+      priceDate: string(v.priceDate, `${path}.${key}.priceDate`),
+      kind: enumValue(v.kind, ['official', 'market_reference'], `${path}.${key}.kind`),
+      selectedAt: string(v.selectedAt, `${path}.${key}.selectedAt`),
+    };
+  }
+  return result;
+}
+
 function parseFloor(value: unknown, path: string): Floor {
   const v = record(value, path);
   const floor: Floor = {
@@ -568,6 +594,7 @@ function normalizeProject(value: unknown): Project {
     });
   }
   if (source.terreno != null) project.terreno = parseTerreno(source.terreno, 'project.terreno');
+  if (source.commercialSelections != null) project.commercialSelections = commercialSelectionsMap(source.commercialSelections, 'project.commercialSelections');
   return project;
 }
 

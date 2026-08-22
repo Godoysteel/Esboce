@@ -19,9 +19,19 @@ test('ficha oferece uma ação coerente com a categoria do produto', () => {
   assert.match(app, /Adicionar ao projeto/);
   assert.match(app, /Aplicar na superfície/);
   assert.match(app, /Usar na construção/);
-  assert.match(app, /ViewportController\.activateCatalogProduct\(product\.id\)/);
+  assert.match(app, /ViewportController\.activateCatalogProduct\(product\.id, selection\)/);
   assert.match(viewport, /export function activateCatalogProduct/);
   assert.match(viewport, /currentPaintSurface = 'floors'/);
   assert.match(viewport, /pendingOpeningProductId = productId/);
   assert.match(html, /catalog-offer\.market_reference/);
+});
+
+test('oferta escolhida vira snapshot comercial persistido por alvo', () => {
+  assert.match(app, /input\[name="catalogOffer"\]:checked/);
+  assert.match(app, /selectedAt: new Date\(\)\.toISOString\(\)/);
+  assert.match(viewport, /setCommercialSelection\(Store\.currentFloor\(\)\.id \+ ':wall:'/);
+  assert.match(viewport, /setCommercialSelection\(Store\.currentFloor\(\)\.id \+ ':room:'/);
+  assert.match(viewport, /setCommercialSelection\(Store\.currentFloor\(\)\.id \+ ':roof:'/);
+  assert.match(viewport, /setCommercialSelection\(Store\.currentFloor\(\)\.id \+ ':opening:'/);
+  assert.match(viewport, /setCommercialSelection\(Store\.currentFloor\(\)\.id \+ ':furniture:'/);
 });

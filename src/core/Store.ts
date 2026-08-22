@@ -9,7 +9,7 @@ import { buildColdWaterKitchenPrototype, buildColdWaterNetworkFromFixtures, buil
 import type {
   Project, Floor, Wall, Column, Roof, Opening, OpeningKind, Varanda, Laje, Furniture, ColumnShape, RoofType,
   RidgeAxis, VarandaFrontSide, FoundationType, StoreEvent, StoreListener, ForroBoardType,
-  WallSnapshot, LinkedWallUpdate, GlazingPanel, GlazingGlassMaterial, BalconyRailing, VolumeBox, Stair, StairModel, PlanUnderlay, Terreno, TerrenoMuroSide,
+  WallSnapshot, LinkedWallUpdate, GlazingPanel, GlazingGlassMaterial, BalconyRailing, VolumeBox, Stair, StairModel, PlanUnderlay, Terreno, TerrenoMuroSide, CommercialSelection,
   HydraulicNetworkType, HydraulicNode, HydraulicSegment,
 } from './types.js';
 
@@ -968,6 +968,11 @@ export const commands = {
     pushUndoSnapshot();
     if (face === 'a') w.finishA = productId; else w.finishB = productId;
     emit({ type: 'WallFinishSet', wallId, face, productId });
+  },
+  setCommercialSelection(targetKey: string, selection: CommercialSelection): void {
+    if (!project.commercialSelections) project.commercialSelections = {};
+    project.commercialSelections[targetKey] = { ...selection };
+    emit({ type: 'CommercialSelectionSet', targetKey, productId: selection.productId, offerId: selection.offerId });
   },
   setRoofFinish(roofId: string, productId: string): void {
     const r = findRoof(roofId); if (!r) return;
