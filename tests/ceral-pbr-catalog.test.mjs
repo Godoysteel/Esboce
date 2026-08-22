@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { Catalog } from '../src/core/Catalog.ts';
 
-const verified = ['003230', '003231', '003229', '000317', '000291', '000300', '000280'];
+const verified = ['003230', '003231', '003229', '000317', '000291', '000300', '000280', '000284'];
 const unverified = ['000290', '003135', '000852'];
 
 test('catálogo visual registra somente os SKUs Ceral verificados pelos UUIDs dinâmicos do Supabase', () => {
@@ -36,6 +36,12 @@ test('SKU retangular 000317 usa atlas de 203 mm com duas peças 203 x 102 mm', (
   assert.match(source, /"000317": \{"width_m": 0\.203, "height_m": 0\.102, "roughness": 0\.2, "rows": 2\}/);
   const product = Catalog.getProduct('supabase-000317');
   assert.equal(product.assets.tileMeters, 0.203);
+});
+
+test('SKU 000284 recorta uma peça da placa frontal oficial 3x3 antes de gerar PBR', () => {
+  const source = readFileSync(new URL('../scripts/texturas/generate_ceral_pbr.py', import.meta.url), 'utf8');
+  assert.match(source, /"000284": \{"width_m": 0\.099, "height_m": 0\.099, "roughness": 0\.12, "source_grid": 3\}/);
+  assert.match(source, /source_grid = spec\.get\("source_grid", 1\)/);
 });
 
 test('carregamento do catálogo associa por SKU e substitui a foto pela ambientada oficial', () => {

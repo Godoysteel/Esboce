@@ -168,5 +168,22 @@
     "pieceHeightM": 0.099,
     "faces": 1,
     "status": "official_source_verified"
+  },
+  {
+    "sku": "000284",
+    "catalogName": "REVEST FACHADA 99X99MM NTLD AZUL PISCINA CERAL",
+    "manufacturer": "Ceral",
+    "model": "10x10 Azul Piscina",
+    "manufacturerCode": null,
+    "productPage": "https://cdn.grupoceral.com.br/cms/pdfs/5d7b1e8c-30ab-4865-88fd-2d2c6993c2fa.pdf#page=10",
+    "catalogPhoto": "catalogo/revestimentos/000284/produto-original.jpeg",
+    "catalogPhotoSource": "https://cdn.grupoceral.com.br/cms/pdfs/5d7b1e8c-30ab-4865-88fd-2d2c6993c2fa.pdf#page=11",
+    "materializeSource": "catalogo/revestimentos/000284/miniatura-original.jpeg",
+    "materializeSourceOrigin": "https://cdn.grupoceral.com.br/cms/pdfs/5d7b1e8c-30ab-4865-88fd-2d2c6993c2fa.pdf#page=10",
+    "pbr": { "albedo": "catalogo/revestimentos/000284/pbr/albedo.jpg", "normal": "catalogo/revestimentos/000284/pbr/normal.jpg", "roughness": "catalogo/revestimentos/000284/pbr/roughness.jpg", "ao": "catalogo/revestimentos/000284/pbr/ao.jpg", "moduleWidthM": 0.099, "moduleHeightM": 0.099 },
+    "pieceWidthM": 0.099,
+    "pieceHeightM": 0.099,
+    "faces": 1,
+    "status": "official_source_verified"
   }
 ]

@@ -22,6 +22,7 @@ PRODUCTS = {
     "000291": {"width_m": 0.099, "height_m": 0.099, "roughness": 0.18},
     "000300": {"width_m": 0.099, "height_m": 0.099, "roughness": 0.18},
     "000280": {"width_m": 0.099, "height_m": 0.099, "roughness": 0.12},
+    "000284": {"width_m": 0.099, "height_m": 0.099, "roughness": 0.12, "source_grid": 3},
 }
 
 
@@ -40,6 +41,21 @@ def fit_piece(source: Image.Image, width: int, height: int) -> Image.Image:
 
 
 def build_albedo(source: Image.Image, spec: dict) -> Image.Image:
+    source_grid = spec.get("source_grid", 1)
+    if source_grid > 1:
+        cell_width = source.width / source_grid
+        cell_height = source.height / source_grid
+        center = source_grid // 2
+        # A placa oficial usa pontos de cola vermelhos junto às juntas.
+        # Recortamos o miolo da peça e recriamos uma junta neutra no atlas.
+        inset_x = max(1, round(cell_width * 0.12))
+        inset_y = max(1, round(cell_height * 0.12))
+        source = source.crop((
+            round(center * cell_width) + inset_x,
+            round(center * cell_height) + inset_y,
+            round((center + 1) * cell_width) - inset_x,
+            round((center + 1) * cell_height) - inset_y,
+        ))
     rows = spec.get("rows", 1)
     piece_height = SIZE // rows
     grout_px = max(2, round(SIZE * 0.002 / spec["width_m"]))
