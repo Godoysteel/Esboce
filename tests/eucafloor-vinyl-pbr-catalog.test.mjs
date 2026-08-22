@@ -4,7 +4,16 @@ import { existsSync, readFileSync } from 'node:fs';
 import { Catalog } from '../src/core/Catalog.ts';
 
 const verified = ['003870', '006441'];
+const unverified = ['004883', '002227', '002228', '003470', '002509', '002088', '000042', '002884', '001927', '003869', '002680'];
 const manifest = JSON.parse(readFileSync(new URL('../public/catalogo/revestimentos/manifest.json', import.meta.url), 'utf8'));
+
+test('levantamento vinílico fecha os 13 SKUs sem usar produto semelhante', () => {
+  const vinylSkus = [...verified, ...unverified];
+  const items = manifest.filter((item) => vinylSkus.includes(item.sku));
+  assert.equal(items.length, vinylSkus.length);
+  assert.deepEqual(items.filter((item) => item.status === 'official_source_verified').map((item) => item.sku).sort(), [...verified].sort());
+  assert.deepEqual(items.filter((item) => item.status === 'unverified').map((item) => item.sku).sort(), [...unverified].sort());
+});
 
 test('primeiro lote vinílico Eucafloor registra somente modelos oficiais exatos', () => {
   const items = manifest.filter((item) => verified.includes(item.sku));
@@ -20,7 +29,7 @@ test('primeiro lote vinílico Eucafloor registra somente modelos oficiais exatos
 });
 
 test('vinílicos Eucafloor são aplicáveis com fabricante e escala física corretos', () => {
-  Catalog.registerCommercialProducts(verified.map((sku) => ({ id: `vinyl-${sku}`, sku, preco: 100, unidade: 'M2' })));
+  Catalog.registerCommercialProducts([...verified, ...unverified].map((sku) => ({ id: `vinyl-${sku}`, sku, preco: 100, unidade: 'M2' })));
   assert.equal(Catalog.getProduct('vinyl-003870').assets.tileMeters, 1.219);
   assert.equal(Catalog.getProduct('vinyl-006441').assets.tileMeters, 0.9144);
   for (const sku of verified) {
@@ -28,6 +37,9 @@ test('vinílicos Eucafloor são aplicáveis com fabricante e escala física corr
     assert.equal(product.manufacturer, 'eucafloor');
     assert.match(product.assets.textures.map, /albedo\.jpg\?v=vinyl-1$/);
     assert.match(Catalog.getCommercialCatalogPhoto(sku), new RegExp(`${sku}/produto-original\\.jpg$`));
+  }
+  for (const sku of unverified) {
+    assert.equal(Catalog.getProduct(`vinyl-${sku}`), null, `SKU unverified ${sku} não deve ser aplicável`);
   }
 });
 
