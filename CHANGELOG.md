@@ -19,6 +19,9 @@
 - O orçamento passa a exibir subtotais por fornecedor para as ofertas
   escolhidas, distinguindo explicitamente referências Vórtice de ofertas
   comerciais e preservando o total geral dos demais itens estimados.
+- Cada fornecedor com oferta aplicada ganha um PDF isolado contendo somente
+  seus itens e subtotal; a Referência Vórtice mantém identificação explícita
+  de estimativa também nesse artefato.
 
 > Corrigido: Escada — mesmo com a fresta fina eliminada (correção anterior), ainda restava uma faixa de laje atravessando o vão em certos casos. Causa: o corte gerava vários retângulos de lance que se TOCAM entre si (bordas adjacentes), cada um como um furo separado — e o motor de triangulação (earcut) não garante que furos vizinhos que só se tocam virem uma única região aberta, podendo deixar uma costura sólida na aresta compartilhada. Agora cada escada gera UM furo só, traçado pelo contorno real da união dos lances (formato L/U exato), sem furos vizinhos se tocando. Ver DEC-148 (8ª correção pós-lançamento da DEC-140).
 

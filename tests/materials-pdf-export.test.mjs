@@ -56,6 +56,15 @@ test('rodapé exato pedido pelo Product Owner: "Orçamento gerado por esboce.com
   assert.match(materialsSource, /Orçamento gerado por esboce\.com\.br/);
 });
 
+test('painel oferece PDF isolado com os itens reais de cada fornecedor', () => {
+  assert.match(materialsSource, /export function buildSupplierBudgets/);
+  assert.match(materialsSource, /row\.commercialSelection = selection/);
+  assert.match(materialsSource, /data-supplier-pdf=/);
+  assert.match(materialsSource, /exportSupplierPdf\(decodeURIComponent/);
+  assert.match(materialsSource, /rows\.push\(\['TOTAL', 'Subtotal do fornecedor'/);
+  assert.match(materialsSource, /'Orçamento — ' \+ budget\.supplierName \+ qualifier/);
+});
+
 // "Lista simples, não confusa" — pedido explícito: agrupa por
 // categoria com um título por seção, em vez de repetir o nome da
 // categoria em toda linha (como a tabela do painel/planilha faz).

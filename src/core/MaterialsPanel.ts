@@ -1093,7 +1093,21 @@ export function render(): void {
       : 'Estimado (referência de emergência — catálogo ainda não carregou)';
     html += '<div class="materials-line"><span>' + custoLabel + '</span><span>' + totalRow[5] + '</span></div>';
   }
+  const supplierBudgets = buildSupplierBudgets(allRows);
+  if (supplierBudgets.length) {
+    html += '<div class="object-panel-section-label">Orçamentos por fornecedor</div>';
+    supplierBudgets.forEach(function (budget) {
+      const qualifier = budget.kind === 'market_reference' ? ' · estimativa' : '';
+      html += '<div class="materials-line"><span>' + escapeCell(budget.supplierName) + qualifier + '</span>' +
+        '<button type="button" class="ts-small-btn" data-supplier-pdf="' + encodeURIComponent(budget.supplierId) + '">PDF</button></div>';
+    });
+  }
   bodyEl.innerHTML = html;
+  bodyEl.querySelectorAll<HTMLElement>('[data-supplier-pdf]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      exportSupplierPdf(decodeURIComponent(button.dataset.supplierPdf || ''));
+    });
+  });
 }
 
 // ---------------------------------------------------------------
@@ -1431,6 +1445,18 @@ export function buildDetailRows(): (string | number)[][] {
 // de productUnitCost() (produto real do Catalog) ou de REFERENCE_PRICES
 // (insumo genérico, sem produto ainda) — linhas sem base de preço
 // mostram '—' em vez de inventar um número.
+interface MaterialBudgetRow extends Array<string | number> {
+  commercialSelection?: CommercialSelection;
+}
+
+export interface SupplierBudget {
+  supplierId: string;
+  supplierName: string;
+  kind: CommercialSelection['kind'];
+  rows: (string | number)[][];
+  total: number;
+}
+
 export function buildRows(): (string | number)[][] {
   const q = compute();
   const rows: (string | number)[][] = [];
@@ -1451,7 +1477,9 @@ export function buildRows(): (string | number)[][] {
       existing.cost += cost;
       supplierTotals.set(selection.supplierId, existing);
     }
-    rows.push([cat, item, qtyDisplay, unit, avgPrice != null ? fmtBRL(avgPrice) : '—', cost != null ? fmtBRL(cost) : '—']);
+    const row: MaterialBudgetRow = [cat, item, qtyDisplay, unit, avgPrice != null ? fmtBRL(avgPrice) : '—', cost != null ? fmtBRL(cost) : '—'];
+    if (selection) row.commercialSelection = selection;
+    rows.push(row);
   }
 
   push('Geral', 'Paredes (comprimento)', q.totals.wallLength, 'm', null);
@@ -1700,6 +1728,26 @@ export function buildRows(): (string | number)[][] {
   return rows;
 }
 
+export function buildSupplierBudgets(sourceRows: (string | number)[][] = buildRows()): SupplierBudget[] {
+  const groups = new Map<string, SupplierBudget>();
+  sourceRows.forEach(function (sourceRow) {
+    const row = sourceRow as MaterialBudgetRow;
+    const selection = row.commercialSelection;
+    if (!selection || row[0] === 'TOTAL' || row[0] === 'Orçamento por fornecedor') return;
+    const group = groups.get(selection.supplierId) || {
+      supplierId: selection.supplierId,
+      supplierName: selection.supplierName,
+      kind: selection.kind,
+      rows: [],
+      total: 0,
+    };
+    group.rows.push(Array.from(row));
+    group.total += parseBRL(row[5]!);
+    groups.set(selection.supplierId, group);
+  });
+  return Array.from(groups.values()).sort((a, b) => a.supplierName.localeCompare(b.supplierName));
+}
+
 // Exporta a MESMA leitura que está na tela (buildRows() de novo, não
 // guarda estado à parte) como um .csv que o usuário pode abrir no
 // Excel/Sheets, imprimir ou levar pra loja/orçamentista — é o "Lista de
@@ -1841,6 +1889,18 @@ function exportCategoryPdf(categoryLabel: string, title: string): void {
   exportPdfRows(filtered, title);
 }
 
+function exportSupplierPdf(supplierId: string): void {
+  const budget = buildSupplierBudgets().find(function (candidate) { return candidate.supplierId === supplierId; });
+  if (!budget) {
+    window.alert('Nenhuma oferta escolhida desse fornecedor está no projeto.');
+    return;
+  }
+  const rows = budget.rows.slice();
+  rows.push(['TOTAL', 'Subtotal do fornecedor', '', '', '', fmtBRL(budget.total)]);
+  const qualifier = budget.kind === 'market_reference' ? ' — Estimativa Vórtice' : '';
+  exportPdfRows(rows, 'Orçamento — ' + budget.supplierName + qualifier);
+}
+
 export function init(): void {
   panelEl = document.getElementById('materialsPanel');
   bodyEl = document.getElementById('materialsPanelBody');
@@ -1898,4 +1958,4 @@ export function init(): void {
 }
 
 // Namespace de compatibilidade — mesma razão dos demais módulos.
-export const MaterialsPanel = { init, refresh: render, buildRows, buildDetailRows, compute };
+export const MaterialsPanel = { init, refresh: render, buildRows, buildSupplierBudgets, buildDetailRows, compute };

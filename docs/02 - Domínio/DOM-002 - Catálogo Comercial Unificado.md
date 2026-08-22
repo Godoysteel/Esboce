@@ -38,6 +38,11 @@ Itens sem uma escolha explícita continuam compondo o total geral, mas não são
 atribuídos a uma loja. Referências Vórtice podem ter subtotal próprio desde que
 permaneçam identificadas como estimativa, sem aparência de proposta comercial.
 
+O usuário pode gerar um artefato isolado por fornecedor. Esse documento contém
+somente as linhas vinculadas às ofertas daquele fornecedor e seu subtotal; não
+inclui itens genéricos nem valores atribuídos a outros fornecedores. Quando o
+grupo for Vórtice, o título também deve declarar que se trata de estimativa.
+
 ## Intenção de aplicação
 
 - `place`: adicionar ao projeto objetos posicionáveis;
