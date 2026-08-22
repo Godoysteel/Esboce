@@ -444,6 +444,7 @@ const commercialFloorFinishes: Record<string, {
   '001142': { name: 'Eucafloor Prime Click Valência', manufacturer: 'eucafloor', colorHex: '#8C6448', tileMeters: 1.357, catalogPhoto: 'catalogo/revestimentos/001142/produto-original.jpg', textureVersion: 'staggered-2' },
   '003870': { name: 'Eucafloor LVT Basic Santa Fé', manufacturer: 'eucafloor', colorHex: '#8D6C48', tileMeters: 1.219, catalogPhoto: 'catalogo/revestimentos/003870/produto-original.jpg', textureVersion: 'vinyl-1' },
   '006441': { name: 'Eucafloor LVT Basic Houston', manufacturer: 'eucafloor', colorHex: '#C9C7BE', tileMeters: 0.9144, catalogPhoto: 'catalogo/revestimentos/006441/produto-original.jpg', textureVersion: 'vinyl-1' },
+  '000333': { name: 'Savane Urban Branco Acetinado 91x91', manufacturer: 'savane', colorHex: '#E4E3DE', tileMeters: 0.91, catalogPhoto: 'catalogo/revestimentos/000333/produto-original.jpg', textureVersion: 'savane-1' },
 };
 
 export function registerCommercialProducts(rows: Array<{ id: string; sku: string | null; preco: number; unidade: string }>): void {
