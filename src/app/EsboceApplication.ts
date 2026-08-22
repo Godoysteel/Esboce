@@ -1582,7 +1582,7 @@ export class EsboceApplication {
     const grid = document.createElement("div");
     grid.className = "catalog-grid";
     products.forEach((product) => {
-      const manufacturer = this.catalogManufacturers?.get(product.manufacturer_id);
+      const manufacturerLabel = this.catalogManufacturerLabel(product);
       const offers = this.offersForProduct(product.id);
       const bestOffer = offers[0];
       const card = document.createElement("div");
@@ -1610,7 +1610,7 @@ export class EsboceApplication {
         : '<p class="catalog-card-fornecedor">Sem oferta disponível</p>';
       info.innerHTML = `
         <p class="catalog-card-nome">${product.nome}</p>
-        <p class="catalog-card-fabricante">Fabricante: ${manufacturer?.nome ?? "não informado"}</p>
+        <p class="catalog-card-fabricante">Fabricante: ${manufacturerLabel}</p>
         ${supplierHtml}
         ${precoHtml}
         ${bestOffer ? `<span class="catalog-badge ${bestOffer.kind === "market_reference" ? "generico" : "oficial"}">${this.offerKindLabel(bestOffer)}</span>` : ""}
@@ -1655,6 +1655,11 @@ export class EsboceApplication {
     return offer.kind === "market_reference" ? "Estimativa Vórtice" : "Oferta oficial";
   }
 
+  private catalogManufacturerLabel(product: CatalogProductWithDepartment): string {
+    const name = this.catalogManufacturers?.get(product.manufacturer_id)?.nome?.trim();
+    return name && name.toLocaleLowerCase("pt-BR") !== "o mercador" ? name : "não informado";
+  }
+
   private formatOffer(offer: CatalogOffer, unit: string, selected: boolean): string {
     const price = offer.price > 0 ? `R$ ${offer.price.toFixed(2).replace(".", ",")} / ${unit}` : "Sob consulta";
     const trace = `${offer.region} · ${offer.price_date}`;
@@ -1675,7 +1680,7 @@ export class EsboceApplication {
   }
 
   private openCatalogDetail(product: CatalogProductWithDepartment): void {
-    const manufacturer = this.catalogManufacturers?.get(product.manufacturer_id);
+    const manufacturerLabel = this.catalogManufacturerLabel(product);
     const offers = this.offersForProduct(product.id);
     const action = this.catalogActionFor(product);
     const specsRows = Object.entries(product.specs ?? {})
@@ -1685,7 +1690,7 @@ export class EsboceApplication {
     body.innerHTML = `
       ${product.foto_url ? `<img src="${product.foto_url}" alt="${product.nome}" style="width:100%; aspect-ratio:1; object-fit:contain; background:#F1EFE8; border-radius:8px; margin-bottom:12px;">` : ""}
       <h2 style="margin-bottom:2px;">${product.nome}</h2>
-      <p class="auth-sub" style="margin-bottom:8px;">Fabricante: ${manufacturer?.nome ?? "não informado"}</p>
+      <p class="auth-sub" style="margin-bottom:8px;">Fabricante: ${manufacturerLabel}</p>
       ${specsRows ? `<div class="catalog-detail-specs"><table>${specsRows}</table></div>` : ""}
       <h3 class="catalog-offers-title">Ofertas</h3>
       <div class="catalog-offers">${offers.length ? offers.map((offer, index) => this.formatOffer(offer, product.unidade, index === 0)).join("") : '<p class="auth-sub">Nenhuma oferta disponível.</p>'}</div>

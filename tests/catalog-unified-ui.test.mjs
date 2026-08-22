@@ -13,6 +13,9 @@ test('catálogo único carrega ofertas separadas e mostra fornecedor sem confund
   assert.match(app, /bestOffer\.supplier_name/);
   assert.match(app, /Estimativa Vórtice/);
   assert.match(app, /não constitui oferta comercial/);
+  assert.match(app, /catalogManufacturerLabel\(product\)/);
+  assert.match(app, /toLocaleLowerCase\("pt-BR"\) !== "o mercador"/);
+  assert.doesNotMatch(app, /Fabricante: \$\{manufacturer\?\.nome/);
 });
 
 test('ficha oferece uma ação coerente com a categoria do produto', () => {
