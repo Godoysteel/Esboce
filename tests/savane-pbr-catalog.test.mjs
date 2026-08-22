@@ -47,3 +47,22 @@ test('Travertino Suave 91x91 registra seis faces e fontes visuais distintas', ()
   assert.equal(product.manufacturer, 'savane');
   assert.equal(product.assets.tileMeters, 0.91);
 });
+
+test('Amazon Brown 18x113 usa atlas desencontrado e escala da régua', () => {
+  const item = manifest.find((candidate) => candidate.sku === '006558');
+  assert.equal(item.manufacturerCode, '18111701');
+  assert.equal(item.ean, '7908703300188');
+  assert.equal(item.faces, 12);
+  assert.equal(item.pieceWidthM, 1.13);
+  assert.equal(item.pieceHeightM, 0.18);
+  assert.match(item.pbr.layout, /desencontradas/);
+  for (const path of [item.catalogPhoto, item.materializeSource, ...Object.values(item.pbr).filter((value) => typeof value === 'string' && !value.includes('fileiras'))]) {
+    assert.ok(existsSync(new URL(`../public/${path}`, import.meta.url)), `arquivo ausente: ${path}`);
+  }
+
+  Catalog.registerCommercialProducts([{ id: 'supabase-006558', sku: '006558', preco: 1, unidade: 'M2' }]);
+  const product = Catalog.getProduct('supabase-006558');
+  assert.ok(product);
+  assert.equal(product.assets.tileMeters, 1.13);
+  assert.match(product.assets.textures.map, /savane-staggered-1/);
+});

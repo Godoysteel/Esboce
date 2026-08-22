@@ -446,6 +446,7 @@ const commercialFloorFinishes: Record<string, {
   '006441': { name: 'Eucafloor LVT Basic Houston', manufacturer: 'eucafloor', colorHex: '#C9C7BE', tileMeters: 0.9144, catalogPhoto: 'catalogo/revestimentos/006441/produto-original.jpg', textureVersion: 'vinyl-1' },
   '000333': { name: 'Savane Urban Branco Acetinado 91x91', manufacturer: 'savane', colorHex: '#E4E3DE', tileMeters: 0.91, catalogPhoto: 'catalogo/revestimentos/000333/produto-original.jpg', textureVersion: 'savane-1' },
   '000253': { name: 'Savane Travertino Suave Acetinado 91x91', manufacturer: 'savane', colorHex: '#D9D1C2', tileMeters: 0.91, catalogPhoto: 'catalogo/revestimentos/000253/produto-original.jpg', textureVersion: 'savane-1' },
+  '006558': { name: 'Savane Amazon Brown Rústico 18x113', manufacturer: 'savane', colorHex: '#916A3D', tileMeters: 1.13, catalogPhoto: 'catalogo/revestimentos/006558/produto-original.jpg', textureVersion: 'savane-staggered-1' },
 };
 
 export function registerCommercialProducts(rows: Array<{ id: string; sku: string | null; preco: number; unidade: string }>): void {

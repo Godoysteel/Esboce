@@ -2,7 +2,7 @@
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageFilter
+from PIL import Image, ImageChops, ImageFilter, ImageOps
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -12,6 +12,7 @@ SIZE = 1024
 PRODUCTS = {
     "000333": {"width_m": 0.91, "height_m": 0.91, "roughness": 0.52},
     "000253": {"width_m": 0.91, "height_m": 0.91, "roughness": 0.5},
+    "006558": {"width_m": 1.13, "height_m": 0.18, "roughness": 0.68, "plank": True},
 }
 
 
@@ -22,6 +23,27 @@ def fit_square(source: Image.Image) -> Image.Image:
     return source.crop((left, top, left + side, top + side)).resize(
         (SIZE, SIZE), Image.Resampling.LANCZOS
     )
+
+
+def build_plank_atlas(source: Image.Image) -> Image.Image:
+    gray = np.asarray(source.convert("L"))
+    mask = gray < 245
+    ys, xs = np.where(mask)
+    source = source.crop((xs.min(), ys.min(), xs.max() + 1, ys.max() + 1))
+    if source.height > source.width:
+        source = source.transpose(Image.Transpose.ROTATE_90)
+    rows = 6
+    offsets = (0.0, 0.37, 0.74, 0.18, 0.55, 0.92)
+    canvas = Image.new("RGB", (SIZE, SIZE))
+    for row in range(rows):
+        y0 = round(row * SIZE / rows)
+        y1 = round((row + 1) * SIZE / rows)
+        plank = source.resize((SIZE, y1 - y0), Image.Resampling.LANCZOS)
+        if row % 2:
+            plank = ImageOps.mirror(plank)
+        plank = ImageChops.offset(plank, round(offsets[row] * SIZE), 0)
+        canvas.paste(plank, (0, y0))
+    return canvas
 
 
 def derive_maps(albedo: Image.Image, base_roughness: float):
@@ -46,7 +68,8 @@ def derive_maps(albedo: Image.Image, base_roughness: float):
 
 for sku, spec in PRODUCTS.items():
     folder = CATALOG / sku
-    albedo = fit_square(Image.open(folder / "amostra-frontal-original.jpg").convert("RGB"))
+    source = Image.open(folder / "amostra-frontal-original.jpg").convert("RGB")
+    albedo = build_plank_atlas(source) if spec.get("plank") else fit_square(source)
     normal, roughness, ao = derive_maps(albedo, spec["roughness"])
     pbr = folder / "pbr"
     pbr.mkdir(exist_ok=True)
