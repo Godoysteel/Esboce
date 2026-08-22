@@ -1,0 +1,20 @@
+[
+  {
+    "sku": "000092",
+    "manufacturer": "Fortlev",
+    "supplier": "O Mercador",
+    "model": "Telha de PVC Leitosa Ondalev",
+    "dimensions": {
+      "lengthM": 2.44,
+      "widthM": 0.5,
+      "waveHeightMm": 21,
+      "thicknessMm": 0.7
+    },
+    "status": "official_source_verified",
+    "officialPage": "https://www.fortlev.com.br/produtos/telhas/telha-de-pvc-translucida-ondalev/",
+    "technicalSource": "https://www.fortlev.com.br/wp-content/uploads/2021/02/Manual-Catalogo-Tecnico-Telhas-Translucidas-Fortlev.pdf",
+    "image": "/produtos/fortlev/telha-pvc-leitosa-ondalev-244x50cm-fortlev.jpg",
+    "imageSource": "https://www.fortlev.com.br/wp-content/uploads/2020/03/telhas_translucidas_de_pvc_ondalev_fortlev.jpg",
+    "catalogOnly": true
+  }
+]
