@@ -1150,6 +1150,7 @@
   .catalog-card-info { padding: 10px 10px 12px; }
   .catalog-card-nome { font-size: 13px; font-weight: 600; line-height: 1.25; margin: 0 0 4px; }
   .catalog-card-fabricante { font-size: 11px; color: #5F5E5A; margin: 0 0 6px; }
+  .catalog-card-fornecedor { font-size: 11px; color: #534AB7; margin: -2px 0 6px; }
   .catalog-card-preco { font-size: 14px; font-weight: 700; color: #2C2C2A; }
   .catalog-card-preco.consulta { font-size: 12px; font-weight: 500; color: #9C9A92; }
   .catalog-badge {
@@ -1165,6 +1166,15 @@
   .catalog-detail-specs table { width: 100%; border-collapse: collapse; margin-top: 8px; }
   .catalog-detail-specs td { padding: 4px 0; border-bottom: 1px solid #EDEBE3; }
   .catalog-detail-specs td:first-child { color: #5F5E5A; width: 45%; }
+  .catalog-offers-title { margin: 16px 0 8px; font-size: 14px; }
+  .catalog-offers { display:flex; flex-direction:column; gap:7px; }
+  .catalog-offer { border:1px solid #D3D1C7; border-radius:8px; padding:9px 10px; display:grid; grid-template-columns:1fr auto; gap:2px 8px; }
+  .catalog-offer span { font-weight:700; }
+  .catalog-offer small { grid-column:1 / -1; color:#77746C; line-height:1.35; }
+  .catalog-offer.market_reference { background:#F7F5EE; border-style:dashed; }
+  .catalog-apply { margin-top:14px; }
+  .catalog-apply:disabled { opacity:.55; cursor:not-allowed; }
+  .catalog-action-help { margin:7px 0 0; color:#77746C; font-size:11px; line-height:1.4; }
 </style>
 </head>
 <body>

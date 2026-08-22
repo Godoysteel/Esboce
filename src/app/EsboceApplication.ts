@@ -11,7 +11,8 @@ import { Store } from "../core/Store.js";
 import { ViewportController } from "../core/ViewportController.js";
 import { Viewport2DController } from "../core/Viewport2DController.js";
 import { ViewportStats } from "../core/ViewportStats.js";
-import { createSharedProject, loadSharedProject, updateSharedProject, deleteProject, signUpWithProfile, signIn, signOut, sendPasswordRecovery, updatePassword, onPasswordRecovery, reauthenticate, deleteCurrentAccount, getCurrentUser, listMyProjects, ensureProfileExists, hasCurrentLegalAcceptance, recordCurrentLegalAcceptance, listDepartments, listManufacturers, listCatalogProducts, type ProfileFields, type CatalogDepartment, type CatalogManufacturer, type CatalogProductWithDepartment } from "../core/SupabaseClient.js";
+import { Catalog } from "../core/Catalog.js";
+import { createSharedProject, loadSharedProject, updateSharedProject, deleteProject, signUpWithProfile, signIn, signOut, sendPasswordRecovery, updatePassword, onPasswordRecovery, reauthenticate, deleteCurrentAccount, getCurrentUser, listMyProjects, ensureProfileExists, hasCurrentLegalAcceptance, recordCurrentLegalAcceptance, listDepartments, listManufacturers, listCatalogProducts, listCatalogOffers, type ProfileFields, type CatalogDepartment, type CatalogManufacturer, type CatalogProductWithDepartment, type CatalogOffer } from "../core/SupabaseClient.js";
 import { renderCaptcha, requireCaptchaToken, resetCaptcha } from "../core/Turnstile.js";
 import { CURRENT_LEGAL_ACCEPTANCE } from "../core/LegalAcceptance.js";
 import {
@@ -64,6 +65,7 @@ export class EsboceApplication {
   private catalogDepartments: CatalogDepartment[] | null = null;
   private catalogManufacturers: Map<string, CatalogManufacturer> | null = null;
   private catalogProducts: CatalogProductWithDepartment[] | null = null;
+  private catalogOffers: CatalogOffer[] | null = null;
   private catalogActiveDeptId: string | null = null;
   private catalogActiveCategoriaFilter: string | null = null;
   private pendingConstructionSystemSelection: ((system: ConstructionSystem) => void) | null = null;
@@ -1477,9 +1479,11 @@ export class EsboceApplication {
         listManufacturers(),
         listCatalogProducts(),
       ]);
+      const offers = await listCatalogOffers(products);
       this.catalogDepartments = departments;
       this.catalogManufacturers = new Map(manufacturers.map((m) => [m.id, m]));
       this.catalogProducts = products;
+      this.catalogOffers = offers;
       return true;
     } catch (err) {
       console.error("Falha ao carregar catálogo:", err);
@@ -1574,6 +1578,8 @@ export class EsboceApplication {
     grid.className = "catalog-grid";
     products.forEach((product) => {
       const manufacturer = this.catalogManufacturers?.get(product.manufacturer_id);
+      const offers = this.offersForProduct(product.id);
+      const bestOffer = offers[0];
       const card = document.createElement("div");
       card.className = "catalog-card";
 
@@ -1591,14 +1597,18 @@ export class EsboceApplication {
 
       const info = document.createElement("div");
       info.className = "catalog-card-info";
-      const precoHtml = product.preco > 0
-        ? `<div class="catalog-card-preco">R$ ${product.preco.toFixed(2).replace(".", ",")} <span style="font-weight:400;font-size:11px;color:#5F5E5A;">/ ${product.unidade}</span></div>`
+      const precoHtml = bestOffer && bestOffer.price > 0
+        ? `<div class="catalog-card-preco">R$ ${bestOffer.price.toFixed(2).replace(".", ",")} <span style="font-weight:400;font-size:11px;color:#5F5E5A;">/ ${product.unidade}</span></div>`
         : '<div class="catalog-card-preco consulta">Sob consulta</div>';
+      const supplierHtml = bestOffer
+        ? `<p class="catalog-card-fornecedor">${bestOffer.supplier_name}${offers.length > 1 ? ` · +${offers.length - 1} oferta(s)` : ""}</p>`
+        : '<p class="catalog-card-fornecedor">Sem oferta disponível</p>';
       info.innerHTML = `
         <p class="catalog-card-nome">${product.nome}</p>
-        <p class="catalog-card-fabricante">${manufacturer?.nome ?? product.manufacturer_id}</p>
+        <p class="catalog-card-fabricante">Fabricante: ${manufacturer?.nome ?? "não informado"}</p>
+        ${supplierHtml}
         ${precoHtml}
-        <span class="catalog-badge ${product.origem}">${this.catalogOrigemLabel(product.origem)}</span>
+        ${bestOffer ? `<span class="catalog-badge ${bestOffer.kind === "market_reference" ? "generico" : "oficial"}">${this.offerKindLabel(bestOffer)}</span>` : ""}
       `;
       card.appendChild(info);
 
@@ -1614,23 +1624,62 @@ export class EsboceApplication {
     return "Fornecedor";
   }
 
+  private offersForProduct(productId: string): CatalogOffer[] {
+    return (this.catalogOffers ?? [])
+      .filter((offer) => offer.product_id === productId)
+      .sort((a, b) => Number(b.is_official) - Number(a.is_official) || a.price - b.price);
+  }
+
+  private offerKindLabel(offer: CatalogOffer): string {
+    return offer.kind === "market_reference" ? "Estimativa Vórtice" : "Oferta oficial";
+  }
+
+  private formatOffer(offer: CatalogOffer, unit: string): string {
+    const price = offer.price > 0 ? `R$ ${offer.price.toFixed(2).replace(".", ",")} / ${unit}` : "Sob consulta";
+    const trace = `${offer.region} · ${offer.price_date}`;
+    const warning = offer.kind === "market_reference" ? " · não constitui oferta comercial" : "";
+    return `<div class="catalog-offer ${offer.kind}"><strong>${offer.supplier_name}</strong><span>${price}</span><small>${trace}${warning}</small></div>`;
+  }
+
+  private catalogActionFor(product: CatalogProductWithDepartment): { label: string; enabled: boolean } {
+    const local = Catalog.getProduct(product.id);
+    if (!local) return { label: "Usar na construção", enabled: false };
+    if (local.category === "furniture" || local.category === "door" || local.category === "window") {
+      return { label: "Adicionar ao projeto", enabled: true };
+    }
+    if (local.category === "paint" || local.category === "floor_tile" || local.category === "roof_tile") {
+      return { label: "Aplicar na superfície", enabled: true };
+    }
+    return { label: "Usar na construção", enabled: false };
+  }
+
   private openCatalogDetail(product: CatalogProductWithDepartment): void {
     const manufacturer = this.catalogManufacturers?.get(product.manufacturer_id);
+    const offers = this.offersForProduct(product.id);
+    const action = this.catalogActionFor(product);
     const specsRows = Object.entries(product.specs ?? {})
       .map(([key, value]) => `<tr><td>${key}</td><td>${value}</td></tr>`)
       .join("");
-    const precoHtml = product.preco > 0
-      ? `R$ ${product.preco.toFixed(2).replace(".", ",")} / ${product.unidade}`
-      : "Sob consulta";
     const body = this.requireElement("catalogDetailBody");
     body.innerHTML = `
       ${product.foto_url ? `<img src="${product.foto_url}" alt="${product.nome}" style="width:100%; aspect-ratio:1; object-fit:contain; background:#F1EFE8; border-radius:8px; margin-bottom:12px;">` : ""}
       <h2 style="margin-bottom:2px;">${product.nome}</h2>
-      <p class="auth-sub" style="margin-bottom:8px;">${manufacturer?.nome ?? product.manufacturer_id}${product.sku ? ` · SKU ${product.sku}` : ""}</p>
-      <p style="font-size:16px; font-weight:700; margin:0 0 10px;">${precoHtml}</p>
-      <span class="catalog-badge ${product.origem}">${this.catalogOrigemLabel(product.origem)}</span>
+      <p class="auth-sub" style="margin-bottom:8px;">Fabricante: ${manufacturer?.nome ?? "não informado"}</p>
       ${specsRows ? `<div class="catalog-detail-specs"><table>${specsRows}</table></div>` : ""}
+      <h3 class="catalog-offers-title">Ofertas</h3>
+      <div class="catalog-offers">${offers.length ? offers.map((offer) => this.formatOffer(offer, product.unidade)).join("") : '<p class="auth-sub">Nenhuma oferta disponível.</p>'}</div>
+      <button class="auth-submit catalog-apply" id="catalogApplyProduct" ${action.enabled ? "" : "disabled"}>${action.label}</button>
+      ${action.enabled ? "" : '<p class="catalog-action-help">Este item entra automaticamente no quantitativo. A aplicação visual ainda não se aplica a esta categoria.</p>'}
     `;
+    const applyButton = document.getElementById("catalogApplyProduct") as HTMLButtonElement | null;
+    if (applyButton && action.enabled) {
+      applyButton.addEventListener("click", () => {
+        if (!ViewportController.activateCatalogProduct(product.id)) return;
+        this.requireElement("catalogDetailOverlay").style.display = "none";
+        this.requireElement("catalogOverlay").classList.remove("visible");
+        this.setCatalogEntryButtonsActive(false);
+      });
+    }
     this.requireElement("catalogDetailOverlay").style.display = "flex";
   }
 

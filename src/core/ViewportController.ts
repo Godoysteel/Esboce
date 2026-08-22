@@ -5402,6 +5402,38 @@ import {
   // Ático/Normal (`atticModeOverlay`) — só pré-seleciona qual tipo vale
   // se a pessoa escolher "Normal" ali.
   export function setNextRoofType(type: any) { pendingRoofType = type; }
+  export function activateCatalogProduct(productId: string): boolean {
+    var product = Catalog.getProduct(productId);
+    if (!product) return false;
+    if (product.category === 'paint') {
+      currentPaintSurface = 'walls'; currentPaintProductId = productId; setTool('paintBucket');
+      hintEl.textContent = 'Produto carregado. Clique somente nas paredes compatíveis.';
+      return true;
+    }
+    if (product.category === 'floor_tile') {
+      currentPaintSurface = 'floors'; currentPaintProductId = productId; selectedPaintRoomKey = null; setTool('paintBucket');
+      hintEl.textContent = 'Produto carregado. Clique no piso compatível e confirme Aplicar.';
+      return true;
+    }
+    if (product.category === 'roof_tile') {
+      currentPaintSurface = 'roofs'; currentPaintProductId = productId; setTool('paintBucket');
+      hintEl.textContent = 'Produto carregado. Clique somente em coberturas compatíveis.';
+      return true;
+    }
+    if (product.category === 'door' || product.category === 'window') {
+      pendingOpeningProductId = productId; setTool(product.category);
+      hintEl.textContent = 'Produto carregado. Clique numa parede compatível para posicionar.';
+      return true;
+    }
+    if (product.category === 'furniture') {
+      var item = Store.commands.createFurniture(camTarget.x * Core.GRID, camTarget.z * Core.GRID, productId, 0, 0);
+      selectFurniture(item.id);
+      hintEl.textContent = 'Produto adicionado no centro da vista. Arraste para posicionar.';
+      render();
+      return true;
+    }
+    return false;
+  }
   // Botão "Ajustar altura" do gizmo (DEC-116) — arma a alça de altura
   // do cômodo SÓ pra esta parede, só até o próximo ajuste/seleção. Sem
   // isso, a alça nem existe na cena (ver renderSelectionHandles em
@@ -5415,7 +5447,7 @@ export const ViewportController = {
   select, selectColumn, selectRoof, selectOpening, selectVaranda, selectFurniture, selectGlazingPanel, selectVolumeBox, selectStair, selectForro, selectPlanUnderlay, selectHydraulicNode, beginHydraulicRouteDraw,
   getSelectedWallId, getSelectedColumnId, getSelectedRoofId,
   getSelectedOpeningId, getSelectedVarandaId, getSelectedLajeId, getSelectedFurnitureId, getSelectedGlazingPanelId, getSelectedBalconyRailingId, getSelectedVolumeBoxId, getSelectedStairId, getSelectedForroRoomKey, getSelectedPlanUnderlay, getSelectedHydraulicNodeId, getSelectedRoomWallIds,
-  setNextRoofAtticMode, setNextRoofType, armHeightAdjust,
+  setNextRoofAtticMode, setNextRoofType, activateCatalogProduct, armHeightAdjust,
   toggleWallDiagnostics,
   resetCamera,
   toggleTouchCameraMode,
