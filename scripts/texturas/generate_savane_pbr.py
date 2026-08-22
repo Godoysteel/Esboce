@@ -11,6 +11,7 @@ SIZE = 1024
 
 PRODUCTS = {
     "000333": {"width_m": 0.91, "height_m": 0.91, "roughness": 0.52},
+    "000253": {"width_m": 0.91, "height_m": 0.91, "roughness": 0.5},
 }
 
 

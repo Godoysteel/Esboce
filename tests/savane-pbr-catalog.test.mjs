@@ -29,3 +29,21 @@ test('Urban Branco 91x91 fica aplicável pelo SKU comercial', () => {
   assert.match(product.assets.thumbnailUrl, /000333\/produto-original\.jpg$/);
   assert.match(product.assets.textures.map, /000333\/pbr\/albedo\.jpg\?v=savane-1$/);
 });
+
+test('Travertino Suave 91x91 registra seis faces e fontes visuais distintas', () => {
+  const item = manifest.find((candidate) => candidate.sku === '000253');
+  assert.equal(item.manufacturerCode, '91110891');
+  assert.equal(item.status, 'active');
+  assert.equal(item.faces, 6);
+  assert.equal(item.pieceWidthM, 0.91);
+  assert.notEqual(item.catalogPhotoSource, item.materializeSourceOrigin);
+  for (const path of [item.catalogPhoto, item.materializeSource, ...Object.values(item.pbr).filter((value) => typeof value === 'string')]) {
+    assert.ok(existsSync(new URL(`../public/${path}`, import.meta.url)), `arquivo ausente: ${path}`);
+  }
+
+  Catalog.registerCommercialProducts([{ id: 'supabase-000253', sku: '000253', preco: 1, unidade: 'M2' }]);
+  const product = Catalog.getProduct('supabase-000253');
+  assert.ok(product);
+  assert.equal(product.manufacturer, 'savane');
+  assert.equal(product.assets.tileMeters, 0.91);
+});
