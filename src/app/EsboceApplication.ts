@@ -1460,7 +1460,12 @@ export class EsboceApplication {
     const loaded = await this.ensureCatalogLoaded();
     if (!loaded) return;
     this.catalogActiveCategoriaFilter = null;
-    if (!this.catalogActiveDeptId) this.catalogActiveDeptId = this.catalogDepartments?.[0]?.id ?? null;
+    const visibleProducts = this.catalogProductsWithPhotos();
+    if (!this.catalogActiveDeptId || !visibleProducts.some((product) => product.department_id === this.catalogActiveDeptId)) {
+      this.catalogActiveDeptId = this.catalogDepartments?.find((department) =>
+        visibleProducts.some((product) => product.department_id === department.id)
+      )?.id ?? null;
+    }
     this.renderCatalogTabs();
     this.renderCatalogGrid();
   }
@@ -1519,7 +1524,7 @@ export class EsboceApplication {
   private openCatalogFilteredByCategoria(categoria: string): void {
     this.requireElement("catalogOverlay").classList.add("visible");
     this.setCatalogEntryButtonsActive(true);
-    const product = this.catalogProducts?.find((p) => p.categoria === categoria);
+    const product = this.catalogProductsWithPhotos().find((p) => p.categoria === categoria);
     this.catalogActiveDeptId = product?.department_id ?? this.catalogActiveDeptId;
     this.catalogActiveCategoriaFilter = categoria;
     this.renderCatalogTabs();
@@ -1529,7 +1534,7 @@ export class EsboceApplication {
   private renderCatalogTabs(): void {
     const tabsEl = this.requireElement("catalogTabs");
     const departments = this.catalogDepartments ?? [];
-    const products = this.catalogProducts ?? [];
+    const products = this.catalogProductsWithPhotos();
     tabsEl.innerHTML = "";
     // Só mostra departamento que tem pelo menos 1 produto — uma aba
     // vazia não ajuda ninguém a navegar.
@@ -1552,7 +1557,7 @@ export class EsboceApplication {
   private renderCatalogGrid(): void {
     const bodyEl = this.requireElement("catalogBody");
     const filter = this.catalogActiveCategoriaFilter;
-    const products = (this.catalogProducts ?? []).filter((p) =>
+    const products = this.catalogProductsWithPhotos().filter((p) =>
       filter ? p.categoria === filter : p.department_id === this.catalogActiveDeptId
     );
 
@@ -1637,6 +1642,10 @@ export class EsboceApplication {
       grid.appendChild(card);
     });
     bodyEl.appendChild(grid);
+  }
+
+  private catalogProductsWithPhotos(): CatalogProductWithDepartment[] {
+    return (this.catalogProducts ?? []).filter((product) => Boolean(product.foto_url?.trim()));
   }
 
   private catalogOrigemLabel(origem: string): string {

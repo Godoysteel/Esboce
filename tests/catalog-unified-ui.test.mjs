@@ -38,3 +38,10 @@ test('oferta escolhida vira snapshot comercial persistido por alvo', () => {
   assert.match(viewport, /setCommercialSelection\(Store\.currentFloor\(\)\.id \+ ':opening:'/);
   assert.match(viewport, /setCommercialSelection\(Store\.currentFloor\(\)\.id \+ ':furniture:'/);
 });
+
+test('catálogo visual mostra somente produtos que possuem foto', () => {
+  assert.match(app, /catalogProductsWithPhotos\(\)/);
+  assert.match(app, /Boolean\(product\.foto_url\?\.trim\(\)\)/);
+  assert.match(app, /const products = this\.catalogProductsWithPhotos\(\);/);
+  assert.match(app, /const products = this\.catalogProductsWithPhotos\(\)\.filter/);
+});
