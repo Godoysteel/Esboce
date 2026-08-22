@@ -1,13 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { Catalog } from '../src/core/Catalog.ts';
 
-const verified = ['003230', '003231', '003229', '000317', '000291', '000300', '000280', '000284', '000287', '000279'];
-const unverified = ['000290', '003135', '000852', '000356', '000348', '000419', '000435', '000436', '000437', '000260'];
+const verified = ['003230', '003231', '003229', '000317', '000291', '000300', '000287', '000279'];
+const unverified = ['000290', '003135', '000852', '000280', '000284', '000356', '000348', '000419', '000435', '000436', '000437', '000260'];
 const manifest = JSON.parse(readFileSync(new URL('../public/catalogo/revestimentos/manifest.json', import.meta.url), 'utf8'));
 
-test('levantamento Ceral fecha os 20 SKUs em dez verificados e dez preservados como unverified', () => {
+test('levantamento Ceral fecha os 20 SKUs em oito verificados e doze preservados como unverified', () => {
   assert.equal(manifest.length, 20);
   assert.deepEqual(manifest.filter((item) => item.status === 'official_source_verified').map((item) => item.sku).sort(), [...verified].sort());
   assert.deepEqual(manifest.filter((item) => item.status === 'unverified').map((item) => item.sku).sort(), [...unverified].sort());
@@ -38,17 +39,21 @@ test('catálogo visual registra somente os SKUs Ceral verificados pelos UUIDs di
   }
 });
 
+test('fotos comerciais oficiais dos SKUs verificados não são repetidas', () => {
+  const hashes = verified.map((sku) => {
+    const item = manifest.find((candidate) => candidate.sku === sku);
+    const image = readFileSync(new URL(`../public/${item.catalogPhoto}`, import.meta.url));
+    return createHash('sha256').update(image).digest('hex');
+  });
+
+  assert.equal(new Set(hashes).size, hashes.length);
+});
+
 test('SKU retangular 000317 usa atlas de 203 mm com duas peças 203 x 102 mm', () => {
   const source = readFileSync(new URL('../scripts/texturas/generate_ceral_pbr.py', import.meta.url), 'utf8');
   assert.match(source, /"000317": \{"width_m": 0\.203, "height_m": 0\.102, "roughness": 0\.2, "rows": 2\}/);
   const product = Catalog.getProduct('supabase-000317');
   assert.equal(product.assets.tileMeters, 0.203);
-});
-
-test('SKU 000284 recorta uma peça da placa frontal oficial 3x3 antes de gerar PBR', () => {
-  const source = readFileSync(new URL('../scripts/texturas/generate_ceral_pbr.py', import.meta.url), 'utf8');
-  assert.match(source, /"000284": \{"width_m": 0\.099, "height_m": 0\.099, "roughness": 0\.12, "source_grid": 3\}/);
-  assert.match(source, /source_grid = spec\.get\("source_grid", 1\)/);
 });
 
 test('carregamento do catálogo associa por SKU e substitui a foto pela ambientada oficial', () => {
