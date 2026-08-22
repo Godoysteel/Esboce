@@ -10,7 +10,7 @@ import type {
   Project, Floor, Wall, Column, Roof, Opening, OpeningKind, Varanda, Laje, Furniture, ColumnShape, RoofType,
   RidgeAxis, VarandaFrontSide, FoundationType, StoreEvent, StoreListener, ForroBoardType,
   WallSnapshot, LinkedWallUpdate, GlazingPanel, GlazingGlassMaterial, BalconyRailing, VolumeBox, Stair, StairModel, PlanUnderlay, Terreno, TerrenoMuroSide,
-  HydraulicNetworkType
+  HydraulicNetworkType, HydraulicNode, HydraulicSegment,
 } from './types.js';
 
 let project: Project = Core.createProject();
@@ -31,6 +31,27 @@ export function onChange(fn: StoreListener): void {
 function pushUndoSnapshot(): void {
   undoStack.push(JSON.parse(JSON.stringify(project)));
   if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+}
+
+// Maior X entre toda entidade de todo pavimento — usado como eixo
+// padrão de espelho em duplicateEntireConstructionMirrored, pra cópia
+// nascer encostada na borda direita da construção original.
+function computeConstructionBoundsX(): number {
+  let maxX = -Infinity;
+  const consider = (x: number) => { if (x > maxX) maxX = x; };
+  project.floors.forEach((f) => {
+    f.walls.forEach((w) => { consider(w.x1); consider(w.x2); });
+    f.columns.forEach((c) => consider(c.x));
+    f.roofs.forEach((r) => { consider(r.x1); consider(r.x2); });
+    f.varandas.forEach((v) => { consider(v.x1); consider(v.x2); });
+    f.lajes.forEach((l) => l.points.forEach((p) => consider(p.x)));
+    f.furniture.forEach((it) => consider(it.x));
+    f.glazingPanels.forEach((g) => { if (g.state === 'preview' && g.x != null) consider(g.x); });
+    f.balconyRailings.forEach((b) => consider(b.x));
+    f.volumeBoxes.forEach((v) => consider(v.x));
+    f.stairs.forEach((s) => consider(s.x));
+  });
+  return maxX === -Infinity ? 0 : maxX;
 }
 
 export function currentFloor(): Floor {
@@ -514,6 +535,183 @@ export const commands = {
       w.x1 = s.x1 + dx; w.y1 = s.y1 + dy; w.x2 = s.x2 + dx; w.y2 = s.y2 + dy;
     });
     emit({ type: 'WallsGroupDragged', live: true });
+  },
+
+  // Move a construção INTEIRA — todos os pavimentos, mantendo o
+  // empilhamento — por um delta em X/Y. Diferente de
+  // updateWallsGroupBodyLive (só paredes de UM cômodo): aqui todo tipo
+  // de entidade de todo pavimento anda junto (parede, coluna, telhado,
+  // varanda, laje solta, móvel, painel de vidro solto — attached anda
+  // sozinho com a parede via wallId+offsetM —, sacada de vidro, bloco
+  // de volumetria, escada, planta de referência, ponto hidráulico).
+  // Terreno nunca se move — é a referência fixa. Sem rotação/espelho
+  // nenhum, é só soma — chamado uma vez no soltar do arraste
+  // "Selecionar tudo" (ViewportController já chamou beginTransaction
+  // no começo do gesto, então não empurra outro snapshot de undo aqui).
+  moveEntireConstruction(dx: number, dy: number): void {
+    project.floors.forEach((f) => {
+      f.walls.forEach((w) => { w.x1 += dx; w.y1 += dy; w.x2 += dx; w.y2 += dy; });
+      f.columns.forEach((c) => { c.x += dx; c.y += dy; });
+      f.roofs.forEach((r) => { r.x1 += dx; r.y1 += dy; r.x2 += dx; r.y2 += dy; });
+      f.varandas.forEach((v) => { v.x1 += dx; v.y1 += dy; v.x2 += dx; v.y2 += dy; });
+      f.lajes.forEach((l) => { l.points.forEach((p) => { p.x += dx; p.y += dy; }); });
+      f.furniture.forEach((it) => { it.x += dx; it.y += dy; });
+      f.glazingPanels.forEach((g) => { if (g.state === 'preview' && g.x != null && g.y != null) { g.x += dx; g.y += dy; } });
+      f.balconyRailings.forEach((b) => { b.x += dx; b.y += dy; });
+      f.volumeBoxes.forEach((v) => { v.x += dx; v.y += dy; });
+      f.stairs.forEach((s) => { s.x += dx; s.y += dy; });
+      if (f.planUnderlay) { f.planUnderlay.x += dx; f.planUnderlay.y += dy; }
+    });
+    project.hydraulics.nodes.forEach((n) => { n.x += dx; n.y += dy; });
+    emit({ type: 'EntireConstructionMoved', dx, dy, live: true });
+  },
+
+  // Duplica a construção INTEIRA espelhada num eixo vertical (X) —
+  // "geminado": a cópia é um reflexo de verdade (não uma cópia igual
+  // deslocada), encostada na borda direita da original
+  // (computeConstructionBoundsX). As duas unidades convivem no MESMO
+  // Floor de cada pavimento (não cria pavimento novo). Cada entidade
+  // ganha id novo (Core.nextId/nextHydraulicId); referências por id
+  // (wallId, startNodeId/endNodeId, ownerFixtureId) são remapeadas pro
+  // id novo correspondente. roomFinishes/roomFinishSettings/
+  // roomLajeGenerated/roomForroGenerated/roomForroTipo (todos indexados
+  // por roomKey = ids de parede ordenados e unidos) são remapeados pro
+  // roomKey do cômodo espelhado, senão a cópia nasceria sem
+  // acabamento/laje/forro que o original já tinha.
+  //
+  // Limitações aceitas (ver plano): planUnderlay não duplica (é
+  // referência de desenho); Roof.compoundGroupId/atticWallIds não são
+  // remapeados (cobertura composta/ático pode precisar de ajuste manual
+  // na cópia); Stair com model 'L'/'U' só reposiciona/gira — o giro
+  // real da escada (qual lado sobe) não inverte, porque a malha .glb é
+  // fixa; hidráulica duplicada espelhada foi decisão explícita do
+  // Product Owner mesmo sabendo do risco de sair errada num detalhe de
+  // lateralidade — revisar visualmente depois.
+  duplicateEntireConstructionMirrored(): void {
+    pushUndoSnapshot();
+    const axisX = computeConstructionBoundsX();
+    const wallIdMapsByFloor: Record<string, string>[] = [];
+
+    project.floors.forEach((f, floorIdx) => {
+      const rooms = Core.detectRooms(f.walls);
+      const oldWallIdsPerRoom = rooms.map((room) => Core.findRoomWallIds(f.walls, room).slice().sort());
+      const oldRoomKeys = oldWallIdsPerRoom.map((ids) => ids.join(','));
+
+      const wallIdMap: Record<string, string> = {};
+      const newWalls: Wall[] = f.walls.map((w) => {
+        const newId = Core.nextId('wall');
+        wallIdMap[w.id] = newId;
+        return { ...w, id: newId, x1: Core.mirrorX(w.x1, axisX), x2: Core.mirrorX(w.x2, axisX) };
+      });
+      wallIdMapsByFloor[floorIdx] = wallIdMap;
+
+      const newColumns: Column[] = f.columns.map((c) => ({ ...c, id: Core.nextId('column'), x: Core.mirrorX(c.x, axisX) }));
+      const newRoofs: Roof[] = f.roofs.map((r) => ({
+        ...r, id: Core.nextId('roof'), x1: Core.mirrorX(r.x1, axisX), x2: Core.mirrorX(r.x2, axisX),
+      }));
+      const newVarandas: Varanda[] = f.varandas.map((v) => ({
+        ...v, id: Core.nextId('varanda'), x1: Core.mirrorX(v.x1, axisX), x2: Core.mirrorX(v.x2, axisX),
+        frontSide: v.frontSide === 'minX' ? 'maxX' : v.frontSide === 'maxX' ? 'minX' : v.frontSide,
+      }));
+      // Espelhar em X inverte o sentido do contorno (horário vira
+      // anti-horário) — Laje.points exige sentido horário, daí o
+      // .reverse() depois de espelhar cada ponto.
+      const newLajes: Laje[] = f.lajes.map((l) => ({
+        ...l, id: Core.nextId('laje'),
+        points: l.points.map((p) => ({ x: Core.mirrorX(p.x, axisX), y: p.y })).reverse(),
+      }));
+      const newFurniture: Furniture[] = f.furniture.map((it) => ({
+        ...it, id: Core.nextId('furniture'), x: Core.mirrorX(it.x, axisX), rotationDeg: Core.mirrorRotationDeg(it.rotationDeg),
+      }));
+      const newGlazingPanels: GlazingPanel[] = f.glazingPanels.map((g) => {
+        const copy: GlazingPanel = { ...g, id: Core.nextId('glazing') };
+        if (g.state === 'preview' && g.x != null && g.y != null) {
+          copy.x = Core.mirrorX(g.x, axisX);
+          if (g.rotationDeg != null) copy.rotationDeg = Core.mirrorRotationDeg(g.rotationDeg);
+        } else if (g.state === 'attached' && g.wallId) {
+          copy.wallId = wallIdMap[g.wallId] || g.wallId;
+          if (g.normalSign != null) copy.normalSign = (g.normalSign * -1) as 1 | -1;
+        }
+        return copy;
+      });
+      const newBalconyRailings: BalconyRailing[] = f.balconyRailings.map((b) => ({
+        ...b, id: Core.nextId('balcony'), x: Core.mirrorX(b.x, axisX), rotationDeg: Core.mirrorRotationDeg(b.rotationDeg),
+      }));
+      const newVolumeBoxes: VolumeBox[] = f.volumeBoxes.map((v) => ({
+        ...v, id: Core.nextId('volumebox'), x: Core.mirrorX(v.x, axisX), rotationDeg: Core.mirrorRotationDeg(v.rotationDeg),
+      }));
+      const newStairs: Stair[] = f.stairs.map((s) => ({
+        ...s, id: Core.nextId('stair'), x: Core.mirrorX(s.x, axisX), rotationDeg: Core.mirrorRotationDeg(s.rotationDeg),
+      }));
+      // offset não muda — distância ao longo da parede a partir de p1,
+      // preservada porque as duas pontas da parede foram espelhadas
+      // juntas (isometria).
+      const newOpenings: Opening[] = f.openings.map((o) => ({
+        ...o, id: Core.nextId('opening'), wallId: wallIdMap[o.wallId] || o.wallId,
+      }));
+
+      function remapRoomMap<T>(map: Record<string, T> | undefined): Record<string, T> {
+        const result: Record<string, T> = {};
+        if (!map) return result;
+        oldRoomKeys.forEach((oldKey, i) => {
+          const value = map[oldKey];
+          if (value === undefined) return;
+          const newKey = oldWallIdsPerRoom[i]!.map((id) => wallIdMap[id] || id).sort().join(',');
+          result[newKey] = value;
+        });
+        return result;
+      }
+      Object.assign(f.roomFinishes, remapRoomMap(f.roomFinishes));
+      if (f.roomFinishSettings) Object.assign(f.roomFinishSettings, remapRoomMap(f.roomFinishSettings));
+      if (f.roomLajeGenerated) Object.assign(f.roomLajeGenerated, remapRoomMap(f.roomLajeGenerated));
+      if (f.roomForroGenerated) Object.assign(f.roomForroGenerated, remapRoomMap(f.roomForroGenerated));
+      if (f.roomForroTipo) Object.assign(f.roomForroTipo, remapRoomMap(f.roomForroTipo));
+
+      f.walls.push(...newWalls);
+      f.columns.push(...newColumns);
+      f.roofs.push(...newRoofs);
+      f.varandas.push(...newVarandas);
+      f.lajes.push(...newLajes);
+      f.furniture.push(...newFurniture);
+      f.glazingPanels.push(...newGlazingPanels);
+      f.balconyRailings.push(...newBalconyRailings);
+      f.volumeBoxes.push(...newVolumeBoxes);
+      f.stairs.push(...newStairs);
+      f.openings.push(...newOpenings);
+    });
+
+    // Hidráulica — project-level (HydraulicNode.floorIndex identifica o
+    // pavimento), remapeada com o wallIdMap do floor correspondente.
+    const nodeIdMap: Record<string, string> = {};
+    const newNodes: HydraulicNode[] = project.hydraulics.nodes.map((n) => {
+      const wallIdMap = wallIdMapsByFloor[n.floorIndex ?? 0] || {};
+      const newId = nextHydraulicId('hyd-node');
+      nodeIdMap[n.id] = newId;
+      const copy: HydraulicNode = { ...n, id: newId, x: Core.mirrorX(n.x, axisX) };
+      if (n.wallId) copy.wallId = wallIdMap[n.wallId] || n.wallId;
+      if (n.wallFaceSide != null) copy.wallFaceSide = (n.wallFaceSide * -1) as 1 | -1;
+      return copy;
+    });
+    newNodes.forEach((n) => {
+      if (!n.ownerFixtureId) return;
+      const mapped = nodeIdMap[n.ownerFixtureId];
+      if (mapped) n.ownerFixtureId = mapped;
+    });
+    project.hydraulics.nodes.push(...newNodes);
+
+    const newSegments: HydraulicSegment[] = project.hydraulics.segments
+      .filter((s) => nodeIdMap[s.startNodeId] && nodeIdMap[s.endNodeId])
+      .map((s) => {
+        const copy: HydraulicSegment = {
+          ...s, id: nextHydraulicId('hyd-segment'),
+          startNodeId: nodeIdMap[s.startNodeId]!, endNodeId: nodeIdMap[s.endNodeId]!,
+        };
+        if (s.ownerFixtureId) copy.ownerFixtureId = nodeIdMap[s.ownerFixtureId] || s.ownerFixtureId;
+        return copy;
+      });
+    project.hydraulics.segments.push(...newSegments);
+
+    emit({ type: 'EntireConstructionDuplicatedMirrored', axisX });
   },
 
   // "Empurra" uma parede na direção perpendicular a ela mesma, e arrasta

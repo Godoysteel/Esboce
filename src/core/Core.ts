@@ -94,6 +94,23 @@ export function nextId(prefix: string): string {
   return prefix + '_' + (_idSeq++);
 }
 
+// Helpers puros pra mover/duplicar a construção inteira (Store.
+// moveEntireConstruction / duplicateEntireConstructionMirrored) —
+// reaproveitados por todo tipo de entidade que tem posição no plano.
+export function translatePoint(x: number, y: number, dx: number, dy: number): { x: number; y: number } {
+  return { x: x + dx, y: y + dy };
+}
+export function mirrorX(x: number, axisX: number): number {
+  return 2 * axisX - x;
+}
+// Reflexo de um ângulo 2D (Furniture/VolumeBox/Stair/BalconyRailing/
+// GlazingPanel.rotationDeg) ao espelhar num eixo VERTICAL (X) —
+// fórmula genérica de reflexo, correta pra qualquer grau, não só
+// múltiplo de 90°.
+export function mirrorRotationDeg(deg: number): number {
+  return (360 - deg) % 360;
+}
+
 export function createWallEntity(x1: number, y1: number, x2: number, y2: number, id?: string): Wall {
   return { id: id || nextId('wall'), x1, y1, x2, y2 };
 }
@@ -2002,7 +2019,7 @@ export const Core = {
   ARCO_DEFAULT_WIDTH, ARCO_DEFAULT_HEIGHT, ARCO_DEFAULT_SILL,
   WALL_HEIGHT, OPENING_MIN_WIDTH, OPENING_MIN_HEIGHT,
   OPENING_MARGIN, OPENING_GAP, OPENING_WALL_CLEARANCE,
-  snap, nextId, snapCoordinateToWalls,
+  snap, nextId, snapCoordinateToWalls, translatePoint, mirrorX, mirrorRotationDeg,
   createOpeningEntity, wallLengthMeters, polygonAreaModelUnits, wallOffsetAtPoint, findValidOpeningOffset,
   resolveOpeningEdgeResize, resolveOpeningHeightResize,
   findRoomsAdjacentToOpening,

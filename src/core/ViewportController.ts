@@ -119,6 +119,10 @@ import {
   // transforms durante o pointermove. A geometria persistida continua
   // intacta até o pointerup, quando o Store recebe o delta final uma vez.
   var roomGroupDragObjects: { object: any; startX: number; startZ: number }[] = [];
+  // Mesmo princípio do roomGroupDragObjects acima, só que pra TODA a
+  // construção (todos os pavimentos) de uma vez — usado por "Selecionar
+  // tudo". O terreno nunca entra aqui (é a referência fixa).
+  var wholeConstructionDragObjects: { object: any; startX: number; startZ: number }[] = [];
   var furnitureDragObject: any = null;
   var hydraulicFixtureDragObjects: any[] = [];
   var columnDragObjects: { object: any; startX: number; startZ: number }[] = [];
@@ -209,7 +213,8 @@ import {
     varanda: 'Clique no chão pra colocar uma varanda. Selecione uma já colocada, clique direito nela pra girar qual lado é a frente ou excluir.',
     demolish: 'Clique numa parede pra quebrar ela — some da vista e do orçamento, mas o cômodo continua fechado (o piso não desaparece).',
     paintBucket: 'Escolha a superfície no menu acima e siga o fluxo indicado para aplicar o acabamento.',
-    terreno: 'Clique num lado destacado do retângulo pra adicionar ou remover o muro daquele lado.'
+    terreno: 'Clique num lado destacado do retângulo pra adicionar ou remover o muro daquele lado.',
+    wholeConstruction: 'Clique em qualquer ponto e arraste pra mover a construção inteira (todos os pavimentos) dentro do terreno.'
   };
 
   function hydraulicFixtureKeyFromTool(tool: any): string | null {
@@ -249,6 +254,37 @@ import {
   function previewRoomGroupDelta(dx: number, dy: number) {
     var worldDx = dx * scale, worldDz = dy * scale;
     roomGroupDragObjects.forEach(function (entry) {
+      entry.object.position.x = entry.startX + worldDx;
+      entry.object.position.z = entry.startZ + worldDz;
+    });
+  }
+
+  // "Selecionar tudo": coleta CADA objeto 3D que representa alguma
+  // entidade do modelo (qualquer pavimento) — reconhecido pela mesma
+  // tag de userData que cada tipo já usa pra ser encontrado em outros
+  // lugares do arquivo (wallId, columnId, roofId, etc.). Ficam de fora
+  // de propósito: tudo que é terreno (terrenoSide/terrenoMuroId — a
+  // referência fixa que nunca se move) e as alças de gizmo
+  // (userData.handle) e prévias transitórias de outro arraste em
+  // andamento — nenhuma dessas é "a construção", são UI ou o terreno.
+  function collectWholeConstructionDragObjects() {
+    wholeConstructionDragObjects = [];
+    scene.children.forEach(function (object: any) {
+      var data = object.userData || {};
+      if (data.terrenoSide != null || data.terrenoMuroId != null) return;
+      if (data.handle != null || data.roofResizePreview || data.wallResizePreview) return;
+      var belongs = !!(data.wallId || data.openingId || data.columnId || data.roofId
+        || data.varandaId || data.furnitureId || data.roomKey || data.glazingPanelId
+        || data.balconyRailingId || data.volumeBoxId || data.stairId
+        || data.hydraulicNodeId || data.hydraulicSegmentId);
+      if (!belongs) return;
+      wholeConstructionDragObjects.push({ object: object, startX: object.position.x, startZ: object.position.z });
+    });
+  }
+
+  function previewWholeConstructionDelta(dx: number, dy: number) {
+    var worldDx = dx * scale, worldDz = dy * scale;
+    wholeConstructionDragObjects.forEach(function (entry) {
       entry.object.position.x = entry.startX + worldDx;
       entry.object.position.z = entry.startZ + worldDz;
     });
@@ -2487,6 +2523,20 @@ import {
       return;
     }
 
+    // Ferramenta "Selecionar tudo": qualquer clique (em cima de parede,
+    // móvel ou vazio, tanto faz) arma o arraste da construção inteira —
+    // não tem sentido selecionar UM objeto aqui, é tudo ou nada.
+    if (currentTool === 'wholeConstruction') {
+      var wcGround = getGroundModelPoint(e.clientX, e.clientY);
+      if (!wcGround) return;
+      collectWholeConstructionDragObjects();
+      dragElementStart = { lastDx: 0, lastDy: 0 };
+      dragGroundStart = wcGround;
+      dragMode = 'wholeConstruction';
+      Store.commands.beginTransaction();
+      return;
+    }
+
     // Ferramenta Telhado: nunca seleciona parede/coluna, só telhado já
     // colocado (ou coloca um novo em cima do cômodo sob o cursor).
     if (currentTool === 'telhado') {
@@ -3212,6 +3262,17 @@ import {
     // quantizado pela mesma malha das paredes. Uma posição colidente só
     // é aceita quando representa duas paredes no mesmo eixo prontas
     // para fusão; nos demais casos conserva o último passo válido.
+    if (dragMode === 'wholeConstruction') {
+      var gpWc = getGroundModelPoint(e.clientX, e.clientY);
+      if (gpWc && dragGroundStart && dragElementStart) {
+        var wcDx = Core.snap(gpWc.x - dragGroundStart.x);
+        var wcDy = Core.snap(gpWc.y - dragGroundStart.y);
+        dragElementStart.lastDx = wcDx;
+        dragElementStart.lastDy = wcDy;
+        previewWholeConstructionDelta(wcDx, wcDy);
+      }
+      return;
+    }
     if (dragMode === 'roomGroup') {
       var gpR = getGroundModelPoint(e.clientX, e.clientY);
       if (gpR && dragGroundStart && dragElementStart) {
@@ -3927,6 +3988,14 @@ import {
 
     if (dragMode === 'wallBody') {
       if (selectedWallId) snapWallToGridExact(selectedWallId);
+      dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
+      return;
+    }
+    if (dragMode === 'wholeConstruction') {
+      if (dragElementStart) {
+        Store.commands.moveEntireConstruction(dragElementStart.lastDx || 0, dragElementStart.lastDy || 0);
+      }
+      wholeConstructionDragObjects = [];
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }

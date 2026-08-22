@@ -321,6 +321,15 @@ export class EsboceApplication {
         ? 'Forro de drywall gerado — ' + roomCount + (roomCount === 1 ? ' cômodo coberto.' : ' cômodos cobertos.')
         : 'Nenhum cômodo fechado neste pavimento ainda — feche as paredes antes de gerar o forro.';
     });
+    // Duplicar geminado é uma ação de um clique só (nasce já espelhada e
+    // encostada no eixo calculado) — sem arraste, ao contrário de
+    // "Selecionar tudo" (armado como tool-btn/data-tool comum, tratado
+    // pelo ViewportController como qualquer outra ferramenta).
+    this.requireElement("duplicateGeminadoBtn").addEventListener("click", () => {
+      Store.commands.duplicateEntireConstructionMirrored();
+      this.requireElement('viewportHint').textContent =
+        'Segunda unidade criada, espelhada — reveja a hidráulica dela antes de finalizar.';
+    });
     // Rail de categorias (Ambientes/Paredes/Aberturas/Cobertura/
     // Materiais/Mobiliário/Instalações/Mais) — um painel visível por
     // vez, puramente de UI (não é estado de Store/ViewportController).

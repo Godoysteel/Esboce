@@ -18,6 +18,9 @@ import {
   polygonAreaModelUnits,
   rectPoints,
   lajeBounds,
+  mirrorRotationDeg,
+  mirrorX,
+  translatePoint,
   resolveOpeningEdgeResize,
   resolveOpeningHeightResize,
   resolveRoomHeightUpdate,
@@ -1632,4 +1635,108 @@ test('cor da placa e espaçamento dos perfis mudam por tipo — ST fica no espa�
   assert.match(scene3DRendererSource, /FORRO_RUNNER_SPACING_TIGHT_M = 0\.4;/);
   assert.match(scene3DRendererSource, /var runnerSpacingM = tipo === 'ST' \? FORRO_RUNNER_SPACING_M : FORRO_RUNNER_SPACING_TIGHT_M;/);
   assert.match(scene3DRendererSource, /FORRO_BOARD_COLORS: Record<string, number> = \{/);
+});
+
+// Mover/duplicar a construção inteira — Core.translatePoint/mirrorX/
+// mirrorRotationDeg são os três helpers puros compartilhados pelos dois
+// comandos (ver Store.moveEntireConstruction/duplicateEntireConstructionMirrored).
+test('translatePoint soma o delta, sem nenhuma rotação/espelho', () => {
+  assert.deepEqual(translatePoint(10, 20, 5, -3), { x: 15, y: 17 });
+  assert.deepEqual(translatePoint(0, 0, 0, 0), { x: 0, y: 0 });
+});
+
+test('mirrorX reflete em torno do eixo — ponto NO eixo fica parado, pontos simétricos trocam de lugar', () => {
+  assert.equal(mirrorX(120, 120), 120);
+  assert.equal(mirrorX(100, 120), 140);
+  assert.equal(mirrorX(140, 120), 100);
+});
+
+test('mirrorRotationDeg reflete o ângulo (espelho em eixo vertical) — 0/180 ficam parados, 90/270 trocam, valores fora de múltiplo de 90 também funcionam', () => {
+  assert.equal(mirrorRotationDeg(0), 0);
+  assert.equal(mirrorRotationDeg(180), 180);
+  assert.equal(mirrorRotationDeg(90), 270);
+  assert.equal(mirrorRotationDeg(270), 90);
+  assert.equal(mirrorRotationDeg(30), 330);
+});
+
+test('Store.commands.moveEntireConstruction existe e translada CADA tipo de entidade de CADA pavimento pelo mesmo delta, incluindo hidráulica', () => {
+  const cmdStart = storeSource.indexOf('function computeConstructionBoundsX(');
+  assert.notEqual(cmdStart, -1);
+  const moveStart = storeSource.indexOf('moveEntireConstruction(dx: number, dy: number): void {', cmdStart);
+  assert.notEqual(moveStart, -1);
+  const moveEnd = storeSource.indexOf('\n  },', moveStart);
+  const moveBlock = storeSource.slice(moveStart, moveEnd);
+
+  // Cada array do Floor precisa aparecer — mover só metade da construção
+  // (ex.: esquecer os móveis) é o tipo de bug que não aparece em nenhum
+  // teste de comportamento isolado, só numa varredura de cobertura como esta.
+  ['walls', 'columns', 'roofs', 'varandas', 'lajes', 'furniture', 'glazingPanels',
+    'balconyRailings', 'volumeBoxes', 'stairs', 'planUnderlay']
+    .forEach((field) => assert.match(moveBlock, new RegExp('\\.' + field), `moveEntireConstruction deveria tocar floor.${field}`));
+
+  // Hidráulica é por PROJETO (não por floor) — todos os pavimentos se
+  // movem juntos, então TODO nó, de qualquer floorIndex, leva o mesmo delta.
+  assert.match(moveBlock, /hydraulics\.nodes/);
+});
+
+test('Store.commands.duplicateEntireConstructionMirrored existe, espelha em torno de computeConstructionBoundsX e remapeia id de parede em quem referencia wallId', () => {
+  const dupStart = storeSource.indexOf('duplicateEntireConstructionMirrored(): void {');
+  assert.notEqual(dupStart, -1);
+  const dupEnd = storeSource.indexOf('\n  },', storeSource.indexOf('emit({ type: \'EntireConstructionDuplicatedMirrored\'', dupStart));
+  const dupBlock = storeSource.slice(dupStart, dupEnd);
+
+  assert.match(dupBlock, /computeConstructionBoundsX\(\)/);
+  assert.match(dupBlock, /Core\.detectRooms\(f\.walls\)/);
+  assert.match(dupBlock, /Core\.mirrorX\(/);
+  assert.match(dupBlock, /Core\.mirrorRotationDeg\(/);
+  // Laje.points precisa inverter a ordem depois de espelhar em X, senão
+  // o polígono nasce em sentido anti-horário (Laje exige sentido horário).
+  assert.match(dupBlock, /\.reverse\(\)/);
+  // wallId referenciado por Opening/GlazingPanel/HydraulicNode tem que
+  // apontar pra parede NOVA, não pra antiga — senão a cópia fica órfã.
+  assert.match(dupBlock, /wallIdMap\[/);
+  // roomKey (roomFinishes/roomLajeGenerated/roomForroGenerated/roomForroTipo)
+  // remapeado pro roomKey da SALA NOVA, senão a laje/forro gerados não
+  // aparecem no cômodo duplicado mesmo com a geometria certa.
+  assert.match(dupBlock, /roomForroGenerated/);
+  assert.match(dupBlock, /roomForroTipo/);
+});
+
+test('"Selecionar tudo" (dragMode wholeConstruction): prévia só translada objetos 3D já existentes, commit único no pointerup — mesmo princípio DEC-87/roomGroup', () => {
+  assert.match(viewportControllerSource, /function collectWholeConstructionDragObjects\(\)/);
+  assert.match(viewportControllerSource, /function previewWholeConstructionDelta\(dx: number, dy: number\)/);
+
+  // Terreno e alças de gizmo NUNCA podem entrar na coleta — senão o
+  // terreno (referência fixa) se moveria junto, ou uma alça de outro
+  // objeto ficaria arrastada sem sentido.
+  const collectStart = viewportControllerSource.indexOf('function collectWholeConstructionDragObjects()');
+  const collectEnd = viewportControllerSource.indexOf('\n  }', collectStart);
+  const collectBlock = viewportControllerSource.slice(collectStart, collectEnd);
+  assert.match(collectBlock, /terrenoSide/);
+  assert.match(collectBlock, /terrenoMuroId/);
+  assert.match(collectBlock, /data\.handle/);
+
+  const moveStart = viewportControllerSource.indexOf("if (dragMode === 'wholeConstruction') {");
+  const moveEnd = viewportControllerSource.indexOf("if (dragMode === 'roomGroup')", moveStart);
+  const pointerMoveFlow = viewportControllerSource.slice(moveStart, moveEnd);
+  assert.match(pointerMoveFlow, /previewWholeConstructionDelta\(/);
+  assert.doesNotMatch(pointerMoveFlow, /Store\.commands\.moveEntireConstruction/);
+
+  const upStart = viewportControllerSource.indexOf("if (dragMode === 'wholeConstruction') {", moveEnd);
+  const upEnd = viewportControllerSource.indexOf("if (dragMode === 'roomGroup')", upStart);
+  const pointerUpFlow = viewportControllerSource.slice(upStart, upEnd);
+  assert.match(pointerUpFlow, /Store\.commands\.moveEntireConstruction\(/);
+});
+
+test('botão "Selecionar tudo" existe como tool-btn comum (data-tool="wholeConstruction") — o listener genérico de ferramentas já cobre ele sem wiring próprio', () => {
+  assert.match(indexHtmlSource, /id="toolWholeConstruction" data-tool="wholeConstruction"/);
+  assert.match(viewportControllerSource, /wholeConstruction: 'Clique em qualquer ponto e arraste/);
+});
+
+test('botão "Duplicar (geminado)" existe no HTML e chama duplicateEntireConstructionMirrored direto (sem arraste)', () => {
+  assert.match(indexHtmlSource, /id="duplicateGeminadoBtn"/);
+  assert.match(
+    esboceApplicationSource,
+    /requireElement\("duplicateGeminadoBtn"\)\.addEventListener\("click", \(\) => \{[\s\S]{0,300}Store\.commands\.duplicateEntireConstructionMirrored\(\);/,
+  );
 });
