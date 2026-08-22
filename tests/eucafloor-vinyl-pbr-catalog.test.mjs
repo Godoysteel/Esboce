@@ -4,8 +4,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { Catalog } from '../src/core/Catalog.ts';
 
 const eucafloorVerified = ['003870', '006441'];
-const verified = [...eucafloorVerified, '000042'];
-const unverified = ['004883', '002227', '002228', '003470', '002509', '002088', '002884', '001927', '003869', '002680'];
+const verified = [...eucafloorVerified, '000042', '002884'];
+const unverified = ['004883', '002227', '002228', '003470', '002509', '002088', '001927', '003869', '002680'];
 const manifest = JSON.parse(readFileSync(new URL('../public/catalogo/revestimentos/manifest.json', import.meta.url), 'utf8'));
 
 test('levantamento vinílico fecha os 13 SKUs sem usar produto semelhante', () => {
