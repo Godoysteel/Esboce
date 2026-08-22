@@ -7,11 +7,12 @@ import { Catalog } from '../src/core/Catalog.ts';
 const verified = ['003230', '003231', '003229', '000317', '000291', '000300', '000287', '000279'];
 const unverified = ['000290', '003135', '000852', '000280', '000284', '000356', '000348', '000419', '000435', '000436', '000437', '000260'];
 const manifest = JSON.parse(readFileSync(new URL('../public/catalogo/revestimentos/manifest.json', import.meta.url), 'utf8'));
+const ceralManifest = manifest.filter((item) => item.manufacturer === 'Ceral');
 
 test('levantamento Ceral fecha os 20 SKUs em oito verificados e doze preservados como unverified', () => {
-  assert.equal(manifest.length, 20);
-  assert.deepEqual(manifest.filter((item) => item.status === 'official_source_verified').map((item) => item.sku).sort(), [...verified].sort());
-  assert.deepEqual(manifest.filter((item) => item.status === 'unverified').map((item) => item.sku).sort(), [...unverified].sort());
+  assert.equal(ceralManifest.length, 20);
+  assert.deepEqual(ceralManifest.filter((item) => item.status === 'official_source_verified').map((item) => item.sku).sort(), [...verified].sort());
+  assert.deepEqual(ceralManifest.filter((item) => item.status === 'unverified').map((item) => item.sku).sort(), [...unverified].sort());
 });
 
 test('catálogo visual registra somente os SKUs Ceral verificados pelos UUIDs dinâmicos do Supabase', () => {

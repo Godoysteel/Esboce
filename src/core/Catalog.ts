@@ -422,16 +422,25 @@ const commercialFloorFinishes: Record<string, {
   colorHex: string;
   tileMeters: number;
   catalogPhoto: string;
+  manufacturer: string;
 }> = {
-  '003230': { name: 'Ceral Arizona BG 43x43', colorHex: '#D8C69F', tileMeters: 0.43, catalogPhoto: 'catalogo/revestimentos/003230/produto-original.jpeg' },
-  '003231': { name: 'Ceral Tec Silver 43x43', colorHex: '#C9CBC8', tileMeters: 0.43, catalogPhoto: 'catalogo/revestimentos/003231/produto-original.jpeg' },
-  '003229': { name: 'Ceral 4335 43x43', colorHex: '#E7E7DF', tileMeters: 0.433, catalogPhoto: 'catalogo/revestimentos/003229/produto-original.jpeg' },
+  '003230': { name: 'Ceral Arizona BG 43x43', manufacturer: 'ceral', colorHex: '#D8C69F', tileMeters: 0.43, catalogPhoto: 'catalogo/revestimentos/003230/produto-original.jpeg' },
+  '003231': { name: 'Ceral Tec Silver 43x43', manufacturer: 'ceral', colorHex: '#C9CBC8', tileMeters: 0.43, catalogPhoto: 'catalogo/revestimentos/003231/produto-original.jpeg' },
+  '003229': { name: 'Ceral 4335 43x43', manufacturer: 'ceral', colorHex: '#E7E7DF', tileMeters: 0.433, catalogPhoto: 'catalogo/revestimentos/003229/produto-original.jpeg' },
   // Atlas quadrado de 203 mm com duas peças 203 x 102 mm empilhadas.
-  '000317': { name: 'Ceral 10x20 Cinza', colorHex: '#929491', tileMeters: 0.203, catalogPhoto: 'catalogo/revestimentos/000317/produto-original.jpeg' },
-  '000291': { name: 'Ceral 10x10 NTLD Branco', colorHex: '#F6F6F3', tileMeters: 0.099, catalogPhoto: 'catalogo/revestimentos/000291/produto-original.jpeg' },
-  '000300': { name: 'Ceral 10x10 NTLD Preto', colorHex: '#181A1B', tileMeters: 0.099, catalogPhoto: 'catalogo/revestimentos/000300/produto-original.jpeg' },
-  '000287': { name: 'Ceral 10x10 NTLD Azul Royal', colorHex: '#385596', tileMeters: 0.099, catalogPhoto: 'catalogo/revestimentos/000287/produto-original.jpeg' },
-  '000279': { name: 'Ceral 10x10 NTLD Azul Capri', colorHex: '#5DA7D0', tileMeters: 0.099, catalogPhoto: 'catalogo/revestimentos/000279/produto-original.jpeg' },
+  '000317': { name: 'Ceral 10x20 Cinza', manufacturer: 'ceral', colorHex: '#929491', tileMeters: 0.203, catalogPhoto: 'catalogo/revestimentos/000317/produto-original.jpeg' },
+  '000291': { name: 'Ceral 10x10 NTLD Branco', manufacturer: 'ceral', colorHex: '#F6F6F3', tileMeters: 0.099, catalogPhoto: 'catalogo/revestimentos/000291/produto-original.jpeg' },
+  '000300': { name: 'Ceral 10x10 NTLD Preto', manufacturer: 'ceral', colorHex: '#181A1B', tileMeters: 0.099, catalogPhoto: 'catalogo/revestimentos/000300/produto-original.jpeg' },
+  '000287': { name: 'Ceral 10x10 NTLD Azul Royal', manufacturer: 'ceral', colorHex: '#385596', tileMeters: 0.099, catalogPhoto: 'catalogo/revestimentos/000287/produto-original.jpeg' },
+  '000279': { name: 'Ceral 10x10 NTLD Azul Capri', manufacturer: 'ceral', colorHex: '#5DA7D0', tileMeters: 0.099, catalogPhoto: 'catalogo/revestimentos/000279/produto-original.jpeg' },
+  '003712': { name: 'Eucafloor Max Elegance Carvalho Chamonix', manufacturer: 'eucafloor', colorHex: '#A88A68', tileMeters: 1.357, catalogPhoto: 'catalogo/revestimentos/003712/produto-original.jpg' },
+  '000359': { name: 'Eucafloor New Evidence Smart Oak', manufacturer: 'eucafloor', colorHex: '#B69A79', tileMeters: 1.357, catalogPhoto: 'catalogo/revestimentos/000359/produto-original.jpg' },
+  '003193': { name: 'Eucafloor New Evidence Smart Oak', manufacturer: 'eucafloor', colorHex: '#B69A79', tileMeters: 1.357, catalogPhoto: 'catalogo/revestimentos/003193/produto-original.jpg' },
+  '003423': { name: 'Eucafloor Prime Click Andorra New', manufacturer: 'eucafloor', colorHex: '#B39774', tileMeters: 1.357, catalogPhoto: 'catalogo/revestimentos/003423/produto-original.jpg' },
+  '003898': { name: 'Eucafloor Prime Click Cacau', manufacturer: 'eucafloor', colorHex: '#75513A', tileMeters: 1.357, catalogPhoto: 'catalogo/revestimentos/003898/produto-original.jpg' },
+  '005813': { name: 'Eucafloor Prime Click Carvalho Maiorca', manufacturer: 'eucafloor', colorHex: '#C5A77E', tileMeters: 1.357, catalogPhoto: 'catalogo/revestimentos/005813/produto-original.jpg' },
+  '006316': { name: 'Eucafloor Prime Click Nogueira Málaga', manufacturer: 'eucafloor', colorHex: '#73523D', tileMeters: 1.357, catalogPhoto: 'catalogo/revestimentos/006316/produto-original.jpg' },
+  '001142': { name: 'Eucafloor Prime Click Valência', manufacturer: 'eucafloor', colorHex: '#8C6448', tileMeters: 1.357, catalogPhoto: 'catalogo/revestimentos/001142/produto-original.jpg' },
 };
 
 export function registerCommercialProducts(rows: Array<{ id: string; sku: string | null; preco: number; unidade: string }>): void {
@@ -442,7 +451,7 @@ export function registerCommercialProducts(rows: Array<{ id: string; sku: string
     products.push({
       id: row.id,
       name: finish.name,
-      manufacturer: 'ceral',
+      manufacturer: finish.manufacturer,
       category: 'floor_tile',
       commercial: { sku: row.sku, price: Number(row.preco) || 0, unit: row.unidade },
       assets: {
