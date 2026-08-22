@@ -1480,6 +1480,11 @@ export class EsboceApplication {
         listCatalogProducts(),
       ]);
       const offers = await listCatalogOffers(products);
+      Catalog.registerCommercialProducts(products);
+      products.forEach(function (product) {
+        const officialPhoto = Catalog.getCommercialCatalogPhoto(product.sku);
+        if (officialPhoto) product.foto_url = officialPhoto;
+      });
       this.catalogDepartments = departments;
       this.catalogManufacturers = new Map(manufacturers.map((m) => [m.id, m]));
       this.catalogProducts = products;

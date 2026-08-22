@@ -411,8 +411,61 @@ export const products: Product[] = [
       commercial: { sku: 'VOR-MOV-013', price: 2200.00, unit: 'peca' },
       assets: { colorHex: '#D9D5C7', textureUrl: null, modelUrl: 'models/armario.glb' } }
   ];
+
+// Revestimentos comerciais reais: o UUID de products é criado pelo Supabase e
+// varia entre instalações, portanto a associação visual é feita pelo SKU
+// estável do catálogo do Mercador. Somente itens com fonte oficial verificada
+// entram aqui; os `unverified` continuam preservados no banco, sem acabamento
+// aplicável, até uma validação futura.
+const commercialFloorFinishes: Record<string, {
+  name: string;
+  colorHex: string;
+  tileMeters: number;
+  catalogPhoto: string;
+}> = {
+  '003230': { name: 'Ceral Arizona BG 43x43', colorHex: '#D8C69F', tileMeters: 0.43, catalogPhoto: 'catalogo/revestimentos/003230/produto-original.jpeg' },
+  '003231': { name: 'Ceral Tec Silver 43x43', colorHex: '#C9CBC8', tileMeters: 0.43, catalogPhoto: 'catalogo/revestimentos/003231/produto-original.jpeg' },
+  '003229': { name: 'Ceral 4335 43x43', colorHex: '#E7E7DF', tileMeters: 0.433, catalogPhoto: 'catalogo/revestimentos/003229/produto-original.jpeg' },
+  // Atlas quadrado de 203 mm com duas peças 203 x 102 mm empilhadas.
+  '000317': { name: 'Ceral 10x20 Cinza', colorHex: '#929491', tileMeters: 0.203, catalogPhoto: 'catalogo/revestimentos/000317/produto-original.jpeg' },
+  '000291': { name: 'Ceral 10x10 NTLD Branco', colorHex: '#F6F6F3', tileMeters: 0.099, catalogPhoto: 'catalogo/revestimentos/000291/produto-original.jpeg' },
+  '000300': { name: 'Ceral 10x10 NTLD Preto', colorHex: '#181A1B', tileMeters: 0.099, catalogPhoto: 'catalogo/revestimentos/000300/produto-original.jpeg' },
+};
+
+export function registerCommercialProducts(rows: Array<{ id: string; sku: string | null; preco: number; unidade: string }>): void {
+  rows.forEach(function (row) {
+    if (!row.sku || !commercialFloorFinishes[row.sku] || products.some(function (product) { return product.id === row.id; })) return;
+    const finish = commercialFloorFinishes[row.sku]!;
+    const base = PUBLIC_BASE_URL + 'catalogo/revestimentos/' + row.sku + '/pbr/';
+    products.push({
+      id: row.id,
+      name: finish.name,
+      manufacturer: 'ceral',
+      category: 'floor_tile',
+      commercial: { sku: row.sku, price: Number(row.preco) || 0, unit: row.unidade },
+      assets: {
+        colorHex: finish.colorHex,
+        textureUrl: null,
+        thumbnailUrl: finish.catalogPhoto,
+        tileMeters: finish.tileMeters,
+        textures: {
+          map: base + 'albedo.jpg',
+          normalMap: base + 'normal.jpg',
+          roughnessMap: base + 'roughness.jpg',
+          aoMap: base + 'ao.jpg',
+        },
+      },
+    });
+  });
+}
+
+export function getCommercialCatalogPhoto(sku: string | null): string | null {
+  if (!sku || !commercialFloorFinishes[sku]) return null;
+  return PUBLIC_BASE_URL + commercialFloorFinishes[sku]!.catalogPhoto;
+}
+
 export function getProductsByCategory(cat: ProductCategory): Product[] { return products.filter((p) => p.category === cat); }
 export function getProduct(id: string): Product | null { return products.find((p) => p.id === id) || null; }
 
 // Namespace de compatibilidade, mesma razão do Core.ts (chamadas Catalog.xxx no código legado).
-export const Catalog = { manufacturer, products, getProductsByCategory, getProduct };
+export const Catalog = { manufacturer, products, registerCommercialProducts, getCommercialCatalogPhoto, getProductsByCategory, getProduct };
