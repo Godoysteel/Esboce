@@ -56,10 +56,8 @@ import {
   var scale = 1 / Core.GRID;
 
   var currentTool: any = null; // null (nenhuma) | 'room' | 'wall' | 'columnQuadrada' | 'columnRedonda' | 'telhado' | 'door' | 'window' | 'demolish' | 'paintBucket' — cômodos com nome nascem instantâneos pelos botões visuais (ver placeRoomPreset); clique no chão vazio só desenha se uma ferramenta acima foi escolhida explicitamente
-  // Cor "carregada" na lata de tinta — escolhida na paleta fixa que
-  // aparece enquanto a ferramenta paintBucket está ativa (ver
-  // paintPickerPanelEl). Começa na primeira tinta do catálogo pra já
-  // ter algo selecionado no primeiro clique.
+  // Produto escolhido no catálogo e carregado para aplicação direta na
+  // próxima face clicada. Não existe mais bandeja intermediária.
   var currentPaintProductId = Catalog.getProductsByCategory('paint')[0] ? Catalog.getProductsByCategory('paint')[0]!.id : null;
   var pendingCommercialSelection: CommercialSelection | null = null;
   var currentPaintSurface: any = null;
@@ -214,7 +212,7 @@ import {
     arco: 'Clique sobre uma parede pra abrir um vão ali — sacada, garagem, conceito aberto. Selecione um arco colocado pra arrastar os lados ou o topo.',
     varanda: 'Clique no chão pra colocar uma varanda. Selecione uma já colocada, clique direito nela pra girar qual lado é a frente ou excluir.',
     demolish: 'Clique numa parede pra quebrar ela — some da vista e do orçamento, mas o cômodo continua fechado (o piso não desaparece).',
-    paintBucket: 'Escolha a superfície no menu acima e siga o fluxo indicado para aplicar o acabamento.',
+    paintBucket: 'Material carregado do catálogo. Clique diretamente na face que deseja revestir.',
     terreno: 'Clique num lado destacado do retângulo pra adicionar ou remover o muro daquele lado.',
     wholeConstruction: 'Clique em qualquer ponto e arraste pra mover a construção inteira (todos os pavimentos) dentro do terreno.'
   };
@@ -2169,7 +2167,6 @@ import {
     }
     container.classList.remove('tool-demolish', 'tool-paintBucket');
     if (tool === 'demolish' || tool === 'paintBucket') container.classList.add('tool-' + tool);
-    refreshPaintPickerPanel();
     refreshOpeningPickerPanel();
     cancelPlacing();
     deselect();
@@ -2270,6 +2267,7 @@ import {
   // escolhe a cor primeiro, "carrega" a lata, e só depois clica na
   // parede — por isso fica fixa no topo do viewport.
   function refreshPaintPickerPanel() {
+    if (!paintPickerPanelEl) return;
     if (currentTool !== 'paintBucket') {
       paintPickerPanelEl.classList.remove('visible');
       return;
@@ -2836,14 +2834,16 @@ import {
     // o painel de acabamento por clique direito primeiro.
     if (currentTool === 'paintBucket') {
       var paintHit = pickMeshHit(e.clientX, e.clientY);
-      if (currentPaintSurface === 'walls' && paintHit && paintHit.object.userData.wallId && currentPaintProductId) {
+      var paintProduct = currentPaintProductId ? Catalog.getProduct(currentPaintProductId) : null;
+      var canPaintWall = paintProduct && (paintProduct.category === 'paint' || paintProduct.category === 'floor_tile');
+      if (canPaintWall && paintHit && paintHit.object.userData.wallId && currentPaintProductId) {
         var faceHit = wallFaceAtPoint(paintHit.object.userData.wallId, paintHit.point);
         Store.commands.setWallFinishFace(paintHit.object.userData.wallId, faceHit as any, currentPaintProductId);
         if (pendingCommercialSelection) Store.commands.setCommercialSelection(Store.currentFloor().id + ':wall:' + paintHit.object.userData.wallId + ':' + faceHit, pendingCommercialSelection);
         hintEl.textContent = 'Lado ' + faceHit.toUpperCase() + ' pintado. Clique em outra pra continuar.';
         return;
       }
-      if (currentPaintSurface === 'walls' && paintHit && paintHit.object.userData.gableSide && paintHit.object.userData.roofId && currentPaintProductId) {
+      if (canPaintWall && paintHit && paintHit.object.userData.gableSide && paintHit.object.userData.roofId && currentPaintProductId) {
         Store.commands.setRoofGableFinish(paintHit.object.userData.roofId, paintHit.object.userData.gableSide, currentPaintProductId);
         if (pendingCommercialSelection) Store.commands.setCommercialSelection(Store.currentFloor().id + ':gable:' + paintHit.object.userData.roofId + ':' + paintHit.object.userData.gableSide, pendingCommercialSelection);
         hintEl.textContent = 'Acabamento aplicado somente à face clicada do oitão.';
@@ -2853,19 +2853,20 @@ import {
       // (Product Owner: "ele deve poder ser pintado como as paredes")
       // — o box inteiro usa o mesmo acabamento nas 6 faces, sem
       // distinção de lado A/B como a parede tem.
-      if (currentPaintSurface === 'walls' && paintHit && paintHit.object.userData.volumeBoxId && currentPaintProductId) {
+      if (canPaintWall && paintHit && paintHit.object.userData.volumeBoxId && currentPaintProductId) {
         Store.commands.setVolumeBoxFinish(paintHit.object.userData.volumeBoxId, currentPaintProductId);
         if (pendingCommercialSelection) Store.commands.setCommercialSelection(Store.currentFloor().id + ':volume:' + paintHit.object.userData.volumeBoxId, pendingCommercialSelection);
         hintEl.textContent = 'Bloco pintado. Clique em outro pra continuar.';
         return;
       }
-      if (currentPaintSurface === 'floors' && paintHit && paintHit.object.userData.roomKey) {
-        selectedPaintRoomKey = paintHit.object.userData.roomKey;
-        refreshPaintPickerPanel();
-        hintEl.textContent = 'Piso selecionado. Escolha o material, ajuste escala e rotação e clique em Aplicar.';
+      if (paintProduct && paintProduct.category === 'floor_tile' && paintHit && paintHit.object.userData.roomKey && currentPaintProductId) {
+        var roomKey = paintHit.object.userData.roomKey;
+        Store.commands.setRoomFinish(roomKey, currentPaintProductId, floorFinishScale, floorFinishRotation);
+        if (pendingCommercialSelection) Store.commands.setCommercialSelection(Store.currentFloor().id + ':room:' + roomKey, pendingCommercialSelection);
+        hintEl.textContent = 'Revestimento aplicado diretamente ao piso. Clique em outra face para continuar.';
         return;
       }
-      if (currentPaintSurface === 'roofs' && paintHit && paintHit.object.userData.roofId && currentPaintProductId) {
+      if (paintProduct && paintProduct.category === 'roof_tile' && paintHit && paintHit.object.userData.roofId && currentPaintProductId) {
         Store.commands.setRoofFinish(paintHit.object.userData.roofId, currentPaintProductId);
         if (pendingCommercialSelection) Store.commands.setCommercialSelection(Store.currentFloor().id + ':roof:' + paintHit.object.userData.roofId, pendingCommercialSelection);
         hintEl.textContent = 'Revestimento aplicado somente ao telhado clicado.';
@@ -5277,8 +5278,9 @@ import {
       var productId = btn.dataset.product;
       if (selectedRoofId) { Store.commands.setRoofFinish(selectedRoofId, productId); return; }
     });
-    paintPickerPanelEl.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
-    paintPickerPanelEl.addEventListener('click', function (e: any) {
+    if (paintPickerPanelEl) {
+      paintPickerPanelEl.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
+      paintPickerPanelEl.addEventListener('click', function (e: any) {
       var surfaceBtn = e.target.closest('button.paint-surface');
       if (surfaceBtn) {
         currentPaintSurface = surfaceBtn.dataset.surface;
@@ -5300,8 +5302,8 @@ import {
       if (!btn) return;
       currentPaintProductId = btn.dataset.product;
       refreshPaintPickerPanel();
-    });
-    paintPickerPanelEl.addEventListener('input', function (e: any) {
+      });
+      paintPickerPanelEl.addEventListener('input', function (e: any) {
       if (e.target.matches('[data-floor-scale]')) {
         floorFinishScale = Number(e.target.value);
         refreshPaintPickerPanel();
@@ -5310,7 +5312,8 @@ import {
         floorFinishRotation = Number(e.target.value);
         refreshPaintPickerPanel();
       }
-    });
+      });
+    }
     openingPickerPanelEl.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
     openingPickerPanelEl.addEventListener('click', function (e: any) {
       var btn = e.target.closest('button.paint-surface');

@@ -1617,7 +1617,23 @@ export class EsboceApplication {
       `;
       card.appendChild(info);
 
-      card.addEventListener("click", () => this.openCatalogDetail(product));
+      card.addEventListener("click", () => {
+        const action = this.catalogActionFor(product);
+        if (!action.enabled || !bestOffer) {
+          this.openCatalogDetail(product);
+          return;
+        }
+        const selection: CommercialSelection = {
+          productId: product.id, offerId: bestOffer.id, supplierId: bestOffer.supplier_id,
+          supplierName: bestOffer.supplier_name, ...(bestOffer.supplier_sku ? { supplierSku: bestOffer.supplier_sku } : {}),
+          price: bestOffer.price, currency: bestOffer.currency, region: bestOffer.region,
+          priceDate: bestOffer.price_date, kind: bestOffer.kind, selectedAt: new Date().toISOString(),
+        };
+        if (!ViewportController.activateCatalogProduct(product.id, selection)) return;
+        this.requireElement("catalogDetailOverlay").style.display = "none";
+        this.requireElement("catalogOverlay").classList.remove("visible");
+        this.setCatalogEntryButtonsActive(false);
+      });
       grid.appendChild(card);
     });
     bodyEl.appendChild(grid);

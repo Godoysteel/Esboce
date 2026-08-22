@@ -122,8 +122,8 @@ test('GizmoController liga o volumeBoxGizmo a girar (90°)/excluir/fechar — na
   assert.doesNotMatch(body, /nudgeVolumeBoxHeight|resizeVolumeBoxWidth|resizeVolumeBoxHeight/);
 });
 
-test('ViewportController: ferramenta Lata de tinta aplica acabamento tipo parede num volume clicado (Product Owner: "pintado como as paredes")', () => {
-  const start = viewportSource.indexOf("if (currentPaintSurface === 'walls' && paintHit && paintHit.object.userData.volumeBoxId && currentPaintProductId) {");
+test('ViewportController: produto carregado do catálogo aplica acabamento tipo parede num volume clicado', () => {
+  const start = viewportSource.indexOf('if (canPaintWall && paintHit && paintHit.object.userData.volumeBoxId && currentPaintProductId) {');
   assert.ok(start !== -1);
   const end = viewportSource.indexOf('\n      }', start);
   const body = viewportSource.slice(start, end);
