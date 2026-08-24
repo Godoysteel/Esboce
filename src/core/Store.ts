@@ -470,27 +470,34 @@ export const commands = {
     return walls;
   },
 
-  stackRoom(wallIds: string[]): Wall[] | null {
+  raiseRoom(wallIds: string[]): Wall[] | null {
     const source = currentFloor();
     const selected = wallIds.map((id) => source.walls.find((wall) => wall.id === id)).filter((wall): wall is Wall => !!wall);
     if (selected.length < 3 || selected.length !== wallIds.length) return null;
     pushUndoSnapshot();
-    const next = Core.createFloorEntity('Nível ' + (project.floors.length + 1));
-    const wallIdMap = new Map<string, string>();
-    selected.forEach((wall) => {
-      const copy = { ...wall, id: Core.nextId('wall') };
-      delete copy.demolished;
-      wallIdMap.set(wall.id, copy.id);
-      next.walls.push(copy);
-    });
-    source.openings.filter((opening) => wallIdMap.has(opening.wallId)).forEach((opening) => {
-      next.openings.push({ ...opening, id: Core.nextId('opening'), wallId: wallIdMap.get(opening.wallId)! });
-    });
-    project.floors.push(next);
-    project.currentFloorIndex = project.floors.length - 1;
-    const newWallIds = next.walls.map((wall) => wall.id);
-    emit({ type: 'RoomStacked', floorIndex: project.currentFloorIndex, wallIds: newWallIds });
-    return next.walls;
+    const sourceIndex = project.currentFloorIndex;
+    const targetIndex = sourceIndex + 1;
+    if (!project.floors[targetIndex]) project.floors.push(Core.createFloorEntity('Nível ' + (targetIndex + 1)));
+    const target = project.floors[targetIndex]!;
+    const selectedIds = new Set(wallIds);
+    const roomKey = wallIds.slice().sort().join(',');
+    source.walls = source.walls.filter((wall) => !selectedIds.has(wall.id));
+    target.walls.push(...selected);
+    const movedOpenings = source.openings.filter((opening) => selectedIds.has(opening.wallId));
+    source.openings = source.openings.filter((opening) => !selectedIds.has(opening.wallId));
+    target.openings.push(...movedOpenings);
+    const minX = Math.min(...selected.flatMap((wall) => [wall.x1, wall.x2]));
+    const maxX = Math.max(...selected.flatMap((wall) => [wall.x1, wall.x2]));
+    const minY = Math.min(...selected.flatMap((wall) => [wall.y1, wall.y2]));
+    const maxY = Math.max(...selected.flatMap((wall) => [wall.y1, wall.y2]));
+    const movedFurniture = source.furniture.filter((item) => item.x >= minX && item.x <= maxX && item.y >= minY && item.y <= maxY);
+    source.furniture = source.furniture.filter((item) => !movedFurniture.includes(item));
+    target.furniture.push(...movedFurniture);
+    target.roomBaseLajeGenerated = target.roomBaseLajeGenerated || {};
+    target.roomBaseLajeGenerated[roomKey] = true;
+    project.currentFloorIndex = targetIndex;
+    emit({ type: 'RoomRaised', floorIndex: targetIndex, wallIds: wallIds.slice(), baseLajeGenerated: true });
+    return selected;
   },
 
   moveWallEndpoint(wallId: string, which: 1 | 2, x: number, y: number): void {

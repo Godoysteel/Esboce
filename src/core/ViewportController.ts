@@ -5336,15 +5336,15 @@ import {
     openingGizmoEl.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
     roomGizmoEl.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
     roomGizmoEl.addEventListener('click', function (e: any) {
-      var stackBtn = e.target.closest('button[data-action="stackRoom"]');
-      if (!stackBtn || !selectedRoomWallIds) return;
-      var stackedWalls = Store.commands.stackRoom(selectedRoomWallIds);
-      if (!stackedWalls) {
-        hintEl.textContent = 'Não foi possível empilhar este cômodo.';
+      var raiseBtn = e.target.closest('button[data-action="raiseRoom"]');
+      if (!raiseBtn || !selectedRoomWallIds) return;
+      var raisedWalls = Store.commands.raiseRoom(selectedRoomWallIds);
+      if (!raisedWalls) {
+        hintEl.textContent = 'Não foi possível subir este cômodo.';
         return;
       }
-      selectRoomGroup(stackedWalls.map(function (wall: any) { return wall.id; }));
-      hintEl.textContent = 'Cômodo empilhado — você está editando o novo volume. Clique em qualquer volume abaixo para voltar a ele.';
+      selectRoomGroup(raisedWalls.map(function (wall: any) { return wall.id; }));
+      hintEl.textContent = 'Cômodo movido para cima com a laje de entrepiso criada automaticamente.';
     });
     volumeBoxGizmoEl?.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
     stairGizmoEl?.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });

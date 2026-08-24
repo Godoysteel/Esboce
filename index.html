@@ -343,6 +343,7 @@
   .roof-parameter input { width: 100%; min-width: 0; height: 28px; padding: 3px 6px; border: 1px solid #C9C6BB; border-radius: 6px; background: #FFFFFF; color: #292720; font: inherit; text-align: right; }
   .roof-axis { grid-column: 1 / -1; width: 100%; min-height: 30px; padding: 4px 7px; border-radius: 6px; font-size: 11px; }
   .roof-auto-compose { grid-column: 1 / -1; padding: 5px 6px; border-radius: 6px; background: #EEF7F0; color: #2F6B3B; font-size: 10px; text-align: center; }
+  .ts-group-label:has(+ .cp-group-grid #generateLajeBtn), .cp-group-grid:has(#generateLajeBtn) { display: none; }
   .shape-panel button.st { margin: 0; padding: 0; width: 30px; height: 30px; font-size: 14px; font-weight: 700; border-radius: 6px; line-height: 1; }
   .shape-panel button.st.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
   .shape-panel button.ft { margin: 0; padding: 0; width: 30px; height: 30px; font-size: 12px; font-weight: 700; border-radius: 6px; line-height: 1; }
@@ -2018,7 +2019,7 @@
     <button class="gz" data-action="close" title="Fechar">✕</button>
   </div>
   <div id="roomGizmo" class="gizmo opening-gizmo">
-    <button class="gz room-stack" data-action="stackRoom" title="Criar outro cômodo exatamente sobre este">▣↑</button>
+    <button class="gz room-stack" data-action="raiseRoom" title="Mover este cômodo para o nível superior e criar sua laje">▣↑</button>
     <button class="gz" data-action="flipHydraulicFace" title="Trocar lado da parede">⇄</button>
     <button class="gz" data-action="routeHydraulicToSource" title="Desenhar percurso até a caixa d'água">〰️</button>
     <button class="gz danger" data-action="delete" title="Excluir cômodo">🗑</button>

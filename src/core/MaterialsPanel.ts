@@ -723,7 +723,7 @@ export function compute(): ComputeResult {
     // igual o 3D só desenha a malha nessa mesma condição.
     rooms.forEach(function (room) {
       const roomKey = Core.findRoomWallIds(floor.walls, room).slice().sort().join(',');
-      if (!(floor.roomLajeGenerated || {})[roomKey]) return;
+      if (!(floor.roomLajeGenerated || {})[roomKey] && !(floor.roomBaseLajeGenerated || {})[roomKey]) return;
       totals.lajeCount++;
       totals.lajeAreaM2 += room.area / (Core.GRID * Core.GRID);
     });

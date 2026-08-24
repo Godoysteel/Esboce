@@ -6,16 +6,24 @@ const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const store = readFileSync(new URL('../src/core/Store.ts', import.meta.url), 'utf8');
 const viewport = readFileSync(new URL('../src/core/ViewportController.ts', import.meta.url), 'utf8');
 
-test('pavimentos saem da experiência e cômodo ganha ação de empilhar', () => {
+test('pavimentos saem da experiência e cômodo ganha ação de subir', () => {
   assert.match(html, /class="tb-overflow floor-menu tb-pill" hidden aria-hidden="true"/);
-  assert.match(html, /data-action="stackRoom"/);
-  assert.match(store, /stackRoom\(wallIds: string\[\]\): Wall\[\] \| null/);
+  assert.match(html, /data-action="raiseRoom"/);
+  assert.match(store, /raiseRoom\(wallIds: string\[\]\): Wall\[\] \| null/);
 });
 
-test('empilhar preserva a projeção e troca automaticamente para o novo nível interno', () => {
-  assert.match(store, /const copy = \{ \.\.\.wall, id: Core\.nextId\('wall'\) \}/);
-  assert.match(store, /project\.currentFloorIndex = project\.floors\.length - 1/);
+test('subir move as mesmas paredes, sem criar cópia, e gera a laje de base', () => {
+  assert.match(store, /source\.walls = source\.walls\.filter\(\(wall\) => !selectedIds\.has\(wall\.id\)\)/);
+  assert.match(store, /target\.walls\.push\(\.\.\.selected\)/);
+  assert.doesNotMatch(store.slice(store.indexOf('raiseRoom('), store.indexOf('moveWallEndpoint', store.indexOf('raiseRoom('))), /Core\.nextId\('wall'\)/);
+  assert.match(store, /target\.roomBaseLajeGenerated\[roomKey\] = true/);
   assert.match(viewport, /Store\.commands\.setCurrentFloor\(mesh\.userData\.floorIndex\)/);
+});
+
+test('a laje automática do cômodo elevado é desenhada na base', () => {
+  const renderer = readFileSync(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
+  assert.match(renderer, /hasBaseLaje = !!\(floorData\.roomBaseLajeGenerated \|\| \{\}\)\[roomKey\]/);
+  assert.match(renderer, /hasBaseLaje[\s\S]*?buildAutoLajePiece\(lajeShape, lajeSizeX, lajeSizeZ, yOffset,/);
 });
 
 test('encontros transversais de coberturas são compostos sem botão manual', () => {

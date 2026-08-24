@@ -5267,7 +5267,10 @@ export function hashColorHex(key: string): number {
         // piso) — cobre o cômodo inteiro rente à face de fora da parede,
         // como uma laje de verdade apoiada em cima dela, não parando na
         // face interna como o piso.
-        if ((floorData.roomLajeGenerated || {})[roomKey]) {
+        var hasTopLaje = false;
+        if ((floorData.roomLajeGenerated || {})[roomKey]) { hasTopLaje = true; }
+        var hasBaseLaje = !!(floorData.roomBaseLajeGenerated || {})[roomKey];
+        if (hasTopLaje || hasBaseLaje) {
           var lajeShape = new THREE.Shape();
           outsetPoints.forEach(function (p, i) {
             var wx = (p.x - offsetX) * scale, wz = (p.y - offsetY) * scale;
@@ -5358,7 +5361,12 @@ export function hashColorHex(key: string): number {
           // um vizinho mais alto — bug corrigido na DEC-89). Um cômodo
           // mais alto empurra a própria laje pra cima; os vizinhos
           // não-alterados continuam na altura padrão.
-          var lajePieces = buildAutoLajePiece(lajeShape, lajeSizeX, lajeSizeZ, yOffset + roomHeight, lajeWallColor, viewState);
+          // Ao elevar um cômodo, a laje pertence à BASE do novo volume.
+          // O pequeno recuo da extrusão para baixo fecha o encontro com
+          // o nível inferior sem deixar a fresta que existia antes.
+          var lajePieces = hasBaseLaje
+            ? buildAutoLajePiece(lajeShape, lajeSizeX, lajeSizeZ, yOffset, lajeWallColor, viewState)
+            : buildAutoLajePiece(lajeShape, lajeSizeX, lajeSizeZ, yOffset + roomHeight, lajeWallColor, viewState);
           lajePieces.forEach(function (m: any) {
             tagCategory(m, 'laje');
             m.userData.roomKey = roomKey; m.userData.floorIndex = floorIdx;

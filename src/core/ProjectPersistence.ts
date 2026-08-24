@@ -514,6 +514,7 @@ function parseFloor(value: unknown, path: string): Floor {
   if (v.planUnderlay) floor.planUnderlay = parsePlanUnderlay(v.planUnderlay, `${path}.planUnderlay`);
   if (floor.kind === 'attic') floor.wallHeightM = number(v.wallHeightM, `${path}.wallHeightM`, 1.2);
   if (v.roomLajeGenerated) floor.roomLajeGenerated = booleanMap(v.roomLajeGenerated, `${path}.roomLajeGenerated`);
+  if (v.roomBaseLajeGenerated) floor.roomBaseLajeGenerated = booleanMap(v.roomBaseLajeGenerated, `${path}.roomBaseLajeGenerated`);
   if (v.roomForroGenerated) floor.roomForroGenerated = booleanMap(v.roomForroGenerated, `${path}.roomForroGenerated`);
   if (v.roomForroTipo) floor.roomForroTipo = forroTipoMap(v.roomForroTipo, `${path}.roomForroTipo`);
   const wallIds = new Set(floor.walls.map((wall) => wall.id));

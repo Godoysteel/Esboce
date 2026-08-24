@@ -333,6 +333,8 @@ export interface Floor {
   // laje volta a ficar pendente até gerar de novo — mesmo comportamento
   // (aceito) que roomFinishes já tem hoje.
   roomLajeGenerated?: Record<string, boolean>;
+  /** Laje sob um cômodo elevado, criada automaticamente junto com a elevação. */
+  roomBaseLajeGenerated?: Record<string, boolean>;
   // Mesmo espírito de roomLajeGenerated acima, mas pro forro de drywall
   // do teto — botão "Gerar Forro de Drywall" separado, flag independente
   // (um cômodo pode ter laje sem forro, ou forro sem laje, os dois, ou
