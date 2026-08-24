@@ -4483,9 +4483,9 @@ export function hashColorHex(key: string): number {
     renderHydraulics(scene, project, scale, offsetX, offsetY, viewState);
 
     project.floors.forEach(function (floorData, floorIdx) {
-      // pavimentos ACIMA do que está sendo editado ficam escondidos, pra
-      // manter o foco — igual o editor antigo só mostrava um de cada vez
-      if (floorIdx > editingIdx) return;
+      // Selecionar um nível muda somente o contexto de edição. A casa
+      // inteira continua visível, inclusive todos os volumes superiores,
+      // para que a leitura da composição vertical nunca desapareça.
 
       var yOffset = floorIdx * FLOOR_STACK_HEIGHT;
       var currentWallHeight = floorWallHeight(floorData, WALL_HEIGHT);
@@ -5485,7 +5485,7 @@ export function hashColorHex(key: string): number {
       });
     }
 
-    var topFloorIdx = Math.min(editingIdx, project.floors.length - 1);
+    var topFloorIdx = project.floors.length - 1;
     var topBounds = computeWorldBounds(project.floors[topFloorIdx]!.walls, layers.colunas ? project.floors[topFloorIdx]!.columns : null, scale, offsetX, offsetY);
     var topY = topFloorIdx * FLOOR_STACK_HEIGHT + WALL_HEIGHT;
 

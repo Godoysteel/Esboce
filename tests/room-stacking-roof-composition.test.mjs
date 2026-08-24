@@ -26,6 +26,13 @@ test('a laje automática do cômodo elevado é desenhada na base', () => {
   assert.match(renderer, /hasBaseLaje[\s\S]*?buildAutoLajePiece\(lajeShape, lajeSizeX, lajeSizeZ, yOffset,/);
 });
 
+test('selecionar um cômodo inferior mantém todos os níveis superiores visíveis', () => {
+  const renderer = readFileSync(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
+  const floorsLoop = renderer.slice(renderer.indexOf('project.floors.forEach(function (floorData, floorIdx)'), renderer.indexOf('var yOffset = floorIdx * FLOOR_STACK_HEIGHT'));
+  assert.doesNotMatch(floorsLoop, /floorIdx > editingIdx/);
+  assert.match(renderer, /var topFloorIdx = project\.floors\.length - 1/);
+});
+
 test('encontros transversais de coberturas são compostos sem botão manual', () => {
   assert.doesNotMatch(html, /button class="roof-commit"/);
   assert.match(html, /Encontro automático/);
