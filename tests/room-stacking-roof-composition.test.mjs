@@ -33,6 +33,13 @@ test('selecionar um cômodo inferior mantém todos os níveis superiores visíve
   assert.match(renderer, /var topFloorIdx = project\.floors\.length - 1/);
 });
 
+test('Gerar laje ignora cômodos que já têm laje automática de base', () => {
+  assert.match(html, /id="generateLajeBtn" title="Gera laje somente nos cômodos que ainda não possuem laje"/);
+  const command = store.slice(store.indexOf('generateLajeForCurrentFloor(): void'), store.indexOf('generateForroDrywallForCurrentFloor'));
+  assert.match(command, /f\.roomLajeGenerated!\[roomKey\] \|\| \(f\.roomBaseLajeGenerated \|\| \{\}\)\[roomKey\]/);
+  assert.match(command, /if \(!roomKeys\.length\)[\s\S]*?skippedExisting: true/);
+});
+
 test('encontros transversais de coberturas são compostos sem botão manual', () => {
   assert.doesNotMatch(html, /button class="roof-commit"/);
   assert.match(html, /Encontro automático/);

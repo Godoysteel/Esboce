@@ -1067,14 +1067,21 @@ export const commands = {
     const f = currentFloor();
     const rooms = Core.detectRooms(f.walls);
     if (!rooms.length) return;
-    pushUndoSnapshot();
     f.roomLajeGenerated = f.roomLajeGenerated || {};
     const roomKeys: string[] = [];
     rooms.forEach((room) => {
       const roomKey = Core.findRoomWallIds(f.walls, room).slice().sort().join(',');
       if (!roomKey) return;
-      f.roomLajeGenerated![roomKey] = true;
+      if (f.roomLajeGenerated![roomKey] || (f.roomBaseLajeGenerated || {})[roomKey]) return;
       roomKeys.push(roomKey);
+    });
+    if (!roomKeys.length) {
+      emit({ type: 'LajeGenerated', roomKeys: [], skippedExisting: true });
+      return;
+    }
+    pushUndoSnapshot();
+    roomKeys.forEach((roomKey) => {
+      f.roomLajeGenerated![roomKey] = true;
     });
     emit({ type: 'LajeGenerated', roomKeys });
   },

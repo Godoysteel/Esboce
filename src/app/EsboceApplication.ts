@@ -310,11 +310,12 @@ export class EsboceApplication {
     this.requireElement("toolTelhado4Aguas").addEventListener("click", () => armRoofTool("quatroAguas"));
     this.requireElement("toolTelhadoPlatibanda").addEventListener("click", () => armRoofTool("platibanda"));
     this.requireElement("generateLajeBtn").addEventListener("click", () => {
-      const roomCount = Core.detectRooms(Store.currentWalls()).length;
+      const floor = Store.currentFloor();
+      const rooms = Core.detectRooms(floor.walls);
       Store.commands.generateLajeForCurrentFloor();
-      this.requireElement('viewportHint').textContent = roomCount
-        ? 'Laje gerada — ' + roomCount + (roomCount === 1 ? ' cômodo coberto.' : ' cômodos cobertos.')
-        : 'Nenhum cômodo fechado neste pavimento ainda — feche as paredes antes de gerar a laje.';
+      this.requireElement('viewportHint').textContent = !rooms.length
+        ? 'Nenhum cômodo fechado neste nível ainda.'
+        : 'Lajes geradas somente nas áreas descobertas. Lajes existentes foram preservadas sem duplicação.';
     });
     this.requireElement("generateForroDrywallBtn").addEventListener("click", () => {
       const roomCount = Core.detectRooms(Store.currentWalls()).length;

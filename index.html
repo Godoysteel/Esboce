@@ -343,7 +343,6 @@
   .roof-parameter input { width: 100%; min-width: 0; height: 28px; padding: 3px 6px; border: 1px solid #C9C6BB; border-radius: 6px; background: #FFFFFF; color: #292720; font: inherit; text-align: right; }
   .roof-axis { grid-column: 1 / -1; width: 100%; min-height: 30px; padding: 4px 7px; border-radius: 6px; font-size: 11px; }
   .roof-auto-compose { grid-column: 1 / -1; padding: 5px 6px; border-radius: 6px; background: #EEF7F0; color: #2F6B3B; font-size: 10px; text-align: center; }
-  .ts-group-label:has(+ .cp-group-grid #generateLajeBtn), .cp-group-grid:has(#generateLajeBtn) { display: none; }
   .shape-panel button.st { margin: 0; padding: 0; width: 30px; height: 30px; font-size: 14px; font-weight: 700; border-radius: 6px; line-height: 1; }
   .shape-panel button.st.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
   .shape-panel button.ft { margin: 0; padding: 0; width: 30px; height: 30px; font-size: 12px; font-weight: 700; border-radius: 6px; line-height: 1; }
@@ -1734,7 +1733,7 @@
     </div>
     <div class="ts-group-label">Lajes</div>
     <div class="cp-group-grid">
-      <button class="ts-btn tool-btn" id="generateLajeBtn" title="Gera a laje de todos os cômodos fechados do pavimento atual — sem isso, o cômodo fica sem teto/laje">
+      <button class="ts-btn tool-btn" id="generateLajeBtn" title="Gera laje somente nos cômodos que ainda não possuem laje">
         <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="6" y="14" width="28" height="6"/>
           <path d="M9 20v10M31 20v10M6 30h28"/>
