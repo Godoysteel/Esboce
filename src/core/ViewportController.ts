@@ -173,7 +173,7 @@ import {
   var MIN_DIST = 3, MAX_DIST = 35;
   var touchCameraMode = false;
 
-  var gizmoEl: any, gzSwapBtnEl: any, openingGizmoEl: any, roomGizmoEl: any, volumeBoxGizmoEl: any, stairGizmoEl: any, stairTypePanelEl: any, forroTypePanelEl: any, planUnderlayGizmoEl: any, columnShapePanelEl: any, roofTypePanelEl: any, finishPanelEl: any, paintPickerPanelEl: any, openingPickerPanelEl: any, objectPanelEl: any, objectPanelTitleEl: any, objectPanelBodyEl: any, hintEl: any, layersContextMenuEl: any, hydraulicWallPromptEl: any, hydraulicWallElevationPanelEl: any, hydraulicWallElevationTitleEl: any, hydraulicWallElevationSvgEl: any, hydraulicRouteDrawBarEl: any, hydraulicRouteDrawCountEl: any;
+  var gizmoEl: any, gzSwapBtnEl: any, openingGizmoEl: any, roomGizmoEl: any, volumeBoxGizmoEl: any, stairGizmoEl: any, stairTypePanelEl: any, forroTypePanelEl: any, planUnderlayGizmoEl: any, columnShapePanelEl: any, roofTypePanelEl: any, roofPitchInputEl: any, roofPitchControlEl: any, finishPanelEl: any, paintPickerPanelEl: any, openingPickerPanelEl: any, objectPanelEl: any, objectPanelTitleEl: any, objectPanelBodyEl: any, hintEl: any, layersContextMenuEl: any, hydraulicWallPromptEl: any, hydraulicWallElevationPanelEl: any, hydraulicWallElevationTitleEl: any, hydraulicWallElevationSvgEl: any, hydraulicRouteDrawBarEl: any, hydraulicRouteDrawCountEl: any;
   // Estado do desenho de percurso guiado (H2): fixtureId sendo roteada e os
   // pontos-guia já clicados (só plano — a queda vertical final é
   // automática, ver Hydraulics.buildGuidedColdWaterHeaderRoute). null =
@@ -870,21 +870,6 @@ import {
     }).map(function (roof) { return roof.id; });
   }
 
-  function roofCompoundCandidateIds(startId: any) {
-    var roofs = Store.currentRoofs();
-    var found: any[] = [startId], queue: any[] = [startId];
-    while (queue.length) {
-      var current = Store.findRoof(queue.shift());
-      if (!current) continue;
-      roofs.forEach(function (candidate) {
-        if (found.indexOf(candidate.id) !== -1 || candidate.ridgeAxis === current!.ridgeAxis) return;
-        if (Core.rectsNearby(current!, candidate, Core.SNAP_UNIT)) {
-          found.push(candidate.id); queue.push(candidate.id);
-        }
-      });
-    }
-    return found;
-  }
   // "Agarra" o cômodo inteiro (clique único numa parede que fecha só um
   // cômodo) — sem seleção de parede individual, sem gizmo de parede.
   function selectRoomGroup(wallIds: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedRoomWallIds = wallIds; gizmoMenuOpen = false; render(); }
@@ -1391,6 +1376,13 @@ import {
       roofTypePanelEl.classList.add('visible');
       stackLeftOf(roofTypePanelEl, gizmoEl, 8);
       roofTypePanelEl.querySelectorAll('.rt').forEach(function (btn: any) { btn.classList.toggle('active', btn.dataset.rooftype === r!.type); });
+      if (roofPitchInputEl && document.activeElement !== roofPitchInputEl) roofPitchInputEl.value = String(Math.round(r.pitchDeg * 10) / 10);
+      if (roofPitchControlEl) roofPitchControlEl.style.display = r.type === 'platibanda' ? 'none' : 'grid';
+      var axisBtn = roofTypePanelEl.querySelector('.roof-axis');
+      if (axisBtn) {
+        axisBtn.style.display = r.type === 'platibanda' ? 'none' : '';
+        axisBtn.textContent = (r.type === 'umaAgua' ? '↔ Caimento: eixo ' : '↔ Cumeeira: eixo ') + r.ridgeAxis.toUpperCase();
+      }
       return;
     }
     roofTypePanelEl.classList.remove('visible');
@@ -2777,6 +2769,12 @@ import {
     // 2) elemento existente
     var mesh = pickMesh(e.clientX, e.clientY);
 
+    // A troca de nível é contextual: clicar em qualquer volume visível
+    // ativa silenciosamente o nível técnico ao qual ele pertence.
+    if (mesh && Number.isInteger(mesh.userData.floorIndex) && mesh.userData.floorIndex !== Store.getProject().currentFloorIndex) {
+      Store.commands.setCurrentFloor(mesh.userData.floorIndex);
+    }
+
     // Ferramenta Terreno ativa + clicou numa das 4 faixas do lado do
     // retângulo-guia (só existem enquanto a ferramenta está ativa, ver
     // Scene3DRenderer.rebuild/viewState.terrenoToolActive): alterna
@@ -4066,6 +4064,7 @@ import {
         hintEl.textContent = 'Telhados fundidos — a cumeeira agora é uma só.';
         onModelChanged();
       }
+      Store.commands.autoComposeRoofs();
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }
@@ -5166,6 +5165,8 @@ import {
     layersContextMenuEl = document.getElementById('layersContextMenu');
     columnShapePanelEl = document.getElementById('columnShapePanel');
     roofTypePanelEl = document.getElementById('roofTypePanel');
+    roofPitchInputEl = document.getElementById('roofPitchInput');
+    roofPitchControlEl = document.getElementById('roofPitchControl');
     generateAtticBtnEl = document.getElementById('generateAtticBtn');
     finishPanelEl = document.getElementById('finishPanel');
     paintPickerPanelEl = document.getElementById('paintPickerPanel');
@@ -5244,15 +5245,9 @@ import {
     });
     roofTypePanelEl.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
     roofTypePanelEl.addEventListener('click', function (e: any) {
-      var commitBtn = e.target.closest('button.roof-commit');
-      if (commitBtn && selectedRoofId) {
-        var candidates = roofCompoundCandidateIds(selectedRoofId);
-        if (candidates.length < 2) {
-          hintEl.textContent = 'Encoste ou sobreponha uma cobertura transversal antes de engastar.';
-          return;
-        }
-        Store.commands.commitRoofCompound(candidates);
-        hintEl.textContent = 'Cobertura engastada: recorte, metragem líquida e movimento conjunto ativados.';
+      var axisBtn = e.target.closest('button.roof-axis');
+      if (axisBtn && selectedRoofId) {
+        Store.commands.rotateRoofAxis(selectedRoofId);
         render();
         return;
       }
@@ -5260,6 +5255,18 @@ import {
       if (!btn || !selectedRoofId) return;
       Store.commands.setRoofPieceType(selectedRoofId, btn.dataset.rooftype);
     });
+    if (roofPitchInputEl) {
+      roofPitchInputEl.addEventListener('change', function () {
+        if (!selectedRoofId) return;
+        var pitch = Number(roofPitchInputEl.value);
+        if (!Number.isFinite(pitch)) return;
+        Store.commands.setRoofPitch(selectedRoofId, pitch);
+        render();
+      });
+      roofPitchInputEl.addEventListener('keydown', function (e: any) {
+        if (e.key === 'Enter') { roofPitchInputEl.blur(); e.preventDefault(); }
+      });
+    }
     if (generateAtticBtnEl) {
       generateAtticBtnEl.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
       generateAtticBtnEl.addEventListener('click', function () {
@@ -5328,6 +5335,17 @@ import {
     gizmoEl.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
     openingGizmoEl.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
     roomGizmoEl.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
+    roomGizmoEl.addEventListener('click', function (e: any) {
+      var stackBtn = e.target.closest('button[data-action="stackRoom"]');
+      if (!stackBtn || !selectedRoomWallIds) return;
+      var stackedWalls = Store.commands.stackRoom(selectedRoomWallIds);
+      if (!stackedWalls) {
+        hintEl.textContent = 'Não foi possível empilhar este cômodo.';
+        return;
+      }
+      selectRoomGroup(stackedWalls.map(function (wall: any) { return wall.id; }));
+      hintEl.textContent = 'Cômodo empilhado — você está editando o novo volume. Clique em qualquer volume abaixo para voltar a ele.';
+    });
     volumeBoxGizmoEl?.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
     stairGizmoEl?.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
     stairTypePanelEl?.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });

@@ -337,11 +337,16 @@
   .shape-panel button.sp.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
   .shape-panel button.rt { margin: 0; padding: 0; width: 30px; height: 30px; font-size: 14px; border-radius: 6px; line-height: 1; }
   .shape-panel button.rt.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
+  .roof-type-panel { grid-template-columns: repeat(2, minmax(76px, 1fr)); width: 176px; }
+  .shape-panel button.rt { width: auto; min-height: 32px; padding: 4px 7px; font-size: 11px; line-height: 1.15; }
+  .roof-parameter { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 66px; align-items: center; gap: 6px; padding-top: 3px; font-size: 11px; color: #55524B; }
+  .roof-parameter input { width: 100%; min-width: 0; height: 28px; padding: 3px 6px; border: 1px solid #C9C6BB; border-radius: 6px; background: #FFFFFF; color: #292720; font: inherit; text-align: right; }
+  .roof-axis { grid-column: 1 / -1; width: 100%; min-height: 30px; padding: 4px 7px; border-radius: 6px; font-size: 11px; }
+  .roof-auto-compose { grid-column: 1 / -1; padding: 5px 6px; border-radius: 6px; background: #EEF7F0; color: #2F6B3B; font-size: 10px; text-align: center; }
   .shape-panel button.st { margin: 0; padding: 0; width: 30px; height: 30px; font-size: 14px; font-weight: 700; border-radius: 6px; line-height: 1; }
   .shape-panel button.st.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
   .shape-panel button.ft { margin: 0; padding: 0; width: 30px; height: 30px; font-size: 12px; font-weight: 700; border-radius: 6px; line-height: 1; }
   .shape-panel button.ft.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
-  .shape-panel button.roof-commit { grid-column: 1 / -1; width: 64px; min-height: 28px; margin: 2px 0 0; padding: 3px 5px; font-size: 11px; border-radius: 6px; }
   .finish-panel { grid-template-columns: repeat(4, 26px); }
   .finish-panel button.fn { margin: 0; padding: 0; width: 26px; height: 26px; border-radius: 50%; border: 2px solid #FFFFFF; box-shadow: 0 0 0 1px #D3D1C7; cursor: pointer; }
   .finish-panel button.fn.active { box-shadow: 0 0 0 2px #534AB7; }
@@ -1230,11 +1235,10 @@
   </div>
 </div>
 
-<!-- Pavimento — uma pill só, mostrando o andar atual. A lista de
-     andares (antes pills sempre visíveis lado a lado, que cresceria
-     sem limite com mais pavimentos) e o "+ Novo pavimento" agora
-     moram dentro do menu suspenso. -->
-<div class="tb-overflow floor-menu tb-pill">
+<!-- Os níveis continuam no documento para abrir projetos antigos, mas
+     não são mais uma escolha de modelagem. Novos níveis nascem somente
+     ao usar "Empilhar cômodo" no próprio volume. -->
+<div class="tb-overflow floor-menu tb-pill" hidden aria-hidden="true">
   <button id="floorMenuBtn" class="tb-btn" title="Pavimento atual — clique pra trocar ou adicionar">
     <span id="floorMenuLabel">Térreo</span> <span class="tb-caret">▾</span>
   </button>
@@ -2014,6 +2018,7 @@
     <button class="gz" data-action="close" title="Fechar">✕</button>
   </div>
   <div id="roomGizmo" class="gizmo opening-gizmo">
+    <button class="gz room-stack" data-action="stackRoom" title="Criar outro cômodo exatamente sobre este">▣↑</button>
     <button class="gz" data-action="flipHydraulicFace" title="Trocar lado da parede">⇄</button>
     <button class="gz" data-action="routeHydraulicToSource" title="Desenhar percurso até a caixa d'água">〰️</button>
     <button class="gz danger" data-action="delete" title="Excluir cômodo">🗑</button>
@@ -2059,11 +2064,13 @@
     <button class="sp" data-shape="redonda" title="Coluna redonda">◯</button>
   </div>
   <div id="roofTypePanel" class="shape-panel roof-type-panel">
-    <button class="rt" data-rooftype="duasAguas" title="Duas águas">⩓</button>
-    <button class="rt" data-rooftype="quatroAguas" title="Quatro águas">⛰</button>
-    <button class="rt" data-rooftype="umaAgua" title="Uma água">◺</button>
-    <button class="rt" data-rooftype="platibanda" title="Platibanda">▭</button>
-    <button class="roof-commit" title="Concluir e recortar o engaste entre coberturas">Engastar</button>
+    <button class="rt" data-rooftype="duasAguas" title="Duas águas">⩓ 2 águas</button>
+    <button class="rt" data-rooftype="quatroAguas" title="Quatro águas">⛰ 4 águas</button>
+    <button class="rt" data-rooftype="umaAgua" title="Uma água">◺ 1 água</button>
+    <button class="rt" data-rooftype="platibanda" title="Platibanda">▭ Platibanda</button>
+    <label class="roof-parameter" id="roofPitchControl">Inclinação <input id="roofPitchInput" type="number" min="5" max="75" step="1" inputmode="decimal" aria-label="Inclinação do telhado em graus"></label>
+    <button class="roof-axis" title="Alternar a direção da cumeeira ou do caimento">↔ Direção: eixo X</button>
+    <div class="roof-auto-compose" title="Coberturas que se encontram são recortadas automaticamente">Encontro automático</div>
   </div>
   <div id="finishPanel" class="shape-panel finish-panel"></div>
   <button id="generateAtticBtn" style="display:none; position:absolute; right:112px; bottom:82px; z-index:40; padding:13px 20px; border:0; border-radius:14px; background:#5A49C7; color:#fff; font-weight:700; box-shadow:0 8px 28px rgba(40,32,105,.3);">Gerar ático</button>

@@ -33,6 +33,36 @@ function pushUndoSnapshot(): void {
   if (undoStack.length > UNDO_LIMIT) undoStack.shift();
 }
 
+function autoComposeCurrentRoofs(): string[][] {
+  const roofs = currentRoofs();
+  const visited = new Set<string>();
+  const groups: string[][] = [];
+  roofs.forEach((start) => {
+    if (visited.has(start.id)) return;
+    const queue = [start];
+    const component: Roof[] = [];
+    visited.add(start.id);
+    while (queue.length) {
+      const roof = queue.shift()!;
+      component.push(roof);
+      roofs.forEach((candidate) => {
+        if (visited.has(candidate.id) || candidate.ridgeAxis === roof.ridgeAxis) return;
+        if (!Core.rectsNearby(roof, candidate, Core.SNAP_UNIT)) return;
+        visited.add(candidate.id);
+        queue.push(candidate);
+      });
+    }
+    if (component.length < 2) {
+      delete component[0]!.compoundGroupId;
+      return;
+    }
+    const groupId = component.find((roof) => roof.compoundGroupId)?.compoundGroupId || Core.nextId('roof-group');
+    component.forEach((roof) => { roof.compoundGroupId = groupId; });
+    groups.push(component.map((roof) => roof.id));
+  });
+  return groups;
+}
+
 // Maior X entre toda entidade de todo pavimento — usado como eixo
 // padrão de espelho em duplicateEntireConstructionMirrored, pra cópia
 // nascer encostada na borda direita da construção original.
@@ -438,6 +468,29 @@ export const commands = {
     walls.forEach((w) => currentWalls().push(w));
     emit({ type: 'RoomCreated', floorIndex: project.currentFloorIndex, wallIds: walls.map((w) => w.id) });
     return walls;
+  },
+
+  stackRoom(wallIds: string[]): Wall[] | null {
+    const source = currentFloor();
+    const selected = wallIds.map((id) => source.walls.find((wall) => wall.id === id)).filter((wall): wall is Wall => !!wall);
+    if (selected.length < 3 || selected.length !== wallIds.length) return null;
+    pushUndoSnapshot();
+    const next = Core.createFloorEntity('Nível ' + (project.floors.length + 1));
+    const wallIdMap = new Map<string, string>();
+    selected.forEach((wall) => {
+      const copy = { ...wall, id: Core.nextId('wall') };
+      delete copy.demolished;
+      wallIdMap.set(wall.id, copy.id);
+      next.walls.push(copy);
+    });
+    source.openings.filter((opening) => wallIdMap.has(opening.wallId)).forEach((opening) => {
+      next.openings.push({ ...opening, id: Core.nextId('opening'), wallId: wallIdMap.get(opening.wallId)! });
+    });
+    project.floors.push(next);
+    project.currentFloorIndex = project.floors.length - 1;
+    const newWallIds = next.walls.map((wall) => wall.id);
+    emit({ type: 'RoomStacked', floorIndex: project.currentFloorIndex, wallIds: newWallIds });
+    return next.walls;
   },
 
   moveWallEndpoint(wallId: string, which: 1 | 2, x: number, y: number): void {
@@ -1305,6 +1358,7 @@ export const commands = {
     pushUndoSnapshot();
     const roof = Core.createRoofEntity(Math.min(x1, x2), Math.min(y1, y2), Math.max(x1, x2), Math.max(y1, y2), attic ? 'duasAguas' : type, undefined, undefined, undefined, undefined, attic ? 'preview' : undefined, attic ? 1.2 : undefined);
     currentRoofs().push(roof);
+    autoComposeCurrentRoofs();
     emit({ type: 'RoofCreated', floorIndex: project.currentFloorIndex, roofId: roof.id });
     return roof;
   },
@@ -1393,6 +1447,11 @@ export const commands = {
     const r = findRoof(roofId); if (!r) return;
     r.x1 = x1; r.y1 = y1; r.x2 = x2; r.y2 = y2;
     emit({ type: 'RoofBoundsChanged', roofId, live: true });
+  },
+  autoComposeRoofs(): string[][] {
+    const groups = autoComposeCurrentRoofs();
+    emit({ type: 'RoofCompositionChanged', floorIndex: project.currentFloorIndex, groups });
+    return groups;
   },
   updateRoofsGroupBodyLive(snapshots: { id: string; x1: number; y1: number; x2: number; y2: number }[], dx: number, dy: number): void {
     snapshots.forEach((snapshot) => {
