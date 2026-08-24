@@ -362,6 +362,8 @@ export interface ProjectLayers {
   instalacoes: boolean;
   /** Deixa as paredes vazadas (opacidade reduzida) — pra comparar com uma Planta Baixa importada no chão, ou só enxergar melhor o miolo da casa. */
   paredesTransparentes: boolean;
+  /** Mantém os níveis acima do nível em edição visíveis. */
+  niveisSuperiores: boolean;
 }
 
 export type HydraulicNetworkType = 'cold_water' | 'sanitary_sewer' | 'kitchen_sewer' | 'sanitary_vent' | 'rainwater';

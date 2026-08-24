@@ -25,6 +25,7 @@ export function init(): void {
   bind('telhadoToggle', 'telhado');
   bind('varandaToggle', 'varanda');
   bind('paredesTransparentesToggle', 'paredesTransparentes');
+  bind('niveisSuperioresToggle', 'niveisSuperiores');
   const layers = Store.getProject().layers;
   (document.getElementById('radierToggle') as HTMLInputElement).checked = layers.fundacao;
   (document.getElementById('calcadaToggle') as HTMLInputElement).checked = layers.calcada;
@@ -38,6 +39,7 @@ export function init(): void {
   (document.getElementById('telhadoToggle') as HTMLInputElement).checked = layers.telhado;
   (document.getElementById('varandaToggle') as HTMLInputElement).checked = layers.varanda;
   (document.getElementById('paredesTransparentesToggle') as HTMLInputElement).checked = layers.paredesTransparentes;
+  (document.getElementById('niveisSuperioresToggle') as HTMLInputElement).checked = layers.niveisSuperiores;
 }
 
 // Namespace de compatibilidade — mesma razão dos demais módulos.

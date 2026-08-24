@@ -29,8 +29,16 @@ test('a laje automática do cômodo elevado é desenhada na base', () => {
 test('selecionar um cômodo inferior mantém todos os níveis superiores visíveis', () => {
   const renderer = readFileSync(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
   const floorsLoop = renderer.slice(renderer.indexOf('project.floors.forEach(function (floorData, floorIdx)'), renderer.indexOf('var yOffset = floorIdx * FLOOR_STACK_HEIGHT'));
-  assert.doesNotMatch(floorsLoop, /floorIdx > editingIdx/);
+  assert.doesNotMatch(floorsLoop, /if \(floorIdx > editingIdx\)/);
   assert.match(renderer, /var topFloorIdx = project\.floors\.length - 1/);
+});
+
+test('caixa de visualização permite esconder níveis superiores sob demanda', () => {
+  const renderer = readFileSync(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
+  const layersPanel = readFileSync(new URL('../src/core/LayersPanel.ts', import.meta.url), 'utf8');
+  assert.match(html, /id="niveisSuperioresToggle" checked> Mostrar níveis superiores/);
+  assert.match(layersPanel, /bind\('niveisSuperioresToggle', 'niveisSuperiores'\)/);
+  assert.match(renderer, /if \(!layers\.niveisSuperiores && floorIdx > editingIdx\) return/);
 });
 
 test('Gerar laje ignora cômodos que já têm laje automática de base', () => {

@@ -4486,6 +4486,9 @@ export function hashColorHex(key: string): number {
       // Selecionar um nível muda somente o contexto de edição. A casa
       // inteira continua visível, inclusive todos os volumes superiores,
       // para que a leitura da composição vertical nunca desapareça.
+      // A caixa "Mostrar níveis superiores" permite ocultá-los quando a
+      // pessoa precisa enxergar ou editar o interior do nível atual.
+      if (!layers.niveisSuperiores && floorIdx > editingIdx) return;
 
       var yOffset = floorIdx * FLOOR_STACK_HEIGHT;
       var currentWallHeight = floorWallHeight(floorData, WALL_HEIGHT);
