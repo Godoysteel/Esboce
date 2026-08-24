@@ -466,6 +466,15 @@ export const commands = {
       Core.createWallEntity(minX, maxY, minX, minY)
     ];
     walls.forEach((w) => currentWalls().push(w));
+    // Um cômodo desenhado diretamente acima do térreo também precisa do
+    // entrepiso. O identificador é o mesmo usado por raiseRoom/Gerar Laje,
+    // mantendo a criação idempotente em todos os fluxos.
+    if (project.currentFloorIndex > 0) {
+      const floor = currentFloor();
+      const roomKey = walls.map((wall) => wall.id).sort().join(',');
+      floor.roomBaseLajeGenerated = floor.roomBaseLajeGenerated || {};
+      floor.roomBaseLajeGenerated[roomKey] = true;
+    }
     emit({ type: 'RoomCreated', floorIndex: project.currentFloorIndex, wallIds: walls.map((w) => w.id) });
     return walls;
   },
@@ -1370,7 +1379,7 @@ export const commands = {
     // sem Core.snap() aqui de propósito — ver comentário histórico completo.
     if (x1 === x2 || y1 === y2) return null;
     pushUndoSnapshot();
-    const roof = Core.createRoofEntity(Math.min(x1, x2), Math.min(y1, y2), Math.max(x1, x2), Math.max(y1, y2), attic ? 'duasAguas' : type, undefined, undefined, undefined, undefined, attic ? 'preview' : undefined, attic ? 1.2 : undefined);
+    const roof = Core.createRoofEntity(Math.min(x1, x2), Math.min(y1, y2), Math.max(x1, x2), Math.max(y1, y2), type, undefined, undefined, undefined, undefined, attic ? 'preview' : undefined, attic ? 1.2 : undefined);
     currentRoofs().push(roof);
     autoComposeCurrentRoofs();
     emit({ type: 'RoofCreated', floorIndex: project.currentFloorIndex, roofId: roof.id });
@@ -2079,7 +2088,6 @@ export const commands = {
   generateAttic(roofId: string): void {
     const r = findRoof(roofId); if (!r || r.atticMode !== 'preview') return;
     pushUndoSnapshot();
-    r.type = 'duasAguas';
     r.atticMode = 'generated';
     r.atticWallIds = currentWalls().filter((wall) => Core.wallIntersectsRoofFootprint(wall, r)).map((wall) => wall.id);
     emit({ type: 'AtticGenerated', roofId, wallIds: r.atticWallIds.slice() });

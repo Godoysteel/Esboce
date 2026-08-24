@@ -1394,6 +1394,11 @@ export function hashColorHex(key: string): number {
     var c1 = roof.ridgeAxis === 'x' ? wall.y1 : wall.x1;
     var c2 = roof.ridgeAxis === 'x' ? wall.y2 : wall.x2;
     var ts = [0, 1];
+    if (roof.type === 'quatroAguas') {
+      // O perfil também muda nos espigões; mais divisões impedem uma única
+      // face de atravessar a cobertura e formar picos no ático.
+      for (var hipSlice = 1; hipSlice < 16; hipSlice++) ts.push(hipSlice / 16);
+    }
     if (Math.abs(c2 - c1) > 1e-6) {
       var ridgeT = (centerCoord - c1) / (c2 - c1);
       if (ridgeT > 1e-5 && ridgeT < 1 - 1e-5) ts.push(ridgeT);

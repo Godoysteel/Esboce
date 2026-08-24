@@ -20,6 +20,19 @@ test('subir move as mesmas paredes, sem criar cópia, e gera a laje de base', ()
   assert.match(viewport, /Store\.commands\.setCurrentFloor\(mesh\.userData\.floorIndex\)/);
 });
 
+test('cômodo desenhado diretamente em nível superior nasce com laje de base', () => {
+  const command = store.slice(store.indexOf('createRoom('), store.indexOf('raiseRoom('));
+  assert.match(command, /if \(project\.currentFloorIndex > 0\)/);
+  assert.match(command, /floor\.roomBaseLajeGenerated\[roomKey\] = true/);
+});
+
+test('gerar ático preserva o tipo de cobertura escolhido', () => {
+  const createRoof = store.slice(store.indexOf('createRoof('), store.indexOf('fuseRoofs('));
+  const generateAttic = store.slice(store.indexOf('generateAttic('), store.indexOf('configureCurrentFloor('));
+  assert.doesNotMatch(createRoof, /attic \? 'duasAguas'/);
+  assert.doesNotMatch(generateAttic, /r\.type = 'duasAguas'/);
+});
+
 test('a laje automática do cômodo elevado é desenhada na base', () => {
   const renderer = readFileSync(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
   assert.match(renderer, /hasBaseLaje = !!\(floorData\.roomBaseLajeGenerated \|\| \{\}\)\[roomKey\]/);

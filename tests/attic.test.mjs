@@ -62,6 +62,13 @@ test('parede interna que cruza a cumeeira mantém complemento triangular', () =>
   assert.ok(Math.abs(Core.atticWallExtensionAreaMeters(wall, roof) - (4 + 4 * (eaveContact - 1.2))) < 1e-9);
 });
 
+test('ático de quatro águas desce pelos espigões perto das extremidades', () => {
+  const roof = createRoofEntity(0, 0, 120, 80, 'quatroAguas', 30, 'x', 'atico-4', undefined, 'generated', 1.2);
+  const center = Core.roofHeightAtModelPoint(roof, 60, 40);
+  const nearEnd = Core.roofHeightAtModelPoint(roof, 10, 40);
+  assert.ok(center > nearEnd);
+});
+
 test('abertura no ático usa como limite o ponto mais baixo sob o telhado', () => {
   const roof = createRoofEntity(0, 0, 80, 80, 'duasAguas', 45, 'x', 'atico-abertura', undefined, 'generated', 1.2);
   const wall = { id: 'frontao', x1: 0, y1: 0, x2: 0, y2: 80 };

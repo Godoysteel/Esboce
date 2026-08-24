@@ -193,10 +193,17 @@ export function roofHeightAtModelPoint(roof: Roof, x: number, y: number): number
   // não o plano abstrato que começa no limite do footprint.
   const pitchRad = roof.pitchDeg * Math.PI / 180;
   const undersideContactOffset = 0.4 * Math.tan(pitchRad) - 0.12 / Math.cos(pitchRad) - 0.006;
-  const center = roof.ridgeAxis === 'x' ? (roof.y1 + roof.y2) / 2 : (roof.x1 + roof.x2) / 2;
-  const halfSpan = roof.ridgeAxis === 'x' ? (roof.y2 - roof.y1) / 2 : (roof.x2 - roof.x1) / 2;
-  const coordinate = roof.ridgeAxis === 'x' ? y : x;
-  const riseUnits = Math.max(0, halfSpan - Math.abs(coordinate - center));
+  let riseUnits: number;
+  if (roof.type === 'quatroAguas') {
+    // Em quatro águas a altura é limitada pela água mais próxima: junto às
+    // extremidades da cumeeira ela desce pelos espigões.
+    riseUnits = Math.max(0, Math.min(x - roof.x1, roof.x2 - x, y - roof.y1, roof.y2 - y));
+  } else {
+    const center = roof.ridgeAxis === 'x' ? (roof.y1 + roof.y2) / 2 : (roof.x1 + roof.x2) / 2;
+    const halfSpan = roof.ridgeAxis === 'x' ? (roof.y2 - roof.y1) / 2 : (roof.x2 - roof.x1) / 2;
+    const coordinate = roof.ridgeAxis === 'x' ? y : x;
+    riseUnits = Math.max(0, halfSpan - Math.abs(coordinate - center));
+  }
   return base + riseUnits / GRID * Math.tan(pitchRad) + undersideContactOffset;
 }
 
