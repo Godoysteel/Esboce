@@ -23,7 +23,8 @@ test('subir move as mesmas paredes, sem criar cópia, e gera a laje de base', ()
 test('a laje automática do cômodo elevado é desenhada na base', () => {
   const renderer = readFileSync(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
   assert.match(renderer, /hasBaseLaje = !!\(floorData\.roomBaseLajeGenerated \|\| \{\}\)\[roomKey\]/);
-  assert.match(renderer, /hasBaseLaje[\s\S]*?buildAutoLajePiece\(lajeShape, lajeSizeX, lajeSizeZ, yOffset,/);
+  assert.match(renderer, /hasBaseLaje[\s\S]*?buildAutoLajePiece\(lajeShape, lajeSizeX, lajeSizeZ, yOffset - LAJE_THICKNESS,/);
+  assert.match(renderer, /var FLOOR_STACK_HEIGHT = WALL_HEIGHT \+ LAJE_THICKNESS/);
 });
 
 test('selecionar um cômodo inferior mantém todos os níveis superiores visíveis', () => {

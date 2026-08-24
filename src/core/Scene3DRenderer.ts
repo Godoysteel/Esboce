@@ -5365,10 +5365,13 @@ export function hashColorHex(key: string): number {
           // mais alto empurra a própria laje pra cima; os vizinhos
           // não-alterados continuam na altura padrão.
           // Ao elevar um cômodo, a laje pertence à BASE do novo volume.
-          // O pequeno recuo da extrusão para baixo fecha o encontro com
-          // o nível inferior sem deixar a fresta que existia antes.
+          // buildAutoLajePiece cresce para cima a partir do topY recebido;
+          // por isso a base começa uma espessura abaixo de yOffset e
+          // termina exatamente no piso superior. Como FLOOR_STACK_HEIGHT
+          // = WALL_HEIGHT + LAJE_THICKNESS, ela também encontra o topo da
+          // parede inferior sem invadir o cômodo nem deixar fresta.
           var lajePieces = hasBaseLaje
-            ? buildAutoLajePiece(lajeShape, lajeSizeX, lajeSizeZ, yOffset, lajeWallColor, viewState)
+            ? buildAutoLajePiece(lajeShape, lajeSizeX, lajeSizeZ, yOffset - LAJE_THICKNESS, lajeWallColor, viewState)
             : buildAutoLajePiece(lajeShape, lajeSizeX, lajeSizeZ, yOffset + roomHeight, lajeWallColor, viewState);
           lajePieces.forEach(function (m: any) {
             tagCategory(m, 'laje');
