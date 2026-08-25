@@ -4443,11 +4443,18 @@ export function hashColorHex(key: string): number {
         if (r.atticMode || r.steppedLowerRoofId) {
           var baseHandle = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 12), new THREE.MeshBasicMaterial({ color: 0xF4A340, depthTest: false }));
           baseHandle.renderOrder = 999;
-          baseHandle.position.set(wx2 + 0.32, topY, wz2 + 0.32);
+          baseHandle.position.set(wx2 + 0.32, topY + 0.38, wz2 + 0.32);
           baseHandle.userData.handle = 'roofBaseHeight';
           baseHandle.userData.roofHandleForId = r.id;
           scene.add(baseHandle);
           registry.handleMeshes.push(baseHandle);
+          var baseHandleStem = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.38, 8), new THREE.MeshBasicMaterial({ color: 0xF4A340, depthTest: false }));
+          baseHandleStem.position.set(wx2 + 0.32, topY + 0.19, wz2 + 0.32);
+          baseHandleStem.renderOrder = 998;
+          baseHandleStem.userData.handle = 'roofBaseHeight';
+          baseHandleStem.userData.roofHandleForId = r.id;
+          scene.add(baseHandleStem);
+          registry.handleMeshes.push(baseHandleStem);
           // No modelo em níveis, a mesma regulagem também precisa estar
           // acessível por dentro. Esta segunda alça fica no centro do
           // fechamento transversal: ao subi-la, telhado e paredes próprias
@@ -4457,11 +4464,18 @@ export function hashColorHex(key: string): number {
             var closureModelY = r.ridgeAxis === 'x' ? midY : r.y1;
             var innerBaseHandle = new THREE.Mesh(new THREE.SphereGeometry(0.13, 12, 12), new THREE.MeshBasicMaterial({ color: 0xF4A340, depthTest: false }));
             innerBaseHandle.renderOrder = 999;
-            innerBaseHandle.position.set((closureModelX - offsetX) * scale, topY, (closureModelY - offsetY) * scale);
+            innerBaseHandle.position.set((closureModelX - offsetX) * scale, topY + 0.38, (closureModelY - offsetY) * scale);
             innerBaseHandle.userData.handle = 'roofBaseHeight';
             innerBaseHandle.userData.roofHandleForId = r.id;
             scene.add(innerBaseHandle);
             registry.handleMeshes.push(innerBaseHandle);
+            var innerBaseStem = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.38, 8), new THREE.MeshBasicMaterial({ color: 0xF4A340, depthTest: false }));
+            innerBaseStem.position.set((closureModelX - offsetX) * scale, topY + 0.19, (closureModelY - offsetY) * scale);
+            innerBaseStem.renderOrder = 998;
+            innerBaseStem.userData.handle = 'roofBaseHeight';
+            innerBaseStem.userData.roofHandleForId = r.id;
+            scene.add(innerBaseStem);
+            registry.handleMeshes.push(innerBaseStem);
           }
         }
         var pole = ridgeLineMesh(new THREE.Vector3(wx2, topY, wz2), new THREE.Vector3(wx2, ridgeY, wz2));

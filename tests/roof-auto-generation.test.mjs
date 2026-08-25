@@ -56,4 +56,8 @@ test('cumeeira em níveis preserva o beiral inferior contra o oitão elevado', (
   assert.match(renderer, /closure\.userData\.roofClosure = 'perimetral'/);
   assert.match(store, /const minimumHeightM = r\.steppedLowerRoofId \? Core\.WALL_HEIGHT : 0\.1/);
   assert.match(store, /Math\.min\(8, heightM\)/);
+  assert.match(renderer, /baseHandleStem\.userData\.handle = 'roofBaseHeight'/);
+  assert.match(renderer, /innerBaseStem\.userData\.handle = 'roofBaseHeight'/);
+  assert.match(viewport, /Alça laranja: subir o telhado inteiro/);
+  assert.match(viewport, /Telhado inteiro elevado individualmente/);
 });

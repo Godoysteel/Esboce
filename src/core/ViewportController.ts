@@ -883,7 +883,7 @@ import {
     render();
   }
   function selectColumn(columnId: any) { selectedWallId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedColumnId = columnId; gizmoMenuOpen = false; render(); }
-  function selectRoof(roofId: any) { selectedWallId = null; selectedColumnId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedRoofId = roofId; gizmoMenuOpen = false; render(); }
+  function selectRoof(roofId: any) { selectedWallId = null; selectedColumnId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedRoofId = roofId; gizmoMenuOpen = false; render(); var selectedRoof = Store.findRoof(roofId); if (selectedRoof && selectedRoof.steppedLowerRoofId) hintEl.textContent = 'Alça laranja: subir o telhado inteiro. Alça branca: ajustar somente a cumeeira.'; }
 
   function connectedRoofIds(startId: any) {
     var selected = Store.findRoof(startId);
@@ -3534,7 +3534,9 @@ import {
     if (dragMode === 'roofBaseHeight') {
       if (dragElementStart) {
         var deltaBase = dragElementStart.startScreenY - e.clientY;
-        Store.commands.updateRoofBaseHeightLive(selectedRoofId, dragElementStart.baseHeightM + deltaBase * 0.01);
+        var wholeRoofHeight = dragElementStart.baseHeightM + deltaBase * 0.01;
+        Store.commands.updateRoofBaseHeightLive(selectedRoofId, wholeRoofHeight);
+        hintEl.textContent = 'Telhado inteiro elevado individualmente — base em ' + Math.max(Core.WALL_HEIGHT, Math.min(8, wholeRoofHeight)).toFixed(2).replace('.', ',') + ' m.';
       }
       return;
     }
