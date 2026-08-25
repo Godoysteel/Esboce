@@ -3358,6 +3358,55 @@ export function hashColorHex(key: string): number {
     var structColor = pickColor(0xA6A49A, 'varanda', viewState); // mesmo cinza-claro já usado nas colunas comuns
     var slabColor = pickColor(0xC7C2B4, 'varanda', viewState); // tom neutro de piso externo
 
+    if (varanda.contourSegments && varanda.contourSegments.length) {
+      var contourWidth = varanda.widthM || 2.2;
+      var postColor = varanda.postMaterial === 'madeira' ? 0x8B5A2B : varanda.postMaterial === 'tijolo' ? 0xA84F32 : 0xC7C5BE;
+      var seenPosts: Record<string, boolean> = {};
+      varanda.contourSegments.forEach(function (segment: any) {
+        var dxM = segment.x2 - segment.x1, dyM = segment.y2 - segment.y1;
+        var lenModel = Math.hypot(dxM, dyM);
+        if (lenModel < Core.SNAP_UNIT) return;
+        var nx = -dyM / lenModel * segment.outwardSign, ny = dxM / lenModel * segment.outwardSign;
+        var outsetModel = contourWidth * Core.GRID;
+        var points = [
+          { x: segment.x1, y: segment.y1 }, { x: segment.x2, y: segment.y2 },
+          { x: segment.x2 + nx * outsetModel, y: segment.y2 + ny * outsetModel },
+          { x: segment.x1 + nx * outsetModel, y: segment.y1 + ny * outsetModel },
+        ];
+        var shape = new THREE.Shape();
+        points.forEach(function (point, index) {
+          var wx = (point.x - offsetX) * scale, wz = (point.y - offsetY) * scale;
+          if (index === 0) shape.moveTo(wx, wz); else shape.lineTo(wx, wz);
+        });
+        shape.closePath();
+        meshes.push(makeSlabMesh(shape, VARANDA_SLAB_THICK, floorTopY, slabColor, 1));
+
+        var minX = Math.min.apply(null, points.map(function (p) { return p.x; }));
+        var maxX = Math.max.apply(null, points.map(function (p) { return p.x; }));
+        var minY = Math.min.apply(null, points.map(function (p) { return p.y; }));
+        var maxY = Math.max.apply(null, points.map(function (p) { return p.y; }));
+        var roof = { id: varanda.id + '-' + segment.wallId, x1: minX, y1: minY, x2: maxX, y2: maxY, type: 'umaAgua', pitchDeg: 12, ridgeAxis: Math.abs(dxM) >= Math.abs(dyM) ? 'x' : 'y' };
+        buildRoofPiece(roof, scale, offsetX, offsetY, floorTopY + WALL_HEIGHT, viewState).forEach(function (piece) { meshes.push(piece); });
+
+        var postCount = Math.max(1, Math.ceil((lenModel / Core.GRID) / 2.5));
+        for (var postIndex = 0; postIndex <= postCount; postIndex++) {
+          var t = postIndex / postCount;
+          var px = segment.x1 + dxM * t + nx * outsetModel;
+          var py = segment.y1 + dyM * t + ny * outsetModel;
+          var key = Math.round(px) + ':' + Math.round(py);
+          if (seenPosts[key]) continue;
+          seenPosts[key] = true;
+          var post = new THREE.Mesh(
+            new THREE.BoxGeometry(varanda.postMaterial === 'tijolo' ? 0.32 : 0.20, WALL_HEIGHT, varanda.postMaterial === 'tijolo' ? 0.32 : 0.20),
+            new THREE.MeshStandardMaterial({ color: postColor, roughness: 0.9 })
+          );
+          post.position.set((px - offsetX) * scale, floorTopY + WALL_HEIGHT / 2, (py - offsetY) * scale);
+          meshes.push(post);
+        }
+      });
+      return meshes;
+    }
+
     meshes.push(makeSlabMesh(rectShape(bounds), VARANDA_SLAB_THICK, floorTopY, slabColor, 1));
 
     var corners = varandaCorners(bounds, varanda.frontSide);

@@ -622,7 +622,10 @@ export const commands = {
       f.walls.forEach((w) => { w.x1 += dx; w.y1 += dy; w.x2 += dx; w.y2 += dy; });
       f.columns.forEach((c) => { c.x += dx; c.y += dy; });
       f.roofs.forEach((r) => { r.x1 += dx; r.y1 += dy; r.x2 += dx; r.y2 += dy; });
-      f.varandas.forEach((v) => { v.x1 += dx; v.y1 += dy; v.x2 += dx; v.y2 += dy; });
+      f.varandas.forEach((v) => {
+        v.x1 += dx; v.y1 += dy; v.x2 += dx; v.y2 += dy;
+        v.contourSegments?.forEach((segment) => { segment.x1 += dx; segment.y1 += dy; segment.x2 += dx; segment.y2 += dy; });
+      });
       f.lajes.forEach((l) => { l.points.forEach((p) => { p.x += dx; p.y += dy; }); });
       f.furniture.forEach((it) => { it.x += dx; it.y += dy; });
       f.glazingPanels.forEach((g) => { if (g.state === 'preview' && g.x != null && g.y != null) { g.x += dx; g.y += dy; } });
@@ -678,10 +681,18 @@ export const commands = {
       const newRoofs: Roof[] = f.roofs.map((r) => ({
         ...r, id: Core.nextId('roof'), x1: Core.mirrorX(r.x1, axisX), x2: Core.mirrorX(r.x2, axisX),
       }));
-      const newVarandas: Varanda[] = f.varandas.map((v) => ({
-        ...v, id: Core.nextId('varanda'), x1: Core.mirrorX(v.x1, axisX), x2: Core.mirrorX(v.x2, axisX),
-        frontSide: v.frontSide === 'minX' ? 'maxX' : v.frontSide === 'maxX' ? 'minX' : v.frontSide,
-      }));
+      const newVarandas: Varanda[] = f.varandas.map((v) => {
+        const copy: Varanda = {
+          ...v, id: Core.nextId('varanda'), x1: Core.mirrorX(v.x1, axisX), x2: Core.mirrorX(v.x2, axisX),
+          frontSide: v.frontSide === 'minX' ? 'maxX' : v.frontSide === 'maxX' ? 'minX' : v.frontSide,
+        };
+        if (v.contourSegments) copy.contourSegments = v.contourSegments.map((segment) => ({
+          ...segment, wallId: wallIdMap[segment.wallId] || segment.wallId,
+          x1: Core.mirrorX(segment.x1, axisX), x2: Core.mirrorX(segment.x2, axisX),
+          outwardSign: (-segment.outwardSign) as 1 | -1,
+        }));
+        return copy;
+      });
       // Espelhar em X inverte o sentido do contorno (horário vira
       // anti-horário) — Laje.points exige sentido horário, daí o
       // .reverse() depois de espelhar cada ponto.
@@ -1121,6 +1132,40 @@ export const commands = {
     return roofs.length;
   },
 
+  createRoofCompositePreset(kind: 'extensaoLateral' | 'cumeeirasParalelas'): number {
+    const floor = currentFloor();
+    const rects = Core.roofGenerationRects(floor.walls);
+    if (!rects.length) return 0;
+    const base = rects.reduce((best, rect) => (rect.x2 - rect.x1) * (rect.y2 - rect.y1) > (best.x2 - best.x1) * (best.y2 - best.y1) ? rect : best, rects[0]!);
+    pushUndoSnapshot();
+    const groupId = Core.nextId('roof-group');
+    const width = base.x2 - base.x1, depth = base.y2 - base.y1;
+    const roofs: Roof[] = [];
+    if (kind === 'extensaoLateral') {
+      const main = Core.createRoofEntity(base.x1, base.y1, base.x2, base.y2, 'duasAguas', 30, width >= depth ? 'x' : 'y');
+      const extension = width >= depth
+        ? Core.createRoofEntity(base.x1, base.y2 - depth * 0.18, base.x2, base.y2 + depth * 0.38, 'umaAgua', 16, 'x')
+        : Core.createRoofEntity(base.x2 - width * 0.18, base.y1, base.x2 + width * 0.38, base.y2, 'umaAgua', 16, 'y');
+      roofs.push(main, extension);
+    } else {
+      if (width >= depth) {
+        roofs.push(
+          Core.createRoofEntity(base.x1, base.y1, base.x2, base.y1 + depth * 0.58, 'duasAguas', 30, 'x'),
+          Core.createRoofEntity(base.x1 + width * 0.18, base.y1 + depth * 0.48, base.x2, base.y2, 'duasAguas', 30, 'x'),
+        );
+      } else {
+        roofs.push(
+          Core.createRoofEntity(base.x1, base.y1, base.x1 + width * 0.58, base.y2, 'duasAguas', 30, 'y'),
+          Core.createRoofEntity(base.x1 + width * 0.48, base.y1 + depth * 0.18, base.x2, base.y2, 'duasAguas', 30, 'y'),
+        );
+      }
+    }
+    roofs.forEach((roof) => { roof.compoundGroupId = groupId; });
+    floor.roofs.push(...roofs);
+    emit({ type: 'RoofCompositePresetCreated', kind, roofIds: roofs.map((roof) => roof.id), groupId });
+    return roofs.length;
+  },
+
   // Botão "Gerar Forro de Drywall" — mesmo espírito de generateLajeForCurrentFloor
   // acima, flag independente (roomForroGenerated, não roomLajeGenerated):
   // um cômodo pode ter só laje, só forro, os dois, ou nenhum. Cômodo criado
@@ -1530,6 +1575,21 @@ export const commands = {
     currentVarandas().push(v);
     emit({ type: 'VarandaCreated', floorIndex: project.currentFloorIndex, varandaId: v.id });
     return v;
+  },
+
+  createContourVaranda(postMaterial: 'madeira' | 'concreto' | 'tijolo', widthM = 2.2): Varanda | null {
+    const segments = Core.varandaContourSegments(currentWalls());
+    if (!segments.length) return null;
+    const xs = segments.flatMap((segment) => [segment.x1, segment.x2]);
+    const ys = segments.flatMap((segment) => [segment.y1, segment.y2]);
+    pushUndoSnapshot();
+    const varanda = Core.createVarandaEntity(Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys), 'minZ');
+    varanda.contourSegments = segments;
+    varanda.widthM = Math.max(0.8, Math.min(5, widthM));
+    varanda.postMaterial = postMaterial;
+    currentVarandas().push(varanda);
+    emit({ type: 'ContourVarandaCreated', varandaId: varanda.id, segmentCount: segments.length, postMaterial });
+    return varanda;
   },
 
   updateVarandaBoundsLive(varandaId: string, x1: number, y1: number, x2: number, y2: number): void {

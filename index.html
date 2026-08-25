@@ -1704,7 +1704,17 @@
       <button class="cp-close" data-close-panel title="Fechar">×</button>
     </div>
     <div class="ts-group-label">Telhados</div>
-    <button class="cp-action-row" id="generateRoofBtn" title="Gera uma composição de telhados editáveis para os cômodos deste nível" style="width:100%; margin-bottom:10px; font-weight:700;">⌂ Gerar telhado</button>
+    <div class="ts-group-label">Modelos compostos</div>
+    <div class="cp-group-grid" style="margin-bottom:10px;">
+      <button class="ts-btn" id="roofPresetExtension" title="Duas águas com uma água prolongada para varanda lateral"><span>Extensão lateral</span></button>
+      <button class="ts-btn" id="roofPresetParallel" title="Duas coberturas paralelas com cumeeiras desencontradas"><span>Cumeeiras paralelas</span></button>
+    </div>
+    <div class="ts-group-label">Varanda de contorno</div>
+    <div class="cp-group-grid" style="margin-bottom:10px;">
+      <button class="ts-btn contour-varanda-btn" data-post-material="madeira"><span>Postes de madeira</span></button>
+      <button class="ts-btn contour-varanda-btn" data-post-material="concreto"><span>Postes de concreto</span></button>
+      <button class="ts-btn contour-varanda-btn" data-post-material="tijolo"><span>Postes de tijolo</span></button>
+    </div>
     <div class="cp-group-grid">
       <button class="ts-btn" id="toolTelhado1Agua" title="1 Água">
         <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 28 32 10"/><path d="M6 28v6h26v-6"/></svg>
@@ -2292,7 +2302,7 @@ Mova uma parede para registrar a operação.</pre>
   </div>
 </div>
 
-<div id="roofStyleOverlay" role="dialog" aria-modal="true" aria-labelledby="roofStyleTitle" style="display:none; position:fixed; inset:0; background:rgba(44,44,42,0.55); z-index:1000; align-items:center; justify-content:center;">
+<div id="roofStyleOverlay" role="dialog" aria-modal="true" aria-labelledby="roofStyleTitle" style="display:none; position:fixed; inset:0; background:rgba(44,44,42,0.55); z-index:1000; align-items:center; justify-content:center;" hidden aria-hidden="true">
   <div class="auth-modal" style="max-width:440px;">
     <button id="roofStyleClose" class="auth-modal-close" title="Fechar">✕</button>
     <h2 id="roofStyleTitle">Qual estilo de telhado?</h2>

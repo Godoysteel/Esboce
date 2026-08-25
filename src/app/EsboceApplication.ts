@@ -309,9 +309,22 @@ export class EsboceApplication {
     this.requireElement("toolTelhado1Agua").addEventListener("click", () => armRoofTool("umaAgua"));
     this.requireElement("toolTelhado4Aguas").addEventListener("click", () => armRoofTool("quatroAguas"));
     this.requireElement("toolTelhadoPlatibanda").addEventListener("click", () => armRoofTool("platibanda"));
-    this.requireElement("generateRoofBtn").addEventListener("click", () => {
-      ViewportController.activateRoofTool();
-      this.requireElement("roofStyleOverlay").style.display = "flex";
+    this.requireElement("roofPresetExtension").addEventListener("click", () => {
+      const count = Store.commands.createRoofCompositePreset('extensaoLateral');
+      this.requireElement('viewportHint').textContent = count ? 'Modelo com extensão lateral criado. Selecione cada cobertura para ajustar.' : 'Crie ao menos um cômodo fechado antes de inserir o modelo.';
+    });
+    this.requireElement("roofPresetParallel").addEventListener("click", () => {
+      const count = Store.commands.createRoofCompositePreset('cumeeirasParalelas');
+      this.requireElement('viewportHint').textContent = count ? 'Cumeeiras paralelas criadas como um conjunto editável.' : 'Crie ao menos um cômodo fechado antes de inserir o modelo.';
+    });
+    document.querySelectorAll<HTMLElement>('.contour-varanda-btn').forEach((button) => {
+      button.addEventListener('click', () => {
+        const material = button.dataset.postMaterial as 'madeira' | 'concreto' | 'tijolo';
+        const varanda = Store.commands.createContourVaranda(material);
+        this.requireElement('viewportHint').textContent = varanda
+          ? 'Varanda criada ao redor das paredes externas, com curvas automáticas de 90°. Selecione para editar.'
+          : 'Não encontrei um contorno externo fechado neste nível.';
+      });
     });
     this.requireElement("roofStyleClose").addEventListener("click", () => {
       ViewportController.cancelActiveTool();

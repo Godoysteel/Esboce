@@ -17,13 +17,14 @@ test('gerador ignora divisória interna e cria um volume retangular coeso', () =
   assert.ok(rects[0].x1 < 0 && rects[0].x2 > 200 && rects[0].y1 < 0 && rects[0].y2 > 100);
 });
 
-test('interface oferece estilos e mantém os volumes gerados editáveis', () => {
+test('interface prioriza modelos manuais compostos e mantém as peças editáveis', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const store = readFileSync(new URL('../src/core/Store.ts', import.meta.url), 'utf8');
   const app = readFileSync(new URL('../src/app/EsboceApplication.ts', import.meta.url), 'utf8');
-  assert.match(html, /id="generateRoofBtn"/);
-  ['automatico', 'contemporaneo', 'tradicional', 'colonial', 'chale'].forEach((style) => assert.match(html, new RegExp(`data-roof-style="${style}"`)));
-  assert.match(store, /generateRoofsForCurrentFloor/);
+  assert.doesNotMatch(html, /id="generateRoofBtn"/);
+  assert.match(html, /id="roofPresetExtension"/);
+  assert.match(html, /id="roofPresetParallel"/);
+  assert.match(store, /createRoofCompositePreset/);
   assert.match(store, /floor\.roofs\.push\(\.\.\.roofs\)/);
-  assert.match(app, /ViewportController\.activateRoofTool\(\)/);
+  assert.match(app, /createRoofCompositePreset\('extensaoLateral'\)/);
 });

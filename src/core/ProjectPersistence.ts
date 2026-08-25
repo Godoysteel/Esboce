@@ -256,12 +256,25 @@ function parseOpening(value: unknown, path: string): Opening {
 
 function parseVaranda(value: unknown, path: string): Varanda {
   const v = record(value, path);
-  return {
+  const contourSegments = array(v.contourSegments, `${path}.contourSegments`, true).map((item, index) => {
+    const segment = record(item, `${path}.contourSegments[${index}]`);
+    return {
+      wallId: string(segment.wallId, `${path}.contourSegments[${index}].wallId`),
+      x1: number(segment.x1, `${path}.contourSegments[${index}].x1`), y1: number(segment.y1, `${path}.contourSegments[${index}].y1`),
+      x2: number(segment.x2, `${path}.contourSegments[${index}].x2`), y2: number(segment.y2, `${path}.contourSegments[${index}].y2`),
+      outwardSign: number(segment.outwardSign, `${path}.contourSegments[${index}].outwardSign`) >= 0 ? 1 as const : -1 as const,
+    };
+  });
+  const result: Varanda = {
     id: string(v.id, `${path}.id`),
     x1: number(v.x1, `${path}.x1`), y1: number(v.y1, `${path}.y1`),
     x2: number(v.x2, `${path}.x2`), y2: number(v.y2, `${path}.y2`),
     frontSide: enumValue(v.frontSide, ['minZ', 'maxZ', 'minX', 'maxX'], `${path}.frontSide`, 'minZ'),
   };
+  if (contourSegments.length) result.contourSegments = contourSegments;
+  if (v.widthM != null) result.widthM = number(v.widthM, `${path}.widthM`);
+  if (v.postMaterial != null) result.postMaterial = enumValue(v.postMaterial, ['madeira', 'concreto', 'tijolo'], `${path}.postMaterial`);
+  return result;
 }
 
 function parseLaje(value: unknown, path: string): Laje {

@@ -718,6 +718,25 @@ export function roofGenerationRects(wallList: Wall[]): RectLike[] {
   return rects;
 }
 
+export function varandaContourSegments(wallList: Wall[]): import('./types.js').VarandaContourSegment[] {
+  const rooms = detectRooms(wallList);
+  const roomWallSets = rooms.map((room) => ({ room, ids: new Set(findRoomWallIds(wallList, room)) }));
+  const result: import('./types.js').VarandaContourSegment[] = [];
+  wallList.forEach((wall) => {
+    if (wall.demolished) return;
+    const owners = roomWallSets.filter((entry) => entry.ids.has(wall.id));
+    if (owners.length !== 1) return;
+    const dx = wall.x2 - wall.x1, dy = wall.y2 - wall.y1;
+    const len = Math.hypot(dx, dy);
+    if (len < SNAP_UNIT) return;
+    const nx = -dy / len, ny = dx / len;
+    const mx = (wall.x1 + wall.x2) / 2, my = (wall.y1 + wall.y2) / 2;
+    const plusIsInside = pointInPolygon(mx + nx * SNAP_UNIT, my + ny * SNAP_UNIT, owners[0]!.room.points);
+    result.push({ wallId: wall.id, x1: wall.x1, y1: wall.y1, x2: wall.x2, y2: wall.y2, outwardSign: plusIsInside ? -1 : 1 });
+  });
+  return result;
+}
+
 // "perto" o bastante pra valer a pena tentar alinhar? Sobrepostos ou com
 // uma folga pequena nos dois eixos.
 export function rectsNearby(a: RectLike, b: RectLike, toleranceUnits: number): boolean {
@@ -2081,7 +2100,7 @@ export const Core = {
   wallResizeEndpointNeedsBridge,
   distPointToLine, wallOBB, furnitureOBB, openingOBB, obbOverlapMTV, wallOverlapsForeignOpening, resolveWallOffsetAgainstOpenings, wallsCanFuse, wallsMeetAtEndpoint, resolveWallGroupGridDelta,
   findWallTJunctionSplits,
-  createWallEntity, createColumnEntity, createRoofEntity, wallIntersectsRoofFootprint, roofHeightAtModelPoint, atticOpeningMaxTopMeters, openingFitsAtticRoof, atticWallExtensionAreaMeters, createVarandaEntity, createLajeEntity, createFloorEntity,
+  createWallEntity, createColumnEntity, createRoofEntity, wallIntersectsRoofFootprint, roofHeightAtModelPoint, atticOpeningMaxTopMeters, openingFitsAtticRoof, atticWallExtensionAreaMeters, createVarandaEntity, varandaContourSegments, createLajeEntity, createFloorEntity,
   createFurnitureEntity,
   createGlazingPanelEntity, GLAZING_DEFAULT_WIDTH_M, GLAZING_DEFAULT_HEIGHT_M, GLAZING_DEFAULT_MODULE_TARGET_M,
   createBalconyRailingEntity, BALCONY_DEFAULT_WIDTH_M, BALCONY_DEFAULT_HEIGHT_M, BALCONY_DEFAULT_MODULE_TARGET_M,

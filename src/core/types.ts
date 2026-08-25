@@ -66,6 +66,8 @@ export interface Roof {
 }
 
 export type VarandaFrontSide = 'minZ' | 'maxZ' | 'minX' | 'maxX';
+export type VarandaPostMaterial = 'madeira' | 'concreto' | 'tijolo';
+export interface VarandaContourSegment { wallId: string; x1: number; y1: number; x2: number; y2: number; outwardSign: 1 | -1; }
 
 export interface Varanda {
   id: string;
@@ -74,6 +76,9 @@ export interface Varanda {
   x2: number;
   y2: number;
   frontSide: VarandaFrontSide;
+  contourSegments?: VarandaContourSegment[];
+  widthM?: number;
+  postMaterial?: VarandaPostMaterial;
 }
 
 // Terreno (lote) — ver docs/02 - Domínio/Modelo de Domínio.md, seção 5, e
