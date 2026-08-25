@@ -60,4 +60,7 @@ test('cumeeira em níveis preserva o beiral inferior contra o oitão elevado', (
   assert.match(renderer, /innerBaseStem\.userData\.handle = 'roofBaseHeight'/);
   assert.match(viewport, /Alça laranja: subir o telhado inteiro/);
   assert.match(viewport, /Telhado inteiro elevado individualmente/);
+  assert.match(viewport, /if \(dragMode === 'roofBaseHeight'\) \{/);
+  assert.match(viewport, /Telhado inteiro posicionado individualmente/);
+  assert.match(viewport, /dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null/);
 });

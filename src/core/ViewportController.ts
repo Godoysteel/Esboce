@@ -4204,6 +4204,19 @@ import {
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }
+    // Elevação do telhado inteiro: faltava encerrar este modo no
+    // pointerup. Sem este bloco, o cursor continuava alterando baseHeightM
+    // mesmo depois de soltar o mouse; ao mover o ponteiro para baixo, a
+    // cobertura podia voltar ao topo das paredes e os fechamentos próprios
+    // dela pareciam desaparecer. O gesto agora termina exatamente ao soltar.
+    if (dragMode === 'roofBaseHeight') {
+      var elevatedRoof = selectedRoofId ? Store.findRoof(selectedRoofId) : null;
+      if (elevatedRoof) {
+        hintEl.textContent = 'Telhado inteiro posicionado individualmente — base em ' + (elevatedRoof.baseHeightM || Core.WALL_HEIGHT).toFixed(2).replace('.', ',') + ' m.';
+      }
+      dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
+      return;
+    }
     if (dragMode === 'roofRidge' || dragMode === 'roofParapetHeight') {
       if (selectedRoofId && fuseRoofsIfTouching(selectedRoofId)) {
         hintEl.textContent = 'Telhados fundidos — a cumeeira agora é uma só.';
