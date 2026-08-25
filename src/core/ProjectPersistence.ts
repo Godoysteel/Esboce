@@ -229,13 +229,16 @@ function parseRoof(value: unknown, path: string): Roof {
     gableFinishA: optionalString(v.gableFinishA, `${path}.gableFinishA`),
     gableFinishB: optionalString(v.gableFinishB, `${path}.gableFinishB`),
     compoundGroupId: optionalString(v.compoundGroupId, `${path}.compoundGroupId`),
+    steppedLowerRoofId: optionalString(v.steppedLowerRoofId, `${path}.steppedLowerRoofId`),
     atticMode: v.atticMode == null ? undefined : enumValue(v.atticMode, ['preview', 'generated'], `${path}.atticMode`),
   };
   for (const [key, item] of Object.entries(optionalFields)) {
     if (item !== undefined) (roof as unknown as Record<string, unknown>)[key] = item;
   }
-  if (roof.atticMode) {
+  if (roof.atticMode || roof.steppedLowerRoofId) {
     roof.baseHeightM = number(v.baseHeightM, `${path}.baseHeightM`, 1.2);
+  }
+  if (roof.atticMode) {
     roof.atticWallIds = array(v.atticWallIds, `${path}.atticWallIds`, true).map((id, index) => string(id, `${path}.atticWallIds[${index}]`));
   }
   return roof;

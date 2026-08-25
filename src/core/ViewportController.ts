@@ -532,7 +532,7 @@ import {
     clearRoofResizePreview();
     beginRoofResizePreview(roof.id);
     var previewRoof = Object.assign({}, roof, bounds);
-    var floorTopY = currentFloorYOffset() + (roof.atticMode ? (roof.baseHeightM || 1.2) : Scene3DRenderer.WALL_HEIGHT_GETTER());
+    var floorTopY = currentFloorYOffset() + ((roof.atticMode || roof.steppedLowerRoofId) ? (roof.baseHeightM || 1.2) : Scene3DRenderer.WALL_HEIGHT_GETTER());
     roofResizePreviewMeshes = Scene3DRenderer.createRoofResizePreviewMeshes(previewRoof, scale, offsetX, offsetY, floorTopY);
     roofResizePreviewMeshes.forEach(function (object) { scene.add(object); });
   }

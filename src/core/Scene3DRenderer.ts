@@ -1499,6 +1499,43 @@ export function hashColorHex(key: string): number {
     });
   }
 
+  // Fechamento próprio da "Cumeeira em níveis". É deliberadamente uma
+  // peça da COBERTURA: não entra em Floor.walls, detectRooms,
+  // computeWallFootprints nem nas junções T. O perfil inferior acompanha
+  // a água do telhado baixo e o superior acompanha a mesma água elevada,
+  // formando somente a faixa transversal realmente visível.
+  function buildSteppedRidgeClosure(raised: any, lower: any, scale: number, offsetX: number, offsetY: number, yOffset: number, lowerBaseM: number, raisedBaseM: number, color: any) {
+    var wall = raised.ridgeAxis === 'x'
+      ? { x1: raised.x1, y1: raised.y1, x2: raised.x1, y2: raised.y2 }
+      : { x1: raised.x1, y1: raised.y1, x2: raised.x2, y2: raised.y1 };
+    var dx = wall.x2 - wall.x1, dy = wall.y2 - wall.y1, len = Math.hypot(dx, dy);
+    if (len < 1e-6) return [];
+    var nx = -dy / len * Core.WALL_THICK / 2 * scale;
+    var nz = dx / len * Core.WALL_THICK / 2 * scale;
+    var lowerProfile = Object.assign({}, lower, { baseHeightM: lowerBaseM });
+    var raisedProfile = Object.assign({}, raised, { baseHeightM: raisedBaseM });
+    var material = new THREE.MeshStandardMaterial({ color: color, side: THREE.DoubleSide, flatShading: true, roughness: 1 });
+    function pointAt(t: number) { return { x: wall.x1 + dx * t, y: wall.y1 + dy * t }; }
+    return ([[0, 0.5], [0.5, 1]] as [number, number][]).map(function (range) {
+      var a = pointAt(range[0]), b = pointAt(range[1]);
+      var ax = (a.x - offsetX) * scale, az = (a.y - offsetY) * scale;
+      var bx = (b.x - offsetX) * scale, bz = (b.y - offsetY) * scale;
+      var lowA = yOffset + Core.roofHeightAtModelPoint(lowerProfile, a.x, a.y);
+      var lowB = yOffset + Core.roofHeightAtModelPoint(lowerProfile, b.x, b.y);
+      var highA = yOffset + Core.roofHeightAtModelPoint(raisedProfile, a.x, a.y);
+      var highB = yOffset + Core.roofHeightAtModelPoint(raisedProfile, b.x, b.y);
+      var vertices = new Float32Array([
+        ax+nx,lowA,az+nz, ax-nx,lowA,az-nz, bx+nx,lowB,bz+nz, bx-nx,lowB,bz-nz,
+        ax+nx,highA,az+nz, ax-nx,highA,az-nz, bx+nx,highB,bz+nz, bx-nx,highB,bz-nz
+      ]);
+      var indices = [0,2,6,0,6,4, 1,5,7,1,7,3, 0,4,5,0,5,1, 2,3,7,2,7,6, 4,6,7,4,7,5, 0,1,3,0,3,2];
+      var geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+      geometry.setIndex(indices); geometry.computeVertexNormals();
+      return new THREE.Mesh(geometry, material);
+    });
+  }
+
   function buildAtticWallFaceExtensions(wall: any, roof: any, openings: any[], fp: any, yOffset: number, mat: any, side: 'a' | 'b') {
     var start = side === 'a' ? fp.p1a : fp.p1b;
     var end = side === 'a' ? fp.p2a : fp.p2b;
@@ -4319,7 +4356,7 @@ export function hashColorHex(key: string): number {
     }
     if (viewState.selectedRoof) {
       var r = viewState.selectedRoof, roofYOffset = viewState.editingYOffset;
-      var topY = roofYOffset + (r.atticMode ? (r.baseHeightM || 1.2) : wallHeight);
+      var topY = roofYOffset + ((r.atticMode || r.steppedLowerRoofId) ? (r.baseHeightM || 1.2) : wallHeight);
       var midX = (r.x1 + r.x2) / 2, midY = (r.y1 + r.y2) / 2;
 
       // 4 alças nas bordas — arrastar uma estica/encolhe só aquele lado
@@ -4355,7 +4392,7 @@ export function hashColorHex(key: string): number {
         mesh2.userData.roofHandleForId = r.id;
         scene.add(mesh2);
         registry.handleMeshes.push(mesh2);
-        if (r.atticMode) {
+        if (r.atticMode || r.steppedLowerRoofId) {
           var baseHandle = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 12), new THREE.MeshBasicMaterial({ color: 0xF4A340, depthTest: false }));
           baseHandle.renderOrder = 999;
           baseHandle.position.set(wx2 + 0.32, topY, wz2 + 0.32);
@@ -5127,7 +5164,7 @@ export function hashColorHex(key: string): number {
         // ao outro ao mesmo tempo sempre que as bases se sobrepõem, abrindo
         // um buraco onde nenhum dos dois desenha nada.
         var roofPeakBoxes = floorData.roofs.map(function (r: any) {
-          var rOwnHeight = r.atticMode ? (r.baseHeightM || 1.2) : Core.roofHeightAtRect(floorData.walls, r.x1, r.y1, r.x2, r.y2, currentWallHeight);
+          var rOwnHeight = (r.atticMode || r.steppedLowerRoofId) ? (r.baseHeightM || 1.2) : Core.roofHeightAtRect(floorData.walls, r.x1, r.y1, r.x2, r.y2, currentWallHeight);
           var rFootprint = roofWorldFootprint(r, scale, offsetX, offsetY);
           var rSlope = roofSlopeSurfaceParams(r, scale, offsetX, offsetY);
           return {
@@ -5146,7 +5183,7 @@ export function hashColorHex(key: string): number {
           // espírito de Core.resolvedWallHeights). Cai pro padrão do
           // pavimento quando não há cômodo fechado sob o telhado. Ático
           // continua usando `baseHeightM` — campo próprio, deliberado.
-          var roofOwnHeight = roof.atticMode ? (roof.baseHeightM || 1.2) : Core.roofHeightAtRect(floorData.walls, roof.x1, roof.y1, roof.x2, roof.y2, currentWallHeight);
+          var roofOwnHeight = (roof.atticMode || roof.steppedLowerRoofId) ? (roof.baseHeightM || 1.2) : Core.roofHeightAtRect(floorData.walls, roof.x1, roof.y1, roof.x2, roof.y2, currentWallHeight);
           var pieceBaseY = yOffset + roofOwnHeight;
           var pieces = buildRoofPiece(roof, scale, offsetX, offsetY, pieceBaseY, viewState, wallMatchColor);
           if (roof.atticMode === 'preview') pieces.forEach(function (piece) {
@@ -5178,7 +5215,7 @@ export function hashColorHex(key: string): number {
               tallerRoof && roof.compoundGroupId &&
               tallerRoof.compoundGroupId === roof.compoundGroupId &&
               tallerRoof.ridgeAxis === roof.ridgeAxis &&
-              (roof.atticMode || tallerRoof.atticMode)
+              (roof.steppedLowerRoofId || tallerRoof.steppedLowerRoofId || roof.atticMode || tallerRoof.atticMode)
             );
             return !steppedRidgePair;
           })
@@ -5204,6 +5241,19 @@ export function hashColorHex(key: string): number {
             scene.add(m);
             registry.structureMeshes.push(m);
           });
+          if (roof.steppedLowerRoofId) {
+            var lowerRoof = floorData.roofs.find(function (candidate) { return candidate.id === roof.steppedLowerRoofId; });
+            if (lowerRoof) {
+              var lowerBaseM = Core.roofHeightAtRect(floorData.walls, lowerRoof.x1, lowerRoof.y1, lowerRoof.x2, lowerRoof.y2, currentWallHeight);
+              buildSteppedRidgeClosure(roof, lowerRoof, scale, offsetX, offsetY, yOffset, lowerBaseM, roofOwnHeight, wallMatchColor).forEach(function (closure) {
+                tagCategory(closure, 'telhado');
+                closure.userData.roofId = roof.id;
+                closure.userData.floorIndex = floorIdx;
+                scene.add(closure);
+                registry.structureMeshes.push(closure);
+              });
+            }
+          }
         });
       }
 

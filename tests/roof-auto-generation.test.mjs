@@ -29,8 +29,9 @@ test('interface prioriza modelos manuais compostos e mantém as peças editávei
   assert.match(store, /raisedBaseHeightM = Core\.WALL_HEIGHT \+ 0\.45/);
   assert.match(store, /lower = Core\.createRoofEntity\(base\.x1, base\.y1, joinX, base\.y2/);
   assert.match(store, /raised = Core\.createRoofEntity\(joinX, base\.y1, base\.x2, base\.y2/);
-  assert.match(store, /raised\.atticWallIds = floor\.walls/);
-  assert.match(store, /floor\.walls\.push\(divider\)/);
+  assert.match(store, /raised\.steppedLowerRoofId = lower\.id/);
+  assert.doesNotMatch(store, /floor\.walls\.push\(divider\)/);
+  assert.doesNotMatch(store, /raised\.atticWallIds = floor\.walls/);
   assert.match(app, /createRoofCompositePreset\('extensaoLateral'\)/);
 });
 
@@ -38,6 +39,8 @@ test('cumeeira em níveis preserva o beiral inferior contra o oitão elevado', (
   const renderer = readFileSync(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
   assert.match(renderer, /var steppedRidgePair =/);
   assert.match(renderer, /tallerRoof\.compoundGroupId === roof\.compoundGroupId/);
-  assert.match(renderer, /\(roof\.atticMode \|\| tallerRoof\.atticMode\)/);
+  assert.match(renderer, /roof\.steppedLowerRoofId \|\| tallerRoof\.steppedLowerRoofId/);
   assert.match(renderer, /return !steppedRidgePair/);
+  assert.match(renderer, /function buildSteppedRidgeClosure/);
+  assert.match(renderer, /if \(roof\.steppedLowerRoofId\)/);
 });

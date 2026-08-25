@@ -1502,7 +1502,7 @@ test('Scene3DRenderer: prévia (ghost) do telhado usa drawPreview.roofBaseHeight
 
   assert.match(
     scene3DRendererSource,
-    /var roofOwnHeight = roof\.atticMode \? \(roof\.baseHeightM \|\| 1\.2\) : Core\.roofHeightAtRect\(floorData\.walls, roof\.x1, roof\.y1, roof\.x2, roof\.y2, currentWallHeight\);/
+    /var roofOwnHeight = \(roof\.atticMode \|\| roof\.steppedLowerRoofId\) \? \(roof\.baseHeightM \|\| 1\.2\) : Core\.roofHeightAtRect\(floorData\.walls, roof\.x1, roof\.y1, roof\.x2, roof\.y2, currentWallHeight\);/
   );
 });
 

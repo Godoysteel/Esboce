@@ -1168,7 +1168,6 @@ export const commands = {
       // pavimento. As duas coberturas ocupam regiões vizinhas e nunca se
       // sobrepõem — o degrau aparece apenas na parede do encontro.
       const raisedBaseHeightM = Core.WALL_HEIGHT + 0.45;
-      let divider: Wall;
       let lower: Roof;
       let raised: Roof;
       if (width >= depth) {
@@ -1176,20 +1175,16 @@ export const commands = {
         // primeiro trecho termina em joinX e o seguinte continua no
         // mesmo alinhamento, porém em outra altura.
         const joinX = base.x1 + width * 0.52;
-        divider = Core.createWallEntity(joinX, base.y1, joinX, base.y2);
         lower = Core.createRoofEntity(base.x1, base.y1, joinX, base.y2, 'duasAguas', 26, 'x');
-        raised = Core.createRoofEntity(joinX, base.y1, base.x2, base.y2, 'duasAguas', 26, 'x', undefined, undefined, 'generated', raisedBaseHeightM);
+        raised = Core.createRoofEntity(joinX, base.y1, base.x2, base.y2, 'duasAguas', 26, 'x');
       } else {
         // Cumeeira no eixo Y: mesma regra, agora interrompida em joinY.
         const joinY = base.y1 + depth * 0.52;
-        divider = Core.createWallEntity(base.x1, joinY, base.x2, joinY);
         lower = Core.createRoofEntity(base.x1, base.y1, base.x2, joinY, 'duasAguas', 26, 'y');
-        raised = Core.createRoofEntity(base.x1, joinY, base.x2, base.y2, 'duasAguas', 26, 'y', undefined, undefined, 'generated', raisedBaseHeightM);
+        raised = Core.createRoofEntity(base.x1, joinY, base.x2, base.y2, 'duasAguas', 26, 'y');
       }
-      floor.walls.push(divider);
-      raised.atticWallIds = floor.walls
-        .filter((wall) => Core.wallIntersectsRoofFootprint(wall, raised))
-        .map((wall) => wall.id);
+      raised.baseHeightM = raisedBaseHeightM;
+      raised.steppedLowerRoofId = lower.id;
       roofs.push(
         lower,
         raised,
@@ -1511,6 +1506,7 @@ export const commands = {
     pushUndoSnapshot();
     const offset = Core.GRID;
     const copy = Core.createRoofEntity(r.x1 + offset, r.y1 + offset, r.x2 + offset, r.y2 + offset, r.type, r.pitchDeg, r.ridgeAxis, undefined, r.parapetHeight, r.atticMode, r.baseHeightM);
+    if (r.steppedLowerRoofId) copy.steppedLowerRoofId = r.steppedLowerRoofId;
     currentRoofs().push(copy);
     emit({ type: 'RoofCreated', floorIndex: project.currentFloorIndex, roofId: copy.id, duplicatedFrom: roofId });
     return copy;
@@ -2263,7 +2259,7 @@ export const commands = {
   },
 
   updateRoofBaseHeightLive(roofId: string, heightM: number): void {
-    const r = findRoof(roofId); if (!r || !r.atticMode) return;
+    const r = findRoof(roofId); if (!r || (!r.atticMode && !r.steppedLowerRoofId)) return;
     r.baseHeightM = Math.max(0.1, Math.min(4.5, heightM));
     emit({ type: 'RoofBaseHeightChanged', roofId, live: true });
   },
