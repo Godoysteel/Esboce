@@ -4404,7 +4404,10 @@ export function hashColorHex(key: string): number {
     }
     if (viewState.selectedRoof) {
       var r = viewState.selectedRoof, roofYOffset = viewState.editingYOffset;
-      var topY = roofYOffset + ((r.atticMode || r.steppedLowerRoofId) ? (r.baseHeightM || 1.2) : wallHeight);
+      var selectedRoofBaseM = r.steppedLowerRoofId
+        ? Math.max(r.baseHeightM || wallHeight, wallHeight + 0.15)
+        : (r.atticMode ? (r.baseHeightM || 1.2) : wallHeight);
+      var topY = roofYOffset + selectedRoofBaseM;
       var midX = (r.x1 + r.x2) / 2, midY = (r.y1 + r.y2) / 2;
 
       // 4 alças nas bordas — arrastar uma estica/encolhe só aquele lado
@@ -4443,13 +4446,13 @@ export function hashColorHex(key: string): number {
         if (r.atticMode || r.steppedLowerRoofId) {
           var baseHandle = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 12), new THREE.MeshBasicMaterial({ color: 0xF4A340, depthTest: false }));
           baseHandle.renderOrder = 999;
-          baseHandle.position.set(wx2 + 0.32, topY + 0.38, wz2 + 0.32);
+          baseHandle.position.set(wx2 + 0.85, topY + 0.38, wz2 + 0.85);
           baseHandle.userData.handle = 'roofBaseHeight';
           baseHandle.userData.roofHandleForId = r.id;
           scene.add(baseHandle);
           registry.handleMeshes.push(baseHandle);
           var baseHandleStem = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.38, 8), new THREE.MeshBasicMaterial({ color: 0xF4A340, depthTest: false }));
-          baseHandleStem.position.set(wx2 + 0.32, topY + 0.19, wz2 + 0.32);
+          baseHandleStem.position.set(wx2 + 0.85, topY + 0.19, wz2 + 0.85);
           baseHandleStem.renderOrder = 998;
           baseHandleStem.userData.handle = 'roofBaseHeight';
           baseHandleStem.userData.roofHandleForId = r.id;
@@ -4462,15 +4465,17 @@ export function hashColorHex(key: string): number {
           if (r.steppedLowerRoofId) {
             var closureModelX = r.ridgeAxis === 'x' ? r.x1 : midX;
             var closureModelY = r.ridgeAxis === 'x' ? midY : r.y1;
+            var innerHandleX = (closureModelX - offsetX) * scale + (r.ridgeAxis === 'x' ? 0 : 0.75);
+            var innerHandleZ = (closureModelY - offsetY) * scale + (r.ridgeAxis === 'x' ? 0.75 : 0);
             var innerBaseHandle = new THREE.Mesh(new THREE.SphereGeometry(0.13, 12, 12), new THREE.MeshBasicMaterial({ color: 0xF4A340, depthTest: false }));
             innerBaseHandle.renderOrder = 999;
-            innerBaseHandle.position.set((closureModelX - offsetX) * scale, topY + 0.38, (closureModelY - offsetY) * scale);
+            innerBaseHandle.position.set(innerHandleX, topY + 0.38, innerHandleZ);
             innerBaseHandle.userData.handle = 'roofBaseHeight';
             innerBaseHandle.userData.roofHandleForId = r.id;
             scene.add(innerBaseHandle);
             registry.handleMeshes.push(innerBaseHandle);
             var innerBaseStem = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.38, 8), new THREE.MeshBasicMaterial({ color: 0xF4A340, depthTest: false }));
-            innerBaseStem.position.set((closureModelX - offsetX) * scale, topY + 0.19, (closureModelY - offsetY) * scale);
+            innerBaseStem.position.set(innerHandleX, topY + 0.19, innerHandleZ);
             innerBaseStem.renderOrder = 998;
             innerBaseStem.userData.handle = 'roofBaseHeight';
             innerBaseStem.userData.roofHandleForId = r.id;
@@ -5241,7 +5246,9 @@ export function hashColorHex(key: string): number {
         // ao outro ao mesmo tempo sempre que as bases se sobrepõem, abrindo
         // um buraco onde nenhum dos dois desenha nada.
         var roofPeakBoxes = floorData.roofs.map(function (r: any) {
-          var rOwnHeight = (r.atticMode || r.steppedLowerRoofId) ? (r.baseHeightM || 1.2) : Core.roofHeightAtRect(floorData.walls, r.x1, r.y1, r.x2, r.y2, currentWallHeight);
+          var rOwnHeight = r.steppedLowerRoofId
+            ? Math.max(r.baseHeightM || currentWallHeight, currentWallHeight + 0.15)
+            : (r.atticMode ? (r.baseHeightM || 1.2) : Core.roofHeightAtRect(floorData.walls, r.x1, r.y1, r.x2, r.y2, currentWallHeight));
           var rFootprint = roofWorldFootprint(r, scale, offsetX, offsetY);
           var rSlope = roofSlopeSurfaceParams(r, scale, offsetX, offsetY);
           return {
@@ -5260,7 +5267,9 @@ export function hashColorHex(key: string): number {
           // espírito de Core.resolvedWallHeights). Cai pro padrão do
           // pavimento quando não há cômodo fechado sob o telhado. Ático
           // continua usando `baseHeightM` — campo próprio, deliberado.
-          var roofOwnHeight = (roof.atticMode || roof.steppedLowerRoofId) ? (roof.baseHeightM || 1.2) : Core.roofHeightAtRect(floorData.walls, roof.x1, roof.y1, roof.x2, roof.y2, currentWallHeight);
+          var roofOwnHeight = roof.steppedLowerRoofId
+            ? Math.max(roof.baseHeightM || currentWallHeight, currentWallHeight + 0.15)
+            : (roof.atticMode ? (roof.baseHeightM || 1.2) : Core.roofHeightAtRect(floorData.walls, roof.x1, roof.y1, roof.x2, roof.y2, currentWallHeight));
           var pieceBaseY = yOffset + roofOwnHeight;
           var pieces = buildRoofPiece(roof, scale, offsetX, offsetY, pieceBaseY, viewState, wallMatchColor);
           if (roof.atticMode === 'preview') pieces.forEach(function (piece) {

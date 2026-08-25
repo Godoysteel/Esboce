@@ -866,7 +866,12 @@ import {
     raycaster.setFromCamera(mouse, camera);
     var targets = scene.children.filter(function (o: any) { return o.isMesh && o.userData && o.userData.handle; });
     var hits = raycaster.intersectObjects(targets, false);
-    return hits.length ? hits[0]!.object.userData.handle : null;
+    // Quando duas alças se projetam próximas na tela, a elevação do
+    // telhado inteiro não pode ser roubada pela esfera da cumeeira que
+    // estiver alguns centímetros à frente no espaço 3D. A alça laranja
+    // recebe prioridade sempre que o próprio raio realmente a atingiu.
+    var wholeRoofHit = hits.find(function (hit: any) { return hit.object.userData.handle === 'roofBaseHeight'; });
+    return wholeRoofHit ? wholeRoofHit.object.userData.handle : (hits.length ? hits[0]!.object.userData.handle : null);
   }
 
   function isEditableMesh(mesh: any) {

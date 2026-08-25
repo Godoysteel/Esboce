@@ -54,7 +54,7 @@ test('cumeeira em níveis preserva o beiral inferior contra o oitão elevado', (
   assert.match(renderer, /innerBaseHandle\.userData\.handle = 'roofBaseHeight'/);
   assert.match(renderer, /closure\.userData\.roofClosure = 'transversal'/);
   assert.match(renderer, /closure\.userData\.roofClosure = 'perimetral'/);
-  assert.match(store, /const minimumHeightM = r\.steppedLowerRoofId \? Core\.WALL_HEIGHT : 0\.1/);
+  assert.match(store, /const minimumHeightM = r\.steppedLowerRoofId \? Core\.WALL_HEIGHT \+ 0\.15 : 0\.1/);
   assert.match(store, /Math\.min\(8, heightM\)/);
   assert.match(renderer, /baseHandleStem\.userData\.handle = 'roofBaseHeight'/);
   assert.match(renderer, /innerBaseStem\.userData\.handle = 'roofBaseHeight'/);
@@ -63,4 +63,7 @@ test('cumeeira em níveis preserva o beiral inferior contra o oitão elevado', (
   assert.match(viewport, /if \(dragMode === 'roofBaseHeight'\) \{/);
   assert.match(viewport, /Telhado inteiro posicionado individualmente/);
   assert.match(viewport, /dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null/);
+  assert.match(viewport, /var wholeRoofHit = hits\.find/);
+  assert.match(renderer, /Math\.max\(roof\.baseHeightM \|\| currentWallHeight, currentWallHeight \+ 0\.15\)/);
+  assert.match(renderer, /baseHandle\.position\.set\(wx2 \+ 0\.85/);
 });

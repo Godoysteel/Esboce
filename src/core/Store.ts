@@ -2262,7 +2262,7 @@ export const commands = {
 
   updateRoofBaseHeightLive(roofId: string, heightM: number): void {
     const r = findRoof(roofId); if (!r || (!r.atticMode && !r.steppedLowerRoofId)) return;
-    const minimumHeightM = r.steppedLowerRoofId ? Core.WALL_HEIGHT : 0.1;
+    const minimumHeightM = r.steppedLowerRoofId ? Core.WALL_HEIGHT + 0.15 : 0.1;
     r.baseHeightM = Math.max(minimumHeightM, Math.min(8, heightM));
     emit({ type: 'RoofBaseHeightChanged', roofId, live: true });
   },
