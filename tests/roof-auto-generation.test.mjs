@@ -42,5 +42,7 @@ test('cumeeira em níveis preserva o beiral inferior contra o oitão elevado', (
   assert.match(renderer, /roof\.steppedLowerRoofId \|\| tallerRoof\.steppedLowerRoofId/);
   assert.match(renderer, /return !steppedRidgePair/);
   assert.match(renderer, /function buildSteppedRidgeClosure/);
+  assert.match(renderer, /function buildRaisedRoofPerimeterClosures/);
   assert.match(renderer, /if \(roof\.steppedLowerRoofId\)/);
+  assert.match(renderer, /buildRaisedRoofPerimeterClosures\(roof, scale/);
 });

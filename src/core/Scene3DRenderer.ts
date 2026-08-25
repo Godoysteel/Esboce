@@ -1536,6 +1536,54 @@ export function hashColorHex(key: string): number {
     });
   }
 
+  // Complementos laterais e de fundo do trecho elevado. Assim como o
+  // fechamento transversal acima, são peças da cobertura e começam
+  // exatamente no topo das paredes estruturais existentes. Nenhuma
+  // Wall é criada, esticada ou dividida para fechar esse espaço.
+  function buildRaisedRoofPerimeterClosures(roof: any, scale: number, offsetX: number, offsetY: number, yOffset: number, structuralWallHeightM: number, raisedBaseM: number, color: any) {
+    var segments = roof.ridgeAxis === 'x'
+      ? [
+          { x1: roof.x1, y1: roof.y1, x2: roof.x2, y2: roof.y1, slices: 1 },
+          { x1: roof.x1, y1: roof.y2, x2: roof.x2, y2: roof.y2, slices: 1 },
+          { x1: roof.x2, y1: roof.y1, x2: roof.x2, y2: roof.y2, slices: 2 },
+        ]
+      : [
+          { x1: roof.x1, y1: roof.y1, x2: roof.x1, y2: roof.y2, slices: 1 },
+          { x1: roof.x2, y1: roof.y1, x2: roof.x2, y2: roof.y2, slices: 1 },
+          { x1: roof.x1, y1: roof.y2, x2: roof.x2, y2: roof.y2, slices: 2 },
+        ];
+    var profile = Object.assign({}, roof, { baseHeightM: raisedBaseM });
+    var material = new THREE.MeshStandardMaterial({ color: color, side: THREE.DoubleSide, flatShading: true, roughness: 1 });
+    var meshes: any[] = [];
+    segments.forEach(function (segment) {
+      var dx = segment.x2 - segment.x1, dy = segment.y2 - segment.y1, len = Math.hypot(dx, dy);
+      if (len < 1e-6) return;
+      var nx = -dy / len * Core.WALL_THICK / 2 * scale;
+      var nz = dx / len * Core.WALL_THICK / 2 * scale;
+      function pointAt(t: number) { return { x: segment.x1 + dx * t, y: segment.y1 + dy * t }; }
+      for (var index = 0; index < segment.slices; index++) {
+        var t0 = index / segment.slices, t1 = (index + 1) / segment.slices;
+        var a = pointAt(t0), b = pointAt(t1);
+        var ax = (a.x - offsetX) * scale, az = (a.y - offsetY) * scale;
+        var bx = (b.x - offsetX) * scale, bz = (b.y - offsetY) * scale;
+        var lowA = yOffset + structuralWallHeightM, lowB = lowA;
+        var highA = yOffset + Core.roofHeightAtModelPoint(profile, a.x, a.y);
+        var highB = yOffset + Core.roofHeightAtModelPoint(profile, b.x, b.y);
+        if (highA <= lowA + 1e-4 && highB <= lowB + 1e-4) continue;
+        var vertices = new Float32Array([
+          ax+nx,lowA,az+nz, ax-nx,lowA,az-nz, bx+nx,lowB,bz+nz, bx-nx,lowB,bz-nz,
+          ax+nx,highA,az+nz, ax-nx,highA,az-nz, bx+nx,highB,bz+nz, bx-nx,highB,bz-nz
+        ]);
+        var indices = [0,2,6,0,6,4, 1,5,7,1,7,3, 0,4,5,0,5,1, 2,3,7,2,7,6, 4,6,7,4,7,5, 0,1,3,0,3,2];
+        var geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+        geometry.setIndex(indices); geometry.computeVertexNormals();
+        meshes.push(new THREE.Mesh(geometry, material));
+      }
+    });
+    return meshes;
+  }
+
   function buildAtticWallFaceExtensions(wall: any, roof: any, openings: any[], fp: any, yOffset: number, mat: any, side: 'a' | 'b') {
     var start = side === 'a' ? fp.p1a : fp.p1b;
     var end = side === 'a' ? fp.p2a : fp.p2b;
@@ -5246,6 +5294,13 @@ export function hashColorHex(key: string): number {
             if (lowerRoof) {
               var lowerBaseM = Core.roofHeightAtRect(floorData.walls, lowerRoof.x1, lowerRoof.y1, lowerRoof.x2, lowerRoof.y2, currentWallHeight);
               buildSteppedRidgeClosure(roof, lowerRoof, scale, offsetX, offsetY, yOffset, lowerBaseM, roofOwnHeight, wallMatchColor).forEach(function (closure) {
+                tagCategory(closure, 'telhado');
+                closure.userData.roofId = roof.id;
+                closure.userData.floorIndex = floorIdx;
+                scene.add(closure);
+                registry.structureMeshes.push(closure);
+              });
+              buildRaisedRoofPerimeterClosures(roof, scale, offsetX, offsetY, yOffset, currentWallHeight, roofOwnHeight, wallMatchColor).forEach(function (closure) {
                 tagCategory(closure, 'telhado');
                 closure.userData.roofId = roof.id;
                 closure.userData.floorIndex = floorIdx;
