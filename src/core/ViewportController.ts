@@ -5456,6 +5456,8 @@ import {
   // Ático/Normal (`atticModeOverlay`) — só pré-seleciona qual tipo vale
   // se a pessoa escolher "Normal" ali.
   export function setNextRoofType(type: any) { pendingRoofType = type; }
+  export function activateRoofTool() { setTool('telhado'); }
+  export function cancelActiveTool() { setTool(null); }
   export function activateCatalogProduct(productId: string, selection: CommercialSelection): boolean {
     var product = Catalog.getProduct(productId);
     if (!product) return false;
@@ -5503,7 +5505,7 @@ export const ViewportController = {
   select, selectColumn, selectRoof, selectOpening, selectVaranda, selectFurniture, selectGlazingPanel, selectVolumeBox, selectStair, selectForro, selectPlanUnderlay, selectHydraulicNode, beginHydraulicRouteDraw,
   getSelectedWallId, getSelectedColumnId, getSelectedRoofId,
   getSelectedOpeningId, getSelectedVarandaId, getSelectedLajeId, getSelectedFurnitureId, getSelectedGlazingPanelId, getSelectedBalconyRailingId, getSelectedVolumeBoxId, getSelectedStairId, getSelectedForroRoomKey, getSelectedPlanUnderlay, getSelectedHydraulicNodeId, getSelectedRoomWallIds,
-  setNextRoofAtticMode, setNextRoofType, activateCatalogProduct, armHeightAdjust,
+  setNextRoofAtticMode, setNextRoofType, activateRoofTool, cancelActiveTool, activateCatalogProduct, armHeightAdjust,
   toggleWallDiagnostics,
   resetCamera,
   toggleTouchCameraMode,

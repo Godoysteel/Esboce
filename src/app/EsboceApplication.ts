@@ -309,6 +309,25 @@ export class EsboceApplication {
     this.requireElement("toolTelhado1Agua").addEventListener("click", () => armRoofTool("umaAgua"));
     this.requireElement("toolTelhado4Aguas").addEventListener("click", () => armRoofTool("quatroAguas"));
     this.requireElement("toolTelhadoPlatibanda").addEventListener("click", () => armRoofTool("platibanda"));
+    this.requireElement("generateRoofBtn").addEventListener("click", () => {
+      ViewportController.activateRoofTool();
+      this.requireElement("roofStyleOverlay").style.display = "flex";
+    });
+    this.requireElement("roofStyleClose").addEventListener("click", () => {
+      ViewportController.cancelActiveTool();
+      this.requireElement("roofStyleOverlay").style.display = "none";
+    });
+    document.querySelectorAll<HTMLElement>("[data-roof-style]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const style = button.dataset.roofStyle as 'automatico' | 'contemporaneo' | 'tradicional' | 'colonial' | 'chale';
+        const count = Store.commands.generateRoofsForCurrentFloor(style);
+        ViewportController.cancelActiveTool();
+        this.requireElement("roofStyleOverlay").style.display = "none";
+        this.requireElement('viewportHint').textContent = count
+          ? `Telhado ${button.textContent?.trim()} gerado em ${count} ${count === 1 ? 'volume editável' : 'volumes editáveis'}.`
+          : (Store.currentRoofs().length ? 'Este nível já possui telhado. Edite ou exclua as coberturas existentes antes de gerar novamente.' : 'Nenhum cômodo fechado encontrado neste nível.');
+      });
+    });
     this.requireElement("generateLajeBtn").addEventListener("click", () => {
       const floor = Store.currentFloor();
       const rooms = Core.detectRooms(floor.walls);
@@ -361,6 +380,7 @@ export class EsboceApplication {
       button.addEventListener("click", () => {
         const mode = button.dataset.atticMode;
         ViewportController.setNextRoofAtticMode(mode !== "standard");
+        ViewportController.activateRoofTool();
         this.requireElement("atticModeOverlay").style.display = "none";
       });
     });

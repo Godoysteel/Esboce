@@ -692,6 +692,32 @@ export function fusedRoofBounds(a: Roof, b: Roof): { x1: number; y1: number; x2:
 // livre pra ser arrastada/reshapeada sem depender da outra.)
 interface RectLike { x1: number; y1: number; x2: number; y2: number; }
 
+// Volumes retangulares iniciais para o gerador de cobertura. Cômodos que
+// compartilham uma aresta inteira viram um bloco maior; divisórias internas
+// deixam de produzir um telhadinho por quarto, sem criar áreas sobrepostas.
+export function roofGenerationRects(wallList: Wall[]): RectLike[] {
+  let rects = detectRooms(wallList).map((room) => {
+    const b = roomModelBounds(room)!;
+    return { x1: b.minX, y1: b.minY, x2: b.maxX, y2: b.maxY };
+  }).filter((r) => r.x2 - r.x1 >= SNAP_UNIT && r.y2 - r.y1 >= SNAP_UNIT);
+  const same = (a: number, b: number) => Math.abs(a - b) <= COINCIDENCE_TOL;
+  let merged = true;
+  while (merged) {
+    merged = false;
+    outer: for (let i = 0; i < rects.length; i++) for (let j = i + 1; j < rects.length; j++) {
+      const a = rects[i]!, b = rects[j]!;
+      const horizontal = same(a.y1, b.y1) && same(a.y2, b.y2) && (same(a.x2, b.x1) || same(b.x2, a.x1));
+      const vertical = same(a.x1, b.x1) && same(a.x2, b.x2) && (same(a.y2, b.y1) || same(b.y2, a.y1));
+      if (!horizontal && !vertical) continue;
+      rects[i] = { x1: Math.min(a.x1, b.x1), y1: Math.min(a.y1, b.y1), x2: Math.max(a.x2, b.x2), y2: Math.max(a.y2, b.y2) };
+      rects.splice(j, 1);
+      merged = true;
+      break outer;
+    }
+  }
+  return rects;
+}
+
 // "perto" o bastante pra valer a pena tentar alinhar? Sobrepostos ou com
 // uma folga pequena nos dois eixos.
 export function rectsNearby(a: RectLike, b: RectLike, toleranceUnits: number): boolean {
@@ -2047,7 +2073,7 @@ export const Core = {
   createOpeningEntity, wallLengthMeters, polygonAreaModelUnits, wallOffsetAtPoint, findValidOpeningOffset,
   resolveOpeningEdgeResize, resolveOpeningHeightResize,
   findRoomsAdjacentToOpening,
-  roofRidgeHeightMeters, roofPitchForRidgeHeight, roofsCanFuse, fusedRoofBounds,
+  roofRidgeHeightMeters, roofPitchForRidgeHeight, roofsCanFuse, fusedRoofBounds, roofGenerationRects,
   rectPoints, lajeBounds,
   rectsNearby, pointInPolygon, roomModelBounds, findRoomWallIds, findIsolatedRoomWallIds, wallResizeTopology, resolveWallResizeOffset, computeWallFootprints,
   roomsContainingWall, roomHeightM, roomOwnHeightM, resolveRoomHeightUpdate, resolvedWallHeights,
