@@ -46,8 +46,10 @@ function autoComposeCurrentRoofs(): string[][] {
       const roof = queue.shift()!;
       component.push(roof);
       roofs.forEach((candidate) => {
-        if (visited.has(candidate.id) || candidate.ridgeAxis === roof.ridgeAxis) return;
-        if (!Core.rectsNearby(roof, candidate, Core.SNAP_UNIT)) return;
+        if (visited.has(candidate.id)) return;
+        const steppedPair = roof.steppedLowerRoofId === candidate.id || candidate.steppedLowerRoofId === roof.id;
+        if (!steppedPair && candidate.ridgeAxis === roof.ridgeAxis) return;
+        if (!steppedPair && !Core.rectsNearby(roof, candidate, Core.SNAP_UNIT)) return;
         visited.add(candidate.id);
         queue.push(candidate);
       });

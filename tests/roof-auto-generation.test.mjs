@@ -37,6 +37,8 @@ test('interface prioriza modelos manuais compostos e mantém as peças editávei
 
 test('cumeeira em níveis preserva o beiral inferior contra o oitão elevado', () => {
   const renderer = readFileSync(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
+  const viewport = readFileSync(new URL('../src/core/ViewportController.ts', import.meta.url), 'utf8');
+  const store = readFileSync(new URL('../src/core/Store.ts', import.meta.url), 'utf8');
   assert.match(renderer, /var steppedRidgePair =/);
   assert.match(renderer, /tallerRoof\.compoundGroupId === roof\.compoundGroupId/);
   assert.match(renderer, /roof\.steppedLowerRoofId \|\| tallerRoof\.steppedLowerRoofId/);
@@ -45,4 +47,7 @@ test('cumeeira em níveis preserva o beiral inferior contra o oitão elevado', (
   assert.match(renderer, /function buildRaisedRoofPerimeterClosures/);
   assert.match(renderer, /if \(roof\.steppedLowerRoofId\)/);
   assert.match(renderer, /buildRaisedRoofPerimeterClosures\(roof, scale/);
+  assert.match(viewport, /roof\.steppedLowerRoofId === o\.id \|\| o\.steppedLowerRoofId === roof\.id/);
+  assert.match(store, /const steppedPair = roof\.steppedLowerRoofId === candidate\.id \|\| candidate\.steppedLowerRoofId === roof\.id/);
+  assert.match(store, /if \(!steppedPair && candidate\.ridgeAxis === roof\.ridgeAxis\) return/);
 });

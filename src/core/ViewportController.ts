@@ -3193,6 +3193,12 @@ import {
     var found: any = null;
     roofs.forEach(function (o: any) {
       if (found) return;
+      // Um modelo composto continua formado por peças independentes.
+      // Em especial, na "Cumeeira em níveis" as duas coberturas têm o
+      // mesmo eixo e podem se sobrepor quando uma borda é dimensionada;
+      // isso é intencional e não significa que devam virar um telhado só.
+      if (roof.compoundGroupId && roof.compoundGroupId === o.compoundGroupId) return;
+      if (roof.steppedLowerRoofId === o.id || o.steppedLowerRoofId === roof.id) return;
       if (Core.roofsCanFuse(roof, o, ROOF_NEARBY_TOLERANCE)) found = o;
     });
     return found;
