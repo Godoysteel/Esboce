@@ -136,6 +136,8 @@ import {
   // reconstruir a cena inteira dezenas de vezes por segundo); a parede
   // de verdade só é atualizada uma vez, no soltar (ver DEC-8x).
   var wallResizePreviewMeshes: THREE.Object3D[] = [];
+  var wallResizePreviewFrame: number | null = null;
+  var pendingWallResizePreview: { candidateWalls: any[]; previewIds: string[] } | null = null;
   var wallResizeHiddenObjects: THREE.Object3D[] = [];
   var pendingRoofAttic = false;
   var pendingGenerateRoofId: any = null;
@@ -543,6 +545,9 @@ import {
   }
 
   function clearWallResizePreview() {
+    if (wallResizePreviewFrame != null) cancelAnimationFrame(wallResizePreviewFrame);
+    wallResizePreviewFrame = null;
+    pendingWallResizePreview = null;
     wallResizePreviewMeshes.forEach(function (object: any) {
       scene.remove(object);
       if (object.geometry) object.geometry.dispose();
@@ -567,6 +572,24 @@ import {
       candidateWalls, wallIds, scale, offsetX, offsetY, yOffset, wallHeight != null ? wallHeight : Scene3DRenderer.WALL_HEIGHT_GETTER()
     );
     wallResizePreviewMeshes.forEach(function (object) { scene.add(object); });
+  }
+
+  // Eventos de ponteiro podem chegar bem mais rápido que a tela consegue
+  // desenhar. Mantém somente a prévia mais recente e cria no máximo uma
+  // geometria fantasma por quadro.
+  function scheduleWallResizePreview(candidateWalls: any[], previewIds: string[]) {
+    pendingWallResizePreview = { candidateWalls: candidateWalls, previewIds: previewIds };
+    if (wallResizePreviewFrame != null) return;
+    wallResizePreviewFrame = requestAnimationFrame(function () {
+      wallResizePreviewFrame = null;
+      var pending = pendingWallResizePreview;
+      pendingWallResizePreview = null;
+      if (pending) {
+        var liveCandidate = wallResizeLiveCandidate;
+        previewWallResize(pending.candidateWalls, pending.previewIds);
+        wallResizeLiveCandidate = liveCandidate;
+      }
+    });
   }
 
   // Calcula o candidato de arraste (offset perpendicular, posição final
@@ -3327,7 +3350,7 @@ import {
       var wallResizeCandidate = resolveWallResizeCandidate(e);
       if (wallResizeCandidate) {
         if (wallResizeCandidate.hint) hintEl.textContent = wallResizeCandidate.hint;
-        previewWallResize(wallResizeCandidate.candidateWalls, wallResizeCandidate.previewIds);
+        scheduleWallResizePreview(wallResizeCandidate.candidateWalls, wallResizeCandidate.previewIds);
         dragElementStart.diagnosticDeltaX = wallResizeCandidate.rx1 - dragElementStart.x1;
         dragElementStart.diagnosticDeltaY = wallResizeCandidate.ry1 - dragElementStart.y1;
         wallResizeLiveCandidate = {

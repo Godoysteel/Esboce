@@ -231,6 +231,43 @@ export function hashColorHex(key: string): number {
   }
   var registry: Registry = { wallMeshes: [], roomMeshes: [], structureMeshes: [], previewMeshes: [], handleMeshes: [], furnitureMeshes: [], openingModelMeshes: [] };
 
+  // Selecionar um objeto ainda reconstrói a cena para manter todos os
+  // materiais/alças coerentes, mas não muda a planta. Estes cálculos são os
+  // mais caros em projetos grandes e podem ser reaproveitados até alguma
+  // parede realmente mudar.
+  interface FloorGeometryCacheEntry {
+    signature: string;
+    rooms: ReturnType<typeof Core.detectRooms>;
+    activeWalls: Wall[];
+    wallFootprints: ReturnType<typeof Core.computeWallFootprints>;
+    wallFootprintsFull: ReturnType<typeof Core.computeWallFootprints>;
+    resolvedWallHeights: ReturnType<typeof Core.resolvedWallHeights>;
+  }
+  var floorGeometryCache = new WeakMap<object, FloorGeometryCacheEntry>();
+
+  function floorWallSignature(floorData: any, wallHeight: number): string {
+    return wallHeight + '|' + floorData.walls.map(function (w: any) {
+      return [w.id, w.x1, w.y1, w.x2, w.y2, w.heightM == null ? '' : w.heightM, w.demolished ? 1 : 0].join(':');
+    }).join('|');
+  }
+
+  function getFloorGeometry(floorData: any, wallHeight: number): FloorGeometryCacheEntry {
+    var signature = floorWallSignature(floorData, wallHeight);
+    var cached = floorGeometryCache.get(floorData);
+    if (cached && cached.signature === signature) return cached;
+    var activeWalls = floorData.walls.filter(function (w: any) { return !w.demolished; });
+    var next: FloorGeometryCacheEntry = {
+      signature: signature,
+      rooms: Core.detectRooms(floorData.walls),
+      activeWalls: activeWalls,
+      wallFootprints: Core.computeWallFootprints(activeWalls),
+      wallFootprintsFull: Core.computeWallFootprints(floorData.walls),
+      resolvedWallHeights: Core.resolvedWallHeights(floorData.walls, wallHeight)
+    };
+    floorGeometryCache.set(floorData, next);
+    return next;
+  }
+
   // --- Móveis (glTF) ---------------------------------------------------
   // Cada .glb é carregado uma única vez e cacheado; peças repetidas na
   // cena (ex.: duas camas) reaproveitam o mesmo THREE.Group via clone(),
@@ -4500,7 +4537,8 @@ export function hashColorHex(key: string): number {
       var isGroundFloor = floorIdx === 0;
       var wallCategory: keyof typeof layers = isGroundFloor ? 'paredesTerreo' : 'paredesSuperiores';
       var wallsVisible = layers[wallCategory];
-      var rooms = Core.detectRooms(floorData.walls);
+      var floorGeometry = getFloorGeometry(floorData, currentWallHeight);
+      var rooms = floorGeometry.rooms;
       // computeWallFootprints é só GEOMETRIA VISUAL (junta cantos/mitre
       // entre paredes vizinhas pra desenhar) — bem diferente de
       // detectRooms acima, que precisa da lista INTEIRA (com parede
@@ -4514,8 +4552,8 @@ export function hashColorHex(key: string): number {
       // SÓ daqui faz essa ponta virar uma extremidade livre de verdade
       // (mesmo tratamento que já existe pra qualquer ponta solta), sem
       // tirar a parede demolida da lista que fecha o cômodo.
-      var activeWallsForFootprint = floorData.walls.filter(function (w) { return !w.demolished; });
-      var wallFootprints = Core.computeWallFootprints(activeWallsForFootprint);
+      var activeWallsForFootprint = floorGeometry.activeWalls;
+      var wallFootprints = floorGeometry.wallFootprints;
       // Versão SEM filtro, só pra soleira de parede demolida (ver bloco
       // "Soleira" mais abaixo) — quando a parede some inteira, a soleira
       // que fecha o buraco do piso precisa do contorno ORIGINAL dela
@@ -4523,7 +4561,7 @@ export function hashColorHex(key: string): number {
       // reduzido a ponta livre (esse é o certo pra desenhar a PAREDE em
       // si — wallFootprints acima — mas erraria a soleira, que deve
       // cobrir exatamente onde a espessura da parede estava).
-      var wallFootprintsFull = Core.computeWallFootprints(floorData.walls);
+      var wallFootprintsFull = floorGeometry.wallFootprintsFull;
       // Altura de renderização de CADA parede, recalculada aqui (não só
       // confiando em Wall.heightM) — ver Core.resolvedWallHeights: uma
       // parede compartilhada por 2+ cômodos nunca fica mais baixa do que
@@ -4535,7 +4573,7 @@ export function hashColorHex(key: string): number {
       // não só no canto — a tampa parcial de canto (abaixo) sozinha não
       // resolve isso porque o problema não é o canto, é a altura da
       // parede em si estar errada.
-      var resolvedWallHeightsMap = Core.resolvedWallHeights(floorData.walls, currentWallHeight);
+      var resolvedWallHeightsMap = floorGeometry.resolvedWallHeights;
       // Altura efetiva de QUALQUER parede do pavimento (não só a `w` da
       // vez) — usada abaixo pra achar a altura da vizinha num canto.
       // Mesma regra de prioridade da linha `renderedWallHeight` logo

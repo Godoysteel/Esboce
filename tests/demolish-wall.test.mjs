@@ -61,8 +61,8 @@ test('Scene3DRenderer pula a parede demolida ao desenhar (paredes e as aberturas
   // legitimamente usa a lista sem filtro, por um motivo oposto: a
   // soleira precisa do contorno ORIGINAL da própria parede demolida.
   assert.doesNotMatch(renderer3DSource, /var wallFootprints = Core\.computeWallFootprints\(floorData\.walls\)/);
-  assert.match(renderer3DSource, /var activeWallsForFootprint = floorData\.walls\.filter\(function \(w\) \{ return !w\.demolished; \}\);/);
-  assert.match(renderer3DSource, /Core\.computeWallFootprints\(activeWallsForFootprint\)/);
+  assert.match(renderer3DSource, /var activeWallsForFootprint = floorGeometry\.activeWalls;/);
+  assert.match(renderer3DSource, /var wallFootprints = floorGeometry\.wallFootprints;/);
 });
 
 test('a matemática de canto de verdade: excluir a parede demolida da lista passada a computeWallFootprints faz a parede vizinha ganhar uma ponta LIVRE (tampa reta), em vez de um canto em L esperando uma parceira que não existe mais', () => {
@@ -151,7 +151,7 @@ test('parede demolida ganha o mesmo tratamento de "buraco no piso" que arco/port
   // precisa do contorno ORIGINAL dela (como se os vizinhos ainda
   // estivessem lá), não da ponta livre que ela mesma ganharia se ainda
   // fosse desenhada.
-  assert.match(renderer3DSource, /var wallFootprintsFull = Core\.computeWallFootprints\(floorData\.walls\);/);
+  assert.match(renderer3DSource, /var wallFootprintsFull = floorGeometry\.wallFootprintsFull;/);
 
   // Tolerante a CRLF/LF de propósito — o blob local (Windows) e o checkout
   // do runner de CI (Linux) já divergiram nisso antes (git normaliza fim

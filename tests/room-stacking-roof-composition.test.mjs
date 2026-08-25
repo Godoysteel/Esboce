@@ -70,3 +70,11 @@ test('encontros transversais de coberturas são compostos sem botão manual', ()
   assert.match(store, /Core\.rectsNearby\(roof, candidate, Core\.SNAP_UNIT\)/);
   assert.match(store, /autoComposeCurrentRoofs\(\);\s*emit\(\{ type: 'RoofCreated'/);
 });
+
+test('seleção e arraste de parede reutilizam geometria e limitam a prévia a um quadro', () => {
+  const renderer = readFileSync(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
+  assert.match(renderer, /floorGeometryCache = new WeakMap/);
+  assert.match(renderer, /getFloorGeometry\(floorData, currentWallHeight\)/);
+  assert.match(viewport, /function scheduleWallResizePreview/);
+  assert.match(viewport, /wallResizePreviewFrame = requestAnimationFrame/);
+});

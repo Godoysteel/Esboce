@@ -1325,7 +1325,7 @@ test('resolvedWallHeights: parede exclusiva de um único cômodo nunca é força
 });
 
 test('Scene3DRenderer usa Core.resolvedWallHeights (não mais Wall.heightM cru) pra decidir a altura renderizada de cada parede (DEC-92)', () => {
-  assert.match(scene3DRendererSource, /var resolvedWallHeightsMap = Core\.resolvedWallHeights\(floorData\.walls, currentWallHeight\);/);
+  assert.match(scene3DRendererSource, /var resolvedWallHeightsMap = floorGeometry\.resolvedWallHeights;/);
   assert.match(scene3DRendererSource, /var renderedWallHeight = generatedAtticRoof \? \(generatedAtticRoof\.baseHeightM \|\| 1\.2\) : \(resolvedWallHeightsMap\[w\.id\]/);
   // wallEffectiveHeight (usada pela tampa parcial de canto da DEC-91) fica
   // consistente com a mesma fonte, em vez de reler w.heightM cru.
