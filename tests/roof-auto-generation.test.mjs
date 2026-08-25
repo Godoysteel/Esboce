@@ -27,7 +27,8 @@ test('interface prioriza modelos manuais compostos e mantém as peças editávei
   assert.match(store, /createRoofCompositePreset/);
   assert.match(store, /floor\.roofs\.push\(\.\.\.roofs\)/);
   assert.match(store, /raisedBaseHeightM = Core\.WALL_HEIGHT \+ 0\.45/);
-  assert.match(store, /lower = Core\.createRoofEntity\(base\.x1, base\.y1, base\.x2, stepY/);
+  assert.match(store, /lower = Core\.createRoofEntity\(base\.x1, base\.y1, joinX, base\.y2/);
+  assert.match(store, /raised = Core\.createRoofEntity\(joinX, base\.y1, base\.x2, base\.y2/);
   assert.match(store, /raised\.atticWallIds = floor\.walls/);
   assert.match(store, /floor\.walls\.push\(divider\)/);
   assert.match(app, /createRoofCompositePreset\('extensaoLateral'\)/);

@@ -1172,15 +1172,19 @@ export const commands = {
       let lower: Roof;
       let raised: Roof;
       if (width >= depth) {
-        const stepY = base.y1 + depth * 0.52;
-        divider = Core.createWallEntity(base.x1, stepY, base.x2, stepY);
-        lower = Core.createRoofEntity(base.x1, base.y1, base.x2, stepY, 'duasAguas', 26, 'x');
-        raised = Core.createRoofEntity(base.x1, stepY, base.x2, base.y2, 'duasAguas', 26, 'x', undefined, undefined, 'generated', raisedBaseHeightM);
+        // Cumeeira no eixo X: divide NO COMPRIMENTO da cumeeira. O
+        // primeiro trecho termina em joinX e o seguinte continua no
+        // mesmo alinhamento, porém em outra altura.
+        const joinX = base.x1 + width * 0.52;
+        divider = Core.createWallEntity(joinX, base.y1, joinX, base.y2);
+        lower = Core.createRoofEntity(base.x1, base.y1, joinX, base.y2, 'duasAguas', 26, 'x');
+        raised = Core.createRoofEntity(joinX, base.y1, base.x2, base.y2, 'duasAguas', 26, 'x', undefined, undefined, 'generated', raisedBaseHeightM);
       } else {
-        const stepX = base.x1 + width * 0.52;
-        divider = Core.createWallEntity(stepX, base.y1, stepX, base.y2);
-        lower = Core.createRoofEntity(base.x1, base.y1, stepX, base.y2, 'duasAguas', 26, 'y');
-        raised = Core.createRoofEntity(stepX, base.y1, base.x2, base.y2, 'duasAguas', 26, 'y', undefined, undefined, 'generated', raisedBaseHeightM);
+        // Cumeeira no eixo Y: mesma regra, agora interrompida em joinY.
+        const joinY = base.y1 + depth * 0.52;
+        divider = Core.createWallEntity(base.x1, joinY, base.x2, joinY);
+        lower = Core.createRoofEntity(base.x1, base.y1, base.x2, joinY, 'duasAguas', 26, 'y');
+        raised = Core.createRoofEntity(base.x1, joinY, base.x2, base.y2, 'duasAguas', 26, 'y', undefined, undefined, 'generated', raisedBaseHeightM);
       }
       floor.walls.push(divider);
       raised.atticWallIds = floor.walls
