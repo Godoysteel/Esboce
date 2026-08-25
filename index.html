@@ -1006,6 +1006,17 @@
     font-size: 9px;
   }
   .category-panel .cp-group-grid .ts-btn .ts-icon { width: 21px; height: 21px; }
+  .category-panel .coverage-visual-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; }
+  .category-panel .coverage-visual-grid.varanda-visual-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .category-panel .coverage-card { padding:4px 4px 6px; gap:3px; overflow:hidden; min-height:94px; justify-content:flex-start; }
+  .category-panel .coverage-card .coverage-thumb {
+    display:block; width:100%; height:70px; object-fit:contain; border-radius:7px;
+    background:linear-gradient(145deg,#f7f5ef,#ebe8df); pointer-events:none;
+  }
+  .category-panel .varanda-visual-grid .coverage-card { min-height:88px; font-size:8.5px; }
+  .category-panel .varanda-visual-grid .coverage-thumb { height:62px; }
+  .category-panel .coverage-card:hover .coverage-thumb,
+  .category-panel .coverage-card.active .coverage-thumb { background:linear-gradient(145deg,#fff,#eeeaff); }
   .category-panel .ts-group-label { margin-top: 1px; }
   @media (max-width: 700px) {
     .category-rail {
@@ -1703,42 +1714,38 @@
       <div><div class="cp-title">Cobertura</div><div class="cp-desc">Crie telhados e lajes</div></div>
       <button class="cp-close" data-close-panel title="Fechar">×</button>
     </div>
-    <div class="ts-group-label">Telhados</div>
+    <div class="ts-group-label">Telhados básicos</div>
+    <div class="coverage-visual-grid" style="margin-bottom:10px;">
+      <button class="ts-btn coverage-card" id="toolTelhado1Agua" title="Telhado de uma água — um único plano inclinado">
+        <img class="coverage-thumb" src="/ui/coberturas/telhado-1-agua.png" alt="" aria-hidden="true"><span>1 Água</span>
+      </button>
+      <button class="ts-btn tool-btn coverage-card" id="toolTelhado" data-tool="telhado" title="Telhado de duas águas — dois planos unidos pela cumeeira">
+        <img class="coverage-thumb" src="/ui/coberturas/telhado-2-aguas.png" alt="" aria-hidden="true"><span>2 Águas</span>
+      </button>
+      <button class="ts-btn coverage-card" id="toolTelhado4Aguas" title="Telhado de quatro águas — caimento nos quatro lados">
+        <img class="coverage-thumb" src="/ui/coberturas/telhado-4-aguas.png" alt="" aria-hidden="true"><span>4 Águas</span>
+      </button>
+      <button class="ts-btn coverage-card" id="toolTelhadoPlatibanda" title="Cobertura plana escondida por platibanda">
+        <img class="coverage-thumb" src="/ui/coberturas/telhado-platibanda.png" alt="" aria-hidden="true"><span>Platibanda</span>
+      </button>
+    </div>
     <div class="ts-group-label">Modelos compostos</div>
-    <div class="cp-group-grid" style="margin-bottom:10px;">
-      <button class="ts-btn" id="roofPresetExtension" title="Duas águas com uma água prolongada para varanda lateral"><span>Extensão lateral</span></button>
-      <button class="ts-btn" id="roofPresetParallel" title="Duas coberturas paralelas com cumeeiras desencontradas"><span>Cumeeiras paralelas</span></button>
+    <div class="coverage-visual-grid" style="margin-bottom:10px;">
+      <button class="ts-btn coverage-card" id="roofPresetExtension" title="Duas águas assimétricas com uma lateral prolongada">
+        <img class="coverage-thumb" src="/ui/coberturas/telhado-extensao-lateral.png" alt="" aria-hidden="true"><span>Extensão lateral</span>
+      </button>
+      <button class="ts-btn coverage-card" id="roofPresetParallel" title="Duas coberturas com cumeeiras paralelas e oitões unidos">
+        <img class="coverage-thumb" src="/ui/coberturas/telhado-cumeeiras-paralelas.png" alt="" aria-hidden="true"><span>Cumeeiras paralelas</span>
+      </button>
     </div>
     <div class="ts-group-label">Módulo de varanda</div>
-    <div class="cp-group-grid" style="margin-bottom:10px;">
-      <button class="ts-btn contour-varanda-btn" data-post-material="madeira"><span>Postes de madeira</span></button>
-      <button class="ts-btn contour-varanda-btn" data-post-material="concreto"><span>Postes de concreto</span></button>
-      <button class="ts-btn contour-varanda-btn" data-post-material="tijolo"><span>Postes de tijolo</span></button>
+    <div class="coverage-visual-grid varanda-visual-grid" style="margin-bottom:10px;">
+      <button class="ts-btn contour-varanda-btn coverage-card" data-post-material="madeira"><img class="coverage-thumb" src="/ui/coberturas/varanda-madeira.png" alt="" aria-hidden="true"><span>Madeira</span></button>
+      <button class="ts-btn contour-varanda-btn coverage-card" data-post-material="concreto"><img class="coverage-thumb" src="/ui/coberturas/varanda-concreto.png" alt="" aria-hidden="true"><span>Concreto</span></button>
+      <button class="ts-btn contour-varanda-btn coverage-card" data-post-material="tijolo"><img class="coverage-thumb" src="/ui/coberturas/varanda-tijolo.png" alt="" aria-hidden="true"><span>Tijolo</span></button>
     </div>
     <div class="cp-group-grid">
-      <button class="ts-btn" id="toolTelhado1Agua" title="1 Água">
-        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 28 32 10"/><path d="M6 28v6h26v-6"/></svg>
-        <span>1 Água</span>
-      </button>
-      <button class="ts-btn tool-btn" id="toolTelhado" data-tool="telhado" title="Telhado (2 Águas)">
-        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M4 22 20 8l16 14"/>
-          <path d="M9 20v12h22V20"/>
-          <path d="M17 32v-8h6v8"/>
-        </svg>
-        <span>2 Águas</span>
-      </button>
       <button class="ts-btn ts-disabled" data-disabled-label="3 Águas" title="3 Águas — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>3 Águas</span><span class="ts-badge-soon">em breve</span></button>
-      <button class="ts-btn" id="toolTelhado4Aguas" title="4 Águas">
-        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 26 16 10h8l12 16"/><path d="M8 26h24v6H8z"/><path d="M16 10 20 26M24 10 20 26" stroke-opacity="0.5"/></svg>
-        <span>4 Águas</span>
-      </button>
-    </div>
-    <div class="cp-group-grid">
-      <button class="ts-btn" id="toolTelhadoPlatibanda" title="Platibanda">
-        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="10" width="26" height="8" rx="1"/><rect x="10" y="18" width="20" height="12"/></svg>
-        <span>Platibanda</span>
-      </button>
       <button class="ts-btn ts-disabled" data-disabled-label="Meia Água" title="Meia Água — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Meia Água</span><span class="ts-badge-soon">em breve</span></button>
       <button class="ts-btn ts-disabled" data-disabled-label="Beiral" title="Beiral — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Beiral</span><span class="ts-badge-soon">em breve</span></button>
       <button class="ts-btn ts-disabled" data-disabled-label="Personalizado" title="Personalizado — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Personalizado</span><span class="ts-badge-soon">em breve</span></button>
