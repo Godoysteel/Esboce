@@ -1164,16 +1164,22 @@ export const commands = {
       // de encontro vira uma parede REAL do pavimento, controlada pelo
       // telhado elevado; por isso recebe acabamento e esquadrias como
       // qualquer outra parede, em vez de ser apenas uma saia decorativa.
-      const raisedBaseHeightM = Core.WALL_HEIGHT + 1.05;
+      // Um pequeno desnível arquitetônico, não a altura de um segundo
+      // pavimento. As duas coberturas ocupam regiões vizinhas e nunca se
+      // sobrepõem — o degrau aparece apenas na parede do encontro.
+      const raisedBaseHeightM = Core.WALL_HEIGHT + 0.45;
       let divider: Wall;
+      let lower: Roof;
       let raised: Roof;
       if (width >= depth) {
         const stepY = base.y1 + depth * 0.52;
         divider = Core.createWallEntity(base.x1, stepY, base.x2, stepY);
+        lower = Core.createRoofEntity(base.x1, base.y1, base.x2, stepY, 'duasAguas', 26, 'x');
         raised = Core.createRoofEntity(base.x1, stepY, base.x2, base.y2, 'duasAguas', 26, 'x', undefined, undefined, 'generated', raisedBaseHeightM);
       } else {
         const stepX = base.x1 + width * 0.52;
         divider = Core.createWallEntity(stepX, base.y1, stepX, base.y2);
+        lower = Core.createRoofEntity(base.x1, base.y1, stepX, base.y2, 'duasAguas', 26, 'y');
         raised = Core.createRoofEntity(stepX, base.y1, base.x2, base.y2, 'duasAguas', 26, 'y', undefined, undefined, 'generated', raisedBaseHeightM);
       }
       floor.walls.push(divider);
@@ -1181,7 +1187,7 @@ export const commands = {
         .filter((wall) => Core.wallIntersectsRoofFootprint(wall, raised))
         .map((wall) => wall.id);
       roofs.push(
-        Core.createRoofEntity(base.x1, base.y1, base.x2, base.y2, 'duasAguas', 26, raised.ridgeAxis),
+        lower,
         raised,
       );
     }
