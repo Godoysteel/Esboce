@@ -33,3 +33,11 @@ test('interface prioriza modelos manuais compostos e mantém as peças editávei
   assert.match(store, /floor\.walls\.push\(divider\)/);
   assert.match(app, /createRoofCompositePreset\('extensaoLateral'\)/);
 });
+
+test('cumeeira em níveis preserva o beiral inferior contra o oitão elevado', () => {
+  const renderer = readFileSync(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
+  assert.match(renderer, /var steppedRidgePair =/);
+  assert.match(renderer, /tallerRoof\.compoundGroupId === roof\.compoundGroupId/);
+  assert.match(renderer, /\(roof\.atticMode \|\| tallerRoof\.atticMode\)/);
+  assert.match(renderer, /return !steppedRidgePair/);
+});

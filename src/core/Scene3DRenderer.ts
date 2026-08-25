@@ -5165,7 +5165,23 @@ export function hashColorHex(key: string): number {
           // roofPeakBoxes.
           var ownSlope = roofSlopeSurfaceParams(roof, scale, offsetX, offsetY);
           var ownPeakY = pieceBaseY + ownSlope.peakAboveBase;
-          var tallerRoofClipBoxes = roofPeakBoxes.filter(function (b: any) { return b.id !== roof.id && b.peakY > ownPeakY + 1e-4; })
+          var tallerRoofClipBoxes = roofPeakBoxes.filter(function (b: any) {
+            if (b.id === roof.id || b.peakY <= ownPeakY + 1e-4) return false;
+            var tallerRoof = floorData.roofs.find(function (candidate) { return candidate.id === b.id; });
+            // Cumeeira em níveis: os dois trechos consecutivos pertencem
+            // ao mesmo conjunto, mantêm o mesmo eixo e um deles controla
+            // a parede elevada (atticMode). Nesse encontro o beiral do
+            // trecho baixo PRECISA avançar até/sobre o oitão alto. O
+            // clipping genérico apagava a água inclinada e deixava só um
+            // pedaço da tabeira, abrindo uma fresta visível.
+            var steppedRidgePair = !!(
+              tallerRoof && roof.compoundGroupId &&
+              tallerRoof.compoundGroupId === roof.compoundGroupId &&
+              tallerRoof.ridgeAxis === roof.ridgeAxis &&
+              (roof.atticMode || tallerRoof.atticMode)
+            );
+            return !steppedRidgePair;
+          })
             .map(function (b: any) { return { minX: b.minX, maxX: b.maxX, minZ: b.minZ, maxZ: b.maxZ, baseY: b.baseY, peakAboveBase: b.peakAboveBase, tanPitch: b.tanPitch, ridgeCoord: b.ridgeCoord, halfSpan: b.halfSpan, axisIsZ: b.axisIsZ }; });
           var clipBoxesForThisRoof = roomClipBoxes.concat(tallerRoofClipBoxes);
           if (clipBoxesForThisRoof.length) pieces.forEach(function (piece) {

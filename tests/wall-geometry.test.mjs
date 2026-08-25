@@ -1527,7 +1527,7 @@ test('Scene3DRenderer.applyRoomBoxClipping: injeta discard por pixel via onBefor
 test('Scene3DRenderer: cada telhado calcula a caixa dos cômodos ESTRITAMENTE mais altos que ele (nunca a própria) e aplica applyRoomBoxClipping em toda peça', () => {
   const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
   assert.notEqual(roofsStart, -1);
-  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 6200);
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 9000);
   assert.match(roofsBlock, /var roomHeightBoxes = rooms\.map\(function \(room: any\) \{/);
   assert.match(roofsBlock, /baseY: yOffset \+ ownHeightM, peakAboveBase: 0, tanPitch: 0, ridgeCoord: 0, halfSpan: 0, axisIsZ: 0,/);
   assert.match(roofsBlock, /var roomClipBoxes = roomHeightBoxes\.filter\(function \(b: any\) \{ return b\.baseY > pieceBaseY \+ 1e-4; \}\);/);
@@ -1557,13 +1557,15 @@ test('Scene3DRenderer.roofSlopeSurfaceParams: mesma matemática de vão/beiral j
 test('Scene3DRenderer: caixa de telhado-vs-telhado compara PICO×PICO (nunca pico×base) — garante que só um lado do par esconde o outro, nunca os dois ao mesmo tempo — e carrega a rampa inteira (baseY/peakAboveBase/tanPitch/ridgeCoord/halfSpan/axisIsZ), não só uma altura', () => {
   const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
   assert.notEqual(roofsStart, -1);
-  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 6200);
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 9000);
   assert.match(roofsBlock, /var roofPeakBoxes = floorData\.roofs\.map\(function \(r: any\) \{/);
   assert.match(roofsBlock, /var rSlope = roofSlopeSurfaceParams\(r, scale, offsetX, offsetY\);/);
   assert.match(roofsBlock, /peakY: yOffset \+ rOwnHeight \+ rSlope\.peakAboveBase,/);
   assert.match(roofsBlock, /var ownSlope = roofSlopeSurfaceParams\(roof, scale, offsetX, offsetY\);/);
   assert.match(roofsBlock, /var ownPeakY = pieceBaseY \+ ownSlope\.peakAboveBase;/);
-  assert.match(roofsBlock, /var tallerRoofClipBoxes = roofPeakBoxes\.filter\(function \(b: any\) \{ return b\.id !== roof\.id && b\.peakY > ownPeakY \+ 1e-4; \}\)/);
+  assert.match(roofsBlock, /var tallerRoofClipBoxes = roofPeakBoxes\.filter\(function \(b: any\) \{/);
+  assert.match(roofsBlock, /b\.id === roof\.id \|\| b\.peakY <= ownPeakY \+ 1e-4/);
+  assert.match(roofsBlock, /return !steppedRidgePair/);
   assert.match(roofsBlock, /baseY: b\.baseY, peakAboveBase: b\.peakAboveBase, tanPitch: b\.tanPitch, ridgeCoord: b\.ridgeCoord, halfSpan: b\.halfSpan, axisIsZ: b\.axisIsZ/);
 });
 
