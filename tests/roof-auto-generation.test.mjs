@@ -50,4 +50,10 @@ test('cumeeira em níveis preserva o beiral inferior contra o oitão elevado', (
   assert.match(viewport, /roof\.steppedLowerRoofId === o\.id \|\| o\.steppedLowerRoofId === roof\.id/);
   assert.match(store, /const steppedPair = roof\.steppedLowerRoofId === candidate\.id \|\| candidate\.steppedLowerRoofId === roof\.id/);
   assert.match(store, /if \(!steppedPair && candidate\.ridgeAxis === roof\.ridgeAxis\) return/);
+  assert.match(renderer, /var innerBaseHandle = new THREE\.Mesh/);
+  assert.match(renderer, /innerBaseHandle\.userData\.handle = 'roofBaseHeight'/);
+  assert.match(renderer, /closure\.userData\.roofClosure = 'transversal'/);
+  assert.match(renderer, /closure\.userData\.roofClosure = 'perimetral'/);
+  assert.match(store, /const minimumHeightM = r\.steppedLowerRoofId \? Core\.WALL_HEIGHT : 0\.1/);
+  assert.match(store, /Math\.min\(8, heightM\)/);
 });

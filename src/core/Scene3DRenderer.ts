@@ -4448,6 +4448,21 @@ export function hashColorHex(key: string): number {
           baseHandle.userData.roofHandleForId = r.id;
           scene.add(baseHandle);
           registry.handleMeshes.push(baseHandle);
+          // No modelo em níveis, a mesma regulagem também precisa estar
+          // acessível por dentro. Esta segunda alça fica no centro do
+          // fechamento transversal: ao subi-la, telhado e paredes próprias
+          // da cobertura crescem juntos, permitindo pé-direito duplo.
+          if (r.steppedLowerRoofId) {
+            var closureModelX = r.ridgeAxis === 'x' ? r.x1 : midX;
+            var closureModelY = r.ridgeAxis === 'x' ? midY : r.y1;
+            var innerBaseHandle = new THREE.Mesh(new THREE.SphereGeometry(0.13, 12, 12), new THREE.MeshBasicMaterial({ color: 0xF4A340, depthTest: false }));
+            innerBaseHandle.renderOrder = 999;
+            innerBaseHandle.position.set((closureModelX - offsetX) * scale, topY, (closureModelY - offsetY) * scale);
+            innerBaseHandle.userData.handle = 'roofBaseHeight';
+            innerBaseHandle.userData.roofHandleForId = r.id;
+            scene.add(innerBaseHandle);
+            registry.handleMeshes.push(innerBaseHandle);
+          }
         }
         var pole = ridgeLineMesh(new THREE.Vector3(wx2, topY, wz2), new THREE.Vector3(wx2, ridgeY, wz2));
         pole.material.depthTest = false;
@@ -5296,6 +5311,7 @@ export function hashColorHex(key: string): number {
               buildSteppedRidgeClosure(roof, lowerRoof, scale, offsetX, offsetY, yOffset, lowerBaseM, roofOwnHeight, wallMatchColor).forEach(function (closure) {
                 tagCategory(closure, 'telhado');
                 closure.userData.roofId = roof.id;
+                closure.userData.roofClosure = 'transversal';
                 closure.userData.floorIndex = floorIdx;
                 scene.add(closure);
                 registry.structureMeshes.push(closure);
@@ -5303,6 +5319,7 @@ export function hashColorHex(key: string): number {
               buildRaisedRoofPerimeterClosures(roof, scale, offsetX, offsetY, yOffset, currentWallHeight, roofOwnHeight, wallMatchColor).forEach(function (closure) {
                 tagCategory(closure, 'telhado');
                 closure.userData.roofId = roof.id;
+                closure.userData.roofClosure = 'perimetral';
                 closure.userData.floorIndex = floorIdx;
                 scene.add(closure);
                 registry.structureMeshes.push(closure);
