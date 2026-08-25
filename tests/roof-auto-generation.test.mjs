@@ -26,5 +26,8 @@ test('interface prioriza modelos manuais compostos e mantém as peças editávei
   assert.match(html, /id="roofPresetParallel"/);
   assert.match(store, /createRoofCompositePreset/);
   assert.match(store, /floor\.roofs\.push\(\.\.\.roofs\)/);
+  assert.match(store, /raisedBaseHeightM = Core\.WALL_HEIGHT \+ 1\.05/);
+  assert.match(store, /raised\.atticWallIds = floor\.walls/);
+  assert.match(store, /floor\.walls\.push\(divider\)/);
   assert.match(app, /createRoofCompositePreset\('extensaoLateral'\)/);
 });

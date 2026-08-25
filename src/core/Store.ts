@@ -1159,21 +1159,31 @@ export const commands = {
         );
       }
     } else {
-      // Os oitões se encostam: as peças são sequenciais no eixo da
-      // cumeeira, em vez de nascerem lado a lado pelas águas.
+      // Cobertura escalonada: a peça principal permanece na altura
+      // normal e a segunda nasce elevada, com cumeeira paralela. A linha
+      // de encontro vira uma parede REAL do pavimento, controlada pelo
+      // telhado elevado; por isso recebe acabamento e esquadrias como
+      // qualquer outra parede, em vez de ser apenas uma saia decorativa.
+      const raisedBaseHeightM = Core.WALL_HEIGHT + 1.05;
+      let divider: Wall;
+      let raised: Roof;
       if (width >= depth) {
-        const joinX = base.x1 + width * 0.50;
-        roofs.push(
-          Core.createRoofEntity(base.x1, base.y1, joinX, base.y2, 'duasAguas', 30, 'x'),
-          Core.createRoofEntity(joinX, base.y1 + depth * 0.10, base.x2, base.y2 + depth * 0.10, 'duasAguas', 30, 'x'),
-        );
+        const stepY = base.y1 + depth * 0.52;
+        divider = Core.createWallEntity(base.x1, stepY, base.x2, stepY);
+        raised = Core.createRoofEntity(base.x1, stepY, base.x2, base.y2, 'duasAguas', 26, 'x', undefined, undefined, 'generated', raisedBaseHeightM);
       } else {
-        const joinY = base.y1 + depth * 0.50;
-        roofs.push(
-          Core.createRoofEntity(base.x1, base.y1, base.x2, joinY, 'duasAguas', 30, 'y'),
-          Core.createRoofEntity(base.x1 + width * 0.10, joinY, base.x2 + width * 0.10, base.y2, 'duasAguas', 30, 'y'),
-        );
+        const stepX = base.x1 + width * 0.52;
+        divider = Core.createWallEntity(stepX, base.y1, stepX, base.y2);
+        raised = Core.createRoofEntity(stepX, base.y1, base.x2, base.y2, 'duasAguas', 26, 'y', undefined, undefined, 'generated', raisedBaseHeightM);
       }
+      floor.walls.push(divider);
+      raised.atticWallIds = floor.walls
+        .filter((wall) => Core.wallIntersectsRoofFootprint(wall, raised))
+        .map((wall) => wall.id);
+      roofs.push(
+        Core.createRoofEntity(base.x1, base.y1, base.x2, base.y2, 'duasAguas', 26, raised.ridgeAxis),
+        raised,
+      );
     }
     roofs.forEach((roof) => { roof.compoundGroupId = groupId; });
     floor.roofs.push(...roofs);
@@ -1556,6 +1566,15 @@ export const commands = {
     const r = findRoof(roofId); if (!r) return;
     r.x1 = x1; r.y1 = y1; r.x2 = x2; r.y2 = y2;
     emit({ type: 'RoofBoundsChanged', roofId, live: true });
+  },
+
+  updateOpeningSillHeightLive(openingId: string, sillHeight: number): void {
+    const op = findOpening(openingId); if (!op) return;
+    const wall = findWall(op.wallId); if (!wall) return;
+    const roof = generatedAtticRoofForWall(wall.id);
+    const roofLimit = roof ? Core.atticOpeningMaxTopMeters(wall, roof, op.offset, op.width) - 0.02 : Core.WALL_HEIGHT - 0.05;
+    op.sillHeight = Math.max(0, Math.min(roofLimit - op.height, sillHeight));
+    emit({ type: 'OpeningMovedVertically', openingId, live: true });
   },
   autoComposeRoofs(): string[][] {
     const groups = autoComposeCurrentRoofs();

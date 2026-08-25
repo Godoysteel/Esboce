@@ -2794,6 +2794,9 @@ import {
         // roofRidge (delta de tela, não raycast contra plano vertical).
         var opT = Store.findOpening(selectedOpeningId);
         if (opT) dragElementStart = { sillHeight: opT.sillHeight, height: opT.height, startScreenY: e.clientY };
+      } else if (handle === 'openingEdgeBottom') {
+        var opB = Store.findOpening(selectedOpeningId);
+        if (opB) dragElementStart = { sillHeight: opB.sillHeight, height: opB.height, startScreenY: e.clientY };
       }
       Store.commands.beginTransaction();
       return;
@@ -3853,6 +3856,13 @@ import {
       }
       return;
     }
+    if (dragMode === 'openingEdgeBottom') {
+      if (dragElementStart) {
+        var deltaSillO = dragElementStart.startScreenY - e.clientY;
+        Store.commands.updateOpeningSillHeightLive(selectedOpeningId, dragElementStart.sillHeight + deltaSillO * 0.01);
+      }
+      return;
+    }
     // Ferramenta Telhado: nenhum clique ainda, só passando o mouse — o
     // telhadinho fantasma (tamanho padrão) segue o cursor, já grudado na
     // grade, mostrando onde ele nasceria se clicasse agora.
@@ -4348,7 +4358,7 @@ import {
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }
-    if (dragMode === 'openingSlide' || dragMode === 'openingEdgeLeft' || dragMode === 'openingEdgeRight' || dragMode === 'openingEdgeTop' || dragMode === 'varandaBody' || dragMode === 'varandaTraceEnd' || dragMode === 'varandaTraceStart' || (dragMode && dragMode.indexOf('varandaEdge') === 0)) {
+    if (dragMode === 'openingSlide' || dragMode === 'openingEdgeLeft' || dragMode === 'openingEdgeRight' || dragMode === 'openingEdgeTop' || dragMode === 'openingEdgeBottom' || dragMode === 'varandaBody' || dragMode === 'varandaTraceEnd' || dragMode === 'varandaTraceStart' || (dragMode && dragMode.indexOf('varandaEdge') === 0)) {
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }

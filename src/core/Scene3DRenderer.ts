@@ -4559,10 +4559,12 @@ export function hashColorHex(key: string): number {
         var opYOffset = viewState.editingYOffset;
         var midHeightY = opYOffset + opSel.sillHeight + opSel.height / 2;
         var topY2 = opYOffset + opSel.sillHeight + opSel.height;
+        var bottomY2 = opYOffset + opSel.sillHeight;
         [
           ['openingEdgeLeft', leftModel, midHeightY],
           ['openingEdgeRight', rightModel, midHeightY],
-          ['openingEdgeTop', centerModel, topY2]
+          ['openingEdgeTop', centerModel, topY2],
+          ['openingEdgeBottom', centerModel, bottomY2]
         ].forEach(function (h: any) {
           var hx = wSel.x1 + oUx * h[1], hz = wSel.y1 + oUy * h[1];
           var wx = (hx - offsetX) * scale, wz = (hz - offsetY) * scale;
