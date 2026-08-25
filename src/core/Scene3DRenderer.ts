@@ -3360,6 +3360,8 @@ export function hashColorHex(key: string): number {
 
     if (varanda.contourSegments && varanda.contourSegments.length) {
       var contourWidth = varanda.widthM || 2.2;
+      var contourHeight = varanda.heightM || 2.7;
+      var contourPitch = varanda.pitchDeg || 12;
       var postColor = varanda.postMaterial === 'madeira' ? 0x8B5A2B : varanda.postMaterial === 'tijolo' ? 0xA84F32 : 0xC7C5BE;
       var seenPosts: Record<string, boolean> = {};
       varanda.contourSegments.forEach(function (segment: any) {
@@ -3385,8 +3387,8 @@ export function hashColorHex(key: string): number {
         var maxX = Math.max.apply(null, points.map(function (p) { return p.x; }));
         var minY = Math.min.apply(null, points.map(function (p) { return p.y; }));
         var maxY = Math.max.apply(null, points.map(function (p) { return p.y; }));
-        var roof = { id: varanda.id + '-' + segment.wallId, x1: minX, y1: minY, x2: maxX, y2: maxY, type: 'umaAgua', pitchDeg: 12, ridgeAxis: Math.abs(dxM) >= Math.abs(dyM) ? 'x' : 'y' };
-        buildRoofPiece(roof, scale, offsetX, offsetY, floorTopY + WALL_HEIGHT, viewState).forEach(function (piece) { meshes.push(piece); });
+        var roof = { id: varanda.id + '-' + segment.wallId, x1: minX, y1: minY, x2: maxX, y2: maxY, type: 'umaAgua', pitchDeg: contourPitch, ridgeAxis: Math.abs(dxM) >= Math.abs(dyM) ? 'x' : 'y' };
+        buildRoofPiece(roof, scale, offsetX, offsetY, floorTopY + contourHeight, viewState).forEach(function (piece) { meshes.push(piece); });
 
         var postCount = Math.max(1, Math.ceil((lenModel / Core.GRID) / 2.5));
         for (var postIndex = 0; postIndex <= postCount; postIndex++) {
@@ -3397,10 +3399,10 @@ export function hashColorHex(key: string): number {
           if (seenPosts[key]) continue;
           seenPosts[key] = true;
           var post = new THREE.Mesh(
-            new THREE.BoxGeometry(varanda.postMaterial === 'tijolo' ? 0.32 : 0.20, WALL_HEIGHT, varanda.postMaterial === 'tijolo' ? 0.32 : 0.20),
+            new THREE.BoxGeometry(varanda.postMaterial === 'tijolo' ? 0.32 : 0.20, contourHeight, varanda.postMaterial === 'tijolo' ? 0.32 : 0.20),
             new THREE.MeshStandardMaterial({ color: postColor, roughness: 0.9 })
           );
-          post.position.set((px - offsetX) * scale, floorTopY + WALL_HEIGHT / 2, (py - offsetY) * scale);
+          post.position.set((px - offsetX) * scale, floorTopY + contourHeight / 2, (py - offsetY) * scale);
           meshes.push(post);
         }
       });
@@ -4514,6 +4516,18 @@ export function hashColorHex(key: string): number {
 
     if (viewState.selectedVaranda) {
       var vSel = viewState.selectedVaranda, vYOffset = viewState.editingYOffset;
+      if (vSel.contourSegments && vSel.contourSegments.length) {
+        var lastContour = vSel.contourSegments[vSel.contourSegments.length - 1];
+        [
+          ['varandaTraceEnd', lastContour.x2, lastContour.y2]
+        ].forEach(function (handleData) {
+          var handleMesh = new THREE.Mesh(new THREE.SphereGeometry(0.14, 12, 12), new THREE.MeshBasicMaterial({ color: 0x5A49C7, depthTest: false }));
+          handleMesh.renderOrder = 999;
+          handleMesh.position.set((handleData[1] - offsetX) * scale, vYOffset + (vSel.heightM || 2.7) + 0.25, (handleData[2] - offsetY) * scale);
+          handleMesh.userData.handle = handleData[0];
+          scene.add(handleMesh); registry.handleMeshes.push(handleMesh);
+        });
+      } else {
       var vMidX = (vSel.x1 + vSel.x2) / 2, vMidY = (vSel.y1 + vSel.y2) / 2;
       [
         ['MinX', vSel.x1, vMidY], ['MaxX', vSel.x2, vMidY],
@@ -4529,6 +4543,7 @@ export function hashColorHex(key: string): number {
         scene.add(meshE);
         registry.handleMeshes.push(meshE);
       });
+      }
     }
 
     if (viewState.selectedOpening) {

@@ -175,7 +175,7 @@ import {
   var MIN_DIST = 3, MAX_DIST = 35;
   var touchCameraMode = false;
 
-  var gizmoEl: any, gzSwapBtnEl: any, openingGizmoEl: any, roomGizmoEl: any, volumeBoxGizmoEl: any, stairGizmoEl: any, stairTypePanelEl: any, forroTypePanelEl: any, planUnderlayGizmoEl: any, columnShapePanelEl: any, roofTypePanelEl: any, roofPitchInputEl: any, roofPitchControlEl: any, finishPanelEl: any, paintPickerPanelEl: any, openingPickerPanelEl: any, objectPanelEl: any, objectPanelTitleEl: any, objectPanelBodyEl: any, hintEl: any, layersContextMenuEl: any, hydraulicWallPromptEl: any, hydraulicWallElevationPanelEl: any, hydraulicWallElevationTitleEl: any, hydraulicWallElevationSvgEl: any, hydraulicRouteDrawBarEl: any, hydraulicRouteDrawCountEl: any;
+  var gizmoEl: any, gzSwapBtnEl: any, openingGizmoEl: any, roomGizmoEl: any, volumeBoxGizmoEl: any, stairGizmoEl: any, stairTypePanelEl: any, forroTypePanelEl: any, planUnderlayGizmoEl: any, columnShapePanelEl: any, roofTypePanelEl: any, roofPitchInputEl: any, roofPitchControlEl: any, varandaTypePanelEl: any, varandaWidthInputEl: any, varandaHeightInputEl: any, varandaPitchInputEl: any, finishPanelEl: any, paintPickerPanelEl: any, openingPickerPanelEl: any, objectPanelEl: any, objectPanelTitleEl: any, objectPanelBodyEl: any, hintEl: any, layersContextMenuEl: any, hydraulicWallPromptEl: any, hydraulicWallElevationPanelEl: any, hydraulicWallElevationTitleEl: any, hydraulicWallElevationSvgEl: any, hydraulicRouteDrawBarEl: any, hydraulicRouteDrawCountEl: any;
   // Estado do desenho de percurso guiado (H2): fixtureId sendo roteada e os
   // pontos-guia já clicados (só plano — a queda vertical final é
   // automática, ver Hydraulics.buildGuidedColdWaterHeaderRoute). null =
@@ -904,7 +904,7 @@ import {
   function selectOpening(openingId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedOpeningId = openingId; gizmoMenuOpen = false; render(); }
   // Varanda: mesmo padrão do telhado (clique seleciona, clique direito
   // de novo abre o menu com girar/excluir).
-  function selectVaranda(varandaId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedVarandaId = varandaId; gizmoMenuOpen = false; render(); }
+  function selectVaranda(varandaId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedVarandaId = varandaId; gizmoMenuOpen = true; render(); }
   // Laje: mesmo padrão da varanda — clique seleciona, arraste livre nas
   // bordas (nunca trava em contorno de parede — ver DEC-35).
 
@@ -1176,6 +1176,7 @@ import {
     // categoria de produto trocável no catálogo por enquanto) —
     // escondido por padrão, cada branch abaixo decide se mostra.
     if (gzSwapBtnEl) gzSwapBtnEl.style.display = 'none';
+    if (!selectedVarandaId) varandaTypePanelEl?.classList.remove('visible');
     if (selectedHydraulicNodeId) {
       var hydraulicNode = Store.findHydraulicNode(selectedHydraulicNodeId);
       var hydraulicFlipButton = roomGizmoEl.querySelector('[data-action="flipHydraulicFace"]');
@@ -1416,8 +1417,14 @@ import {
       var midV = modelToWorld((vG.x1 + vG.x2) / 2, (vG.y1 + vG.y2) / 2);
       positionFloatingPanel(gizmoEl, midV.x, yOffset + Scene3DRenderer.FLOOR_STACK_HEIGHT_GETTER(), midV.z, 0);
       gizmoEl.classList.add('visible');
+      varandaTypePanelEl?.classList.add('visible');
+      if (varandaWidthInputEl && document.activeElement !== varandaWidthInputEl) varandaWidthInputEl.value = String(vG.widthM || 2.2);
+      if (varandaHeightInputEl && document.activeElement !== varandaHeightInputEl) varandaHeightInputEl.value = String(vG.heightM || 2.7);
+      if (varandaPitchInputEl && document.activeElement !== varandaPitchInputEl) varandaPitchInputEl.value = String(vG.pitchDeg || 12);
+      if (varandaTypePanelEl) { positionFloatingPanel(varandaTypePanelEl, midV.x, yOffset + Scene3DRenderer.FLOOR_STACK_HEIGHT_GETTER(), midV.z, -60); stackLeftOf(varandaTypePanelEl, gizmoEl, 8); }
       return;
     }
+    varandaTypePanelEl?.classList.remove('visible');
 
     if (selectedLajeId) {
       var lG = Store.findLaje(selectedLajeId);
@@ -2773,6 +2780,9 @@ import {
           dragElementStart = { heightM: vbHeightBottom.heightM, sillHeightM: vbHeightBottom.sillHeightM || 0, startScreenY: e.clientY, lastHeightM: vbHeightBottom.heightM, lastSillHeightM: vbHeightBottom.sillHeightM || 0 };
           beginVolumeBoxResizePreview(vbHeightBottom.id);
         }
+      } else if (handle === 'varandaTraceStart' || handle === 'varandaTraceEnd') {
+        var traceVaranda = Store.findVaranda(selectedVarandaId);
+        if (traceVaranda?.contourSegments?.length) dragElementStart = { traceHandle: handle };
       } else if (handle.indexOf('varandaEdge') === 0) {
         // Varanda não trava em região de cômodo nenhuma (decisão
         // explícita — sempre livre), então não precisa achar região
@@ -2962,7 +2972,12 @@ import {
           collectRoofGroupDragObjects(connectedIds, roofId);
           Store.commands.beginTransaction();
         } else if (mesh.userData.varandaId) {
-          selectVaranda(mesh.userData.varandaId);
+          var varandaId = mesh.userData.varandaId;
+          selectVaranda(varandaId);
+          dragMode = 'varandaBody';
+          dragGroundStart = getGroundModelPoint(e.clientX, e.clientY);
+          dragElementStart = { lastGround: dragGroundStart };
+          Store.commands.beginTransaction();
         } else if (mesh.userData.furnitureId) {
           var furnitureId = mesh.userData.furnitureId;
           selectFurniture(furnitureId);
@@ -3800,6 +3815,20 @@ import {
       }
       return;
     }
+    if (dragMode === 'varandaBody') {
+      var gpVB = getGroundModelPoint(e.clientX, e.clientY);
+      if (gpVB && dragElementStart?.lastGround) {
+        var deltaVBX = gpVB.x - dragElementStart.lastGround.x, deltaVBY = gpVB.y - dragElementStart.lastGround.y;
+        Store.commands.updateVarandaBodyLive(selectedVarandaId, deltaVBX, deltaVBY, !e.altKey);
+        dragElementStart.lastGround = gpVB;
+      }
+      return;
+    }
+    if (dragMode === 'varandaTraceEnd' || dragMode === 'varandaTraceStart') {
+      var gpVT = getGroundModelPoint(e.clientX, e.clientY);
+      if (gpVT) Store.commands.extendVarandaLive(selectedVarandaId, Core.snap(gpVT.x), Core.snap(gpVT.y), !!e.shiftKey);
+      return;
+    }
     if (dragMode === 'openingEdgeLeft' || dragMode === 'openingEdgeRight') {
       var opE = Store.findOpening(selectedOpeningId);
       var gpOE = getGroundModelPoint(e.clientX, e.clientY);
@@ -4319,7 +4348,7 @@ import {
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }
-    if (dragMode === 'openingSlide' || dragMode === 'openingEdgeLeft' || dragMode === 'openingEdgeRight' || dragMode === 'openingEdgeTop' || (dragMode && dragMode.indexOf('varandaEdge') === 0)) {
+    if (dragMode === 'openingSlide' || dragMode === 'openingEdgeLeft' || dragMode === 'openingEdgeRight' || dragMode === 'openingEdgeTop' || dragMode === 'varandaBody' || dragMode === 'varandaTraceEnd' || dragMode === 'varandaTraceStart' || (dragMode && dragMode.indexOf('varandaEdge') === 0)) {
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }
@@ -5189,6 +5218,10 @@ import {
     columnShapePanelEl = document.getElementById('columnShapePanel');
     roofTypePanelEl = document.getElementById('roofTypePanel');
     roofPitchInputEl = document.getElementById('roofPitchInput');
+    varandaTypePanelEl = document.getElementById('varandaTypePanel');
+    varandaWidthInputEl = document.getElementById('varandaWidthInput');
+    varandaHeightInputEl = document.getElementById('varandaHeightInput');
+    varandaPitchInputEl = document.getElementById('varandaPitchInput');
     roofPitchControlEl = document.getElementById('roofPitchControl');
     generateAtticBtnEl = document.getElementById('generateAtticBtn');
     finishPanelEl = document.getElementById('finishPanel');
@@ -5290,6 +5323,14 @@ import {
         if (e.key === 'Enter') { roofPitchInputEl.blur(); e.preventDefault(); }
       });
     }
+    [varandaWidthInputEl, varandaHeightInputEl, varandaPitchInputEl].forEach(function (input) {
+      input?.addEventListener('change', function () {
+        if (!selectedVarandaId) return;
+        Store.commands.setVarandaParameters(selectedVarandaId, Number(varandaWidthInputEl.value), Number(varandaHeightInputEl.value), Number(varandaPitchInputEl.value));
+        render();
+      });
+      input?.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
+    });
     if (generateAtticBtnEl) {
       generateAtticBtnEl.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
       generateAtticBtnEl.addEventListener('click', function () {

@@ -274,6 +274,9 @@ function parseVaranda(value: unknown, path: string): Varanda {
   if (contourSegments.length) result.contourSegments = contourSegments;
   if (v.widthM != null) result.widthM = number(v.widthM, `${path}.widthM`);
   if (v.postMaterial != null) result.postMaterial = enumValue(v.postMaterial, ['madeira', 'concreto', 'tijolo'], `${path}.postMaterial`);
+  if (v.heightM != null) result.heightM = number(v.heightM, `${path}.heightM`);
+  if (v.pitchDeg != null) result.pitchDeg = number(v.pitchDeg, `${path}.pitchDeg`);
+  if (v.attachedWallId != null) result.attachedWallId = string(v.attachedWallId, `${path}.attachedWallId`);
   return result;
 }
 

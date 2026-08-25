@@ -1709,7 +1709,7 @@
       <button class="ts-btn" id="roofPresetExtension" title="Duas águas com uma água prolongada para varanda lateral"><span>Extensão lateral</span></button>
       <button class="ts-btn" id="roofPresetParallel" title="Duas coberturas paralelas com cumeeiras desencontradas"><span>Cumeeiras paralelas</span></button>
     </div>
-    <div class="ts-group-label">Varanda de contorno</div>
+    <div class="ts-group-label">Módulo de varanda</div>
     <div class="cp-group-grid" style="margin-bottom:10px;">
       <button class="ts-btn contour-varanda-btn" data-post-material="madeira"><span>Postes de madeira</span></button>
       <button class="ts-btn contour-varanda-btn" data-post-material="concreto"><span>Postes de concreto</span></button>
@@ -2083,6 +2083,12 @@
     <label class="roof-parameter" id="roofPitchControl">Inclinação <input id="roofPitchInput" type="number" min="5" max="75" step="1" inputmode="decimal" aria-label="Inclinação do telhado em graus"></label>
     <button class="roof-axis" title="Alternar a direção da cumeeira ou do caimento">↔ Direção: eixo X</button>
     <div class="roof-auto-compose" title="Coberturas que se encontram são recortadas automaticamente">Encontro automático</div>
+  </div>
+  <div id="varandaTypePanel" class="shape-panel roof-type-panel">
+    <label class="roof-parameter">Largura <input id="varandaWidthInput" type="number" min="0.8" max="6" step="0.1" inputmode="decimal" aria-label="Largura da varanda em metros"></label>
+    <label class="roof-parameter">Altura <input id="varandaHeightInput" type="number" min="2" max="6" step="0.1" inputmode="decimal" aria-label="Altura da varanda em metros"></label>
+    <label class="roof-parameter">Inclinação <input id="varandaPitchInput" type="number" min="2" max="60" step="1" inputmode="decimal" aria-label="Inclinação da cobertura da varanda"></label>
+    <small style="max-width:220px;line-height:1.25">Arraste a alça roxa para seguir as paredes. Segure Shift para continuar reto.</small>
   </div>
   <div id="finishPanel" class="shape-panel finish-panel"></div>
   <button id="generateAtticBtn" style="display:none; position:absolute; right:112px; bottom:82px; z-index:40; padding:13px 20px; border:0; border-radius:14px; background:#5A49C7; color:#fff; font-weight:700; box-shadow:0 8px 28px rgba(40,32,105,.3);">Gerar ático</button>

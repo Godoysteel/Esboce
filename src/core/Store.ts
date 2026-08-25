@@ -1142,21 +1142,36 @@ export const commands = {
     const width = base.x2 - base.x1, depth = base.y2 - base.y1;
     const roofs: Roof[] = [];
     if (kind === 'extensaoLateral') {
-      const main = Core.createRoofEntity(base.x1, base.y1, base.x2, base.y2, 'duasAguas', 30, width >= depth ? 'x' : 'y');
-      const extension = width >= depth
-        ? Core.createRoofEntity(base.x1, base.y2 - depth * 0.18, base.x2, base.y2 + depth * 0.38, 'umaAgua', 16, 'x')
-        : Core.createRoofEntity(base.x2 - width * 0.18, base.y1, base.x2 + width * 0.38, base.y2, 'umaAgua', 16, 'y');
-      roofs.push(main, extension);
-    } else {
+      // Duas águas assimétrico: duas peças de uma água compartilham a
+      // cumeeira; uma delas se prolonga lateralmente. Não há um telhado
+      // duas-águas inteiro escondido por baixo da extensão.
       if (width >= depth) {
+        const ridgeY = base.y1 + depth * 0.5;
         roofs.push(
-          Core.createRoofEntity(base.x1, base.y1, base.x2, base.y1 + depth * 0.58, 'duasAguas', 30, 'x'),
-          Core.createRoofEntity(base.x1 + width * 0.18, base.y1 + depth * 0.48, base.x2, base.y2, 'duasAguas', 30, 'x'),
+          Core.createRoofEntity(base.x1, base.y1, base.x2, ridgeY, 'umaAgua', 28, 'x'),
+          Core.createRoofEntity(base.x1, ridgeY, base.x2, base.y2 + depth * 0.45, 'umaAgua', 18, 'x'),
         );
       } else {
+        const ridgeX = base.x1 + width * 0.5;
         roofs.push(
-          Core.createRoofEntity(base.x1, base.y1, base.x1 + width * 0.58, base.y2, 'duasAguas', 30, 'y'),
-          Core.createRoofEntity(base.x1 + width * 0.48, base.y1 + depth * 0.18, base.x2, base.y2, 'duasAguas', 30, 'y'),
+          Core.createRoofEntity(base.x1, base.y1, ridgeX, base.y2, 'umaAgua', 28, 'y'),
+          Core.createRoofEntity(ridgeX, base.y1, base.x2 + width * 0.45, base.y2, 'umaAgua', 18, 'y'),
+        );
+      }
+    } else {
+      // Os oitões se encostam: as peças são sequenciais no eixo da
+      // cumeeira, em vez de nascerem lado a lado pelas águas.
+      if (width >= depth) {
+        const joinX = base.x1 + width * 0.50;
+        roofs.push(
+          Core.createRoofEntity(base.x1, base.y1, joinX, base.y2, 'duasAguas', 30, 'x'),
+          Core.createRoofEntity(joinX, base.y1 + depth * 0.10, base.x2, base.y2 + depth * 0.10, 'duasAguas', 30, 'x'),
+        );
+      } else {
+        const joinY = base.y1 + depth * 0.50;
+        roofs.push(
+          Core.createRoofEntity(base.x1, base.y1, base.x2, joinY, 'duasAguas', 30, 'y'),
+          Core.createRoofEntity(base.x1 + width * 0.10, joinY, base.x2 + width * 0.10, base.y2, 'duasAguas', 30, 'y'),
         );
       }
     }
@@ -1578,18 +1593,61 @@ export const commands = {
   },
 
   createContourVaranda(postMaterial: 'madeira' | 'concreto' | 'tijolo', widthM = 2.2): Varanda | null {
-    const segments = Core.varandaContourSegments(currentWalls());
-    if (!segments.length) return null;
-    const xs = segments.flatMap((segment) => [segment.x1, segment.x2]);
-    const ys = segments.flatMap((segment) => [segment.y1, segment.y2]);
+    // Nasce isolada, como um módulo de 3 × 2,2 m. A aderência à casa só
+    // acontece quando o usuário a arrasta para perto de uma parede.
+    const walls = currentWalls();
+    const bounds = walls.length ? {
+      minX: Math.min(...walls.flatMap((wall) => [wall.x1, wall.x2])), minY: Math.min(...walls.flatMap((wall) => [wall.y1, wall.y2])),
+      maxX: Math.max(...walls.flatMap((wall) => [wall.x1, wall.x2])), maxY: Math.max(...walls.flatMap((wall) => [wall.y1, wall.y2])),
+    } : { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+    const x1 = bounds.maxX + Core.GRID * 2, y1 = bounds.minY;
+    const x2 = x1 + Core.GRID * 3, y2 = y1;
     pushUndoSnapshot();
-    const varanda = Core.createVarandaEntity(Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys), 'minZ');
-    varanda.contourSegments = segments;
+    const varanda = Core.createVarandaEntity(x1, y1, x2, y1 + widthM * Core.GRID, 'minZ');
+    varanda.contourSegments = [{ wallId: '', x1, y1, x2, y2, outwardSign: 1 }];
     varanda.widthM = Math.max(0.8, Math.min(5, widthM));
     varanda.postMaterial = postMaterial;
+    varanda.heightM = 2.7;
+    varanda.pitchDeg = 12;
     currentVarandas().push(varanda);
-    emit({ type: 'ContourVarandaCreated', varandaId: varanda.id, segmentCount: segments.length, postMaterial });
+    emit({ type: 'ContourVarandaCreated', varandaId: varanda.id, segmentCount: 1, postMaterial });
     return varanda;
+  },
+
+  updateVarandaBodyLive(varandaId: string, dx: number, dy: number, snapToWalls = true): void {
+    const varanda = findVaranda(varandaId); if (!varanda) return;
+    const source = varanda.contourSegments?.length ? varanda.contourSegments : [{ wallId: '', x1: varanda.x1, y1: varanda.y1, x2: varanda.x2, y2: varanda.y1, outwardSign: 1 as const }];
+    const moved = source.map((segment) => ({ ...segment, x1: segment.x1 + dx, y1: segment.y1 + dy, x2: segment.x2 + dx, y2: segment.y2 + dy }));
+    const snapped = snapToWalls && moved.length === 1 ? Core.snapVarandaSegmentToExteriorWalls(moved[0]!.x1, moved[0]!.y1, moved[0]!.x2, moved[0]!.y2, currentWalls()) : null;
+    varanda.contourSegments = snapped ? [snapped] : moved;
+    if (snapped) varanda.attachedWallId = snapped.wallId; else delete varanda.attachedWallId;
+    const xs = varanda.contourSegments.flatMap((s) => [s.x1, s.x2]), ys = varanda.contourSegments.flatMap((s) => [s.y1, s.y2]);
+    varanda.x1 = Math.min(...xs); varanda.x2 = Math.max(...xs); varanda.y1 = Math.min(...ys); varanda.y2 = Math.max(...ys);
+    emit({ type: 'VarandaBodyChanged', varandaId, live: true, snapped: !!snapped });
+  },
+
+  extendVarandaLive(varandaId: string, targetX: number, targetY: number, forceStraight = false): void {
+    const varanda = findVaranda(varandaId); if (!varanda?.contourSegments?.length) return;
+    const first = varanda.contourSegments[0]!;
+    if (forceStraight || !varanda.attachedWallId) {
+      const dx = first.x2 - first.x1, dy = first.y2 - first.y1, len = Math.hypot(dx, dy) || 1;
+      const distance = (targetX - first.x1) * dx / len + (targetY - first.y1) * dy / len;
+      varanda.contourSegments = [{ ...first, x2: first.x1 + dx / len * distance, y2: first.y1 + dy / len * distance }];
+    } else {
+      varanda.contourSegments = Core.extendVarandaAlongExteriorWalls({ ...first, wallId: varanda.attachedWallId }, targetX, targetY, currentWalls());
+    }
+    const xs = varanda.contourSegments.flatMap((s) => [s.x1, s.x2]), ys = varanda.contourSegments.flatMap((s) => [s.y1, s.y2]);
+    varanda.x1 = Math.min(...xs); varanda.x2 = Math.max(...xs); varanda.y1 = Math.min(...ys); varanda.y2 = Math.max(...ys);
+    emit({ type: 'VarandaExtended', varandaId, live: true, forceStraight });
+  },
+
+  setVarandaParameters(varandaId: string, widthM: number, heightM: number, pitchDeg: number): void {
+    const varanda = findVaranda(varandaId); if (!varanda) return;
+    pushUndoSnapshot();
+    varanda.widthM = Math.max(0.8, Math.min(6, widthM));
+    varanda.heightM = Math.max(2, Math.min(6, heightM));
+    varanda.pitchDeg = Math.max(2, Math.min(60, pitchDeg));
+    emit({ type: 'VarandaParametersChanged', varandaId });
   },
 
   updateVarandaBoundsLive(varandaId: string, x1: number, y1: number, x2: number, y2: number): void {
@@ -1605,6 +1663,16 @@ export const commands = {
     const order: VarandaFrontSide[] = ['minZ', 'maxX', 'maxZ', 'minX'];
     const idx = order.indexOf(v.frontSide);
     v.frontSide = order[(idx + 1) % order.length]!;
+    if (v.contourSegments?.length) {
+      const cx = (v.x1 + v.x2) / 2, cy = (v.y1 + v.y2) / 2;
+      v.contourSegments = v.contourSegments.map((segment) => ({ ...segment,
+        x1: cx - (segment.y1 - cy), y1: cy + (segment.x1 - cx),
+        x2: cx - (segment.y2 - cy), y2: cy + (segment.x2 - cx), wallId: '',
+      }));
+      delete v.attachedWallId;
+      const xs = v.contourSegments.flatMap((s) => [s.x1, s.x2]), ys = v.contourSegments.flatMap((s) => [s.y1, s.y2]);
+      v.x1 = Math.min(...xs); v.x2 = Math.max(...xs); v.y1 = Math.min(...ys); v.y2 = Math.max(...ys);
+    }
     emit({ type: 'VarandaFrontChanged', varandaId });
   },
 

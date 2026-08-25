@@ -79,6 +79,12 @@ export interface Varanda {
   contourSegments?: VarandaContourSegment[];
   widthM?: number;
   postMaterial?: VarandaPostMaterial;
+  /** Altura livre entre o piso e a face inferior da cobertura. */
+  heightM?: number;
+  /** Inclinação própria da cobertura de uma água. */
+  pitchDeg?: number;
+  /** Parede externa à qual o primeiro trecho está aderido por snap. */
+  attachedWallId?: string;
 }
 
 // Terreno (lote) — ver docs/02 - Domínio/Modelo de Domínio.md, seção 5, e

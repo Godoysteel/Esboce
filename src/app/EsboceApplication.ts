@@ -322,8 +322,8 @@ export class EsboceApplication {
         const material = button.dataset.postMaterial as 'madeira' | 'concreto' | 'tijolo';
         const varanda = Store.commands.createContourVaranda(material);
         this.requireElement('viewportHint').textContent = varanda
-          ? 'Varanda criada ao redor das paredes externas, com curvas automáticas de 90°. Selecione para editar.'
-          : 'Não encontrei um contorno externo fechado neste nível.';
+          ? 'Módulo de varanda criado ao lado da casa. Arraste-o até uma parede para encaixar; depois estenda pela alça roxa.'
+          : 'Não foi possível criar o módulo de varanda.';
       });
     });
     this.requireElement("roofStyleClose").addEventListener("click", () => {

@@ -737,6 +737,76 @@ export function varandaContourSegments(wallList: Wall[]): import('./types.js').V
   return result;
 }
 
+/** Encontra a face externa mais próxima e devolve um trecho curto alinhado a ela. */
+export function snapVarandaSegmentToExteriorWalls(
+  x1: number, y1: number, x2: number, y2: number, wallList: Wall[], toleranceUnits = GRID * 0.65,
+): import('./types.js').VarandaContourSegment | null {
+  const exterior = varandaContourSegments(wallList);
+  const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
+  const length = Math.max(SNAP_UNIT, Math.hypot(x2 - x1, y2 - y1));
+  let best: { segment: import('./types.js').VarandaContourSegment; px: number; py: number; dist: number } | null = null;
+  exterior.forEach((segment) => {
+    const projected = projectOnSegment(cx, cy, segment.x1, segment.y1, segment.x2, segment.y2);
+    if (!projected || projected.dist > toleranceUnits || (best && projected.dist >= best.dist)) return;
+    best = { segment, px: projected.x, py: projected.y, dist: projected.dist };
+  });
+  if (!best) return null;
+  const b = best as { segment: import('./types.js').VarandaContourSegment; px: number; py: number; dist: number };
+  const dx = b.segment.x2 - b.segment.x1, dy = b.segment.y2 - b.segment.y1;
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len, uy = dy / len;
+  const half = Math.min(length / 2, len / 2);
+  return { wallId: b.segment.wallId, x1: b.px - ux * half, y1: b.py - uy * half, x2: b.px + ux * half, y2: b.py + uy * half, outwardSign: b.segment.outwardSign };
+}
+
+/**
+ * Estende um módulo já aderido pela cadeia de paredes externas. A busca
+ * percorre as duas direções possíveis e escolhe o caminho que termina mais
+ * perto do cursor. Isso produz curvas de 90° sem antecipar toda a varanda.
+ */
+export function extendVarandaAlongExteriorWalls(
+  seed: import('./types.js').VarandaContourSegment, targetX: number, targetY: number, wallList: Wall[],
+): import('./types.js').VarandaContourSegment[] {
+  const exterior = varandaContourSegments(wallList);
+  const byId = new Map(exterior.map((segment) => [segment.wallId, segment]));
+  const host = byId.get(seed.wallId);
+  if (!host) return [seed];
+  const samePoint = (ax: number, ay: number, bx: number, by: number) => Math.hypot(ax - bx, ay - by) <= COINCIDENCE_TOL * 4;
+  type Oriented = import('./types.js').VarandaContourSegment;
+  const orient = (segment: Oriented, reverse: boolean): Oriented => reverse
+    ? { ...segment, x1: segment.x2, y1: segment.y2, x2: segment.x1, y2: segment.y1, outwardSign: (-segment.outwardSign) as 1 | -1 }
+    : { ...segment };
+  const starts = [orient(host, false), orient(host, true)];
+  let bestPath: Oriented[] = [seed], bestScore = Infinity;
+  starts.forEach((start) => {
+    const fixedAtStart = Math.hypot(start.x1 - seed.x1, start.y1 - seed.y1) <= Math.hypot(start.x2 - seed.x1, start.y2 - seed.y1);
+    const first = fixedAtStart ? start : orient(start, true);
+    const visit = (path: Oriented[], used: Set<string>) => {
+      const tail = path[path.length - 1]!;
+      const projection = projectOnSegment(targetX, targetY, tail.x1, tail.y1, tail.x2, tail.y2);
+      if (projection) {
+        const score = projection.dist + path.length * 0.01;
+        if (score < bestScore) {
+          bestScore = score;
+          bestPath = path.slice(0, -1).concat([{ ...tail, x2: projection.x, y2: projection.y }]);
+        }
+      }
+      if (path.length >= exterior.length) return;
+      exterior.forEach((candidate) => {
+        if (used.has(candidate.wallId)) return;
+        let next: Oriented | null = null;
+        if (samePoint(tail.x2, tail.y2, candidate.x1, candidate.y1)) next = orient(candidate, false);
+        else if (samePoint(tail.x2, tail.y2, candidate.x2, candidate.y2)) next = orient(candidate, true);
+        if (!next) return;
+        const nextUsed = new Set(used); nextUsed.add(candidate.wallId);
+        visit(path.concat([next]), nextUsed);
+      });
+    };
+    visit([{ ...first, x1: seed.x1, y1: seed.y1 }], new Set([host.wallId]));
+  });
+  return bestPath.filter((segment) => Math.hypot(segment.x2 - segment.x1, segment.y2 - segment.y1) >= SNAP_UNIT / 3);
+}
+
 // "perto" o bastante pra valer a pena tentar alinhar? Sobrepostos ou com
 // uma folga pequena nos dois eixos.
 export function rectsNearby(a: RectLike, b: RectLike, toleranceUnits: number): boolean {
@@ -2100,7 +2170,7 @@ export const Core = {
   wallResizeEndpointNeedsBridge,
   distPointToLine, wallOBB, furnitureOBB, openingOBB, obbOverlapMTV, wallOverlapsForeignOpening, resolveWallOffsetAgainstOpenings, wallsCanFuse, wallsMeetAtEndpoint, resolveWallGroupGridDelta,
   findWallTJunctionSplits,
-  createWallEntity, createColumnEntity, createRoofEntity, wallIntersectsRoofFootprint, roofHeightAtModelPoint, atticOpeningMaxTopMeters, openingFitsAtticRoof, atticWallExtensionAreaMeters, createVarandaEntity, varandaContourSegments, createLajeEntity, createFloorEntity,
+  createWallEntity, createColumnEntity, createRoofEntity, wallIntersectsRoofFootprint, roofHeightAtModelPoint, atticOpeningMaxTopMeters, openingFitsAtticRoof, atticWallExtensionAreaMeters, createVarandaEntity, varandaContourSegments, snapVarandaSegmentToExteriorWalls, extendVarandaAlongExteriorWalls, createLajeEntity, createFloorEntity,
   createFurnitureEntity,
   createGlazingPanelEntity, GLAZING_DEFAULT_WIDTH_M, GLAZING_DEFAULT_HEIGHT_M, GLAZING_DEFAULT_MODULE_TARGET_M,
   createBalconyRailingEntity, BALCONY_DEFAULT_WIDTH_M, BALCONY_DEFAULT_HEIGHT_M, BALCONY_DEFAULT_MODULE_TARGET_M,
