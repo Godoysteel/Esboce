@@ -341,6 +341,9 @@
   .shape-panel button.rt { width: auto; min-height: 32px; padding: 4px 7px; font-size: 11px; line-height: 1.15; }
   .roof-parameter { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 66px; align-items: center; gap: 6px; padding-top: 3px; font-size: 11px; color: #55524B; }
   .roof-parameter input { width: 100%; min-width: 0; height: 28px; padding: 3px 6px; border: 1px solid #C9C6BB; border-radius: 6px; background: #FFFFFF; color: #292720; font: inherit; text-align: right; }
+  .roof-elevation { grid-template-columns: 1fr auto; }
+  .roof-elevation output { font-weight: 700; color: #D87812; }
+  .roof-elevation input[type="range"] { grid-column: 1 / -1; padding: 0; accent-color: #E8963C; cursor: ns-resize; }
   .roof-axis { grid-column: 1 / -1; width: 100%; min-height: 30px; padding: 4px 7px; border-radius: 6px; font-size: 11px; }
   .roof-auto-compose { grid-column: 1 / -1; padding: 5px 6px; border-radius: 6px; background: #EEF7F0; color: #2F6B3B; font-size: 10px; text-align: center; }
   .shape-panel button.st { margin: 0; padding: 0; width: 30px; height: 30px; font-size: 14px; font-weight: 700; border-radius: 6px; line-height: 1; }
@@ -2088,6 +2091,7 @@
     <button class="rt" data-rooftype="umaAgua" title="Uma água">◺ 1 água</button>
     <button class="rt" data-rooftype="platibanda" title="Platibanda">▭ Platibanda</button>
     <label class="roof-parameter" id="roofPitchControl">Inclinação <input id="roofPitchInput" type="number" min="5" max="75" step="1" inputmode="decimal" aria-label="Inclinação do telhado em graus"></label>
+    <label class="roof-parameter roof-elevation" id="roofElevationControl"><span>Subir telhado inteiro</span><output id="roofElevationValue">3,15 m</output><input id="roofElevationInput" type="range" min="2.85" max="8" step="0.05" aria-label="Altura da base do telhado em metros"></label>
     <button class="roof-axis" title="Alternar a direção da cumeeira ou do caimento">↔ Direção: eixo X</button>
     <div class="roof-auto-compose" title="Coberturas que se encontram são recortadas automaticamente">Encontro automático</div>
   </div>

@@ -50,14 +50,10 @@ test('cumeeira em níveis preserva o beiral inferior contra o oitão elevado', (
   assert.match(viewport, /roof\.steppedLowerRoofId === o\.id \|\| o\.steppedLowerRoofId === roof\.id/);
   assert.match(store, /const steppedPair = roof\.steppedLowerRoofId === candidate\.id \|\| candidate\.steppedLowerRoofId === roof\.id/);
   assert.match(store, /if \(!steppedPair && candidate\.ridgeAxis === roof\.ridgeAxis\) return/);
-  assert.match(renderer, /var innerBaseHandle = new THREE\.Mesh/);
-  assert.match(renderer, /innerBaseHandle\.userData\.handle = 'roofBaseHeight'/);
   assert.match(renderer, /closure\.userData\.roofClosure = 'transversal'/);
   assert.match(renderer, /closure\.userData\.roofClosure = 'perimetral'/);
   assert.match(store, /const minimumHeightM = r\.steppedLowerRoofId \? Core\.WALL_HEIGHT \+ 0\.15 : 0\.1/);
   assert.match(store, /Math\.min\(8, heightM\)/);
-  assert.match(renderer, /baseHandleStem\.userData\.handle = 'roofBaseHeight'/);
-  assert.match(renderer, /innerBaseStem\.userData\.handle = 'roofBaseHeight'/);
   assert.match(viewport, /Alça laranja: subir o telhado inteiro/);
   assert.match(viewport, /Telhado inteiro elevado individualmente/);
   assert.match(viewport, /if \(dragMode === 'roofBaseHeight'\) \{/);
@@ -65,7 +61,9 @@ test('cumeeira em níveis preserva o beiral inferior contra o oitão elevado', (
   assert.match(viewport, /dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null/);
   assert.match(viewport, /var wholeRoofHit = hits\.find/);
   assert.match(renderer, /Math\.max\(roof\.baseHeightM \|\| currentWallHeight, currentWallHeight \+ 0\.15\)/);
-  assert.match(renderer, /baseHandle\.position\.set\(wx2 \+ 0\.85/);
+  assert.doesNotMatch(renderer, /baseHandle\.userData\.handle = 'roofBaseHeight'/);
+  assert.match(viewport, /roofElevationInputEl\.addEventListener\('input'/);
+  assert.match(viewport, /updateRoofBaseHeightLive\(selectedRoofId, heightM\)/);
   assert.match(viewport, /var finalWholeRoofHeight = dragElementStart\.baseHeightM \+ \(dragElementStart\.startScreenY - e\.clientY\) \* 0\.01/);
   assert.match(viewport, /updateRoofBaseHeightLive\(selectedRoofId, finalWholeRoofHeight\)/);
   assert.match(viewport, /container\.setPointerCapture\(e\.pointerId\)/);

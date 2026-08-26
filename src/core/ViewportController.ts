@@ -175,7 +175,7 @@ import {
   var MIN_DIST = 3, MAX_DIST = 35;
   var touchCameraMode = false;
 
-  var gizmoEl: any, gzSwapBtnEl: any, openingGizmoEl: any, roomGizmoEl: any, volumeBoxGizmoEl: any, stairGizmoEl: any, stairTypePanelEl: any, forroTypePanelEl: any, planUnderlayGizmoEl: any, columnShapePanelEl: any, roofTypePanelEl: any, roofPitchInputEl: any, roofPitchControlEl: any, varandaTypePanelEl: any, varandaWidthInputEl: any, varandaHeightInputEl: any, varandaPitchInputEl: any, finishPanelEl: any, paintPickerPanelEl: any, openingPickerPanelEl: any, objectPanelEl: any, objectPanelTitleEl: any, objectPanelBodyEl: any, hintEl: any, layersContextMenuEl: any, hydraulicWallPromptEl: any, hydraulicWallElevationPanelEl: any, hydraulicWallElevationTitleEl: any, hydraulicWallElevationSvgEl: any, hydraulicRouteDrawBarEl: any, hydraulicRouteDrawCountEl: any;
+  var gizmoEl: any, gzSwapBtnEl: any, openingGizmoEl: any, roomGizmoEl: any, volumeBoxGizmoEl: any, stairGizmoEl: any, stairTypePanelEl: any, forroTypePanelEl: any, planUnderlayGizmoEl: any, columnShapePanelEl: any, roofTypePanelEl: any, roofPitchInputEl: any, roofPitchControlEl: any, roofElevationControlEl: any, roofElevationInputEl: any, roofElevationValueEl: any, varandaTypePanelEl: any, varandaWidthInputEl: any, varandaHeightInputEl: any, varandaPitchInputEl: any, finishPanelEl: any, paintPickerPanelEl: any, openingPickerPanelEl: any, objectPanelEl: any, objectPanelTitleEl: any, objectPanelBodyEl: any, hintEl: any, layersContextMenuEl: any, hydraulicWallPromptEl: any, hydraulicWallElevationPanelEl: any, hydraulicWallElevationTitleEl: any, hydraulicWallElevationSvgEl: any, hydraulicRouteDrawBarEl: any, hydraulicRouteDrawCountEl: any;
   // Estado do desenho de percurso guiado (H2): fixtureId sendo roteada e os
   // pontos-guia já clicados (só plano — a queda vertical final é
   // automática, ver Hydraulics.buildGuidedColdWaterHeaderRoute). null =
@@ -1407,6 +1407,14 @@ import {
       roofTypePanelEl.querySelectorAll('.rt').forEach(function (btn: any) { btn.classList.toggle('active', btn.dataset.rooftype === r!.type); });
       if (roofPitchInputEl && document.activeElement !== roofPitchInputEl) roofPitchInputEl.value = String(Math.round(r.pitchDeg * 10) / 10);
       if (roofPitchControlEl) roofPitchControlEl.style.display = r.type === 'platibanda' ? 'none' : 'grid';
+      var canElevateWholeRoof = !!(r.atticMode || r.steppedLowerRoofId);
+      if (roofElevationControlEl) roofElevationControlEl.style.display = canElevateWholeRoof ? 'grid' : 'none';
+      if (canElevateWholeRoof && roofElevationInputEl && document.activeElement !== roofElevationInputEl) {
+        var currentWallHeightM = Scene3DRenderer.WALL_HEIGHT_GETTER();
+        var elevationM = r.steppedLowerRoofId ? Math.max(r.baseHeightM || currentWallHeightM, currentWallHeightM + 0.15) : (r.baseHeightM || 1.2);
+        roofElevationInputEl.value = String(elevationM);
+        if (roofElevationValueEl) roofElevationValueEl.textContent = elevationM.toFixed(2).replace('.', ',') + ' m';
+      }
       var axisBtn = roofTypePanelEl.querySelector('.roof-axis');
       if (axisBtn) {
         axisBtn.style.display = r.type === 'platibanda' ? 'none' : '';
@@ -5264,6 +5272,9 @@ import {
     columnShapePanelEl = document.getElementById('columnShapePanel');
     roofTypePanelEl = document.getElementById('roofTypePanel');
     roofPitchInputEl = document.getElementById('roofPitchInput');
+    roofElevationControlEl = document.getElementById('roofElevationControl');
+    roofElevationInputEl = document.getElementById('roofElevationInput');
+    roofElevationValueEl = document.getElementById('roofElevationValue');
     varandaTypePanelEl = document.getElementById('varandaTypePanel');
     varandaWidthInputEl = document.getElementById('varandaWidthInput');
     varandaHeightInputEl = document.getElementById('varandaHeightInput');
@@ -5367,6 +5378,19 @@ import {
       });
       roofPitchInputEl.addEventListener('keydown', function (e: any) {
         if (e.key === 'Enter') { roofPitchInputEl.blur(); e.preventDefault(); }
+      });
+    }
+    if (roofElevationInputEl) {
+      roofElevationInputEl.addEventListener('pointerdown', function () { Store.commands.beginTransaction(); });
+      roofElevationInputEl.addEventListener('input', function () {
+        if (!selectedRoofId) return;
+        var heightM = Number(roofElevationInputEl.value);
+        if (!Number.isFinite(heightM)) return;
+        Store.commands.updateRoofBaseHeightLive(selectedRoofId, heightM);
+        var appliedRoof = Store.findRoof(selectedRoofId);
+        var appliedHeightM = appliedRoof && appliedRoof.baseHeightM != null ? appliedRoof.baseHeightM : heightM;
+        if (roofElevationValueEl) roofElevationValueEl.textContent = appliedHeightM.toFixed(2).replace('.', ',') + ' m';
+        hintEl.textContent = 'Telhado inteiro elevado individualmente — base em ' + appliedHeightM.toFixed(2).replace('.', ',') + ' m.';
       });
     }
     [varandaWidthInputEl, varandaHeightInputEl, varandaPitchInputEl].forEach(function (input) {
