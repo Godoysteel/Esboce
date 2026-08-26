@@ -80,7 +80,9 @@ Critérios para iniciar um piloto com usuários convidados:
 - módulo de análise ambiental e desempenho da edificação (sol, ventilação natural, temperatura, umidade e ação do vento sobre a edificação), sem dimensionamento estrutural em nenhuma fase, conforme SPEC-004;
 - exportação vetorial de planta em PDF nas escalas iniciais 1:50 e 1:100;
 - importação de PDF como referência local calibrável, posicionável, rotacionável, bloqueável e com transparência ajustável;
-- composições de quantitativo próprias para bloco estrutural e Light Steel Frame;
+- composições de quantitativo próprias para bloco estrutural;
+- empilhamento de cômodos entre pavimentos com laje de base automática, composição automática de encontros de cobertura e presets editáveis de telhado (incluindo escalonado) e varanda de contorno, conforme SPEC-005;
+- fechamentos técnicos por superfície e catálogo comercial por fornecedor para Light Steel Frame, conforme SPEC-005 — implementado na branch `codex/imagens-revestimentos-reais`, pendente de mesclagem e QA;
 - orçamento por loja e catálogo multi-loja conforme ADR-007;
 - refinamento estrutural para telhas metálicas, fibrocimento e shingle;
 - tratamento de junções de cobertura com três ou mais águas;
