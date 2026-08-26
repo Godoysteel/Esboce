@@ -65,7 +65,7 @@ import {
   var floorFinishScale = 1;
   var floorFinishRotation = 0;
   var selectedWallId: any = null, selectedColumnId: any = null, selectedRoofId: any = null, selectedOpeningId: any = null, selectedVarandaId: any = null, selectedLajeId: any = null, selectedFurnitureId: any = null, selectedGlazingPanelId: any = null, selectedBalconyRailingId: any = null, selectedVolumeBoxId: any = null, selectedStairId: any = null, selectedForroRoomKey: any = null, selectedHydraulicNodeId: any = null;
-  var steelFrameSurfaceSelectionHandler: ((target: { kind: 'wall-face' | 'gable-face' | 'roof'; entityId: string; side?: 'a' | 'b' }) => void) | null = null;
+  var steelFrameSurfaceSelectionHandler: ((target: { kind: 'wall-face' | 'gable-face' | 'roof'; entityId: string; side?: 'a' | 'b' }) => boolean) | null = null;
   // Alça de altura do cômodo (DEC-116) só existe/é clicável enquanto
   // esta variável apontar pra parede selecionada — precisa de um clique
   // deliberado no botão "Ajustar altura" do gizmo pra armar, e desarma
@@ -2829,15 +2829,18 @@ import {
       var sfHit = pickMeshHit(e.clientX, e.clientY);
       if (sfHit && sfHit.object.userData.wallId) {
         var sfSide = wallFaceAtPoint(sfHit.object.userData.wallId, sfHit.point) as 'a' | 'b';
+        var sfWallAccepted = steelFrameSurfaceSelectionHandler({ kind: 'wall-face', entityId: sfHit.object.userData.wallId, side: sfSide });
+        if (!sfWallAccepted) { hintEl.textContent = 'Face já configurada — escolha uma face ainda sem marcação.'; return; }
         select(sfHit.object.userData.wallId);
-        steelFrameSurfaceSelectionHandler({ kind: 'wall-face', entityId: sfHit.object.userData.wallId, side: sfSide });
         hintEl.textContent = 'Face ' + sfSide.toUpperCase() + ' selecionada — escolha o sistema no painel lateral.';
         return;
       }
       if (sfHit && sfHit.object.userData.roofId) {
         var sfRoofSide = sfHit.object.userData.gableSide as 'a' | 'b' | undefined;
+        var sfRoofTarget = { kind: sfRoofSide ? 'gable-face' as const : 'roof' as const, entityId: sfHit.object.userData.roofId, ...(sfRoofSide ? { side: sfRoofSide } : {}) };
+        var sfRoofAccepted = steelFrameSurfaceSelectionHandler(sfRoofTarget);
+        if (!sfRoofAccepted) { hintEl.textContent = sfRoofSide ? 'Oitão já configurado — escolha outra face.' : 'Beiral, tabeira e platibanda deste telhado já foram configurados.'; return; }
         selectRoof(sfHit.object.userData.roofId);
-        steelFrameSurfaceSelectionHandler({ kind: sfRoofSide ? 'gable-face' : 'roof', entityId: sfHit.object.userData.roofId, ...(sfRoofSide ? { side: sfRoofSide } : {}) });
         hintEl.textContent = sfRoofSide ? 'Oitão selecionado — escolha o revestimento no painel lateral.' : 'Cobertura selecionada — configure beiral, tabeira e platibanda no painel lateral.';
         return;
       }

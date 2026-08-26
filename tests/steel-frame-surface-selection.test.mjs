@@ -23,3 +23,15 @@ test('lista contextual oferece sistemas externos e drywall interno', () => {
   assert.match(app, /Revestimentos internos/);
   assert.match(app, /data-sf-system/);
 });
+
+test('faces concluídas ficam verdes, não podem ser selecionadas novamente e bloqueiam o quantitativo enquanto houver pendências', () => {
+  assert.match(app, /targetIsConfigured/);
+  assert.match(app, /return false/);
+  assert.match(app, /quantityButton\.disabled = issues\.length > 0/);
+  assert.match(viewport, /Face já configurada/);
+  const renderer = readFileSync(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
+  assert.match(renderer, /steelFrameFaceConfigured/);
+  assert.match(renderer, /steelFrameRoofConfigured/);
+  assert.match(renderer, /0x3FAE67/);
+  assert.match(html, /data-sf-quantity\]:disabled/);
+});
