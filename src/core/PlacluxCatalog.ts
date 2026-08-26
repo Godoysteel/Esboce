@@ -10,10 +10,13 @@ export interface PlacluxCatalogProduct {
   weightKg?: number;
   coverageM2?: number;
   sourceUrl: string;
+  imageUrl?: string;
   notes?: string;
 }
 
 const source = (slug: string) => `https://placlux.com.br/produtos/${slug}/`;
+const storageImage = (file: string) =>
+  `https://dugcwndtflcjajffxjko.supabase.co/storage/v1/object/public/catalog-products/placlux/${file}`;
 
 /** Distribuidor informado pelo responsável do catálogo para a região de Joinville. */
 export const PLACLUX_SUPPLIER = {
@@ -50,6 +53,38 @@ export const PLACLUX_PRODUCTS: readonly PlacluxCatalogProduct[] = [
   { id: 'placlux.perfis-steel-frame', name: 'Perfis para Steel Frame', category: 'profile', unit: 'kg', sourceUrl: source('perfis-steel-frame'), notes: 'Família de referência; quantitativo do Esboce permanece agregado em kg/m².' },
   { id: 'placlux.forro-mineral-knauf-ceiling', name: 'Forro Mineral Knauf Ceiling', category: 'ceiling', unit: 'm2', sourceUrl: 'https://placlux.com.br/produtos/' },
 ] as const;
+
+const PLACLUX_IMAGE_FILES: Record<string, string> = {
+  'placlux.profort-next-6mm': 'chapa-profort-next.png',
+  'placlux.profort-next-8mm': 'chapa-profort-next.png',
+  'placlux.profort-next-10mm': 'chapa-profort-next.png',
+  'placlux.profort-next-12-5mm': 'chapa-profort-next.png',
+  'placlux.base-coat-20kg': 'base-coat.png',
+  'placlux.fita-fiberglass-10cm-50m': 'fita-fiberglass.png',
+  'placlux.membrana-hidrofuga-52-5m2': 'membrana-hidrofuga.png',
+  'placlux.tela-fiberglass-1x50m': 'tela-fiberglass.png',
+  'placlux.pingadeira-pvc-2-5m': 'pingadeira-pvc.png',
+  'placlux.parafuso-pa-032': 'parafuso-pa-032.png',
+  'placlux.parafuso-pb-032': 'parafuso-pb-032.png',
+  'placlux.cantoneira-pvc-2-5m': 'cantoneira-pvc.png',
+  'placlux.chapa-drywall': 'chapa-drywall.png',
+  'placlux.la-de-rocha': 'la-de-rocha.png',
+  'placlux.massa-drywall': 'massa-drywall.png',
+  'placlux.protherm-18kg': 'protherm.png',
+  'placlux.total-wall': 'total-wall.png',
+  'placlux.manta-acrilica': 'manta-acrilica.png',
+  'placlux.primer-protect-wall-18kg': 'primer-protect-wall.png',
+  'placlux.adesivo-chapisco': 'adesivo-chapisco.png',
+  'placlux.perfis-drywall': 'perfis-drywall.png',
+  'placlux.perfis-steel-frame': 'perfis-steel-frame.png',
+  'placlux.forro-mineral-knauf-ceiling': 'forro-mineral-knauf.png',
+};
+
+for (const product of PLACLUX_PRODUCTS) {
+  const imageFile = PLACLUX_IMAGE_FILES[product.id];
+  if (!imageFile) throw new Error(`Imagem PlacLux não mapeada: ${product.id}`);
+  (product as PlacluxCatalogProduct).imageUrl = storageImage(imageFile);
+}
 
 export function getPlacluxProduct(id: string): PlacluxCatalogProduct | undefined {
   return PLACLUX_PRODUCTS.find((product) => product.id === id);

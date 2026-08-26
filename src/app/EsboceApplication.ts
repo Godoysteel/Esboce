@@ -1709,7 +1709,7 @@ export class EsboceApplication {
     PLACLUX_PRODUCTS.forEach((product) => {
       const card = document.createElement("div");
       card.className = "catalog-card";
-      card.innerHTML = `<div class="catalog-card-photo" style="background:#fff;display:flex;align-items:center;justify-content:center;"><img src="${PLACLUX_SUPPLIER.logoUrl}" alt="${PLACLUX_SUPPLIER.name} — fornecedora PlacLux em ${PLACLUX_SUPPLIER.city}" style="width:100%;height:100%;object-fit:contain;padding:8px;"></div>
+      card.innerHTML = `<div class="catalog-card-photo" style="background:#fff;display:flex;align-items:center;justify-content:center;"><img src="${product.imageUrl}" alt="${product.name}" loading="lazy" style="width:100%;height:100%;object-fit:contain;padding:8px;"></div>
         <div class="catalog-card-info"><p class="catalog-card-nome">${product.name}</p>
         <p class="catalog-card-fabricante">Fabricante: PlacLux · ${product.category}</p>
         <p class="catalog-card-fornecedor">Fornecedor: ${PLACLUX_SUPPLIER.name} · ${PLACLUX_SUPPLIER.city}/${PLACLUX_SUPPLIER.state}</p>
