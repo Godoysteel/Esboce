@@ -55,6 +55,7 @@ test('cumeeira em níveis preserva o beiral inferior contra o oitão elevado', (
   assert.match(store, /const minimumHeightM = r\.steppedLowerRoofId \? Core\.WALL_HEIGHT \+ 0\.15 : 0\.1/);
   assert.match(store, /Math\.min\(8, heightM\)/);
   assert.match(viewport, /Use “Subir telhado inteiro” no painel/);
+  assert.match(viewport, /selectedRoofId = roofId; gizmoMenuOpen = true; render\(\)/);
   assert.match(viewport, /Telhado inteiro elevado individualmente/);
   assert.match(renderer, /Math\.max\(roof\.baseHeightM \|\| currentWallHeight, currentWallHeight \+ 0\.15\)/);
   assert.doesNotMatch(renderer, /baseHandle\.userData\.handle = 'roofBaseHeight'/);
