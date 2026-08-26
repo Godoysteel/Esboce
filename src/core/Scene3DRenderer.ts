@@ -4931,7 +4931,7 @@ export function hashColorHex(key: string): number {
           var isSelected = viewState.selectedWall && viewState.selectedWall.id === w.id;
           var isGroupSelected = viewState.roomGroupWallIds && viewState.roomGroupWallIds.indexOf(w.id) !== -1;
           var isResizeTarget = viewState.resizeWallId === w.id;
-          var highlighted = isSelected || isResizeTarget || isGroupSelected;
+          var highlighted = !viewState.steelFrameConfigMode && (isSelected || isResizeTarget || isGroupSelected);
           // Camada "Paredes transparentes" (ver comentário completo mais
           // abaixo, junto das faces) — declarada aqui em cima porque
           // tanto a tampa de topo (topMat) quanto as faces (faceMat)
@@ -5128,7 +5128,7 @@ export function hashColorHex(key: string): number {
             var wallPbrMaps = hasRealTexture ? buildWallFaceMaterial(product) : null;
             var faceColorHex = product ? parseInt(product.assets.colorHex.slice(1), 16) : wallDefaultColor;
             if (isCeramic || hasRealTexture) faceColorHex = 0xFFFFFF;
-            var steelFrameFaceConfigured = project.constructionSystem === 'light_steel_frame' && !!w.cavityAssembly && !!(side === 'a' ? w.faceAAssemblyId : w.faceBAssemblyId);
+            var steelFrameFaceConfigured = project.constructionSystem === 'light_steel_frame' && !!(side === 'a' ? w.faceAAssemblyId : w.faceBAssemblyId);
             var faceColor = highlighted ? SELECTED_ACCENT : steelFrameFaceConfigured ? 0x3FAE67 : (DEBUG_COLOR_MODE ? hashColorHex(w.id + '-' + side) : faceColorHex);
             var faceMat = new THREE.MeshStandardMaterial({
               color: (floorIdx === editingIdx && !DEBUG_COLOR_MODE) ? pickColor(faceColor, wallCategory, viewState) : faceColor,

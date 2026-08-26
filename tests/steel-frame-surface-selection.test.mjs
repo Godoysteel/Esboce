@@ -56,3 +56,11 @@ test('fluxo oculta o telhado durante paredes e libera pavimentos em sequência',
   const renderer = readFileSync(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
   assert.match(renderer, /if \(!viewState\.hideRoofs\)/);
 });
+
+test('somente a face definida fica verde imediatamente, sem seleção laranja da parede inteira', () => {
+  const renderer = readFileSync(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
+  assert.match(renderer, /steelFrameFaceConfigured.*faceAAssemblyId.*faceBAssemblyId/);
+  assert.doesNotMatch(renderer, /steelFrameFaceConfigured.*cavityAssembly/);
+  assert.match(renderer, /!viewState\.steelFrameConfigMode && \(isSelected/);
+  assert.match(viewport, /selectedWall: steelFrameSurfaceSelectionHandler \? null : selectedWall/);
+});

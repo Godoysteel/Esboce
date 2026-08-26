@@ -1640,9 +1640,9 @@ import {
       highlightedCategory: highlightedCategory,
       editingFloorIndex: project.currentFloorIndex,
       editingYOffset: currentFloorYOffset(),
-      selectedWall: selectedWall,
+      selectedWall: steelFrameSurfaceSelectionHandler ? null : selectedWall,
       selectedColumn: selectedColumn,
-      selectedRoof: selectedRoof,
+      selectedRoof: steelFrameSurfaceSelectionHandler ? null : selectedRoof,
       selectedOpening: selectedOpening,
       selectedVaranda: selectedVaranda,
       selectedLaje: selectedLaje,
@@ -1656,7 +1656,8 @@ import {
       heightAdjustArmedWallId: heightAdjustArmedWallId,
       drawPreview: drawPreview,
       terrenoToolActive: currentTool === 'terreno',
-      hideRoofs: steelFrameRoofHidden
+      hideRoofs: steelFrameRoofHidden,
+      steelFrameConfigMode: !!steelFrameSurfaceSelectionHandler
     });
     positionGizmoAndShapePanel();
     refreshFinishPanel();
