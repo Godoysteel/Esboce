@@ -47,3 +47,12 @@ test('painel orienta o usuário pelo próximo item e lista pendências com nomes
   assert.match(app, /platibanda/);
   assert.match(html, /\.sf-next-step/);
 });
+
+test('fluxo oculta o telhado durante paredes e libera pavimentos em sequência', () => {
+  assert.match(app, /setSteelFrameRoofHidden\(wallStage\(issues\)\)/);
+  assert.match(app, /Conclua primeiro a etapa/);
+  assert.match(app, /sistema da laje \(em implantação\)/);
+  assert.match(viewport, /hideRoofs: steelFrameRoofHidden/);
+  const renderer = readFileSync(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
+  assert.match(renderer, /if \(!viewState\.hideRoofs\)/);
+});

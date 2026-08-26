@@ -66,6 +66,7 @@ import {
   var floorFinishRotation = 0;
   var selectedWallId: any = null, selectedColumnId: any = null, selectedRoofId: any = null, selectedOpeningId: any = null, selectedVarandaId: any = null, selectedLajeId: any = null, selectedFurnitureId: any = null, selectedGlazingPanelId: any = null, selectedBalconyRailingId: any = null, selectedVolumeBoxId: any = null, selectedStairId: any = null, selectedForroRoomKey: any = null, selectedHydraulicNodeId: any = null;
   var steelFrameSurfaceSelectionHandler: ((target: { kind: 'wall-face' | 'gable-face' | 'roof'; entityId: string; side?: 'a' | 'b' }) => boolean) | null = null;
+  var steelFrameRoofHidden = false;
   // Alça de altura do cômodo (DEC-116) só existe/é clicável enquanto
   // esta variável apontar pra parede selecionada — precisa de um clique
   // deliberado no botão "Ajustar altura" do gizmo pra armar, e desarma
@@ -1654,7 +1655,8 @@ import {
       resizeWallId: resizeWallId,
       heightAdjustArmedWallId: heightAdjustArmedWallId,
       drawPreview: drawPreview,
-      terrenoToolActive: currentTool === 'terreno'
+      terrenoToolActive: currentTool === 'terreno',
+      hideRoofs: steelFrameRoofHidden
     });
     positionGizmoAndShapePanel();
     refreshFinishPanel();
@@ -5605,6 +5607,11 @@ import {
       hintEl.textContent = 'Clique diretamente em uma face de parede, oitão ou cobertura.';
     }
   }
+  export function setSteelFrameRoofHidden(hidden: boolean) {
+    if (steelFrameRoofHidden === hidden) return;
+    steelFrameRoofHidden = hidden;
+    render();
+  }
   export function activateCatalogProduct(productId: string, selection: CommercialSelection): boolean {
     var product = Catalog.getProduct(productId);
     if (!product) return false;
@@ -5652,7 +5659,7 @@ export const ViewportController = {
   select, selectColumn, selectRoof, selectOpening, selectVaranda, selectFurniture, selectGlazingPanel, selectVolumeBox, selectStair, selectForro, selectPlanUnderlay, selectHydraulicNode, beginHydraulicRouteDraw,
   getSelectedWallId, getSelectedColumnId, getSelectedRoofId,
   getSelectedOpeningId, getSelectedVarandaId, getSelectedLajeId, getSelectedFurnitureId, getSelectedGlazingPanelId, getSelectedBalconyRailingId, getSelectedVolumeBoxId, getSelectedStairId, getSelectedForroRoomKey, getSelectedPlanUnderlay, getSelectedHydraulicNodeId, getSelectedRoomWallIds,
-  setNextRoofAtticMode, setNextRoofType, activateRoofTool, cancelActiveTool, setSteelFrameSurfaceSelectionHandler, activateCatalogProduct, armHeightAdjust,
+  setNextRoofAtticMode, setNextRoofType, activateRoofTool, cancelActiveTool, setSteelFrameSurfaceSelectionHandler, setSteelFrameRoofHidden, activateCatalogProduct, armHeightAdjust,
   toggleWallDiagnostics,
   resetCamera,
   toggleTouchCameraMode,

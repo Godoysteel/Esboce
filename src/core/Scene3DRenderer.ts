@@ -5248,6 +5248,7 @@ export function hashColorHex(key: string): number {
       }
 
       if (layers.telhado && floorData.roofs) {
+        if (!viewState.hideRoofs) {
         var roofTopY = yOffset + currentWallHeight;
         var wallMatchColor = computeWallMatchColor(floorData.walls);
         // Caixa (pegada retangular × altura própria) de cada cômodo
@@ -5385,6 +5386,7 @@ export function hashColorHex(key: string): number {
               });
           }
         });
+        }
       }
 
       if (layers.varanda && floorData.varandas) {

@@ -22,6 +22,26 @@ function allRoofs(): Roof[] { return Store.getProject().floors.flatMap((floor) =
 function selectedWall(): Wall | undefined { return selectedTarget ? allWalls().find((wall) => wall.id === selectedTarget!.entityId) : undefined; }
 function selectedRoof(): Roof | undefined { return selectedTarget ? allRoofs().find((roof) => roof.id === selectedTarget!.entityId) : undefined; }
 
+function targetFloorIndex(target: SurfaceTarget): number {
+  return Store.getProject().floors.findIndex((floor) => target.kind === 'wall-face'
+    ? floor.walls.some((wall) => wall.id === target.entityId)
+    : floor.roofs.some((roof) => roof.id === target.entityId));
+}
+
+function issueFloorIndex(issue: SteelFrameSpecificationIssue): number {
+  return Store.getProject().floors.findIndex((floor) => issue.kind === 'wall-face' || issue.kind === 'wall-cavity'
+    ? floor.walls.some((wall) => wall.id === issue.entityId)
+    : floor.roofs.some((roof) => roof.id === issue.entityId));
+}
+
+function floorLabel(index: number): string {
+  return Store.getProject().floors[index]?.name || (index === 0 ? 'Térreo' : `Pavimento ${index + 1}`);
+}
+
+function wallStage(issues: SteelFrameSpecificationIssue[]): boolean {
+  return !!issues.length && (issues[0]!.kind === 'wall-face' || issues[0]!.kind === 'wall-cavity');
+}
+
 function issueLabel(issue: SteelFrameSpecificationIssue): string {
   const walls = allWalls();
   const roofs = allRoofs();
@@ -38,9 +58,13 @@ function issueLabel(issue: SteelFrameSpecificationIssue): string {
 function pendingGuide(issues: SteelFrameSpecificationIssue[]): string {
   if (!issues.length) return '<div class="sf-completion-card"><strong>✓ Tudo configurado</strong><span>O quantitativo está liberado.</span></div>';
   const visible = issues.slice(0, 6);
-  return `<div class="sf-next-step"><small>PRÓXIMO PASSO</small><strong>${issueLabel(issues[0]!)}</strong><span>Clique nessa face na construção e escolha o sistema.</span></div>
+  const activeFloor = issueFloorIndex(issues[0]!);
+  const stage = wallStage(issues) ? 'Paredes' : 'Cobertura';
+  return `<div class="sf-stage"><span>ETAPA ATUAL</span><strong>${stage} · ${floorLabel(activeFloor)}</strong></div>
+    <div class="sf-next-step"><small>PRÓXIMO PASSO</small><strong>${issueLabel(issues[0]!)}</strong><span>Clique nessa face na construção e escolha o sistema.</span></div>
     <div class="sf-pending-list"><h4>Ainda falta configurar</h4>${visible.map((issue) => `<div><span>○</span>${issueLabel(issue)}</div>`).join('')}${issues.length > visible.length ? `<small>e mais ${issues.length - visible.length} itens…</small>` : ''}</div>
-    <div class="sf-color-legend"><i></i><span>As faces concluídas ficam verdes e não precisam ser clicadas novamente.</span></div>`;
+    <div class="sf-color-legend"><i></i><span>As faces concluídas ficam verdes e não precisam ser clicadas novamente.</span></div>
+    ${wallStage(issues) ? '<div class="sf-future-stage"><strong>Depois das paredes</strong><span>Escolha do sistema da laje (em implantação) e liberação do próximo pavimento.</span></div>' : ''}`;
 }
 
 function targetIsConfigured(target: SurfaceTarget): boolean {
@@ -158,6 +182,7 @@ function renderRoof(panel: HTMLElement, roof: Roof): void {
 function render(): void {
   const panel = ensurePanel();
   const issues = steelFrameSpecificationIssues(Store.getProject());
+  ViewportController.setSteelFrameRoofHidden(wallStage(issues));
   panel.querySelector<HTMLElement>('[data-sf-progress]')!.textContent = issues.length ? `${issues.length} seleções pendentes` : 'Configuração completa';
   panel.querySelector<HTMLElement>('[data-sf-guidance]')!.textContent = issues.length ? `Conclua ${issueLabel(issues[0]!).toLocaleLowerCase('pt-BR')}.` : 'Todas as superfícies foram configuradas.';
   const quantityButton = panel.querySelector<HTMLButtonElement>('[data-sf-quantity]')!;
@@ -175,6 +200,12 @@ export function open(onComplete: () => void): void {
   selectedTarget = null;
   ensurePanel().classList.add('visible');
   ViewportController.setSteelFrameSurfaceSelectionHandler((target) => {
+    const issues = steelFrameSpecificationIssues(Store.getProject());
+    const activeFloor = issues.length ? issueFloorIndex(issues[0]!) : -1;
+    if (activeFloor >= 0 && targetFloorIndex(target) !== activeFloor) {
+      ensurePanel().querySelector<HTMLElement>('[data-sf-body]')!.innerHTML = `<div class="sf-click-instruction sf-complete-notice">Conclua primeiro a etapa de ${floorLabel(activeFloor)}. O próximo pavimento será liberado depois.</div>`;
+      return false;
+    }
     if (targetIsConfigured(target)) {
       ensurePanel().querySelector<HTMLElement>('[data-sf-body]')!.innerHTML = '<div class="sf-click-instruction sf-complete-notice">Esta face já está configurada e marcada em verde. Escolha uma face que ainda não foi concluída.</div>';
       return false;
@@ -189,6 +220,7 @@ export function open(onComplete: () => void): void {
 export function close(): void {
   document.getElementById('steelFrameConfigurator')?.classList.remove('visible');
   ViewportController.setSteelFrameSurfaceSelectionHandler(null);
+  ViewportController.setSteelFrameRoofHidden(false);
   selectedTarget = null;
 }
 
