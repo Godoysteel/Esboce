@@ -78,6 +78,8 @@ export interface Roof {
   steppedWallVolume?: boolean;
   /** Altura do parapeito acima do topo da parede, em metros — só relevante pra type === 'platibanda'. */
   parapetHeight?: number;
+  /** Moldura em relevo no topo do parapeito — só relevante pra type === 'platibanda'. */
+  parapetMolding?: boolean;
   /** Fluxo paramétrico do ático: prévia transparente ou recorte confirmado. */
   atticMode?: 'preview' | 'generated';
   /** Altura do beiral em relação ao piso do pavimento, em metros. */

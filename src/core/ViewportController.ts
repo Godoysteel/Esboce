@@ -1428,6 +1428,11 @@ import {
         axisBtn.style.display = r.type === 'platibanda' ? 'none' : '';
         axisBtn.textContent = (r.type === 'umaAgua' ? '↔ Caimento: eixo ' : '↔ Cumeeira: eixo ') + r.ridgeAxis.toUpperCase();
       }
+      var moldingBtn = roofTypePanelEl.querySelector('.roof-molding');
+      if (moldingBtn) {
+        moldingBtn.style.display = r.type === 'platibanda' ? '' : 'none';
+        moldingBtn.classList.toggle('active', !!r.parapetMolding);
+      }
       return;
     }
     roofTypePanelEl.classList.remove('visible');
@@ -5380,6 +5385,13 @@ import {
         // pra composição automática — sem isso, um telhado em L só se
         // compõe se o usuário também arrastar uma borda depois.
         Store.commands.autoComposeRoofs();
+        render();
+        return;
+      }
+      var moldingBtn = e.target.closest('button.roof-molding');
+      if (moldingBtn && selectedRoofId) {
+        var moldingRoof = Store.findRoof(selectedRoofId);
+        if (moldingRoof) Store.commands.setRoofParapetMolding(selectedRoofId, !moldingRoof.parapetMolding);
         render();
         return;
       }

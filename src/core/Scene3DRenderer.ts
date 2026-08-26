@@ -139,6 +139,15 @@ export function hashColorHex(key: string): number {
   var MARQUISE_DEPTH = 0.5, MARQUISE_THICKNESS = 0.06;
   var ROOF_PITCH_DEG = 28, ROOF_OVERHANG = 0.4, RAKE_OVERHANG = 0.2, ROOF_THICKNESS = 0.12;
   var ROOF_COLOR = 0xB5573A, GABLE_COLOR = 0xFFFFFF;
+  // Forro em nível do beiral — painel horizontal fechando por baixo só a
+  // água de verdade (ROOF_OVERHANG), nunca a ponta em diagonal do oitão
+  // (RAKE_OVERHANG) — essa continua com o forro aberto (o próprio
+  // telhado inclinado aparecendo por baixo), igual já era antes.
+  var SOFFIT_THICKNESS = 0.03;
+  // Moldura em relevo no topo do parapeito da platibanda — um segundo
+  // anel (mesma técnica de buildParapetWalls), mais largo e mais baixo,
+  // encostado perto do topo do parapeito já existente.
+  var MOLDING_HEIGHT = 0.12, MOLDING_PROJECTION = 0.05;
   var HIGHLIGHT_ACCENT = 0xE8963C, HIGHLIGHT_MIX = 0.55;
   var SELECTED_ACCENT = 0xE8963C;
   var WALL_TOP_COLOR = GABLE_COLOR;
@@ -1297,6 +1306,20 @@ export function hashColorHex(key: string): number {
     return [topMesh, edgeMesh];
   }
 
+  // Painel horizontal fechando o beiral por baixo, entre a face da
+  // parede e a borda do avanço do telhado — em vez do próprio telhado
+  // inclinado aparecer por baixo (era assim antes, "beiral aberto"). Um
+  // box simples e plano, sem seguir a água — Product Owner pediu forro
+  // EM NÍVEL, não uma continuação da inclinação.
+  function buildEaveSoffitPanel(centerX: any, centerZ: any, sizeX: any, sizeZ: any, topYForPanel: any, colorOrMat: any) {
+    var res = resolveFaceMaterial(colorOrMat);
+    var geo = new THREE.BoxGeometry(Math.max(sizeX, 0.01), SOFFIT_THICKNESS, Math.max(sizeZ, 0.01));
+    var mesh = new THREE.Mesh(geo, res.mat);
+    mesh.position.set(centerX, topYForPanel - SOFFIT_THICKNESS / 2, centerZ);
+    mesh.userData.roofClosure = 'soffit';
+    return mesh;
+  }
+
   function ridgeLineMesh(a: any, b: any) {
     var geo = new THREE.BufferGeometry().setFromPoints([a, b]);
     return new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0x1B1C1E }));
@@ -2104,7 +2127,7 @@ export function hashColorHex(key: string): number {
   // uma fresta visível até a face de fora dela.
   var GABLE_WALL_EXTEND = Core.WALL_THICK / 2;
 
-  function buildRoofDuasAguas(topBounds: any, topY: any, roofColor: any, gableColors: any, pitchDeg: any, ridgeAxis: any, tabeiraColor: any) {
+  function buildRoofDuasAguas(topBounds: any, topY: any, roofColor: any, gableColors: any, pitchDeg: any, ridgeAxis: any, tabeiraColor: any, soffitColor: any) {
     var meshes: any[] = [];
     function addGable(mesh: any, side: string) { mesh.userData.gableSide = side; meshes.push(mesh); }
     var ridgeAlongX = ridgeAxis === 'x';
@@ -2151,6 +2174,8 @@ export function hashColorHex(key: string): number {
         { x: gMaxX, y: gableBaseUnderY, z: gMaxZ }
       ], gableColors.b), 'b');
       meshes.push(buildRidgeCapMesh({ x: eMinX, y: ridgeY, z: ridgeZ }, { x: eMaxX, y: ridgeY, z: ridgeZ }, roofColor, pitchRad));
+      meshes.push(buildEaveSoffitPanel((eMinX + eMaxX) / 2, topBounds.minZ - ROOF_OVERHANG / 2, eMaxX - eMinX, ROOF_OVERHANG, topY, soffitColor));
+      meshes.push(buildEaveSoffitPanel((eMinX + eMaxX) / 2, topBounds.maxZ + ROOF_OVERHANG / 2, eMaxX - eMinX, ROOF_OVERHANG, topY, soffitColor));
     } else {
       var eMinX2 = topBounds.minX - ROOF_OVERHANG, eMaxX2 = topBounds.maxX + ROOF_OVERHANG;
       var eMinZ2 = topBounds.minZ - RAKE_OVERHANG, eMaxZ2 = topBounds.maxZ + RAKE_OVERHANG;
@@ -2181,11 +2206,13 @@ export function hashColorHex(key: string): number {
         { x: gMaxX2, y: gableBaseUnderY2, z: gMaxZ2 }
       ], gableColors.b), 'b');
       meshes.push(buildRidgeCapMesh({ x: ridgeX, y: ridgeY2, z: eMinZ2 }, { x: ridgeX, y: ridgeY2, z: eMaxZ2 }, roofColor, pitchRad));
+      meshes.push(buildEaveSoffitPanel(topBounds.minX - ROOF_OVERHANG / 2, (eMinZ2 + eMaxZ2) / 2, ROOF_OVERHANG, eMaxZ2 - eMinZ2, topY, soffitColor));
+      meshes.push(buildEaveSoffitPanel(topBounds.maxX + ROOF_OVERHANG / 2, (eMinZ2 + eMaxZ2) / 2, ROOF_OVERHANG, eMaxZ2 - eMinZ2, topY, soffitColor));
     }
     return meshes;
   }
 
-  function buildRoofQuatroAguas(topBounds: any, topY: any, roofColor: any, pitchDeg: any, ridgeAxis: any, tabeiraColor: any) {
+  function buildRoofQuatroAguas(topBounds: any, topY: any, roofColor: any, pitchDeg: any, ridgeAxis: any, tabeiraColor: any, soffitColor: any) {
     var meshes: any[] = [];
     var ridgeAlongX = ridgeAxis === 'x';
     var pitchRad = pitchDeg * Math.PI / 180;
@@ -2194,6 +2221,14 @@ export function hashColorHex(key: string): number {
     var eMinZ = topBounds.minZ - ROOF_OVERHANG, eMaxZ = topBounds.maxZ + ROOF_OVERHANG;
     var A = { x: eMinX, y: topY, z: eMinZ }, B = { x: eMaxX, y: topY, z: eMinZ };
     var C = { x: eMaxX, y: topY, z: eMaxZ }, D = { x: eMinX, y: topY, z: eMaxZ };
+    // Quatro-águas: todo lado é "água de verdade" (não tem oitão/ponta
+    // em diagonal), então o forro em nível fecha o anel inteiro —
+    // faixas frente/fundo já avançam pelas quinas (+2*ROOF_OVERHANG em
+    // X) pra não sobrar buraco no canto com as faixas laterais.
+    meshes.push(buildEaveSoffitPanel((topBounds.minX + topBounds.maxX) / 2, topBounds.minZ - ROOF_OVERHANG / 2, (topBounds.maxX - topBounds.minX) + 2 * ROOF_OVERHANG, ROOF_OVERHANG, topY, soffitColor));
+    meshes.push(buildEaveSoffitPanel((topBounds.minX + topBounds.maxX) / 2, topBounds.maxZ + ROOF_OVERHANG / 2, (topBounds.maxX - topBounds.minX) + 2 * ROOF_OVERHANG, ROOF_OVERHANG, topY, soffitColor));
+    meshes.push(buildEaveSoffitPanel(topBounds.minX - ROOF_OVERHANG / 2, (topBounds.minZ + topBounds.maxZ) / 2, ROOF_OVERHANG, topBounds.maxZ - topBounds.minZ, topY, soffitColor));
+    meshes.push(buildEaveSoffitPanel(topBounds.maxX + ROOF_OVERHANG / 2, (topBounds.minZ + topBounds.maxZ) / 2, ROOF_OVERHANG, topBounds.maxZ - topBounds.minZ, topY, soffitColor));
 
     if (ridgeAlongX) {
       var ridgeZ = (topBounds.minZ + topBounds.maxZ) / 2;
@@ -2252,7 +2287,7 @@ export function hashColorHex(key: string): number {
   // parede antes da diagonal começar — sem essa correção, a diagonal
   // do fechamento não bate com a inclinação real do telhado, fica mais
   // íngreme.
-  function buildRoofUmaAgua(topBounds: any, topY: any, roofColor: any, gableColors: any, backWallColor: any, pitchDeg: any, ridgeAxis: any, tabeiraColor: any) {
+  function buildRoofUmaAgua(topBounds: any, topY: any, roofColor: any, gableColors: any, backWallColor: any, pitchDeg: any, ridgeAxis: any, tabeiraColor: any, soffitColor: any) {
     var pitchRad = pitchDeg * Math.PI / 180;
     var verticalDrop = ROOF_THICKNESS / Math.cos(pitchRad);
     var slopeAlongZ = ridgeAxis === 'x';
@@ -2298,6 +2333,10 @@ export function hashColorHex(key: string): number {
         { x: gMinX, y: topY, z: gMaxZ }, { x: gMaxX, y: topY, z: gMaxZ },
         { x: gMaxX, y: gHighUnderY, z: gMaxZ }, { x: gMinX, y: gHighUnderY, z: gMaxZ }
       ], backWallColor));
+      // Só o beiral baixo (lado de verdade com avanço) ganha forro em
+      // nível — o lado alto encosta na parede (sem beiral) e os dois
+      // lados em rampa (RAKE_OVERHANG) continuam com o forro aberto.
+      meshes.push(buildEaveSoffitPanel((eMinX + eMaxX) / 2, topBounds.minZ - ROOF_OVERHANG / 2, eMaxX - eMinX, ROOF_OVERHANG, topY, soffitColor));
     } else {
       var eMinZ2 = topBounds.minZ - RAKE_OVERHANG, eMaxZ2 = topBounds.maxZ + RAKE_OVERHANG;
       var eMinX2 = topBounds.minX - ROOF_OVERHANG, eMaxX2 = topBounds.maxX + ROOF_OVERHANG;
@@ -2322,6 +2361,7 @@ export function hashColorHex(key: string): number {
         { x: gMaxX, y: topY, z: gMinZ }, { x: gMaxX, y: topY, z: gMaxZ },
         { x: gMaxX, y: gHighUnderY2, z: gMaxZ }, { x: gMaxX, y: gHighUnderY2, z: gMinZ }
       ], backWallColor));
+      meshes.push(buildEaveSoffitPanel(topBounds.minX - ROOF_OVERHANG / 2, (eMinZ2 + eMaxZ2) / 2, ROOF_OVERHANG, eMaxZ2 - eMinZ2, topY, soffitColor));
     }
     return meshes;
   }
@@ -2458,7 +2498,7 @@ export function hashColorHex(key: string): number {
   function clampParapetHeight(h: any) {
     return Math.max(PARAPET_HEIGHT_MIN, Math.min(PARAPET_HEIGHT_MAX, h != null ? h : PARAPET_HEIGHT_DEFAULT));
   }
-  function buildRoofPlatibanda(topBounds: any, topY: any, roofColor: any, ridgeAxis: any, parapetHeight: any, parapetColor: any) {
+  function buildRoofPlatibanda(topBounds: any, topY: any, roofColor: any, ridgeAxis: any, parapetHeight: any, parapetColor: any, hasMolding: any) {
     var height = clampParapetHeight(parapetHeight);
     var slopeRad = PLATIBANDA_SLOPE_DEG * Math.PI / 180;
     var verticalDrop = ROOF_THICKNESS / Math.cos(slopeRad);
@@ -2479,7 +2519,17 @@ export function hashColorHex(key: string): number {
       ];
     }
     meshes.push.apply(meshes, extrudeSlopeDown(pts, verticalDrop, roofColor, roofColor));
-    meshes = meshes.concat(buildParapetWalls(topBounds, topY, height, PARAPET_THICK, parapetColor != null ? parapetColor : GABLE_COLOR));
+    var parapetColorResolved = parapetColor != null ? parapetColor : GABLE_COLOR;
+    meshes = meshes.concat(buildParapetWalls(topBounds, topY, height, PARAPET_THICK, parapetColorResolved));
+    // Moldura: um segundo anel, mais largo (projeta MOLDING_PROJECTION
+    // além da face do parapeito dos dois lados) e mais baixo, encostado
+    // no topo do parapeito já existente — mesma técnica de
+    // buildParapetWalls, só chamada de novo com outras dimensões.
+    if (hasMolding) {
+      var moldingThickness = PARAPET_THICK + MOLDING_PROJECTION * 2;
+      var moldingTopY = topY + Math.max(height - MOLDING_HEIGHT, 0);
+      meshes = meshes.concat(buildParapetWalls(topBounds, moldingTopY, MOLDING_HEIGHT, moldingThickness, parapetColorResolved));
+    }
     return meshes;
   }
 
@@ -2649,6 +2699,10 @@ export function hashColorHex(key: string): number {
       b: buildGableWallMaterial(roof.gableFinishB, viewState)
     };
     var tabeiraColor = buildTabeiraMaterial(viewState);
+    // Forro do beiral acompanha a cor das paredes da casa (mesma lógica
+    // já usada pro painel de trás do uma-água e pro parapeito da
+    // platibanda) — é um forro pintado, não uma continuação da telha.
+    var soffitColor = pickColor(wallMatchColor != null ? wallMatchColor : GABLE_COLOR, 'telhado', viewState);
     var bounds = {
       minX: (roof.x1 - offsetX) * scale, maxX: (roof.x2 - offsetX) * scale,
       minZ: (roof.y1 - offsetY) * scale, maxZ: (roof.y2 - offsetY) * scale
@@ -2665,7 +2719,7 @@ export function hashColorHex(key: string): number {
     if (!validBounds || (roof.type !== 'platibanda' && !validPitch)) return [];
     var ridgeAxis = roof.ridgeAxis === 'y' ? 'y' : 'x';
 
-    if (roof.type === 'quatroAguas') return buildRoofQuatroAguas(bounds, floorTopY, roofColor, pitchDeg, ridgeAxis, tabeiraColor);
+    if (roof.type === 'quatroAguas') return buildRoofQuatroAguas(bounds, floorTopY, roofColor, pitchDeg, ridgeAxis, tabeiraColor, soffitColor);
     if (roof.type === 'umaAgua') {
       // Painel de trás (lado alto do caimento) usa a cor da PAREDE de
       // verdade, não a cor de fechamento lateral (gableColors) — Product
@@ -2673,13 +2727,13 @@ export function hashColorHex(key: string): number {
       // pra fechar o vão, não um oitão decorativo à parte. Mesma técnica
       // já usada pro parapeito da platibanda (wallMatchColor).
       var backWallColor = pickColor(wallMatchColor != null ? wallMatchColor : GABLE_COLOR, 'telhado', viewState);
-      return buildRoofUmaAgua(bounds, floorTopY, roofColor, gableColors, backWallColor, pitchDeg, ridgeAxis, tabeiraColor);
+      return buildRoofUmaAgua(bounds, floorTopY, roofColor, gableColors, backWallColor, pitchDeg, ridgeAxis, tabeiraColor, soffitColor);
     }
     if (roof.type === 'platibanda') {
       var parapetColor = pickColor(wallMatchColor != null ? wallMatchColor : GABLE_COLOR, 'telhado', viewState);
-      return buildRoofPlatibanda(bounds, floorTopY, roofColor, ridgeAxis, roof.parapetHeight, parapetColor);
+      return buildRoofPlatibanda(bounds, floorTopY, roofColor, ridgeAxis, roof.parapetHeight, parapetColor, !!roof.parapetMolding);
     }
-    return buildRoofDuasAguas(bounds, floorTopY, roofColor, gableColors, pitchDeg, ridgeAxis, tabeiraColor);
+    return buildRoofDuasAguas(bounds, floorTopY, roofColor, gableColors, pitchDeg, ridgeAxis, tabeiraColor, soffitColor);
   }
 
   export function createRoofResizePreviewMeshes(roof: any, scale: number, offsetX: number, offsetY: number, floorTopY: number): THREE.Object3D[] {

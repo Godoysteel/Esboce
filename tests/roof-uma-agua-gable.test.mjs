@@ -48,7 +48,7 @@ test('buildRoofUmaAgua também fecha o painel de trás (lado alto), com a cor da
 
 test('a chamada de buildRoofUmaAgua passa gableColors e backWallColor (cor da parede real, mesma técnica do parapeito)', () => {
   assert.match(source, /var backWallColor = pickColor\(wallMatchColor != null \? wallMatchColor : GABLE_COLOR, 'telhado', viewState\);/);
-  assert.match(source, /buildRoofUmaAgua\(bounds, floorTopY, roofColor, gableColors, backWallColor, pitchDeg, ridgeAxis, tabeiraColor\)/);
+  assert.match(source, /buildRoofUmaAgua\(bounds, floorTopY, roofColor, gableColors, backWallColor, pitchDeg, ridgeAxis, tabeiraColor, soffitColor\)/);
 });
 
 test('wallSupportsRoofGable também reconhece uma-água (suprime contorno duplicado igual já fazia pro duas-águas)', () => {

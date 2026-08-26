@@ -260,6 +260,9 @@ function parseRoof(value: unknown, path: string): Roof {
   if (roof.atticMode || roof.steppedLowerRoofId) {
     roof.baseHeightM = number(v.baseHeightM, `${path}.baseHeightM`, 1.2);
   }
+  if (v.parapetMolding === true) {
+    roof.parapetMolding = true;
+  }
   // Projetos antigos vinculavam o telhado elevado ao telhado baixo. Ao
   // carregar, convertemos o vínculo para o novo volume autônomo.
   if (v.steppedWallVolume === true || roof.steppedLowerRoofId) {

@@ -1555,6 +1555,17 @@ export const commands = {
     emit({ type: 'RoofAxisChanged', roofId });
   },
 
+  // Liga/desliga a moldura em relevo no topo do parapeito — só faz
+  // sentido pra type === 'platibanda', mas não valida isso aqui (o
+  // painel só mostra o botão nesse caso; o campo fica salvo e sem
+  // efeito visual pros outros tipos, sem quebrar nada).
+  setRoofParapetMolding(roofId: string, hasMolding: boolean): void {
+    const r = findRoof(roofId); if (!r) return;
+    pushUndoSnapshot();
+    r.parapetMolding = hasMolding;
+    emit({ type: 'RoofParapetMoldingChanged', roofId });
+  },
+
   deleteRoof(roofId: string): void {
     const roofs = currentRoofs();
     let idx = -1;

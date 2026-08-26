@@ -345,6 +345,8 @@
   .roof-elevation output { font-weight: 700; color: #D87812; }
   .roof-elevation input[type="range"] { grid-column: 1 / -1; padding: 0; accent-color: #E8963C; cursor: ns-resize; }
   .roof-axis { grid-column: 1 / -1; width: 100%; min-height: 30px; padding: 4px 7px; border-radius: 6px; font-size: 11px; }
+  .roof-molding { grid-column: 1 / -1; width: 100%; min-height: 30px; padding: 4px 7px; border-radius: 6px; font-size: 11px; }
+  .roof-molding.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
   .roof-auto-compose { grid-column: 1 / -1; padding: 5px 6px; border-radius: 6px; background: #EEF7F0; color: #2F6B3B; font-size: 10px; text-align: center; }
   .shape-panel button.st { margin: 0; padding: 0; width: 30px; height: 30px; font-size: 14px; font-weight: 700; border-radius: 6px; line-height: 1; }
   .shape-panel button.st.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
@@ -2137,6 +2139,7 @@
   <div id="roofTypePanel" class="shape-panel roof-type-panel">
     <label class="roof-parameter roof-elevation" id="roofElevationControl"><span>Subir telhado inteiro</span><output id="roofElevationValue">3,15 m</output><input id="roofElevationInput" type="range" min="2.85" max="8" step="0.05" aria-label="Altura da base do telhado em metros"></label>
     <button class="roof-axis" title="Alternar a direção da cumeeira ou do caimento">↔ Direção: eixo X</button>
+    <button class="roof-molding" title="Adiciona uma moldura em relevo no topo do parapeito">▭ Com moldura</button>
   </div>
   <div id="varandaTypePanel" class="shape-panel roof-type-panel">
     <label class="roof-parameter">Largura <input id="varandaWidthInput" type="number" min="0.8" max="6" step="0.1" inputmode="decimal" aria-label="Largura da varanda em metros"></label>
