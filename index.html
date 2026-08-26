@@ -1195,6 +1195,23 @@
   .catalog-apply:disabled { opacity:.55; cursor:not-allowed; }
   .catalog-action-help { margin:7px 0 0; color:#77746C; font-size:11px; line-height:1.4; }
 </style>
+  <style>
+    #steelFrameConfigurator { position:fixed; inset:0; z-index:12000; display:none; align-items:center; justify-content:center; padding:24px; background:rgba(20,24,28,.62); }
+    #steelFrameConfigurator.visible { display:flex; }
+    .sf-config-dialog { width:min(920px,96vw); max-height:90vh; display:flex; flex-direction:column; overflow:hidden; border-radius:14px; background:#fff; box-shadow:0 22px 70px rgba(0,0,0,.35); color:#292b2e; }
+    .sf-config-dialog header,.sf-config-dialog footer { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:18px 22px; border-bottom:1px solid #e5e5e2; }
+    .sf-config-dialog header strong { font-size:18px; }
+    .sf-config-dialog header p { margin:5px 0 0; color:#666; font-size:13px; }
+    .sf-config-dialog header button { border:0; background:transparent; font-size:28px; cursor:pointer; }
+    .sf-config-dialog [data-sf-body] { overflow:auto; padding:18px 22px; display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:12px; }
+    .sf-config-card { padding:14px; border:1px solid #ddd; border-radius:10px; background:#fafaf8; }
+    .sf-config-card h3 { margin:0 0 11px; font-size:14px; }
+    .sf-config-card label { display:block; margin-top:9px; color:#555; font-size:12px; }
+    .sf-config-card select { width:100%; margin-top:4px; padding:8px; border:1px solid #c9c9c4; border-radius:6px; background:#fff; }
+    .sf-config-dialog footer { border-top:1px solid #e5e5e2; border-bottom:0; }
+    .sf-config-dialog [data-sf-status] { color:#b1442e; font-size:13px; }
+    .sf-config-dialog [data-sf-save] { padding:10px 16px; border:0; border-radius:7px; background:#166534; color:#fff; font-weight:700; cursor:pointer; }
+  </style>
 </head>
 <body>
 

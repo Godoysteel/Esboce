@@ -24,6 +24,9 @@ import {
 } from "../core/ProjectPersistence.js";
 import type { ConstructionSystem, CommercialSelection } from "../core/types.js";
 import { constructionSystemDefinition } from "../core/ConstructionSystem.js";
+import { PLACLUX_PRODUCTS } from "../core/PlacluxCatalog.js";
+
+const PLACLUX_CATALOG_TAB = "__placlux__";
 
 export class EsboceApplication {
   private readonly scene = new THREE.Scene();
@@ -1494,8 +1497,11 @@ export class EsboceApplication {
     const loaded = await this.ensureCatalogLoaded();
     if (!loaded) return;
     this.catalogActiveCategoriaFilter = null;
+    if (Store.getProject().constructionSystem === "light_steel_frame") {
+      this.catalogActiveDeptId = PLACLUX_CATALOG_TAB;
+    }
     const visibleProducts = this.catalogProductsWithPhotos();
-    if (!this.catalogActiveDeptId || !visibleProducts.some((product) => product.department_id === this.catalogActiveDeptId)) {
+    if (!this.catalogActiveDeptId || (this.catalogActiveDeptId !== PLACLUX_CATALOG_TAB && !visibleProducts.some((product) => product.department_id === this.catalogActiveDeptId))) {
       this.catalogActiveDeptId = this.catalogDepartments?.find((department) =>
         visibleProducts.some((product) => product.department_id === department.id)
       )?.id ?? null;
@@ -1570,6 +1576,16 @@ export class EsboceApplication {
     const departments = this.catalogDepartments ?? [];
     const products = this.catalogProductsWithPhotos();
     tabsEl.innerHTML = "";
+    const placluxTab = document.createElement("div");
+    placluxTab.className = "catalog-tab" + (this.catalogActiveDeptId === PLACLUX_CATALOG_TAB ? " active" : "");
+    placluxTab.textContent = `PlacLux (${PLACLUX_PRODUCTS.length})`;
+    placluxTab.addEventListener("click", () => {
+      this.catalogActiveDeptId = PLACLUX_CATALOG_TAB;
+      this.catalogActiveCategoriaFilter = null;
+      this.renderCatalogTabs();
+      this.renderCatalogGrid();
+    });
+    tabsEl.appendChild(placluxTab);
     // Só mostra departamento que tem pelo menos 1 produto — uma aba
     // vazia não ajuda ninguém a navegar.
     departments
@@ -1590,6 +1606,10 @@ export class EsboceApplication {
 
   private renderCatalogGrid(): void {
     const bodyEl = this.requireElement("catalogBody");
+    if (this.catalogActiveDeptId === PLACLUX_CATALOG_TAB) {
+      this.renderPlacluxCatalog(bodyEl);
+      return;
+    }
     const filter = this.catalogActiveCategoriaFilter;
     const products = this.catalogProductsWithPhotos().filter((p) =>
       filter ? p.categoria === filter : p.department_id === this.catalogActiveDeptId
@@ -1673,6 +1693,28 @@ export class EsboceApplication {
         this.requireElement("catalogOverlay").classList.remove("visible");
         this.setCatalogEntryButtonsActive(false);
       });
+      grid.appendChild(card);
+    });
+    bodyEl.appendChild(grid);
+  }
+
+  private renderPlacluxCatalog(bodyEl: HTMLElement): void {
+    bodyEl.innerHTML = "";
+    const intro = document.createElement("div");
+    intro.style.cssText = "margin-bottom:14px;color:#5F5E5A;font-size:13px;";
+    intro.innerHTML = `<strong>Materiais PlacLux para construção a seco</strong><br>Portfólio técnico disponível para os sistemas Steel Frame. Preços serão exibidos quando houver oferta comercial cadastrada.`;
+    bodyEl.appendChild(intro);
+    const grid = document.createElement("div");
+    grid.className = "catalog-grid";
+    PLACLUX_PRODUCTS.forEach((product) => {
+      const card = document.createElement("div");
+      card.className = "catalog-card";
+      card.innerHTML = `<div class="catalog-card-photo" style="background:#eef2e9;color:#27613c;font-weight:800;display:flex;align-items:center;justify-content:center;">PlacLux</div>
+        <div class="catalog-card-info"><p class="catalog-card-nome">${product.name}</p>
+        <p class="catalog-card-fabricante">Fabricante: PlacLux · ${product.category}</p>
+        <p class="catalog-card-fornecedor">${product.dimensions || product.notes || "Produto técnico"}</p>
+        <div class="catalog-card-preco consulta">Sob consulta</div></div>`;
+      card.addEventListener("click", () => window.open(product.sourceUrl, "_blank", "noopener,noreferrer"));
       grid.appendChild(card);
     });
     bodyEl.appendChild(grid);

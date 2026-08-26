@@ -242,6 +242,33 @@ function applyBody(w: Wall, x1: number, y1: number, x2: number, y2: number): voi
 }
 
 export const commands = {
+  setSteelFrameWallSpecification(
+    wallId: string,
+    values: { faceAAssemblyId: string | undefined; faceBAssemblyId: string | undefined; cavityAssembly: Wall['cavityAssembly'] | undefined },
+  ): void {
+    const wall = project.floors.flatMap((floor) => floor.walls).find((item) => item.id === wallId);
+    if (!wall) return;
+    pushUndoSnapshot();
+    if (values.faceAAssemblyId) wall.faceAAssemblyId = values.faceAAssemblyId; else delete wall.faceAAssemblyId;
+    if (values.faceBAssemblyId) wall.faceBAssemblyId = values.faceBAssemblyId; else delete wall.faceBAssemblyId;
+    if (values.cavityAssembly) wall.cavityAssembly = values.cavityAssembly; else delete wall.cavityAssembly;
+    emit({ type: 'SteelFrameWallSpecificationSet', wallId });
+  },
+
+  setSteelFrameRoofSpecification(
+    roofId: string,
+    values: { [K in 'gableFaceAAssemblyId' | 'gableFaceBAssemblyId' | 'soffitAssemblyId' | 'fasciaAssemblyId' | 'parapetOuterAssemblyId' | 'parapetInnerAssemblyId']: string | undefined },
+  ): void {
+    const roof = project.floors.flatMap((floor) => floor.roofs || []).find((item) => item.id === roofId);
+    if (!roof) return;
+    pushUndoSnapshot();
+    Object.entries(values).forEach(([key, value]) => {
+      if (value) (roof as unknown as Record<string, unknown>)[key] = value;
+      else delete (roof as unknown as Record<string, unknown>)[key];
+    });
+    emit({ type: 'SteelFrameRoofSpecificationSet', roofId });
+  },
+
   createHydraulicPrototype(): void {
     pushUndoSnapshot();
     project.hydraulics = buildColdWaterKitchenPrototype(currentFloor());

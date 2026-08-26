@@ -18,6 +18,9 @@ import {
 import type { FoundationQuantity } from './QuantityGeometry.js';
 import type { Point, Wall, Roof, Column, Laje, Project, CommercialSelection } from './types.js';
 import { constructionSystemDefinition, hasCeramicMasonryEstimate } from './ConstructionSystem.js';
+import * as SteelFrameConfigurator from './SteelFrameConfigurator.js';
+import { STEEL_FRAME_FACE_ASSEMBLIES, quantityWithWaste, steelFrameSpecificationIssues } from './SteelFrameAssemblies.js';
+import { getPlacluxProduct } from './PlacluxCatalog.js';
 import { floorWallHeight } from './Attic.js';
 import { listCatalogOffers, listCatalogProducts, listManufacturers } from './SupabaseClient.js';
 import { classifyHydraulicJunction, destinationLabelForNetwork } from './Hydraulics.js';
@@ -959,6 +962,44 @@ function productLine(productId: string, areaM2: number): string {
   return '<div class="materials-line"><span>' + name + '</span><span>' + fmtM2(areaM2) + extra + '</span></div>';
 }
 
+interface SteelFrameQuantityLine { id: string; label: string; quantity: number; unit: 'm²' | 'kg' | 'un'; }
+const STEEL_FRAME_STRUCTURE_KG_PER_M2 = 12;
+
+function steelFrameQuantities(project: Project): SteelFrameQuantityLine[] {
+  if (project.constructionSystem !== 'light_steel_frame') return [];
+  const totals = new Map<string, SteelFrameQuantityLine>();
+  const add = (id: string, label: string, quantity: number, unit: SteelFrameQuantityLine['unit']) => {
+    const key = id + ':' + unit;
+    const current = totals.get(key);
+    if (current) current.quantity += quantity;
+    else totals.set(key, { id, label, quantity, unit });
+  };
+  let structuralArea = 0;
+  project.floors.forEach((floor) => {
+    const wallHeight = floorWallHeight(floor, Scene3DRenderer.WALL_HEIGHT_GETTER());
+    floor.walls.forEach((wall) => {
+      if (wall.demolished) return;
+      const openingsArea = floor.openings.filter((opening) => opening.wallId === wall.id)
+        .reduce((sum, opening) => sum + opening.width * opening.height, 0);
+      const faceArea = Math.max(0, Core.wallLengthMeters(wall) * wallHeight - openingsArea);
+      structuralArea += faceArea;
+      [wall.faceAAssemblyId, wall.faceBAssemblyId].forEach((assemblyId) => {
+        const assembly = STEEL_FRAME_FACE_ASSEMBLIES.find((item) => item.id === assemblyId);
+        assembly?.layers.forEach((layer) => add(layer.id, layer.label, quantityWithWaste(faceArea, layer), layer.unit === 'unit' ? 'un' : 'm²'));
+      });
+      const insulationId = wall.cavityAssembly?.insulationSystemId;
+      if (insulationId && insulationId !== 'none') {
+        const product = getPlacluxProduct(insulationId);
+        add(insulationId, product?.name || 'Isolamento térmico e acústico', Math.round(faceArea * 1.1 * 100) / 100, 'm²');
+      }
+    });
+  });
+  if (structuralArea > 0) {
+    add('steel-frame-structure', 'Estrutura e fixadores estruturais (média 12 kg/m² + 5% de perda)', Math.round(structuralArea * STEEL_FRAME_STRUCTURE_KG_PER_M2 * 1.05 * 100) / 100, 'kg');
+  }
+  return Array.from(totals.values()).map((line) => ({ ...line, quantity: line.unit === 'un' ? Math.ceil(line.quantity) : Math.round(line.quantity * 100) / 100 }));
+}
+
 function groupSection(title: string, map: Record<string, number>): string {
   const keys = Object.keys(map);
   if (!keys.length) return '';
@@ -983,10 +1024,17 @@ export function render(): void {
   html += '<div class="object-panel-section-label">Sistema construtivo</div>';
   html += '<div class="materials-line"><span>Escolhido no projeto</span><span>' + system.label + '</span></div>';
   if (!hasCeramicMasonryEstimate(q.constructionSystem)) {
-    const missing = q.constructionSystem === 'light_steel_frame'
-      ? 'perfis, placas, membranas e isolamento'
-      : 'blocos estruturais, graute e armaduras';
-    html += '<div class="materials-empty">O quantitativo específico de ' + missing + ' ainda não está disponível. Áreas, acabamentos, fundação, laje e cobertura continuam calculados.</div>';
+    if (q.constructionSystem !== 'light_steel_frame') {
+      html += '<div class="materials-empty">O quantitativo específico de blocos estruturais, graute e armaduras ainda não está disponível. Áreas, acabamentos, fundação, laje e cobertura continuam calculados.</div>';
+    } else {
+      const issues = steelFrameSpecificationIssues(Store.getProject());
+      if (issues.length) html += '<div class="materials-empty">Faltam ' + issues.length + ' escolhas de revestimento/isolamento para concluir o Steel Frame.</div>';
+      const sfLines = steelFrameQuantities(Store.getProject());
+      if (sfLines.length) {
+        html += '<div class="object-panel-section-label">Steel Frame — estrutura, fechamentos e fixadores</div>';
+        sfLines.forEach((line) => { html += '<div class="materials-line"><span>' + line.label + '</span><span>' + line.quantity.toFixed(line.unit === 'un' ? 0 : 2).replace('.', ',') + ' ' + line.unit + '</span></div>'; });
+      }
+    }
   }
   html += '<div class="object-panel-section-label">Quantitativos gerais</div>';
   html += '<div class="materials-line"><span>Paredes</span><span>' + fmtM(q.totals.wallLength) + '</span></div>';
@@ -1603,6 +1651,11 @@ export function buildRows(): (string | number)[][] {
   push('Geral', 'Piso (área)', q.totals.floorArea, 'm²', null);
   pushMaterial('Geral', 'Rodapé (comprimento)', q.totals.baseboard, 'm', q.totals.baseboard > 0 ? q.totals.baseboard * materialPrice('baseboardPerM') : null, 'baseboardPerM');
   push('Geral', 'Telhado (área real da água)', q.totals.roofArea, 'm²', null);
+  if (q.constructionSystem === 'light_steel_frame') {
+    steelFrameQuantities(Store.getProject()).forEach((line) => {
+      push('Steel Frame', line.label, line.quantity, line.unit, null);
+    });
+  }
   // Porta/janela de VIDRO (produto real de catálogo escolhido) — item
   // por PRODUTO, quantidade em m² real da abertura (convenção de
   // mercado pra esquadria de vidro/alumínio, pedido do Product Owner),
@@ -2059,6 +2112,13 @@ export function init(): void {
       categoryMenuEl.classList.remove('visible');
       const category = btn.dataset.materialsCategory;
       if (category === 'geral') {
+        if (SteelFrameConfigurator.needsConfiguration()) {
+          SteelFrameConfigurator.open(function () {
+            panelEl!.classList.add('visible');
+            render();
+          });
+          return;
+        }
         panelEl!.classList.add('visible');
         render();
       } else if (category === 'forro') {
