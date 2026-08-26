@@ -510,8 +510,7 @@
   .construction-system-option:hover, .construction-system-option:focus-visible {
     transform: translateY(-3px); border-color: #5B4BC4; box-shadow: 0 12px 30px rgba(64,55,125,.18); outline: none;
   }
-  /* Sistemas ainda travados (Bloco estrutural, Steel Frame) — pedido do
-     Product Owner: "deixa bloqueado por enquanto". Mesmo espírito visual
+  /* Sistemas ainda travados (atualmente Bloco estrutural). Mesmo espírito visual
      do .ts-disabled já usado no sidebar, mas regra própria porque este
      botão não usa a classe .ts-btn (layout diferente). */
   .construction-system-option.ts-disabled {
@@ -1314,9 +1313,9 @@
           <img src="./images/construction-systems/bloco-estrutural.png" alt="Casa em construção com blocos estruturais">
           <strong>Bloco estrutural</strong><span>Alvenaria estrutural de concreto — em breve</span>
         </button>
-        <button class="construction-system-option ts-disabled" type="button" data-construction-system="light_steel_frame" data-disabled-label="Steel Frame" title="Steel Frame — em breve">
+        <button class="construction-system-option" type="button" data-construction-system="light_steel_frame" title="Criar projeto em Steel Frame">
           <img src="./images/construction-systems/light-steel-frame.png" alt="Casa em construção com perfis de Light Steel Frame">
-          <strong>Steel Frame</strong><span>Estrutura leve em aço galvanizado — em breve</span>
+          <strong>Steel Frame</strong><span>Estrutura leve em aço galvanizado</span>
         </button>
       </div>
       <p class="construction-system-note">Você poderá criar outro projeto e escolher um sistema diferente a qualquer momento.</p>

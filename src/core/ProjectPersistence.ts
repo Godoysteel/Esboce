@@ -199,9 +199,23 @@ function parseWall(value: unknown, path: string): Wall {
   const finishA = optionalString(v.finishA, `${path}.finishA`);
   const finishB = optionalString(v.finishB, `${path}.finishB`);
   const heightM = optionalNumber(v.heightM, `${path}.heightM`);
+  const faceAAssemblyId = optionalString(v.faceAAssemblyId, `${path}.faceAAssemblyId`);
+  const faceBAssemblyId = optionalString(v.faceBAssemblyId, `${path}.faceBAssemblyId`);
   if (finishA !== undefined) wall.finishA = finishA;
   if (finishB !== undefined) wall.finishB = finishB;
   if (heightM !== undefined) wall.heightM = heightM;
+  if (faceAAssemblyId !== undefined) wall.faceAAssemblyId = faceAAssemblyId;
+  if (faceBAssemblyId !== undefined) wall.faceBAssemblyId = faceBAssemblyId;
+  if (v.cavityAssembly != null) {
+    const cavity = record(v.cavityAssembly, `${path}.cavityAssembly`);
+    const thicknessMm = number(cavity.thicknessMm, `${path}.cavityAssembly.thicknessMm`);
+    if (thicknessMm < 0) fail(`${path}.cavityAssembly.thicknessMm`, 'espessura não pode ser negativa');
+    wall.cavityAssembly = {
+      insulationSystemId: string(cavity.insulationSystemId, `${path}.cavityAssembly.insulationSystemId`),
+      thicknessMm,
+      purpose: enumValue(cavity.purpose, ['thermal', 'acoustic', 'thermal_acoustic'], `${path}.cavityAssembly.purpose`),
+    };
+  }
   return wall;
 }
 
@@ -228,6 +242,12 @@ function parseRoof(value: unknown, path: string): Roof {
     finishProductId: optionalString(v.finishProductId, `${path}.finishProductId`),
     gableFinishA: optionalString(v.gableFinishA, `${path}.gableFinishA`),
     gableFinishB: optionalString(v.gableFinishB, `${path}.gableFinishB`),
+    gableFaceAAssemblyId: optionalString(v.gableFaceAAssemblyId, `${path}.gableFaceAAssemblyId`),
+    gableFaceBAssemblyId: optionalString(v.gableFaceBAssemblyId, `${path}.gableFaceBAssemblyId`),
+    soffitAssemblyId: optionalString(v.soffitAssemblyId, `${path}.soffitAssemblyId`),
+    fasciaAssemblyId: optionalString(v.fasciaAssemblyId, `${path}.fasciaAssemblyId`),
+    parapetOuterAssemblyId: optionalString(v.parapetOuterAssemblyId, `${path}.parapetOuterAssemblyId`),
+    parapetInnerAssemblyId: optionalString(v.parapetInnerAssemblyId, `${path}.parapetInnerAssemblyId`),
     compoundGroupId: optionalString(v.compoundGroupId, `${path}.compoundGroupId`),
     steppedLowerRoofId: optionalString(v.steppedLowerRoofId, `${path}.steppedLowerRoofId`),
     atticMode: v.atticMode == null ? undefined : enumValue(v.atticMode, ['preview', 'generated'], `${path}.atticMode`),

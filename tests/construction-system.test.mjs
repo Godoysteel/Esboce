@@ -31,13 +31,7 @@ test('somente tijolos habilita a composição cerâmica', () => {
   assert.match(materialsSource, /hasCeramicMasonryEstimate\(q\.constructionSystem\).*q\.totals\.wallAreaNet/);
 });
 
-// Pedido do Product Owner: "quero que deixa bloqueado por enquanto a
-// versão para steel frame e bloco estrutural" — só Tijolos fica
-// selecionável no seletor inicial. O modelo de dados continua aceitando
-// os três (createProject/hasCeramicMasonryEstimate, teste acima) —
-// projeto antigo salvo com um desses sistemas continua abrindo normal;
-// só a ESCOLHA NOVA fica travada na UI.
-test('Bloco estrutural e Steel Frame ficam travados (ts-disabled) no seletor inicial — só Tijolos continua selecionável', () => {
+test('Tijolos e Steel Frame ficam selecionáveis; somente Bloco estrutural permanece travado', () => {
   const selector = html.match(/<div id="constructionSystemOverlay"[\s\S]*?<canvas id="navGizmoCanvas"/)?.[0] ?? '';
   const tijolosBlock = selector.match(/data-construction-system="ceramic_masonry"[^>]*>/)?.[0] ?? '';
   const blocoBlock = selector.match(/<button[^>]*data-construction-system="structural_block"[^>]*>/)?.[0] ?? '';
@@ -45,8 +39,9 @@ test('Bloco estrutural e Steel Frame ficam travados (ts-disabled) no seletor ini
   assert.doesNotMatch(tijolosBlock, /ts-disabled/, 'Tijolos precisa continuar selecionável');
   assert.match(blocoBlock, /ts-disabled/);
   assert.match(blocoBlock, /data-disabled-label="Bloco estrutural"/);
-  assert.match(steelBlock, /ts-disabled/);
-  assert.match(steelBlock, /data-disabled-label="Steel Frame"/);
+  assert.doesNotMatch(steelBlock, /ts-disabled/);
+  assert.doesNotMatch(steelBlock, /data-disabled-label/);
+  assert.match(steelBlock, /title="Criar projeto em Steel Frame"/);
 });
 
 test('clique em sistema travado não seleciona nada — só o hint global de "em breve" cuida do clique', () => {

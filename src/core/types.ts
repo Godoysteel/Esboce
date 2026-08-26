@@ -15,6 +15,11 @@ export interface Wall {
   // Acabamento de cada face da parede (lado A / lado B) — id de Produto do Catalog.
   finishA?: string;
   finishB?: string;
+  /** Composição técnica de fechamento por face no Light Steel Frame. */
+  faceAAssemblyId?: string;
+  faceBAssemblyId?: string;
+  /** Núcleo compartilhado pelas duas faces; não deve ser contado duas vezes. */
+  cavityAssembly?: WallCavityAssembly;
   // Altura própria, em metros — só usada por muros de terreno
   // (Terreno.muros). Paredes da casa (Floor.walls) ignoram este campo e
   // continuam com a altura fixa Core.WALL_HEIGHT.
@@ -53,6 +58,14 @@ export interface Roof {
   finishProductId?: string;
   gableFinishA?: string;
   gableFinishB?: string;
+  /** Composições técnicas para oitões, forro de beiral e tabeira no LSF. */
+  gableFaceAAssemblyId?: string;
+  gableFaceBAssemblyId?: string;
+  soffitAssemblyId?: string;
+  fasciaAssemblyId?: string;
+  /** Revestimentos das duas faces da platibanda; aplicáveis somente a type=platibanda. */
+  parapetOuterAssemblyId?: string;
+  parapetInnerAssemblyId?: string;
   /** Identifica uma cobertura composta confirmada pelo usuário. */
   compoundGroupId?: string;
   /** Telhado inferior do mesmo eixo numa cumeeira interrompida. O
@@ -431,6 +444,15 @@ export interface HydraulicSystem {
 
 export type FoundationType = 'radier' | 'baldrame';
 export type ConstructionSystem = 'ceramic_masonry' | 'structural_block' | 'light_steel_frame';
+
+export type InsulationPurpose = 'thermal' | 'acoustic' | 'thermal_acoustic';
+
+export interface WallCavityAssembly {
+  /** `none` é uma escolha explícita válida e diferente de campo ausente. */
+  insulationSystemId: string;
+  thicknessMm: number;
+  purpose: InsulationPurpose;
+}
 
 export interface CommercialSelection {
   productId: string;

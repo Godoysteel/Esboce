@@ -730,7 +730,7 @@ export class EsboceApplication {
   private setupConstructionSystemSelector(): void {
     const overlay = this.requireElement("constructionSystemOverlay");
     overlay.querySelectorAll<HTMLElement>("[data-construction-system]").forEach((option) => {
-      // Sistema travado (Bloco estrutural, Steel Frame — ver
+      // Sistema travado (atualmente Bloco estrutural — ver
       // data-disabled-label no HTML): não liga o clique de seleção
       // nenhum, só o hint global de "em breve" (ViewportController,
       // já ligado em todo [data-disabled-label] da página) cuida do

@@ -1,0 +1,143 @@
+import type { Project, Roof, Wall } from './types.js';
+
+export type AssemblyUse = 'external' | 'internal' | 'both' | 'soffit' | 'fascia';
+export type QuantityUnit = 'm2' | 'm' | 'kg' | 'unit';
+
+export interface AssemblyLayerDefinition {
+  id: string;
+  label: string;
+  role: 'finish' | 'basecoat' | 'mesh' | 'external_insulation' | 'external_board'
+    | 'water_barrier' | 'structural_sheathing' | 'internal_board';
+  unit: QuantityUnit;
+  /** Consumo antes da perda. Para fixadores, unidades por m². */
+  consumptionPerM2: number;
+  wastePercent: number;
+  fastener?: boolean;
+}
+
+export interface WallFaceAssemblyDefinition {
+  id: string;
+  label: string;
+  use: AssemblyUse;
+  layers: readonly AssemblyLayerDefinition[];
+}
+
+const area = (id: string, label: string, role: AssemblyLayerDefinition['role'], wastePercent = 10): AssemblyLayerDefinition =>
+  ({ id, label, role, unit: 'm2', consumptionPerM2: 1, wastePercent });
+const fixers = (id: string, label: string, unitsPerM2: number): AssemblyLayerDefinition =>
+  ({ id, label, role: 'finish', unit: 'unit', consumptionPerM2: unitsPerM2, wastePercent: 5, fastener: true });
+
+/**
+ * Presets técnicos iniciais. Consumos de fixadores são parâmetros de orçamento,
+ * não dimensionamento; devem poder ser substituídos pela ficha do fabricante.
+ */
+export const STEEL_FRAME_FACE_ASSEMBLIES: readonly WallFaceAssemblyDefinition[] = [
+  { id: 'eifs', label: 'EIFS', use: 'external', layers: [
+    area('eifs-finish', 'Acabamento EIFS', 'finish', 5),
+    area('eifs-basecoat', 'Basecoat EIFS', 'basecoat', 5),
+    area('eifs-mesh', 'Malha de fibra de vidro', 'mesh'),
+    area('eifs-eps', 'Placa isolante EPS', 'external_insulation'),
+    fixers('eifs-fixers', 'Fixadores para EIFS', 6),
+  ] },
+  { id: 'cement-board-direct', label: 'Placa cimentícia sem OSB', use: 'external', layers: [
+    area('placlux.profort-next-12-5mm', 'ProFort Next 12,5 mm', 'external_board'),
+    area('placlux.membrana-hidrofuga-52-5m2', 'Membrana Hidrófuga ProFort', 'water_barrier'),
+    fixers('placlux.parafuso-pb-032', 'Parafusos Rusper PB 032', 20),
+  ] },
+  { id: 'cement-board-osb', label: 'OSB + placa cimentícia', use: 'external', layers: [
+    area('placlux.profort-next-10mm', 'ProFort Next 10 mm', 'external_board'),
+    area('placlux.membrana-hidrofuga-52-5m2', 'Membrana Hidrófuga ProFort', 'water_barrier'),
+    area('osb', 'Painel OSB estrutural', 'structural_sheathing'),
+    fixers('placlux.parafuso-pa-032', 'Parafusos Rusper PA 032', 20),
+    fixers('osb-screws', 'Parafusos para OSB', 18),
+  ] },
+  { id: 'glasroc-x-direct', label: 'Glasroc X', use: 'both', layers: [
+    area('glasroc-finish', 'Acabamento Glasroc X', 'finish', 5),
+    area('glasroc-basecoat', 'Basecoat Glasroc X', 'basecoat', 5),
+    area('glasroc-mesh', 'Malha Glasroc X', 'mesh'),
+    area('glasroc-x', 'Placa Glasroc X', 'external_board'),
+    area('wrb', 'Membrana hidrófuga', 'water_barrier'),
+    fixers('glasroc-screws', 'Parafusos para Glasroc X', 20),
+  ] },
+  { id: 'glasroc-x-therm', label: 'Glasroc X Therm', use: 'external', layers: [
+    area('glasroc-therm-finish', 'Acabamento Glasroc X Therm', 'finish', 5),
+    area('glasroc-therm-basecoat', 'Basecoat Glasroc X Therm', 'basecoat', 5),
+    area('glasroc-therm-mesh', 'Malha Glasroc X Therm', 'mesh'),
+    area('glasroc-therm-eps', 'Placa isolante EPS', 'external_insulation'),
+    area('glasroc-x', 'Placa Glasroc X', 'external_board'),
+    area('wrb', 'Membrana hidrófuga', 'water_barrier'),
+    fixers('glasroc-therm-fixers', 'Fixadores Glasroc X Therm', 6),
+    fixers('glasroc-screws', 'Parafusos para Glasroc X', 20),
+  ] },
+  { id: 'vinyl-siding-osb', label: 'OSB + siding vinílico', use: 'external', layers: [
+    area('vinyl-siding', 'Siding vinílico', 'finish'),
+    area('wrb', 'Membrana hidrófuga', 'water_barrier'),
+    area('osb', 'Painel OSB estrutural', 'structural_sheathing'),
+    fixers('vinyl-siding-fixers', 'Fixadores para siding vinílico', 8),
+    fixers('osb-screws', 'Parafusos para OSB', 18),
+  ] },
+  { id: 'drywall-st', label: 'Drywall Standard (ST)', use: 'internal', layers: [
+    area('drywall-st', 'Chapa de drywall ST', 'internal_board'),
+    fixers('drywall-screws', 'Parafusos para drywall', 15),
+  ] },
+  { id: 'drywall-ru', label: 'Drywall resistente à umidade (RU)', use: 'internal', layers: [
+    area('drywall-ru', 'Chapa de drywall RU', 'internal_board'),
+    fixers('drywall-screws', 'Parafusos para drywall', 15),
+  ] },
+  { id: 'drywall-rf', label: 'Drywall resistente ao fogo (RF)', use: 'internal', layers: [
+    area('drywall-rf', 'Chapa de drywall RF', 'internal_board'),
+    fixers('drywall-screws', 'Parafusos para drywall', 15),
+  ] },
+  { id: 'soffit-cement-board', label: 'Beiral em placa cimentícia', use: 'soffit', layers: [
+    area('placlux.profort-next-10mm', 'ProFort Next 10 mm para beiral', 'external_board'),
+    fixers('placlux.parafuso-pb-032', 'Parafusos Rusper PB 032', 20),
+  ] },
+  { id: 'soffit-vinyl', label: 'Beiral vinílico', use: 'soffit', layers: [
+    area('vinyl-soffit', 'Forro de beiral vinílico', 'finish'),
+    fixers('vinyl-soffit-fixers', 'Fixadores para beiral vinílico', 8),
+  ] },
+] as const;
+
+export const STEEL_FRAME_STRUCTURE_WASTE_PERCENT = 5;
+
+export function quantityWithWaste(areaM2: number, layer: AssemblyLayerDefinition): number {
+  const raw = Math.max(0, areaM2) * layer.consumptionPerM2 * (1 + layer.wastePercent / 100);
+  return layer.unit === 'unit' ? Math.ceil(raw) : Math.round(raw * 100) / 100;
+}
+
+export interface SteelFrameSpecificationIssue {
+  kind: 'wall-face' | 'wall-cavity' | 'gable-face' | 'soffit' | 'fascia' | 'parapet-face';
+  entityId: string;
+  side?: 'a' | 'b' | 'outer' | 'inner';
+}
+
+function roofHasGable(roof: Roof): boolean {
+  return roof.type === 'duasAguas' || roof.type === 'umaAgua' || !!roof.steppedWallVolume;
+}
+
+/** Lista tudo que impede o quantitativo específico de LSF. */
+export function steelFrameSpecificationIssues(project: Project): SteelFrameSpecificationIssue[] {
+  if (project.constructionSystem !== 'light_steel_frame') return [];
+  const issues: SteelFrameSpecificationIssue[] = [];
+  project.floors.forEach((floor) => {
+    floor.walls.forEach((wall: Wall) => {
+      if (wall.demolished) return;
+      if (!wall.faceAAssemblyId) issues.push({ kind: 'wall-face', entityId: wall.id, side: 'a' });
+      if (!wall.faceBAssemblyId) issues.push({ kind: 'wall-face', entityId: wall.id, side: 'b' });
+      if (!wall.cavityAssembly) issues.push({ kind: 'wall-cavity', entityId: wall.id });
+    });
+    floor.roofs.forEach((roof) => {
+      if (roofHasGable(roof)) {
+        if (!roof.gableFaceAAssemblyId) issues.push({ kind: 'gable-face', entityId: roof.id, side: 'a' });
+        if (!roof.gableFaceBAssemblyId) issues.push({ kind: 'gable-face', entityId: roof.id, side: 'b' });
+      }
+      if (!roof.soffitAssemblyId) issues.push({ kind: 'soffit', entityId: roof.id });
+      if (!roof.fasciaAssemblyId) issues.push({ kind: 'fascia', entityId: roof.id });
+      if (roof.type === 'platibanda') {
+        if (!roof.parapetOuterAssemblyId) issues.push({ kind: 'parapet-face', entityId: roof.id, side: 'outer' });
+        if (!roof.parapetInnerAssemblyId) issues.push({ kind: 'parapet-face', entityId: roof.id, side: 'inner' });
+      }
+    });
+  });
+  return issues;
+}
