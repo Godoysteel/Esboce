@@ -71,6 +71,13 @@ test('paredes de fechamento do telhado superior possuem face interna completa e 
   assert.match(closureFacesBlock, /face\.name === 'interna'\) mesh\.renderOrder = 1/);
   assert.match(steppedClosureBlock, /buildRaisedClosureWallMeshes\(vertices, material\)/);
   assert.match(perimeterClosureBlock, /buildRaisedClosureWallMeshes\(vertices, material\)/);
+  // A normal já é unitária: meia espessura precisa ser 0,06 m em cada
+  // direção, sem aplicar novamente o scale=1/GRID.
+  assert.match(steppedClosureBlock, /Core\.WALL_THICK \/ 2;/);
+  assert.doesNotMatch(steppedClosureBlock, /Core\.WALL_THICK \/ 2 \* scale/);
+  assert.match(perimeterClosureBlock, /Core\.WALL_THICK \/ 2;/);
+  assert.doesNotMatch(perimeterClosureBlock, /Core\.WALL_THICK \/ 2 \* scale/);
+  assert.equal(Core.WALL_THICK, 0.12);
   for (const block of [steppedClosureBlock, perimeterClosureBlock]) {
     assert.match(block, /side: THREE\.DoubleSide/);
     assert.match(block, /transparent: wallsTransparent/);

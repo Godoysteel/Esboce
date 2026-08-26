@@ -1539,8 +1539,13 @@ export function hashColorHex(key: string): number {
       : { x1: raised.x1, y1: raised.y1, x2: raised.x2, y2: raised.y1 };
     var dx = wall.x2 - wall.x1, dy = wall.y2 - wall.y1, len = Math.hypot(dx, dy);
     if (len < 1e-6) return [];
-    var nx = -dy / len * Core.WALL_THICK / 2 * scale;
-    var nz = dx / len * Core.WALL_THICK / 2 * scale;
+    // dx/dy estão em unidades do modelo, mas a normal é unitária. Depois
+    // da divisão por len ela não carrega mais unidade alguma; portanto a
+    // espessura deve entrar diretamente em metros de cena. Multiplicar por
+    // `scale` outra vez reduzia 12 cm para apenas 6 mm no volume inteiro,
+    // deixando as faces interna e externa praticamente coincidentes.
+    var nx = -dy / len * Core.WALL_THICK / 2;
+    var nz = dx / len * Core.WALL_THICK / 2;
     var lowerProfile = Object.assign({}, lower, { baseHeightM: lowerBaseM });
     var raisedProfile = Object.assign({}, raised, { baseHeightM: raisedBaseM });
     // O fechamento é uma parede completa: os índices abaixo possuem uma
@@ -1606,8 +1611,8 @@ export function hashColorHex(key: string): number {
     segments.forEach(function (segment) {
       var dx = segment.x2 - segment.x1, dy = segment.y2 - segment.y1, len = Math.hypot(dx, dy);
       if (len < 1e-6) return;
-      var nx = -dy / len * Core.WALL_THICK / 2 * scale;
-      var nz = dx / len * Core.WALL_THICK / 2 * scale;
+      var nx = -dy / len * Core.WALL_THICK / 2;
+      var nz = dx / len * Core.WALL_THICK / 2;
       function pointAt(t: number) { return { x: segment.x1 + dx * t, y: segment.y1 + dy * t }; }
       for (var index = 0; index < segment.slices; index++) {
         var t0 = index / segment.slices, t1 = (index + 1) / segment.slices;
