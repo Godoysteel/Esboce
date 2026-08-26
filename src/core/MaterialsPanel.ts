@@ -993,6 +993,20 @@ function steelFrameQuantities(project: Project): SteelFrameQuantityLine[] {
         add(insulationId, product?.name || 'Isolamento térmico e acústico', Math.round(faceArea * 1.1 * 100) / 100, 'm²');
       }
     });
+    floor.roofs.forEach((roof) => {
+      if (!(roof.steppedWallVolume || roof.steppedLowerRoofId)) return;
+      const widthM = Math.abs(roof.x2 - roof.x1) / Core.GRID;
+      const depthM = Math.abs(roof.y2 - roof.y1) / Core.GRID;
+      const rectangularHeightM = Math.max(0, (roof.baseHeightM || wallHeight) - wallHeight);
+      const slopeSpanM = roof.ridgeAxis === 'x' ? depthM : widthM;
+      const roofRiseM = (roof.type === 'umaAgua' ? slopeSpanM : slopeSpanM / 2) * Math.tan((roof.pitchDeg || 0) * Math.PI / 180);
+      const slopedClosuresM2 = roof.type === 'quatroAguas' ? 0 : slopeSpanM * roofRiseM;
+      const extensionFaceAreaM2 = 2 * (widthM + depthM) * rectangularHeightM + slopedClosuresM2;
+      [roof.steppedWallFaceAAssemblyId, roof.steppedWallFaceBAssemblyId].forEach((assemblyId) => {
+        const assembly = STEEL_FRAME_FACE_ASSEMBLIES.find((item) => item.id === assemblyId);
+        assembly?.layers.forEach((layer) => add(layer.id, layer.label, quantityWithWaste(extensionFaceAreaM2, layer), layer.unit === 'unit' ? 'un' : 'm²'));
+      });
+    });
   });
   if (structuralArea > 0) {
     add('steel-frame-structure', 'Estrutura e fixadores estruturais (média 12 kg/m² + 5% de perda)', Math.round(structuralArea * STEEL_FRAME_STRUCTURE_KG_PER_M2 * 1.05 * 100) / 100, 'kg');

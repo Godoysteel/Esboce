@@ -248,6 +248,8 @@ function parseRoof(value: unknown, path: string): Roof {
     fasciaAssemblyId: optionalString(v.fasciaAssemblyId, `${path}.fasciaAssemblyId`),
     parapetOuterAssemblyId: optionalString(v.parapetOuterAssemblyId, `${path}.parapetOuterAssemblyId`),
     parapetInnerAssemblyId: optionalString(v.parapetInnerAssemblyId, `${path}.parapetInnerAssemblyId`),
+    steppedWallFaceAAssemblyId: optionalString(v.steppedWallFaceAAssemblyId, `${path}.steppedWallFaceAAssemblyId`),
+    steppedWallFaceBAssemblyId: optionalString(v.steppedWallFaceBAssemblyId, `${path}.steppedWallFaceBAssemblyId`),
     compoundGroupId: optionalString(v.compoundGroupId, `${path}.compoundGroupId`),
     steppedLowerRoofId: optionalString(v.steppedLowerRoofId, `${path}.steppedLowerRoofId`),
     atticMode: v.atticMode == null ? undefined : enumValue(v.atticMode, ['preview', 'generated'], `${path}.atticMode`),

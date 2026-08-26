@@ -65,7 +65,7 @@ import {
   var floorFinishScale = 1;
   var floorFinishRotation = 0;
   var selectedWallId: any = null, selectedColumnId: any = null, selectedRoofId: any = null, selectedOpeningId: any = null, selectedVarandaId: any = null, selectedLajeId: any = null, selectedFurnitureId: any = null, selectedGlazingPanelId: any = null, selectedBalconyRailingId: any = null, selectedVolumeBoxId: any = null, selectedStairId: any = null, selectedForroRoomKey: any = null, selectedHydraulicNodeId: any = null;
-  var steelFrameSurfaceSelectionHandler: ((target: { kind: 'wall-face' | 'gable-face' | 'roof'; entityId: string; side?: 'a' | 'b' }) => boolean) | null = null;
+  var steelFrameSurfaceSelectionHandler: ((target: { kind: 'wall-face' | 'gable-face' | 'stepped-wall-face' | 'roof'; entityId: string; side?: 'a' | 'b' }) => boolean) | null = null;
   var steelFrameRoofHidden = false;
   // Alça de altura do cômodo (DEC-116) só existe/é clicável enquanto
   // esta variável apontar pra parede selecionada — precisa de um clique
@@ -2839,6 +2839,14 @@ import {
         return;
       }
       if (sfHit && sfHit.object.userData.roofId) {
+        var sfSteppedFace = sfHit.object.userData.roofWallFace as string | undefined;
+        if (sfSteppedFace && sfSteppedFace.indexOf('contorno') !== 0) {
+          var sfSteppedSide = sfSteppedFace.indexOf('externa') === 0 ? 'a' as const : 'b' as const;
+          var sfSteppedAccepted = steelFrameSurfaceSelectionHandler({ kind: 'stepped-wall-face', entityId: sfHit.object.userData.roofId, side: sfSteppedSide });
+          if (!sfSteppedAccepted) { hintEl.textContent = 'Esta face da extensão já foi configurada.'; return; }
+          hintEl.textContent = 'Extensão da cumeeira selecionada — escolha o revestimento da face.';
+          return;
+        }
         var sfRoofSide = sfHit.object.userData.gableSide as 'a' | 'b' | undefined;
         var sfRoofTarget = { kind: sfRoofSide ? 'gable-face' as const : 'roof' as const, entityId: sfHit.object.userData.roofId, ...(sfRoofSide ? { side: sfRoofSide } : {}) };
         var sfRoofAccepted = steelFrameSurfaceSelectionHandler(sfRoofTarget);

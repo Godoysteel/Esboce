@@ -119,7 +119,7 @@ export function quantityWithWaste(areaM2: number, layer: AssemblyLayerDefinition
 }
 
 export interface SteelFrameSpecificationIssue {
-  kind: 'wall-face' | 'wall-cavity' | 'gable-face' | 'soffit' | 'fascia' | 'parapet-face';
+  kind: 'wall-face' | 'wall-cavity' | 'gable-face' | 'stepped-wall-face' | 'soffit' | 'fascia' | 'parapet-face';
   entityId: string;
   side?: 'a' | 'b' | 'outer' | 'inner';
 }
@@ -140,6 +140,10 @@ export function steelFrameSpecificationIssues(project: Project): SteelFrameSpeci
       if (!wall.cavityAssembly) issues.push({ kind: 'wall-cavity', entityId: wall.id });
     });
     floor.roofs.forEach((roof) => {
+      if (roof.steppedWallVolume || roof.steppedLowerRoofId) {
+        if (!roof.steppedWallFaceAAssemblyId) issues.push({ kind: 'stepped-wall-face', entityId: roof.id, side: 'a' });
+        if (!roof.steppedWallFaceBAssemblyId) issues.push({ kind: 'stepped-wall-face', entityId: roof.id, side: 'b' });
+      }
       if (roofHasGable(roof)) {
         if (!roof.gableFaceAAssemblyId) issues.push({ kind: 'gable-face', entityId: roof.id, side: 'a' });
         if (!roof.gableFaceBAssemblyId) issues.push({ kind: 'gable-face', entityId: roof.id, side: 'b' });

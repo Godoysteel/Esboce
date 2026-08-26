@@ -1611,8 +1611,8 @@ export function hashColorHex(key: string): number {
     });
     var footprints = Core.computeWallFootprints(syntheticWalls);
     var profile = Object.assign({}, roof, { baseHeightM: raisedBaseM });
-    function makeMaterial() { return new THREE.MeshStandardMaterial({
-      color: color,
+    function makeMaterial(materialColor: any = color) { return new THREE.MeshStandardMaterial({
+      color: materialColor,
       side: THREE.DoubleSide,
       flatShading: true,
       roughness: 1,
@@ -1635,7 +1635,9 @@ export function hashColorHex(key: string): number {
       var rectangularHeightM = Math.max(0, raisedBaseM - visualBottomM);
       var extensionSlices = atticWallExtensionSlices(wall, profile, []);
       (['a', 'b'] as const).forEach(function (side) {
-        var faceMaterial = makeMaterial();
+        var steppedAssemblyId = side === 'a' ? roof.steppedWallFaceAAssemblyId : roof.steppedWallFaceBAssemblyId;
+        var steppedFaceColor = steppedAssemblyId ? steelFrameAssemblyColorHex(steppedAssemblyId) : color;
+        var faceMaterial = makeMaterial(steppedFaceColor);
         var face = buildFaceStripMesh(fp, rectangularHeightM, yOffset + visualBottomM, faceMaterial, side);
         face.userData.roofWallFace = side === 'a' ? 'externa' : 'interna';
         meshes.push(face);

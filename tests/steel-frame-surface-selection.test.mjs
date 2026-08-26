@@ -74,3 +74,12 @@ test('cada sistema usa uma cor própria e a pendência separa faces de isolament
   assert.match(app, /Marcos de portas\/janelas e o topo das paredes não entram/);
   assert.match(html, /--sf-system-color/);
 });
+
+test('extensão vertical da cumeeira em níveis é selecionável como parede', () => {
+  assert.match(viewport, /kind: 'stepped-wall-face'/);
+  assert.match(viewport, /roofWallFace/);
+  assert.match(app, /Extensão da cumeeira · face/);
+  const renderer = readFileSync(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
+  assert.match(renderer, /steppedWallFaceAAssemblyId/);
+  assert.match(renderer, /steppedWallFaceBAssemblyId/);
+});

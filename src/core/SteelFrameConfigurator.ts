@@ -4,7 +4,7 @@ import { STEEL_FRAME_FACE_ASSEMBLIES, steelFrameAssemblyColorHex, steelFrameSpec
 import type { SteelFrameSpecificationIssue } from './SteelFrameAssemblies.js';
 import type { Roof, Wall, WallCavityAssembly } from './types.js';
 
-type SurfaceTarget = { kind: 'wall-face' | 'gable-face' | 'roof'; entityId: string; side?: 'a' | 'b' };
+type SurfaceTarget = { kind: 'wall-face' | 'gable-face' | 'stepped-wall-face' | 'roof'; entityId: string; side?: 'a' | 'b' };
 const faceSystems = STEEL_FRAME_FACE_ASSEMBLIES.filter((item) => item.use === 'external' || item.use === 'internal' || item.use === 'both');
 const soffitSystems = STEEL_FRAME_FACE_ASSEMBLIES.filter((item) => item.use === 'soffit');
 const insulationOptions = [
@@ -50,6 +50,7 @@ function issueLabel(issue: SteelFrameSpecificationIssue): string {
   if (issue.kind === 'wall-face') return `Parede ${wallNumber} · face ${issue.side?.toUpperCase()}`;
   if (issue.kind === 'wall-cavity') return `Parede ${wallNumber} · isolamento térmico e acústico`;
   if (issue.kind === 'gable-face') return `Telhado ${roofNumber} · oitão ${issue.side?.toUpperCase()}`;
+  if (issue.kind === 'stepped-wall-face') return `Telhado ${roofNumber} · extensão de parede ${issue.side === 'a' ? 'externa' : 'interna'}`;
   if (issue.kind === 'soffit') return `Telhado ${roofNumber} · beiral`;
   if (issue.kind === 'fascia') return `Telhado ${roofNumber} · tabeira`;
   return `Telhado ${roofNumber} · platibanda ${issue.side === 'outer' ? 'externa' : 'interna'}`;
@@ -75,6 +76,7 @@ function targetIsConfigured(target: SurfaceTarget): boolean {
   const roof = allRoofs().find((item) => item.id === target.entityId);
   if (!roof) return false;
   if (target.kind === 'gable-face') return !!(target.side === 'a' ? roof.gableFaceAAssemblyId : roof.gableFaceBAssemblyId);
+  if (target.kind === 'stepped-wall-face') return !!(target.side === 'a' ? roof.steppedWallFaceAAssemblyId : roof.steppedWallFaceBAssemblyId);
   return !!roof.soffitAssemblyId && !!roof.fasciaAssemblyId
     && (roof.type !== 'platibanda' || (!!roof.parapetOuterAssemblyId && !!roof.parapetInnerAssemblyId));
 }
@@ -137,6 +139,14 @@ function saveGableFace(systemId: string): void {
   });
 }
 
+function saveSteppedWallFace(systemId: string): void {
+  const roof = selectedRoof();
+  if (!roof || !selectedTarget?.side) return;
+  Store.commands.setSteelFrameRoofSpecification(roof.id, selectedTarget.side === 'a'
+    ? { steppedWallFaceAAssemblyId: systemId }
+    : { steppedWallFaceBAssemblyId: systemId });
+}
+
 function renderWall(panel: HTMLElement, wall: Wall): void {
   const side = selectedTarget!.side!;
   const selectedId = side === 'a' ? wall.faceAAssemblyId : wall.faceBAssemblyId;
@@ -153,6 +163,13 @@ function renderWall(panel: HTMLElement, wall: Wall): void {
 }
 
 function renderRoof(panel: HTMLElement, roof: Roof): void {
+  if (selectedTarget!.kind === 'stepped-wall-face') {
+    const side = selectedTarget!.side!;
+    const selectedId = side === 'a' ? roof.steppedWallFaceAAssemblyId : roof.steppedWallFaceBAssemblyId;
+    panel.querySelector<HTMLElement>('[data-sf-body]')!.innerHTML = `<div class="sf-selected-label">Extensão da cumeeira · face ${side === 'a' ? 'externa' : 'interna'}</div>${systemButtons(selectedId)}`;
+    panel.querySelectorAll<HTMLButtonElement>('[data-sf-system]').forEach((button) => button.addEventListener('click', () => { saveSteppedWallFace(button.dataset.sfSystem!); finishSelectionWhenComplete(); render(); }));
+    return;
+  }
   if (selectedTarget!.kind === 'gable-face') {
     const side = selectedTarget!.side!;
     const selectedId = side === 'a' ? roof.gableFaceAAssemblyId : roof.gableFaceBAssemblyId;

@@ -257,7 +257,7 @@ export const commands = {
 
   setSteelFrameRoofSpecification(
     roofId: string,
-    values: { [K in 'gableFaceAAssemblyId' | 'gableFaceBAssemblyId' | 'soffitAssemblyId' | 'fasciaAssemblyId' | 'parapetOuterAssemblyId' | 'parapetInnerAssemblyId']: string | undefined },
+    values: Partial<{ [K in 'gableFaceAAssemblyId' | 'gableFaceBAssemblyId' | 'soffitAssemblyId' | 'fasciaAssemblyId' | 'parapetOuterAssemblyId' | 'parapetInnerAssemblyId' | 'steppedWallFaceAAssemblyId' | 'steppedWallFaceBAssemblyId']: string | undefined }>,
   ): void {
     const roof = project.floors.flatMap((floor) => floor.roofs || []).find((item) => item.id === roofId);
     if (!roof) return;

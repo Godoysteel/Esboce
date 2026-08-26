@@ -83,3 +83,19 @@ test('revestimentos da platibanda sobrevivem ao salvamento', () => {
   assert.equal(restored.parapetOuterAssemblyId, 'cement-board-osb');
   assert.equal(restored.parapetInnerAssemblyId, 'cement-board-direct');
 });
+
+test('extensão da cumeeira em níveis exige duas faces e sobrevive ao salvamento', () => {
+  const project = createProject('light_steel_frame');
+  project.floors[0].roofs.push({
+    id: 'roof-stepped', x1: 0, y1: 0, x2: 100, y2: 100,
+    type: 'duasAguas', pitchDeg: 28, ridgeAxis: 'x', steppedWallVolume: true,
+    baseHeightM: 3.15, gableFaceAAssemblyId: 'eifs', gableFaceBAssemblyId: 'eifs',
+    soffitAssemblyId: 'soffit-cement-board', fasciaAssemblyId: 'cement-board-direct',
+  });
+  assert.equal(steelFrameSpecificationIssues(project).filter((issue) => issue.kind === 'stepped-wall-face').length, 2);
+  project.floors[0].roofs[0].steppedWallFaceAAssemblyId = 'eifs';
+  project.floors[0].roofs[0].steppedWallFaceBAssemblyId = 'drywall-st';
+  const restored = decodeProjectDocument(encodeProjectDocument(project)).project.floors[0].roofs[0];
+  assert.equal(restored.steppedWallFaceAAssemblyId, 'eifs');
+  assert.equal(restored.steppedWallFaceBAssemblyId, 'drywall-st');
+});

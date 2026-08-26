@@ -66,6 +66,9 @@ export interface Roof {
   /** Revestimentos das duas faces da platibanda; aplicáveis somente a type=platibanda. */
   parapetOuterAssemblyId?: string;
   parapetInnerAssemblyId?: string;
+  /** Revestimentos do volume vertical criado pela Cumeeira em níveis. */
+  steppedWallFaceAAssemblyId?: string;
+  steppedWallFaceBAssemblyId?: string;
   /** Identifica uma cobertura composta confirmada pelo usuário. */
   compoundGroupId?: string;
   /** Telhado inferior do mesmo eixo numa cumeeira interrompida. O
