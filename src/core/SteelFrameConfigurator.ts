@@ -1,96 +1,141 @@
 import { Store } from './Store.js';
+import { ViewportController } from './ViewportController.js';
 import { STEEL_FRAME_FACE_ASSEMBLIES, steelFrameSpecificationIssues } from './SteelFrameAssemblies.js';
 import type { Roof, Wall, WallCavityAssembly } from './types.js';
 
-const external = STEEL_FRAME_FACE_ASSEMBLIES.filter((item) => item.use === 'external' || item.use === 'both');
-const internal = STEEL_FRAME_FACE_ASSEMBLIES.filter((item) => item.use === 'internal' || item.use === 'both');
-const soffit = STEEL_FRAME_FACE_ASSEMBLIES.filter((item) => item.use === 'soffit');
+type SurfaceTarget = { kind: 'wall-face' | 'gable-face' | 'roof'; entityId: string; side?: 'a' | 'b' };
+const faceSystems = STEEL_FRAME_FACE_ASSEMBLIES.filter((item) => item.use === 'external' || item.use === 'internal' || item.use === 'both');
+const soffitSystems = STEEL_FRAME_FACE_ASSEMBLIES.filter((item) => item.use === 'soffit');
 const insulationOptions = [
-  { id: 'none', label: 'Sem isolamento', thickness: 0, purpose: 'thermal_acoustic' },
-  { id: 'placlux.la-de-rocha', label: 'Lã de rocha PlacLux — térmico e acústico', thickness: 50, purpose: 'thermal_acoustic' },
-  { id: 'glass-wool', label: 'Lã de vidro — térmico e acústico', thickness: 50, purpose: 'thermal_acoustic' },
-  { id: 'pet-wool', label: 'Lã de PET — térmico e acústico', thickness: 50, purpose: 'thermal_acoustic' },
+  { id: 'none', label: 'Sem isolamento', thickness: 0 },
+  { id: 'placlux.la-de-rocha', label: 'Lã de rocha PlacLux', thickness: 50 },
+  { id: 'glass-wool', label: 'Lã de vidro', thickness: 50 },
+  { id: 'pet-wool', label: 'Lã de PET', thickness: 50 },
 ] as const;
 
-function optionHtml(items: readonly { id: string; label: string }[], selected?: string): string {
-  return '<option value="">Selecione…</option>' + items.map((item) =>
-    `<option value="${item.id}" ${item.id === selected ? 'selected' : ''}>${item.label}</option>`
-  ).join('');
+let completion: (() => void) | null = null;
+let selectedTarget: SurfaceTarget | null = null;
+
+function allWalls(): Wall[] { return Store.getProject().floors.flatMap((floor) => floor.walls); }
+function allRoofs(): Roof[] { return Store.getProject().floors.flatMap((floor) => floor.roofs || []); }
+function selectedWall(): Wall | undefined { return selectedTarget ? allWalls().find((wall) => wall.id === selectedTarget!.entityId) : undefined; }
+function selectedRoof(): Roof | undefined { return selectedTarget ? allRoofs().find((roof) => roof.id === selectedTarget!.entityId) : undefined; }
+
+function systemButtons(selectedId?: string): string {
+  const groups = [
+    ['Revestimentos externos', faceSystems.filter((item) => item.use === 'external' || item.use === 'both')],
+    ['Revestimentos internos', faceSystems.filter((item) => item.use === 'internal')],
+  ] as const;
+  return groups.map(([label, systems]) => `<div class="sf-side-group"><h4>${label}</h4>${systems.map((system) =>
+    `<button type="button" class="sf-system-option ${system.id === selectedId ? 'selected' : ''}" data-sf-system="${system.id}"><strong>${system.label}</strong><small>${system.layers.length} camadas</small></button>`
+  ).join('')}</div>`).join('');
 }
 
-function wallCard(wall: Wall, index: number): string {
-  const cavity = wall.cavityAssembly?.insulationSystemId;
-  return `<section class="sf-config-card" data-wall-id="${wall.id}">
-    <h3>Parede ${index + 1}</h3>
-    <label>Face A <select data-field="faceAAssemblyId">${optionHtml(external, wall.faceAAssemblyId)}</select></label>
-    <label>Face B / drywall interno <select data-field="faceBAssemblyId">${optionHtml(internal, wall.faceBAssemblyId)}</select></label>
-    <label>Isolamento térmico e acústico <select data-field="cavityAssembly">${optionHtml(insulationOptions, cavity)}</select></label>
-  </section>`;
+function ensurePanel(): HTMLElement {
+  let panel = document.getElementById('steelFrameConfigurator');
+  if (panel) return panel;
+  panel = document.createElement('aside');
+  panel.id = 'steelFrameConfigurator';
+  panel.innerHTML = `<header><div><strong>Fechamentos Steel Frame</strong><p>Clique em uma face da construção.</p></div><button type="button" data-sf-close>×</button></header><div data-sf-body></div><footer><span data-sf-progress></span><button type="button" data-sf-quantity>Ver quantitativo</button></footer>`;
+  document.body.appendChild(panel);
+  panel.querySelector('[data-sf-close]')!.addEventListener('click', close);
+  panel.querySelector('[data-sf-quantity]')!.addEventListener('click', () => {
+    const issues = steelFrameSpecificationIssues(Store.getProject());
+    if (issues.length) {
+      panel!.querySelector<HTMLElement>('[data-sf-progress]')!.textContent = `Faltam ${issues.length} seleções.`;
+      return;
+    }
+    const done = completion;
+    close();
+    done?.();
+  });
+  return panel;
 }
 
-function roofCard(roof: Roof, index: number): string {
-  const hasGable = roof.type === 'duasAguas' || roof.type === 'umaAgua' || !!roof.steppedWallVolume;
-  return `<section class="sf-config-card" data-roof-id="${roof.id}">
-    <h3>Cobertura ${index + 1} — ${roof.type === 'platibanda' ? 'platibanda' : 'telhado'}</h3>
-    ${hasGable ? `<label>Oitão face A <select data-field="gableFaceAAssemblyId">${optionHtml(external, roof.gableFaceAAssemblyId)}</select></label>
-    <label>Oitão face B <select data-field="gableFaceBAssemblyId">${optionHtml(internal, roof.gableFaceBAssemblyId)}</select></label>` : ''}
-    <label>Revestimento do beiral <select data-field="soffitAssemblyId">${optionHtml(soffit, roof.soffitAssemblyId)}</select></label>
-    <label>Revestimento da tabeira <select data-field="fasciaAssemblyId">${optionHtml(external, roof.fasciaAssemblyId)}</select></label>
-    ${roof.type === 'platibanda' ? `<label>Platibanda — face externa <select data-field="parapetOuterAssemblyId">${optionHtml(external, roof.parapetOuterAssemblyId)}</select></label>
-    <label>Platibanda — face interna <select data-field="parapetInnerAssemblyId">${optionHtml(external, roof.parapetInnerAssemblyId)}</select></label>` : ''}
-  </section>`;
+function saveWallFace(systemId: string): void {
+  const wall = selectedWall();
+  if (!wall || !selectedTarget?.side) return;
+  Store.commands.setSteelFrameWallSpecification(wall.id, {
+    faceAAssemblyId: selectedTarget.side === 'a' ? systemId : wall.faceAAssemblyId,
+    faceBAssemblyId: selectedTarget.side === 'b' ? systemId : wall.faceBAssemblyId,
+    cavityAssembly: wall.cavityAssembly,
+  });
 }
 
-function ensureDialog(): HTMLDivElement {
-  let overlay = document.getElementById('steelFrameConfigurator') as HTMLDivElement | null;
-  if (overlay) return overlay;
-  overlay = document.createElement('div');
-  overlay.id = 'steelFrameConfigurator';
-  overlay.innerHTML = `<div class="sf-config-dialog"><header><div><strong>Configurar fechamento Steel Frame</strong><p>Selecione os sistemas de revestimento e isolamento térmico e acústico de cada face.</p></div><button type="button" data-sf-close>×</button></header><div data-sf-body></div><footer><span data-sf-status></span><button type="button" data-sf-save>Salvar e gerar quantitativo</button></footer></div>`;
-  document.body.appendChild(overlay);
-  overlay.querySelector('[data-sf-close]')!.addEventListener('click', () => overlay!.classList.remove('visible'));
-  return overlay;
+function saveGableFace(systemId: string): void {
+  const roof = selectedRoof();
+  if (!roof || !selectedTarget?.side) return;
+  Store.commands.setSteelFrameRoofSpecification(roof.id, {
+    gableFaceAAssemblyId: selectedTarget.side === 'a' ? systemId : roof.gableFaceAAssemblyId,
+    gableFaceBAssemblyId: selectedTarget.side === 'b' ? systemId : roof.gableFaceBAssemblyId,
+    soffitAssemblyId: roof.soffitAssemblyId, fasciaAssemblyId: roof.fasciaAssemblyId,
+    parapetOuterAssemblyId: roof.parapetOuterAssemblyId, parapetInnerAssemblyId: roof.parapetInnerAssemblyId,
+  });
+}
+
+function renderWall(panel: HTMLElement, wall: Wall): void {
+  const side = selectedTarget!.side!;
+  const selectedId = side === 'a' ? wall.faceAAssemblyId : wall.faceBAssemblyId;
+  panel.querySelector<HTMLElement>('[data-sf-body]')!.innerHTML = `<div class="sf-selected-label">Parede · face ${side.toUpperCase()}</div>${systemButtons(selectedId)}
+    <div class="sf-side-group"><h4>Isolamento térmico e acústico</h4>${insulationOptions.map((item) => `<button type="button" class="sf-system-option ${wall.cavityAssembly?.insulationSystemId === item.id ? 'selected' : ''}" data-sf-insulation="${item.id}"><strong>${item.label}</strong><small>${item.thickness ? item.thickness + ' mm' : 'Escolha explícita'}</small></button>`).join('')}</div>`;
+  panel.querySelectorAll<HTMLButtonElement>('[data-sf-system]').forEach((button) => button.addEventListener('click', () => { saveWallFace(button.dataset.sfSystem!); render(); }));
+  panel.querySelectorAll<HTMLButtonElement>('[data-sf-insulation]').forEach((button) => button.addEventListener('click', () => {
+    const preset = insulationOptions.find((item) => item.id === button.dataset.sfInsulation)!;
+    const cavityAssembly: WallCavityAssembly = { insulationSystemId: preset.id, thicknessMm: preset.thickness, purpose: 'thermal_acoustic' };
+    Store.commands.setSteelFrameWallSpecification(wall.id, { faceAAssemblyId: wall.faceAAssemblyId, faceBAssemblyId: wall.faceBAssemblyId, cavityAssembly });
+    render();
+  }));
+}
+
+function renderRoof(panel: HTMLElement, roof: Roof): void {
+  if (selectedTarget!.kind === 'gable-face') {
+    const side = selectedTarget!.side!;
+    const selectedId = side === 'a' ? roof.gableFaceAAssemblyId : roof.gableFaceBAssemblyId;
+    panel.querySelector<HTMLElement>('[data-sf-body]')!.innerHTML = `<div class="sf-selected-label">Oitão · face ${side.toUpperCase()}</div>${systemButtons(selectedId)}`;
+    panel.querySelectorAll<HTMLButtonElement>('[data-sf-system]').forEach((button) => button.addEventListener('click', () => { saveGableFace(button.dataset.sfSystem!); render(); }));
+    return;
+  }
+  panel.querySelector<HTMLElement>('[data-sf-body]')!.innerHTML = `<div class="sf-selected-label">Cobertura selecionada</div>
+    <div class="sf-side-group"><h4>Beiral</h4>${soffitSystems.map((item) => `<button type="button" class="sf-system-option ${roof.soffitAssemblyId === item.id ? 'selected' : ''}" data-roof-field="soffitAssemblyId" data-sf-system="${item.id}"><strong>${item.label}</strong></button>`).join('')}</div>
+    <div class="sf-side-group"><h4>Tabeira</h4>${systemButtons(roof.fasciaAssemblyId)}</div>
+    ${roof.type === 'platibanda' ? `<div class="sf-side-group"><h4>Platibanda externa</h4>${systemButtons(roof.parapetOuterAssemblyId)}</div><div class="sf-side-group"><h4>Platibanda interna</h4>${systemButtons(roof.parapetInnerAssemblyId)}</div>` : ''}`;
+  Array.from(panel.querySelectorAll<HTMLButtonElement>('[data-sf-system]')).forEach((button) => button.addEventListener('click', () => {
+    const title = button.closest('.sf-side-group')?.querySelector('h4')?.textContent || '';
+    const field = button.dataset.roofField || (title === 'Tabeira' ? 'fasciaAssemblyId' : title.includes('externa') ? 'parapetOuterAssemblyId' : 'parapetInnerAssemblyId');
+    Store.commands.setSteelFrameRoofSpecification(roof.id, {
+      gableFaceAAssemblyId: roof.gableFaceAAssemblyId, gableFaceBAssemblyId: roof.gableFaceBAssemblyId,
+      soffitAssemblyId: field === 'soffitAssemblyId' ? button.dataset.sfSystem : roof.soffitAssemblyId,
+      fasciaAssemblyId: field === 'fasciaAssemblyId' ? button.dataset.sfSystem : roof.fasciaAssemblyId,
+      parapetOuterAssemblyId: field === 'parapetOuterAssemblyId' ? button.dataset.sfSystem : roof.parapetOuterAssemblyId,
+      parapetInnerAssemblyId: field === 'parapetInnerAssemblyId' ? button.dataset.sfSystem : roof.parapetInnerAssemblyId,
+    });
+    render();
+  }));
+}
+
+function render(): void {
+  const panel = ensurePanel();
+  const issues = steelFrameSpecificationIssues(Store.getProject());
+  panel.querySelector<HTMLElement>('[data-sf-progress]')!.textContent = issues.length ? `${issues.length} seleções pendentes` : 'Configuração completa';
+  const wall = selectedWall();
+  const roof = selectedRoof();
+  if (selectedTarget?.kind === 'wall-face' && wall) renderWall(panel, wall);
+  else if (selectedTarget && roof) renderRoof(panel, roof);
+  else panel.querySelector<HTMLElement>('[data-sf-body]')!.innerHTML = '<div class="sf-click-instruction"><strong>1.</strong> Gire a casa se necessário.<br><strong>2.</strong> Clique em uma face de parede, oitão ou cobertura.<br><strong>3.</strong> Escolha o sistema nesta lista.</div>';
 }
 
 export function open(onComplete: () => void): void {
-  const project = Store.getProject();
-  const overlay = ensureDialog();
-  const walls = project.floors.flatMap((floor) => floor.walls).filter((wall) => !wall.demolished);
-  const roofs = project.floors.flatMap((floor) => floor.roofs || []);
-  overlay.querySelector<HTMLElement>('[data-sf-body]')!.innerHTML = walls.map(wallCard).join('') + roofs.map(roofCard).join('');
-  overlay.classList.add('visible');
-  const save = overlay.querySelector<HTMLButtonElement>('[data-sf-save]')!;
-  save.onclick = () => {
-    overlay.querySelectorAll<HTMLElement>('[data-wall-id]').forEach((card) => {
-      const value = (field: string) => card.querySelector<HTMLSelectElement>(`[data-field="${field}"]`)!.value || undefined;
-      const insulation = value('cavityAssembly');
-      const preset = insulationOptions.find((item) => item.id === insulation);
-      const cavityAssembly: WallCavityAssembly | undefined = preset ? {
-        insulationSystemId: preset.id,
-        thicknessMm: preset.thickness,
-        purpose: preset.purpose,
-      } : undefined;
-      Store.commands.setSteelFrameWallSpecification(card.dataset.wallId!, {
-        faceAAssemblyId: value('faceAAssemblyId'), faceBAssemblyId: value('faceBAssemblyId'), cavityAssembly,
-      });
-    });
-    overlay.querySelectorAll<HTMLElement>('[data-roof-id]').forEach((card) => {
-      const value = (field: string) => card.querySelector<HTMLSelectElement>(`[data-field="${field}"]`)?.value || undefined;
-      Store.commands.setSteelFrameRoofSpecification(card.dataset.roofId!, {
-        gableFaceAAssemblyId: value('gableFaceAAssemblyId'), gableFaceBAssemblyId: value('gableFaceBAssemblyId'),
-        soffitAssemblyId: value('soffitAssemblyId'), fasciaAssemblyId: value('fasciaAssemblyId'),
-        parapetOuterAssemblyId: value('parapetOuterAssemblyId'), parapetInnerAssemblyId: value('parapetInnerAssemblyId'),
-      });
-    });
-    const remaining = steelFrameSpecificationIssues(project);
-    const status = overlay.querySelector<HTMLElement>('[data-sf-status]')!;
-    if (remaining.length) {
-      status.textContent = `Faltam ${remaining.length} escolhas obrigatórias.`;
-      return;
-    }
-    overlay.classList.remove('visible');
-    onComplete();
-  };
+  completion = onComplete;
+  selectedTarget = null;
+  ensurePanel().classList.add('visible');
+  ViewportController.setSteelFrameSurfaceSelectionHandler((target) => { selectedTarget = target; render(); });
+  render();
+}
+
+export function close(): void {
+  document.getElementById('steelFrameConfigurator')?.classList.remove('visible');
+  ViewportController.setSteelFrameSurfaceSelectionHandler(null);
+  selectedTarget = null;
 }
 
 export function needsConfiguration(): boolean {

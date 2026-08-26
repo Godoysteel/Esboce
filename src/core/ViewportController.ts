@@ -65,6 +65,7 @@ import {
   var floorFinishScale = 1;
   var floorFinishRotation = 0;
   var selectedWallId: any = null, selectedColumnId: any = null, selectedRoofId: any = null, selectedOpeningId: any = null, selectedVarandaId: any = null, selectedLajeId: any = null, selectedFurnitureId: any = null, selectedGlazingPanelId: any = null, selectedBalconyRailingId: any = null, selectedVolumeBoxId: any = null, selectedStairId: any = null, selectedForroRoomKey: any = null, selectedHydraulicNodeId: any = null;
+  var steelFrameSurfaceSelectionHandler: ((target: { kind: 'wall-face' | 'gable-face' | 'roof'; entityId: string; side?: 'a' | 'b' }) => void) | null = null;
   // Alça de altura do cômodo (DEC-116) só existe/é clicável enquanto
   // esta variável apontar pra parede selecionada — precisa de um clique
   // deliberado no botão "Ajustar altura" do gizmo pra armar, e desarma
@@ -2824,6 +2825,26 @@ import {
     // 2) elemento existente
     var mesh = pickMesh(e.clientX, e.clientY);
 
+    if (steelFrameSurfaceSelectionHandler) {
+      var sfHit = pickMeshHit(e.clientX, e.clientY);
+      if (sfHit && sfHit.object.userData.wallId) {
+        var sfSide = wallFaceAtPoint(sfHit.object.userData.wallId, sfHit.point) as 'a' | 'b';
+        select(sfHit.object.userData.wallId);
+        steelFrameSurfaceSelectionHandler({ kind: 'wall-face', entityId: sfHit.object.userData.wallId, side: sfSide });
+        hintEl.textContent = 'Face ' + sfSide.toUpperCase() + ' selecionada — escolha o sistema no painel lateral.';
+        return;
+      }
+      if (sfHit && sfHit.object.userData.roofId) {
+        var sfRoofSide = sfHit.object.userData.gableSide as 'a' | 'b' | undefined;
+        selectRoof(sfHit.object.userData.roofId);
+        steelFrameSurfaceSelectionHandler({ kind: sfRoofSide ? 'gable-face' : 'roof', entityId: sfHit.object.userData.roofId, ...(sfRoofSide ? { side: sfRoofSide } : {}) });
+        hintEl.textContent = sfRoofSide ? 'Oitão selecionado — escolha o revestimento no painel lateral.' : 'Cobertura selecionada — configure beiral, tabeira e platibanda no painel lateral.';
+        return;
+      }
+      hintEl.textContent = 'Clique diretamente em uma face de parede, oitão ou cobertura.';
+      return;
+    }
+
     // A troca de nível é contextual: clicar em qualquer volume visível
     // ativa silenciosamente o nível técnico ao qual ele pertence.
     if (mesh && Number.isInteger(mesh.userData.floorIndex) && mesh.userData.floorIndex !== Store.getProject().currentFloorIndex) {
@@ -5574,6 +5595,13 @@ import {
   export function setNextRoofType(type: any) { pendingRoofType = type; }
   export function activateRoofTool() { setTool('telhado'); }
   export function cancelActiveTool() { setTool(null); }
+  export function setSteelFrameSurfaceSelectionHandler(handler: typeof steelFrameSurfaceSelectionHandler) {
+    steelFrameSurfaceSelectionHandler = handler;
+    if (handler) {
+      setTool(null);
+      hintEl.textContent = 'Clique diretamente em uma face de parede, oitão ou cobertura.';
+    }
+  }
   export function activateCatalogProduct(productId: string, selection: CommercialSelection): boolean {
     var product = Catalog.getProduct(productId);
     if (!product) return false;
@@ -5621,7 +5649,7 @@ export const ViewportController = {
   select, selectColumn, selectRoof, selectOpening, selectVaranda, selectFurniture, selectGlazingPanel, selectVolumeBox, selectStair, selectForro, selectPlanUnderlay, selectHydraulicNode, beginHydraulicRouteDraw,
   getSelectedWallId, getSelectedColumnId, getSelectedRoofId,
   getSelectedOpeningId, getSelectedVarandaId, getSelectedLajeId, getSelectedFurnitureId, getSelectedGlazingPanelId, getSelectedBalconyRailingId, getSelectedVolumeBoxId, getSelectedStairId, getSelectedForroRoomKey, getSelectedPlanUnderlay, getSelectedHydraulicNodeId, getSelectedRoomWallIds,
-  setNextRoofAtticMode, setNextRoofType, activateRoofTool, cancelActiveTool, activateCatalogProduct, armHeightAdjust,
+  setNextRoofAtticMode, setNextRoofType, activateRoofTool, cancelActiveTool, setSteelFrameSurfaceSelectionHandler, activateCatalogProduct, armHeightAdjust,
   toggleWallDiagnostics,
   resetCamera,
   toggleTouchCameraMode,
