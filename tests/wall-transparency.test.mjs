@@ -55,12 +55,8 @@ test('paredes de fechamento do telhado superior possuem face interna completa e 
     rendererSource.indexOf('function buildRaisedClosureWallMeshes'),
     rendererSource.indexOf('// Fechamento próprio da "Cumeeira em níveis"'),
   );
-  const steppedClosureBlock = rendererSource.slice(
-    rendererSource.indexOf('function buildSteppedRidgeClosure'),
-    rendererSource.indexOf('function buildRaisedRoofPerimeterClosures'),
-  );
-  const perimeterClosureBlock = rendererSource.slice(
-    rendererSource.indexOf('function buildRaisedRoofPerimeterClosures'),
+  const visualVolumeBlock = rendererSource.slice(
+    rendererSource.indexOf('function buildSteppedRoofVisualVolume'),
     rendererSource.indexOf('function buildAtticWallFaceExtensions'),
   );
   // Exterior e interior são malhas independentes, não apenas um material
@@ -69,25 +65,21 @@ test('paredes de fechamento do telhado superior possuem face interna completa e 
   assert.match(closureFacesBlock, /name: 'interna', indices: \[1,5,7,1,7,3\]/);
   assert.match(closureFacesBlock, /mesh\.userData\.roofWallFace = face\.name/);
   assert.match(closureFacesBlock, /face\.name === 'interna'\) mesh\.renderOrder = 1/);
-  assert.match(steppedClosureBlock, /buildRaisedClosureWallMeshes\(vertices, material\)/);
-  // Laterais/fundos agora reutilizam literalmente o footprint, as faces
-  // A/B e o complemento de oitão usados pelas paredes dos cômodos.
-  assert.match(perimeterClosureBlock, /Core\.computeWallFootprints\(syntheticWalls\)/);
-  assert.match(perimeterClosureBlock, /nearestStructuralAxis/);
-  assert.match(perimeterClosureBlock, /structuralWalls\.forEach/);
-  assert.match(perimeterClosureBlock, /distance <= Core\.GRID \* 0\.01/);
-  assert.match(perimeterClosureBlock, /buildFaceStripMesh\(fp, rectangularHeightM/);
-  assert.match(perimeterClosureBlock, /buildAtticWallFaceExtensions\(wall, profile/);
-  assert.match(perimeterClosureBlock, /buildWallFootprintEdgeLines\(fp, rectangularHeightM/);
-  assert.match(perimeterClosureBlock, /new THREE\.EdgesGeometry\(extension\.geometry\)/);
-  assert.match(perimeterClosureBlock, /if \(extensionSlices\.length === 0\) meshes\.push\(buildWallTopCapMesh/);
-  assert.match(perimeterClosureBlock, /side === 'a' \? 'externa' : 'interna'/);
-  // A normal já é unitária: meia espessura precisa ser 0,06 m em cada
-  // direção, sem aplicar novamente o scale=1/GRID.
-  assert.match(steppedClosureBlock, /Core\.WALL_THICK \/ 2;/);
-  assert.doesNotMatch(steppedClosureBlock, /Core\.WALL_THICK \/ 2 \* scale/);
+  // O volume é fechado nas quatro faces e segue somente o retângulo do
+  // telhado, sem procurar ou alterar paredes estruturais inferiores.
+  assert.match(visualVolumeBlock, /roof\.x1, y1: roof\.y1, x2: roof\.x2/);
+  assert.match(visualVolumeBlock, /Core\.computeWallFootprints\(syntheticWalls\)/);
+  assert.doesNotMatch(visualVolumeBlock, /nearestStructuralAxis/);
+  assert.doesNotMatch(visualVolumeBlock, /structuralWalls/);
+  assert.match(visualVolumeBlock, /var visualBottomM = structuralWallHeightM - 0\.05/);
+  assert.match(visualVolumeBlock, /buildFaceStripMesh\(fp, rectangularHeightM/);
+  assert.match(visualVolumeBlock, /buildAtticWallFaceExtensions\(wall, profile/);
+  assert.match(visualVolumeBlock, /buildWallFootprintEdgeLines\(fp, rectangularHeightM/);
+  assert.match(visualVolumeBlock, /new THREE\.EdgesGeometry\(extension\.geometry\)/);
+  assert.match(visualVolumeBlock, /if \(extensionSlices\.length === 0\) meshes\.push\(buildWallTopCapMesh/);
+  assert.match(visualVolumeBlock, /side === 'a' \? 'externa' : 'interna'/);
   assert.equal(Core.WALL_THICK, 0.12);
-  for (const block of [steppedClosureBlock, perimeterClosureBlock]) {
+  for (const block of [visualVolumeBlock]) {
     assert.match(block, /side: THREE\.DoubleSide/);
     assert.match(block, /transparent: wallsTransparent/);
     assert.match(block, /opacity: wallsTransparent \? WALL_TRANSPARENT_OPACITY : 1/);

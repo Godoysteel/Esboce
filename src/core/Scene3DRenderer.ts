@@ -1581,56 +1581,18 @@ export function hashColorHex(key: string): number {
     return meshes;
   }
 
-  // Complementos laterais e de fundo do trecho elevado. Assim como o
-  // fechamento transversal acima, são peças da cobertura e começam
-  // exatamente no topo das paredes estruturais existentes. Nenhuma
-  // Wall é criada, esticada ou dividida para fechar esse espaço.
-  function buildRaisedRoofPerimeterClosures(roof: any, structuralWalls: Wall[], scale: number, offsetX: number, offsetY: number, yOffset: number, structuralWallHeightM: number, raisedBaseM: number, color: any, wallsTransparent: boolean) {
-    function nearestStructuralAxis(axis: 'x' | 'y', desired: number, span1: number, span2: number) {
-      var best = desired, bestDistance = Infinity;
-      structuralWalls.forEach(function (wall) {
-        var horizontal = Math.abs(wall.y2 - wall.y1) < 1e-4;
-        var vertical = Math.abs(wall.x2 - wall.x1) < 1e-4;
-        if ((axis === 'x' && !vertical) || (axis === 'y' && !horizontal)) return;
-        var wallSpan1 = axis === 'x' ? Math.min(wall.y1, wall.y2) : Math.min(wall.x1, wall.x2);
-        var wallSpan2 = axis === 'x' ? Math.max(wall.y1, wall.y2) : Math.max(wall.x1, wall.x2);
-        if (Math.min(span2, wallSpan2) < Math.max(span1, wallSpan1) - Core.COINCIDENCE_TOL) return;
-        var candidate = axis === 'x' ? wall.x1 : wall.y1;
-        var distance = Math.abs(candidate - desired);
-        // Só herda o eixo inferior quando já está geometricamente
-        // coincidente (até 1 cm). Depois que a pessoa arrasta uma borda do
-        // telhado, a parede elevada acompanha a nova borda em vez de ficar
-        // magnetizada à parede antiga e abrir uma cunha no encontro.
-        if (distance < bestDistance && distance <= Core.GRID * 0.01) { best = candidate; bestDistance = distance; }
-      });
-      return best;
-    }
-    var alignedX1 = roof.x1, alignedX2 = roof.x2, alignedY1 = roof.y1, alignedY2 = roof.y2;
-    if (roof.ridgeAxis === 'x') {
-      alignedY1 = nearestStructuralAxis('y', roof.y1, roof.x1, roof.x2);
-      alignedY2 = nearestStructuralAxis('y', roof.y2, roof.x1, roof.x2);
-      alignedX2 = nearestStructuralAxis('x', roof.x2, roof.y1, roof.y2);
-    } else {
-      alignedX1 = nearestStructuralAxis('x', roof.x1, roof.y1, roof.y2);
-      alignedX2 = nearestStructuralAxis('x', roof.x2, roof.y1, roof.y2);
-      alignedY2 = nearestStructuralAxis('y', roof.y2, roof.x1, roof.x2);
-    }
-    // Quatro paredes sintéticas fecham o retângulo apenas para calcular o
-    // footprint/mitre exatamente como num cômodo comum. A parede da junção
-    // não é renderizada aqui porque buildSteppedRidgeClosure cuida dela.
-    var segmentDefs = roof.ridgeAxis === 'x'
-      ? [
-          { x1: alignedX1, y1: alignedY1, x2: alignedX2, y2: alignedY1, render: true },
-          { x1: alignedX2, y1: alignedY1, x2: alignedX2, y2: alignedY2, render: true },
-          { x1: alignedX2, y1: alignedY2, x2: alignedX1, y2: alignedY2, render: true },
-          { x1: alignedX1, y1: alignedY2, x2: alignedX1, y2: alignedY1, render: false },
-        ]
-      : [
-          { x1: alignedX1, y1: alignedY1, x2: alignedX1, y2: alignedY2, render: true },
-          { x1: alignedX1, y1: alignedY2, x2: alignedX2, y2: alignedY2, render: true },
-          { x1: alignedX2, y1: alignedY2, x2: alignedX2, y2: alignedY1, render: true },
-          { x1: alignedX2, y1: alignedY1, x2: alignedX1, y2: alignedY1, render: false },
-        ];
+  // Volume visual fechado da "Cumeeira em níveis". Ele pertence somente
+  // à cobertura: nunca procura, recorta, divide ou reposiciona paredes de
+  // cômodos. Ao dimensionar o telhado, as quatro faces são reconstruídas
+  // diretamente a partir do seu retângulo. A base penetra alguns centímetros
+  // na construção inferior para que imprecisões no encontro fiquem ocultas.
+  function buildSteppedRoofVisualVolume(roof: any, scale: number, offsetX: number, offsetY: number, yOffset: number, structuralWallHeightM: number, raisedBaseM: number, color: any, wallsTransparent: boolean) {
+    var segmentDefs = [
+      { x1: roof.x1, y1: roof.y1, x2: roof.x2, y2: roof.y1 },
+      { x1: roof.x2, y1: roof.y1, x2: roof.x2, y2: roof.y2 },
+      { x1: roof.x2, y1: roof.y2, x2: roof.x1, y2: roof.y2 },
+      { x1: roof.x1, y1: roof.y2, x2: roof.x1, y2: roof.y1 },
+    ];
     var syntheticWalls: Wall[] = segmentDefs.map(function (segment, index) {
       return Core.createWallEntity(segment.x1, segment.y1, segment.x2, segment.y2, 'raised-roof-wall-' + index);
     });
@@ -1648,7 +1610,6 @@ export function hashColorHex(key: string): number {
     var topMaterial = makeMaterial();
     var meshes: any[] = [];
     syntheticWalls.forEach(function (wall, index) {
-      if (!segmentDefs[index]!.render) return;
       var fpModel = footprints[wall.id]!;
       function toScene(p: any) { return { x: (p.x - offsetX) * scale, z: (p.y - offsetY) * scale }; }
       var fp = {
@@ -1657,11 +1618,12 @@ export function hashColorHex(key: string): number {
         p1Free: fpModel.p1Free, p2Free: fpModel.p2Free,
         p1Extended: fpModel.p1Extended, p2Extended: fpModel.p2Extended,
       };
-      var rectangularHeightM = Math.max(0, raisedBaseM - structuralWallHeightM);
+      var visualBottomM = structuralWallHeightM - 0.05;
+      var rectangularHeightM = Math.max(0, raisedBaseM - visualBottomM);
       var extensionSlices = atticWallExtensionSlices(wall, profile, []);
       (['a', 'b'] as const).forEach(function (side) {
         var faceMaterial = makeMaterial();
-        var face = buildFaceStripMesh(fp, rectangularHeightM, yOffset + structuralWallHeightM, faceMaterial, side);
+        var face = buildFaceStripMesh(fp, rectangularHeightM, yOffset + visualBottomM, faceMaterial, side);
         face.userData.roofWallFace = side === 'a' ? 'externa' : 'interna';
         meshes.push(face);
         buildAtticWallFaceExtensions(wall, profile, [], fp, yOffset, faceMaterial, side).forEach(function (extension) {
@@ -1672,7 +1634,7 @@ export function hashColorHex(key: string): number {
           meshes.push(extensionEdges);
         });
       });
-      var edgeLines = buildWallFootprintEdgeLines(fp, rectangularHeightM, yOffset + structuralWallHeightM, extensionSlices.length === 0);
+      var edgeLines = buildWallFootprintEdgeLines(fp, rectangularHeightM, yOffset + visualBottomM, extensionSlices.length === 0);
       edgeLines.userData.roofWallFace = 'contorno';
       meshes.push(edgeLines);
       // Mesma regra das paredes comuns com oitão: não desenhar uma tampa
@@ -5391,19 +5353,10 @@ export function hashColorHex(key: string): number {
           if (roof.steppedLowerRoofId) {
             var lowerRoof = floorData.roofs.find(function (candidate) { return candidate.id === roof.steppedLowerRoofId; });
             if (lowerRoof) {
-              var lowerBaseM = Core.roofHeightAtRect(floorData.walls, lowerRoof.x1, lowerRoof.y1, lowerRoof.x2, lowerRoof.y2, currentWallHeight);
-              buildSteppedRidgeClosure(roof, lowerRoof, scale, offsetX, offsetY, yOffset, lowerBaseM, roofOwnHeight, wallMatchColor, !!layers.paredesTransparentes).forEach(function (closure) {
+              buildSteppedRoofVisualVolume(roof, scale, offsetX, offsetY, yOffset, currentWallHeight, roofOwnHeight, wallMatchColor, !!layers.paredesTransparentes).forEach(function (closure) {
                 tagCategory(closure, 'telhado');
                 closure.userData.roofId = roof.id;
-                closure.userData.roofClosure = 'transversal';
-                closure.userData.floorIndex = floorIdx;
-                scene.add(closure);
-                registry.structureMeshes.push(closure);
-              });
-              buildRaisedRoofPerimeterClosures(roof, floorData.walls, scale, offsetX, offsetY, yOffset, currentWallHeight, roofOwnHeight, wallMatchColor, !!layers.paredesTransparentes).forEach(function (closure) {
-                tagCategory(closure, 'telhado');
-                closure.userData.roofId = roof.id;
-                closure.userData.roofClosure = 'perimetral';
+                closure.userData.roofClosure = 'volume-visual';
                 closure.userData.floorIndex = floorIdx;
                 scene.add(closure);
                 registry.structureMeshes.push(closure);

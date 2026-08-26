@@ -35,7 +35,7 @@ test('interface prioriza modelos manuais compostos e mantém as peças editávei
   assert.match(app, /createRoofCompositePreset\('extensaoLateral'\)/);
 });
 
-test('cumeeira em níveis preserva o beiral inferior contra o oitão elevado', () => {
+test('cumeeira em níveis usa volume visual fechado sem alterar paredes estruturais', () => {
   const renderer = readFileSync(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
   const viewport = readFileSync(new URL('../src/core/ViewportController.ts', import.meta.url), 'utf8');
   const store = readFileSync(new URL('../src/core/Store.ts', import.meta.url), 'utf8');
@@ -43,15 +43,14 @@ test('cumeeira em níveis preserva o beiral inferior contra o oitão elevado', (
   assert.match(renderer, /tallerRoof\.compoundGroupId === roof\.compoundGroupId/);
   assert.match(renderer, /roof\.steppedLowerRoofId \|\| tallerRoof\.steppedLowerRoofId/);
   assert.match(renderer, /return !steppedRidgePair/);
-  assert.match(renderer, /function buildSteppedRidgeClosure/);
-  assert.match(renderer, /function buildRaisedRoofPerimeterClosures/);
+  assert.match(renderer, /function buildSteppedRoofVisualVolume/);
   assert.match(renderer, /if \(roof\.steppedLowerRoofId\)/);
-  assert.match(renderer, /buildRaisedRoofPerimeterClosures\(roof, floorData\.walls, scale/);
+  assert.match(renderer, /buildSteppedRoofVisualVolume\(roof, scale/);
   assert.match(viewport, /roof\.steppedLowerRoofId === o\.id \|\| o\.steppedLowerRoofId === roof\.id/);
   assert.match(store, /const steppedPair = roof\.steppedLowerRoofId === candidate\.id \|\| candidate\.steppedLowerRoofId === roof\.id/);
   assert.match(store, /if \(!steppedPair && candidate\.ridgeAxis === roof\.ridgeAxis\) return/);
-  assert.match(renderer, /closure\.userData\.roofClosure = 'transversal'/);
-  assert.match(renderer, /closure\.userData\.roofClosure = 'perimetral'/);
+  assert.match(renderer, /closure\.userData\.roofClosure = 'volume-visual'/);
+  assert.match(renderer, /var visualBottomM = structuralWallHeightM - 0\.05/);
   assert.match(store, /const minimumHeightM = r\.steppedLowerRoofId \? Core\.WALL_HEIGHT \+ 0\.15 : 0\.1/);
   assert.match(store, /Math\.min\(8, heightM\)/);
   assert.match(viewport, /Use “Subir telhado inteiro” no painel/);
