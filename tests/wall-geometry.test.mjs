@@ -1515,13 +1515,33 @@ test('Scene3DRenderer: prévia (ghost) do telhado usa drawPreview.roofBaseHeight
 test('Scene3DRenderer.applyRoomBoxClipping: injeta discard por pixel via onBeforeCompile, seguindo a INCLINAÇÃO real da água (não uma altura plana no pico) — sem clippingPlanes nativo (precisa de UNIÃO de várias caixas, não só uma interseção)', () => {
   const fnStart = scene3DRendererSource.indexOf('function applyRoomBoxClipping(');
   assert.notEqual(fnStart, -1, 'applyRoomBoxClipping não encontrada');
-  const fnBlock = scene3DRendererSource.slice(fnStart, fnStart + 4400);
+  const fnBlock = scene3DRendererSource.slice(fnStart, fnStart + 4800);
   assert.match(fnBlock, /material\.onBeforeCompile = function \(shader: any\) \{/);
   assert.match(fnBlock, /vRoomClipWorldPos = \( modelMatrix \* vec4\( transformed, 1\.0 \) \)\.xyz;/);
   assert.match(fnBlock, /float coord = uRoomClipAxisIsZ\[ i \] > 0\.5 \? vRoomClipWorldPos\.z : vRoomClipWorldPos\.x;/);
-  assert.match(fnBlock, /float surfaceY = uRoomClipBaseY\[ i \] \+ uRoomClipPeak\[ i \] - uRoomClipTanPitch\[ i \] \* abs\( coord - uRoomClipRidgeCoord\[ i \] \);/);
+  assert.match(fnBlock, /surfaceY = uRoomClipBaseY\[ i \] \+ uRoomClipPeak\[ i \] - uRoomClipTanPitch\[ i \] \* abs\( coord - uRoomClipRidgeCoord\[ i \] \);/);
   assert.match(fnBlock, /if \( vRoomClipWorldPos\.y < surfaceY \) discard;/);
   assert.match(fnBlock, /material\.needsUpdate = true;/);
+});
+
+// Quatro-águas é hipado nos 4 lados — a fórmula de rampa única acima
+// (coord/ridgeCoord) só modela UMA direção de caimento e produz um
+// entalhe torto bem na quina quando dois telhados 4-águas se encontram
+// em L (Product Owner, com print). isHip troca, por caixa, pra um
+// campo de altura por DISTÂNCIA ÀS 4 BORDAS do retângulo — a mesma
+// geometria que já define a cumeeira do hip em buildRoofQuatroAguas —
+// então a superfície escondida acompanha o hip de verdade, inclusive
+// nas quinas.
+test('Scene3DRenderer.applyRoomBoxClipping: telhado quatro-águas (isHip) usa campo de altura por distância às 4 bordas, não a rampa de uma direção só', () => {
+  const fnStart = scene3DRendererSource.indexOf('function applyRoomBoxClipping(');
+  const fnBlock = scene3DRendererSource.slice(fnStart, fnStart + 4800);
+  assert.match(fnBlock, /uniform float uRoomClipIsHip\[/);
+  assert.match(fnBlock, /if \( uRoomClipIsHip\[ i \] > 0\.5 \) \{/);
+  assert.match(fnBlock, /float distX = min\( vRoomClipWorldPos\.x - uRoomClipMin\[ i \]\.x, uRoomClipMax\[ i \]\.x - vRoomClipWorldPos\.x \);/);
+  assert.match(fnBlock, /float distZ = min\( vRoomClipWorldPos\.z - uRoomClipMin\[ i \]\.y, uRoomClipMax\[ i \]\.y - vRoomClipWorldPos\.z \);/);
+  assert.match(fnBlock, /surfaceY = uRoomClipBaseY\[ i \] \+ uRoomClipTanPitch\[ i \] \* min\( distX, distZ \);/);
+  assert.match(scene3DRendererSource, /isHip: r\.type === 'quatroAguas' \? 1 : 0,/);
+  assert.match(scene3DRendererSource, /isHip: b\.isHip \}; \}\);/);
 });
 
 test('Scene3DRenderer: cada telhado calcula a caixa dos cômodos ESTRITAMENTE mais altos que ele (nunca a própria) e aplica applyRoomBoxClipping em toda peça', () => {

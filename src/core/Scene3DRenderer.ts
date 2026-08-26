@@ -1119,6 +1119,14 @@ export function hashColorHex(key: string): number {
     // platô plano em base+peakAboveBase — mesma fórmula cobre as 3 formas,
     // ver roofSlopeSurfaceParams.
     baseY: number; peakAboveBase: number; tanPitch: number; ridgeCoord: number; halfSpan: number; axisIsZ: number;
+    // Telhado quatro-águas é hipado nos 4 lados — a fórmula de rampa
+    // única (coord/ridgeCoord acima) só modela UMA direção de caimento
+    // e erra bem perto das quinas/espigões (dois hips se encontrando
+    // formam um entalhe torto em vez de vale — Product Owner, com
+    // print). isHip troca a fórmula, no shader, pela distância às 4
+    // bordas do retângulo (min/max já carregados) — o mesmo cálculo
+    // geométrico que já define onde fica a cumeeira em buildRoofQuatroAguas.
+    isHip: number;
   };
   function applyRoomBoxClipping(material: any, boxes: RoomClipBox[]) {
     if (!material || !boxes.length) return;
@@ -1133,7 +1141,7 @@ export function hashColorHex(key: string): number {
     // loop já para em uRoomClipCount de qualquer forma, essa é só uma
     // segunda camada de segurança.
     var padded = capped.slice();
-    while (padded.length < ROOM_CLIP_BOX_LIMIT) padded.push({ minX: 0, maxX: 0, minZ: 0, maxZ: 0, baseY: -1e6, peakAboveBase: 0, tanPitch: 0, ridgeCoord: 0, halfSpan: 0, axisIsZ: 0 });
+    while (padded.length < ROOM_CLIP_BOX_LIMIT) padded.push({ minX: 0, maxX: 0, minZ: 0, maxZ: 0, baseY: -1e6, peakAboveBase: 0, tanPitch: 0, ridgeCoord: 0, halfSpan: 0, axisIsZ: 0, isHip: 0 });
     material.onBeforeCompile = function (shader: any) {
       shader.uniforms.uRoomClipCount = { value: capped.length };
       shader.uniforms.uRoomClipMin = { value: padded.map(function (b) { return new THREE.Vector2(b.minX, b.minZ); }) };
@@ -1144,6 +1152,7 @@ export function hashColorHex(key: string): number {
       shader.uniforms.uRoomClipRidgeCoord = { value: padded.map(function (b) { return b.ridgeCoord; }) };
       shader.uniforms.uRoomClipHalfSpan = { value: padded.map(function (b) { return b.halfSpan; }) };
       shader.uniforms.uRoomClipAxisIsZ = { value: padded.map(function (b) { return b.axisIsZ; }) };
+      shader.uniforms.uRoomClipIsHip = { value: padded.map(function (b) { return b.isHip; }) };
       shader.vertexShader = shader.vertexShader
         .replace('#include <common>', '#include <common>\nvarying vec3 vRoomClipWorldPos;')
         // Posição mundial calculada direto (não reaproveita a `worldPosition`
@@ -1154,11 +1163,11 @@ export function hashColorHex(key: string): number {
       shader.fragmentShader = shader.fragmentShader
         .replace(
           '#include <common>',
-          '#include <common>\nvarying vec3 vRoomClipWorldPos;\nuniform int uRoomClipCount;\nuniform vec2 uRoomClipMin[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform vec2 uRoomClipMax[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipBaseY[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipPeak[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipTanPitch[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipRidgeCoord[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipHalfSpan[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipAxisIsZ[' + ROOM_CLIP_BOX_LIMIT + '];'
+          '#include <common>\nvarying vec3 vRoomClipWorldPos;\nuniform int uRoomClipCount;\nuniform vec2 uRoomClipMin[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform vec2 uRoomClipMax[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipBaseY[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipPeak[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipTanPitch[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipRidgeCoord[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipHalfSpan[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipAxisIsZ[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipIsHip[' + ROOM_CLIP_BOX_LIMIT + '];'
         )
         .replace(
           '#include <clipping_planes_fragment>',
-          '#include <clipping_planes_fragment>\n  for ( int i = 0; i < ' + ROOM_CLIP_BOX_LIMIT + '; i ++ ) {\n    if ( i >= uRoomClipCount ) break;\n    if ( vRoomClipWorldPos.x > uRoomClipMin[ i ].x && vRoomClipWorldPos.x < uRoomClipMax[ i ].x && vRoomClipWorldPos.z > uRoomClipMin[ i ].y && vRoomClipWorldPos.z < uRoomClipMax[ i ].y ) {\n      float coord = uRoomClipAxisIsZ[ i ] > 0.5 ? vRoomClipWorldPos.z : vRoomClipWorldPos.x;\n      float surfaceY = uRoomClipBaseY[ i ] + uRoomClipPeak[ i ] - uRoomClipTanPitch[ i ] * abs( coord - uRoomClipRidgeCoord[ i ] );\n      if ( vRoomClipWorldPos.y < surfaceY ) discard;\n    }\n  }'
+          '#include <clipping_planes_fragment>\n  for ( int i = 0; i < ' + ROOM_CLIP_BOX_LIMIT + '; i ++ ) {\n    if ( i >= uRoomClipCount ) break;\n    if ( vRoomClipWorldPos.x > uRoomClipMin[ i ].x && vRoomClipWorldPos.x < uRoomClipMax[ i ].x && vRoomClipWorldPos.z > uRoomClipMin[ i ].y && vRoomClipWorldPos.z < uRoomClipMax[ i ].y ) {\n      float surfaceY;\n      if ( uRoomClipIsHip[ i ] > 0.5 ) {\n        float distX = min( vRoomClipWorldPos.x - uRoomClipMin[ i ].x, uRoomClipMax[ i ].x - vRoomClipWorldPos.x );\n        float distZ = min( vRoomClipWorldPos.z - uRoomClipMin[ i ].y, uRoomClipMax[ i ].y - vRoomClipWorldPos.z );\n        surfaceY = uRoomClipBaseY[ i ] + uRoomClipTanPitch[ i ] * min( distX, distZ );\n      } else {\n        float coord = uRoomClipAxisIsZ[ i ] > 0.5 ? vRoomClipWorldPos.z : vRoomClipWorldPos.x;\n        surfaceY = uRoomClipBaseY[ i ] + uRoomClipPeak[ i ] - uRoomClipTanPitch[ i ] * abs( coord - uRoomClipRidgeCoord[ i ] );\n      }\n      if ( vRoomClipWorldPos.y < surfaceY ) discard;\n    }\n  }'
         );
     };
     material.needsUpdate = true;
@@ -4823,7 +4832,7 @@ export function hashColorHex(key: string): number {
         return {
           minX: (Math.min.apply(null, xs) - offsetX) * scale, maxX: (Math.max.apply(null, xs) - offsetX) * scale,
           minZ: (Math.min.apply(null, ys) - offsetY) * scale, maxZ: (Math.max.apply(null, ys) - offsetY) * scale,
-          baseY: fYOffset + ownHeightM, peakAboveBase: 0, tanPitch: 0, ridgeCoord: 0, halfSpan: 0, axisIsZ: 0,
+          baseY: fYOffset + ownHeightM, peakAboveBase: 0, tanPitch: 0, ridgeCoord: 0, halfSpan: 0, axisIsZ: 0, isHip: 0,
         };
       });
     }
@@ -5382,6 +5391,10 @@ export function hashColorHex(key: string): number {
             minX: rFootprint.minX, maxX: rFootprint.maxX, minZ: rFootprint.minZ, maxZ: rFootprint.maxZ,
             baseY: yOffset + rOwnHeight, peakAboveBase: rSlope.peakAboveBase, tanPitch: rSlope.tanPitch,
             ridgeCoord: rSlope.ridgeCoord, halfSpan: rSlope.halfSpan, axisIsZ: rSlope.axisIsZ,
+            // Quatro-águas é hipado nos 4 lados — a fórmula de rampa
+            // única (acima) não segue a superfície real perto das quinas
+            // e sobra/falta corte exatamente onde dois hips se encontram.
+            isHip: r.type === 'quatroAguas' ? 1 : 0,
             peakY: yOffset + rOwnHeight + rSlope.peakAboveBase,
           };
         });
@@ -5432,7 +5445,7 @@ export function hashColorHex(key: string): number {
             );
             return !steppedRidgePair;
           })
-            .map(function (b: any) { return { minX: b.minX, maxX: b.maxX, minZ: b.minZ, maxZ: b.maxZ, baseY: b.baseY, peakAboveBase: b.peakAboveBase, tanPitch: b.tanPitch, ridgeCoord: b.ridgeCoord, halfSpan: b.halfSpan, axisIsZ: b.axisIsZ }; });
+            .map(function (b: any) { return { minX: b.minX, maxX: b.maxX, minZ: b.minZ, maxZ: b.maxZ, baseY: b.baseY, peakAboveBase: b.peakAboveBase, tanPitch: b.tanPitch, ridgeCoord: b.ridgeCoord, halfSpan: b.halfSpan, axisIsZ: b.axisIsZ, isHip: b.isHip }; });
           var clipBoxesForThisRoof = roomClipBoxes.concat(tallerRoofClipBoxes);
           if (clipBoxesForThisRoof.length) pieces.forEach(function (piece) {
             var materials = Array.isArray(piece.material) ? piece.material : [piece.material];
