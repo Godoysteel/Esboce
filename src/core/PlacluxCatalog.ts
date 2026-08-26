@@ -15,6 +15,15 @@ export interface PlacluxCatalogProduct {
 
 const source = (slug: string) => `https://placlux.com.br/produtos/${slug}/`;
 
+/** Distribuidor informado pelo responsável do catálogo para a região de Joinville. */
+export const PLACLUX_SUPPLIER = {
+  id: 'joinsteel-joinville',
+  name: 'JoinSteel',
+  city: 'Joinville',
+  state: 'SC',
+  logoUrl: '/fornecedores/joinsteel-logo.jpeg',
+} as const;
+
 /** Portfólio publicado pela PlacLux; sem preços ou SKUs comerciais inventados. */
 export const PLACLUX_PRODUCTS: readonly PlacluxCatalogProduct[] = [
   { id: 'placlux.profort-next-6mm', name: 'Chapa Cimentícia ProFort Next 6 mm', category: 'board', unit: 'sheet', dimensions: '1200 x 2400 x 6 mm', sourceUrl: source('chapa-cimenticia'), notes: 'Uso interno conforme fabricante.' },

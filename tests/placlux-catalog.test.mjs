@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { PLACLUX_PRODUCTS, getPlacluxProduct } from '../src/core/PlacluxCatalog.ts';
+import { existsSync } from 'node:fs';
+import { PLACLUX_PRODUCTS, PLACLUX_SUPPLIER, getPlacluxProduct } from '../src/core/PlacluxCatalog.ts';
 import { STEEL_FRAME_FACE_ASSEMBLIES } from '../src/core/SteelFrameAssemblies.ts';
 
 test('catálogo PlacLux cobre todas as famílias publicadas e as quatro espessuras ProFort Next', () => {
@@ -21,6 +22,14 @@ test('catálogo PlacLux cobre todas as famílias publicadas e as quatro espessur
     'placlux.perfis-drywall', 'placlux.perfis-steel-frame',
     'placlux.forro-mineral-knauf-ceiling',
   ]) assert.ok(ids.has(id), `produto ausente: ${id}`);
+});
+
+test('JoinSteel de Joinville é a fornecedora identificada dos materiais PlacLux', () => {
+  assert.equal(PLACLUX_SUPPLIER.name, 'JoinSteel');
+  assert.equal(PLACLUX_SUPPLIER.city, 'Joinville');
+  assert.equal(PLACLUX_SUPPLIER.state, 'SC');
+  assert.equal(PLACLUX_SUPPLIER.logoUrl, '/fornecedores/joinsteel-logo.jpeg');
+  assert.ok(existsSync(new URL('../public/fornecedores/joinsteel-logo.jpeg', import.meta.url)));
 });
 
 test('produtos sem ficha individual permanecem sem dimensões inventadas', () => {

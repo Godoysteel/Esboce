@@ -24,7 +24,7 @@ import {
 } from "../core/ProjectPersistence.js";
 import type { ConstructionSystem, CommercialSelection } from "../core/types.js";
 import { constructionSystemDefinition } from "../core/ConstructionSystem.js";
-import { PLACLUX_PRODUCTS } from "../core/PlacluxCatalog.js";
+import { PLACLUX_PRODUCTS, PLACLUX_SUPPLIER } from "../core/PlacluxCatalog.js";
 
 const PLACLUX_CATALOG_TAB = "__placlux__";
 
@@ -1702,17 +1702,18 @@ export class EsboceApplication {
     bodyEl.innerHTML = "";
     const intro = document.createElement("div");
     intro.style.cssText = "margin-bottom:14px;color:#5F5E5A;font-size:13px;";
-    intro.innerHTML = `<strong>Materiais PlacLux para construção a seco</strong><br>Portfólio técnico disponível para os sistemas Steel Frame. Preços serão exibidos quando houver oferta comercial cadastrada.`;
+    intro.innerHTML = `<strong>Materiais PlacLux para construção a seco</strong><br>Fornecidos por ${PLACLUX_SUPPLIER.name}, de ${PLACLUX_SUPPLIER.city}/${PLACLUX_SUPPLIER.state}. Preços serão exibidos quando houver oferta comercial cadastrada.`;
     bodyEl.appendChild(intro);
     const grid = document.createElement("div");
     grid.className = "catalog-grid";
     PLACLUX_PRODUCTS.forEach((product) => {
       const card = document.createElement("div");
       card.className = "catalog-card";
-      card.innerHTML = `<div class="catalog-card-photo" style="background:#eef2e9;color:#27613c;font-weight:800;display:flex;align-items:center;justify-content:center;">PlacLux</div>
+      card.innerHTML = `<div class="catalog-card-photo" style="background:#fff;display:flex;align-items:center;justify-content:center;"><img src="${PLACLUX_SUPPLIER.logoUrl}" alt="${PLACLUX_SUPPLIER.name} — fornecedora PlacLux em ${PLACLUX_SUPPLIER.city}" style="width:100%;height:100%;object-fit:contain;padding:8px;"></div>
         <div class="catalog-card-info"><p class="catalog-card-nome">${product.name}</p>
         <p class="catalog-card-fabricante">Fabricante: PlacLux · ${product.category}</p>
-        <p class="catalog-card-fornecedor">${product.dimensions || product.notes || "Produto técnico"}</p>
+        <p class="catalog-card-fornecedor">Fornecedor: ${PLACLUX_SUPPLIER.name} · ${PLACLUX_SUPPLIER.city}/${PLACLUX_SUPPLIER.state}</p>
+        ${product.dimensions ? `<p class="catalog-card-fornecedor">${product.dimensions}</p>` : ''}
         <div class="catalog-card-preco consulta">Sob consulta</div></div>`;
       card.addEventListener("click", () => window.open(product.sourceUrl, "_blank", "noopener,noreferrer"));
       grid.appendChild(card);
