@@ -1550,7 +1550,7 @@ test('Scene3DRenderer: cada telhado calcula a caixa dos cômodos ESTRITAMENTE ma
   const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 9000);
   assert.match(roofsBlock, /var roomHeightBoxes = allFloorRoomClipBoxes\[floorIdx\] \|\| \[\];/);
   assert.match(roofsBlock, /var roomClipBoxes = roomHeightBoxes\.concat\(higherFloorRoomHeightBoxes\)\.filter\(function \(b: any\) \{ return b\.baseY > pieceBaseY \+ 1e-4; \}\);/);
-  assert.match(roofsBlock, /var clipBoxesForThisRoof = roomClipBoxes\.concat\(tallerRoofClipBoxes\);/);
+  assert.match(roofsBlock, /var clipBoxesForThisRoof = roomClipBoxes\.concat\(biggerRoofClipBoxes\);/);
   assert.match(roofsBlock, /applyRoomBoxClipping\(material, clipBoxesForThisRoof\)/);
 });
 
@@ -1598,19 +1598,30 @@ test('Scene3DRenderer.roofSlopeSurfaceParams: mesma matemática de vão/beiral j
   assert.match(fnBlock, /ridgeCoord: \(minZw \+ maxZw\) \/ 2, halfSpan: halfSpanT, peakAboveBase: halfSpanT \* tanPitch/);
 });
 
-test('Scene3DRenderer: caixa de telhado-vs-telhado compara PICO×PICO (nunca pico×base) — garante que só um lado do par esconde o outro, nunca os dois ao mesmo tempo — e carrega a rampa inteira (baseY/peakAboveBase/tanPitch/ridgeCoord/halfSpan/axisIsZ), não só uma altura', () => {
+// Comparar por PICO (altura de cumeeira) usava uma fórmula de rampa de
+// UMA direção só — errada perto da quina de um telhado hipado
+// (quatro-águas) e ambígua quando os dois picos são parecidos: dois
+// 4-águas encontrando em L se apagavam por completo, cada um tentando
+// esconder o outro ao mesmo tempo (Product Owner, com prints). Decidir
+// por ÁREA DA PLANTA em vez de altura resolve a ambiguidade sem depender
+// de pico nenhum — só um lado do par pode ser "estritamente maior",
+// nunca os dois — e a caixa vencedora carrega a SUPERFÍCIE REAL
+// (isHip para quatro-águas, rampa de uma direção pros demais), não uma
+// altura plana, pra formar um rincão de verdade em vez de apagar a
+// pegada inteira.
+test('Scene3DRenderer: caixa de telhado-vs-telhado compara ÁREA DA PLANTA (nunca pico), carrega a superfície real (isHip pra quatro-águas) — só um lado do par esconde o outro, nunca os dois ao mesmo tempo', () => {
   const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
   assert.notEqual(roofsStart, -1);
   const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 9000);
   assert.match(roofsBlock, /var roofPeakBoxes = floorData\.roofs\.map\(function \(r: any\) \{/);
   assert.match(roofsBlock, /var rSlope = roofSlopeSurfaceParams\(r, scale, offsetX, offsetY\);/);
-  assert.match(roofsBlock, /peakY: yOffset \+ rOwnHeight \+ rSlope\.peakAboveBase,/);
-  assert.match(roofsBlock, /var ownSlope = roofSlopeSurfaceParams\(roof, scale, offsetX, offsetY\);/);
-  assert.match(roofsBlock, /var ownPeakY = pieceBaseY \+ ownSlope\.peakAboveBase;/);
-  assert.match(roofsBlock, /var tallerRoofClipBoxes = roofPeakBoxes\.filter\(function \(b: any\) \{/);
-  assert.match(roofsBlock, /b\.id === roof\.id \|\| b\.peakY <= ownPeakY \+ 1e-4/);
+  assert.match(roofsBlock, /isHip: r\.type === 'quatroAguas' \? 1 : 0,/);
+  assert.match(roofsBlock, /area: Math\.abs\(r\.x2 - r\.x1\) \* Math\.abs\(r\.y2 - r\.y1\),/);
+  assert.match(roofsBlock, /var ownArea = Math\.abs\(roof\.x2 - roof\.x1\) \* Math\.abs\(roof\.y2 - roof\.y1\);/);
+  assert.match(roofsBlock, /var biggerRoofClipBoxes = roofPeakBoxes\.filter\(function \(b: any\) \{/);
+  assert.match(roofsBlock, /b\.id === roof\.id \|\| b\.area <= ownArea \+ 1e-4/);
   assert.match(roofsBlock, /return !steppedRidgePair/);
-  assert.match(roofsBlock, /baseY: b\.baseY, peakAboveBase: b\.peakAboveBase, tanPitch: b\.tanPitch, ridgeCoord: b\.ridgeCoord, halfSpan: b\.halfSpan, axisIsZ: b\.axisIsZ/);
+  assert.match(roofsBlock, /baseY: b\.baseY, peakAboveBase: b\.peakAboveBase, tanPitch: b\.tanPitch, ridgeCoord: b\.ridgeCoord, halfSpan: b\.halfSpan, axisIsZ: b\.axisIsZ, isHip: b\.isHip/);
 });
 
 test('Scene3DRenderer.roofSlopeSurfaceParams: platibanda vira platô plano (tanPitch=0) em base+parapetHeight, não em base+0 — parapetHeight some no cálculo do pico sem essa distinção', () => {

@@ -5380,6 +5380,18 @@ export function hashColorHex(key: string): number {
         // outro; comparar com a base deixaria os dois tentando esconder um
         // ao outro ao mesmo tempo sempre que as bases se sobrepõem, abrindo
         // um buraco onde nenhum dos dois desenha nada.
+        // Encontro telhado-vs-telhado: o de PEGADA MAIOR prevalece — o
+        // menor perde só a parte que atravessa a SUPERFÍCIE DE VERDADE do
+        // maior (não a pegada inteira: esconder tudo dentro da pegada,
+        // em qualquer altura, abria fresta onde o menor aparecia embaixo
+        // do beiral do maior sem que a malha do maior estivesse ali pra
+        // cobrir — Product Owner: "só a parte que atravessa a face do
+        // outro, senão fica uma fresta"). Decidir quem vence por ÁREA DA
+        // PLANTA em vez de altura de cumeeira: comparar altura usava a
+        // fórmula de rampa de UMA direção só, ambígua/instável quando os
+        // dois picos são parecidos — dois 4-águas nessa situação se
+        // apagavam por completo, um tentando esconder o outro ao mesmo
+        // tempo. Área não empata por acaso do jeito que altura empata.
         var roofPeakBoxes = floorData.roofs.map(function (r: any) {
           var rOwnHeight = (r.steppedWallVolume || r.steppedLowerRoofId)
             ? Math.max(r.baseHeightM || currentWallHeight, currentWallHeight + 0.15)
@@ -5391,11 +5403,8 @@ export function hashColorHex(key: string): number {
             minX: rFootprint.minX, maxX: rFootprint.maxX, minZ: rFootprint.minZ, maxZ: rFootprint.maxZ,
             baseY: yOffset + rOwnHeight, peakAboveBase: rSlope.peakAboveBase, tanPitch: rSlope.tanPitch,
             ridgeCoord: rSlope.ridgeCoord, halfSpan: rSlope.halfSpan, axisIsZ: rSlope.axisIsZ,
-            // Quatro-águas é hipado nos 4 lados — a fórmula de rampa
-            // única (acima) não segue a superfície real perto das quinas
-            // e sobra/falta corte exatamente onde dois hips se encontram.
             isHip: r.type === 'quatroAguas' ? 1 : 0,
-            peakY: yOffset + rOwnHeight + rSlope.peakAboveBase,
+            area: Math.abs(r.x2 - r.x1) * Math.abs(r.y2 - r.y1),
           };
         });
         floorData.roofs.forEach(function (roof) {
@@ -5422,15 +5431,14 @@ export function hashColorHex(key: string): number {
           // o próprio cômodo do telhado tem baseY == pieceBaseY (não >),
           // então nunca se auto-esconde.
           var roomClipBoxes = roomHeightBoxes.concat(higherFloorRoomHeightBoxes).filter(function (b: any) { return b.baseY > pieceBaseY + 1e-4; });
-          // E só telhados ESTRITAMENTE de cumeeira mais alta que a PRÓPRIA
-          // cumeeira deste (não a base) — ver comentário acima de
+          // E só telhados de pegada ESTRITAMENTE maior que a PRÓPRIA
+          // pegada deste (nunca a própria) — ver comentário acima de
           // roofPeakBoxes.
-          var ownSlope = roofSlopeSurfaceParams(roof, scale, offsetX, offsetY);
-          var ownPeakY = pieceBaseY + ownSlope.peakAboveBase;
-          var tallerRoofClipBoxes = roofPeakBoxes.filter(function (b: any) {
-            if (b.id === roof.id || b.peakY <= ownPeakY + 1e-4) return false;
-            var tallerRoof = floorData.roofs.find(function (candidate) { return candidate.id === b.id; });
-            if (tallerRoof && tallerRoof.steppedWallVolume && tallerRoof.ridgeAxis === roof.ridgeAxis) return false;
+          var ownArea = Math.abs(roof.x2 - roof.x1) * Math.abs(roof.y2 - roof.y1);
+          var biggerRoofClipBoxes = roofPeakBoxes.filter(function (b: any) {
+            if (b.id === roof.id || b.area <= ownArea + 1e-4) return false;
+            var biggerRoof = floorData.roofs.find(function (candidate) { return candidate.id === b.id; });
+            if (biggerRoof && biggerRoof.steppedWallVolume && biggerRoof.ridgeAxis === roof.ridgeAxis) return false;
             // Cumeeira em níveis: os dois trechos consecutivos pertencem
             // ao mesmo conjunto, mantêm o mesmo eixo e um deles controla
             // a parede elevada (atticMode). Nesse encontro o beiral do
@@ -5438,15 +5446,15 @@ export function hashColorHex(key: string): number {
             // clipping genérico apagava a água inclinada e deixava só um
             // pedaço da tabeira, abrindo uma fresta visível.
             var steppedRidgePair = !!(
-              tallerRoof && roof.compoundGroupId &&
-              tallerRoof.compoundGroupId === roof.compoundGroupId &&
-              tallerRoof.ridgeAxis === roof.ridgeAxis &&
-              (roof.steppedLowerRoofId || tallerRoof.steppedLowerRoofId || roof.atticMode || tallerRoof.atticMode)
+              biggerRoof && roof.compoundGroupId &&
+              biggerRoof.compoundGroupId === roof.compoundGroupId &&
+              biggerRoof.ridgeAxis === roof.ridgeAxis &&
+              (roof.steppedLowerRoofId || biggerRoof.steppedLowerRoofId || roof.atticMode || biggerRoof.atticMode)
             );
             return !steppedRidgePair;
           })
             .map(function (b: any) { return { minX: b.minX, maxX: b.maxX, minZ: b.minZ, maxZ: b.maxZ, baseY: b.baseY, peakAboveBase: b.peakAboveBase, tanPitch: b.tanPitch, ridgeCoord: b.ridgeCoord, halfSpan: b.halfSpan, axisIsZ: b.axisIsZ, isHip: b.isHip }; });
-          var clipBoxesForThisRoof = roomClipBoxes.concat(tallerRoofClipBoxes);
+          var clipBoxesForThisRoof = roomClipBoxes.concat(biggerRoofClipBoxes);
           if (clipBoxesForThisRoof.length) pieces.forEach(function (piece) {
             var materials = Array.isArray(piece.material) ? piece.material : [piece.material];
             materials.forEach(function (material: any) { applyRoomBoxClipping(material, clipBoxesForThisRoof); });
