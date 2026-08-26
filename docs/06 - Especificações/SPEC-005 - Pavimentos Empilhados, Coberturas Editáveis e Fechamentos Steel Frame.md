@@ -1,12 +1,12 @@
 # SPEC-005 — Pavimentos Empilhados, Coberturas Editáveis e Fechamentos Steel Frame
 
-**Status:** Implementado na branch `codex/imagens-revestimentos-reais` (51 commits à frente de `main`); pendente de mesclagem, revisão manual e QA antes de entrar em produção.
+**Status:** Implementado e mesclado a `main` em 26/08/2026; ainda pendente de rodada completa de QA/validação manual pelo Product Owner antes de considerar o piloto controlado (ver Roadmap, "Próxima fase").
 
 **Data:** 26/08/2026
 
 **Escopo:** três evoluções do editor de geometria, desenvolvidas em sequência na mesma branch e documentadas juntas por formarem uma cadeia única de causa e efeito — empilhar cômodos exige compor coberturas automaticamente; compor coberturas automaticamente exige presets editáveis e um telhado escalonado de verdade; e ter um telhado escalonado com faces novas (paredes de extensão, oitões, beiral, tabeira) é o que torna necessário um fluxo de fechamento técnico completo para Light Steel Frame.
 
-Este documento formaliza retroativamente o que já foi implementado e testado, conforme ADR-003 (Documentação como Fonte da Verdade) — a documentação não antecedeu o código nesta branch, mas a divergência é resolvida agora, antes da mesclagem a `main`.
+Este documento formaliza retroativamente o que já foi implementado e testado, conforme ADR-003 (Documentação como Fonte da Verdade) — a documentação não antecedeu o código nesta branch, mas a divergência foi resolvida antes da mesclagem a `main`.
 
 ## 1. Visão
 
