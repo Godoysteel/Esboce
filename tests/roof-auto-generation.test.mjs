@@ -59,3 +59,16 @@ test('cumeeira em níveis usa volume visual fechado sem alterar paredes estrutur
   assert.match(viewport, /selectedRoof\.atticMode \|\| selectedRoof\.steppedWallVolume/);
   assert.match(viewport, /updateRoofBaseHeightLive\(elevationTarget\.id, heightM\)/);
 });
+
+test('girar o eixo da cumeeira reavalia a composição automática de telhados', () => {
+  const viewport = readFileSync(new URL('../src/core/ViewportController.ts', import.meta.url), 'utf8');
+  const axisHandler = viewport.slice(
+    viewport.indexOf("var axisBtn = e.target.closest('button.roof-axis');"),
+    viewport.indexOf("var btn = e.target.closest('button.rt');"),
+  );
+  assert.match(axisHandler, /Store\.commands\.rotateRoofAxis\(selectedRoofId\)/);
+  // Sem isso, dois telhados em L só se compõem se o usuário também
+  // arrastar uma borda depois de girar o eixo — o encontro automático
+  // fica quebrado justamente na ação que mais cria pares elegíveis.
+  assert.match(axisHandler, /Store\.commands\.autoComposeRoofs\(\)/);
+});

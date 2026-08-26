@@ -749,6 +749,9 @@
      linguagem visual de .dim-cota, cor diferente pra não ser confundida
      com as cotas persistentes de parede (que são vermelhas). */
   .dim-cota.hydraulic-drag-cota { background: #5A49C7; }
+  /* Cota temporária durante o arraste da alça de cumeeira (inclinação) —
+     mesma linguagem visual, cor própria pra não confundir com as outras. */
+  .dim-cota.roof-pitch-drag-cota { background: #C2410C; }
 
   /* Barra inferior — mesmo padrão de .top-overlay (container
      transparente, filhos viram pills flutuantes). Ver comentário no
@@ -1217,6 +1220,7 @@
     .sf-system-option strong { flex:1; font-size:12px; }
     .sf-system-option small { flex:none; color:#777; font-size:10px; }
     .sf-complete-notice { border-left:4px solid #3FAE67; background:#edf8f0; color:#225b34; }
+    .sf-attention-notice { border-left:4px solid #d97706; background:#fff7e8; color:#74430b; line-height:1.45; }
     .sf-next-step { display:flex; flex-direction:column; gap:4px; padding:12px; border:1px solid #b8d9c1; border-radius:9px; background:#edf8f0; color:#1d4f2c; }
     .sf-stage { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:9px; padding:8px 10px; border-radius:7px; background:#27364a; color:#fff; }
     .sf-stage span { font-size:8px; font-weight:800; letter-spacing:.08em; opacity:.7; }
@@ -2130,14 +2134,8 @@
     <button class="sp" data-shape="redonda" title="Coluna redonda">◯</button>
   </div>
   <div id="roofTypePanel" class="shape-panel roof-type-panel">
-    <button class="rt" data-rooftype="duasAguas" title="Duas águas">⩓ 2 águas</button>
-    <button class="rt" data-rooftype="quatroAguas" title="Quatro águas">⛰ 4 águas</button>
-    <button class="rt" data-rooftype="umaAgua" title="Uma água">◺ 1 água</button>
-    <button class="rt" data-rooftype="platibanda" title="Platibanda">▭ Platibanda</button>
-    <label class="roof-parameter" id="roofPitchControl">Inclinação <input id="roofPitchInput" type="number" min="5" max="75" step="1" inputmode="decimal" aria-label="Inclinação do telhado em graus"></label>
     <label class="roof-parameter roof-elevation" id="roofElevationControl"><span>Subir telhado inteiro</span><output id="roofElevationValue">3,15 m</output><input id="roofElevationInput" type="range" min="2.85" max="8" step="0.05" aria-label="Altura da base do telhado em metros"></label>
     <button class="roof-axis" title="Alternar a direção da cumeeira ou do caimento">↔ Direção: eixo X</button>
-    <div class="roof-auto-compose" title="Coberturas que se encontram são recortadas automaticamente">Encontro automático</div>
   </div>
   <div id="varandaTypePanel" class="shape-panel roof-type-panel">
     <label class="roof-parameter">Largura <input id="varandaWidthInput" type="number" min="0.8" max="6" step="0.1" inputmode="decimal" aria-label="Largura da varanda em metros"></label>
@@ -2145,7 +2143,6 @@
     <label class="roof-parameter">Inclinação <input id="varandaPitchInput" type="number" min="2" max="60" step="1" inputmode="decimal" aria-label="Inclinação da cobertura da varanda"></label>
     <small style="max-width:220px;line-height:1.25">Arraste a alça roxa para seguir as paredes. Segure Shift para continuar reto.</small>
   </div>
-  <div id="finishPanel" class="shape-panel finish-panel"></div>
   <button id="generateAtticBtn" style="display:none; position:absolute; right:112px; bottom:82px; z-index:40; padding:13px 20px; border:0; border-radius:14px; background:#5A49C7; color:#fff; font-weight:700; box-shadow:0 8px 28px rgba(40,32,105,.3);">Gerar ático</button>
   <style>#generateAtticBtn.visible{display:block !important}</style>
   <div id="openingPickerPanel" class="shape-panel finish-panel tool-picker"></div>
@@ -2202,6 +2199,7 @@ Mova uma parede para registrar a operação.</pre>
   <div id="liveRoomDimensionLine" class="live-room-dimension-line"></div>
   <div id="liveRoomDimensionLineB" class="live-room-dimension-line"></div>
   <div id="hydraulicDragCotaLayer" class="dim-cota-layer"></div>
+  <div id="roofPitchDragCota" class="dim-cota roof-pitch-drag-cota" style="display:none"></div>
 </div>
 
 <!-- Barra inferior — mesmo princípio das ilhas do topo (fase 1): sem

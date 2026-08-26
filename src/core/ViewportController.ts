@@ -177,7 +177,7 @@ import {
   var MIN_DIST = 3, MAX_DIST = 35;
   var touchCameraMode = false;
 
-  var gizmoEl: any, gzSwapBtnEl: any, openingGizmoEl: any, roomGizmoEl: any, volumeBoxGizmoEl: any, stairGizmoEl: any, stairTypePanelEl: any, forroTypePanelEl: any, planUnderlayGizmoEl: any, columnShapePanelEl: any, roofTypePanelEl: any, roofPitchInputEl: any, roofPitchControlEl: any, roofElevationControlEl: any, roofElevationInputEl: any, roofElevationValueEl: any, varandaTypePanelEl: any, varandaWidthInputEl: any, varandaHeightInputEl: any, varandaPitchInputEl: any, finishPanelEl: any, paintPickerPanelEl: any, openingPickerPanelEl: any, objectPanelEl: any, objectPanelTitleEl: any, objectPanelBodyEl: any, hintEl: any, layersContextMenuEl: any, hydraulicWallPromptEl: any, hydraulicWallElevationPanelEl: any, hydraulicWallElevationTitleEl: any, hydraulicWallElevationSvgEl: any, hydraulicRouteDrawBarEl: any, hydraulicRouteDrawCountEl: any;
+  var gizmoEl: any, gzSwapBtnEl: any, openingGizmoEl: any, roomGizmoEl: any, volumeBoxGizmoEl: any, stairGizmoEl: any, stairTypePanelEl: any, forroTypePanelEl: any, planUnderlayGizmoEl: any, columnShapePanelEl: any, roofTypePanelEl: any, roofElevationControlEl: any, roofElevationInputEl: any, roofElevationValueEl: any, roofPitchDragCotaEl: any, varandaTypePanelEl: any, varandaWidthInputEl: any, varandaHeightInputEl: any, varandaPitchInputEl: any, paintPickerPanelEl: any, openingPickerPanelEl: any, objectPanelEl: any, objectPanelTitleEl: any, objectPanelBodyEl: any, hintEl: any, layersContextMenuEl: any, hydraulicWallPromptEl: any, hydraulicWallElevationPanelEl: any, hydraulicWallElevationTitleEl: any, hydraulicWallElevationSvgEl: any, hydraulicRouteDrawBarEl: any, hydraulicRouteDrawCountEl: any;
   // Estado do desenho de percurso guiado (H2): fixtureId sendo roteada e os
   // pontos-guia já clicados (só plano — a queda vertical final é
   // automática, ver Hydraulics.buildGuidedColdWaterHeaderRoute). null =
@@ -1400,15 +1400,20 @@ import {
       var r = Store.findRoof(selectedRoofId);
       if (!r) { selectedRoofId = null; gizmoEl.classList.remove('visible'); roofTypePanelEl.classList.remove('visible'); return; }
       var mid2 = modelToWorld((r.x1 + r.x2) / 2, (r.y1 + r.y2) / 2);
-      var topY2 = yOffset + Scene3DRenderer.FLOOR_STACK_HEIGHT_GETTER();
+      // Ancora o painel no PICO real do telhado (base + subida da água),
+      // não numa altura genérica de piso — senão, em telhados íngremes,
+      // altos ou elevados (ático, cumeeira em níveis), o ponto projetado
+      // cai no meio da malha visível e o painel acaba cobrindo o próprio
+      // telhado que o usuário está tentando editar.
+      var roofBaseM = r.baseHeightM || Scene3DRenderer.WALL_HEIGHT_GETTER();
+      var roofHalfSpanM = (r.ridgeAxis === 'x' ? Math.abs(r.y2 - r.y1) : Math.abs(r.x2 - r.x1)) / Core.GRID / 2;
+      var roofRiseM = r.type === 'platibanda' ? (r.parapetHeight || 0.5) : roofHalfSpanM * Math.tan(r.pitchDeg * Math.PI / 180);
+      var topY2 = yOffset + Math.max(Scene3DRenderer.FLOOR_STACK_HEIGHT_GETTER(), roofBaseM + roofRiseM);
       positionFloatingPanel(gizmoEl, mid2.x, topY2, mid2.z, 0);
       gizmoEl.classList.add('visible');
       positionFloatingPanel(roofTypePanelEl, mid2.x, topY2, mid2.z, -60);
       roofTypePanelEl.classList.add('visible');
       stackLeftOf(roofTypePanelEl, gizmoEl, 8);
-      roofTypePanelEl.querySelectorAll('.rt').forEach(function (btn: any) { btn.classList.toggle('active', btn.dataset.rooftype === r!.type); });
-      if (roofPitchInputEl && document.activeElement !== roofPitchInputEl) roofPitchInputEl.value = String(Math.round(r.pitchDeg * 10) / 10);
-      if (roofPitchControlEl) roofPitchControlEl.style.display = r.type === 'platibanda' ? 'none' : 'grid';
       var elevationRoof = (r.atticMode || r.steppedWallVolume || r.steppedLowerRoofId) ? r : null;
       var canElevateWholeRoof = !!elevationRoof;
       if (roofElevationControlEl) roofElevationControlEl.style.display = canElevateWholeRoof ? 'grid' : 'none';
@@ -1486,39 +1491,6 @@ import {
     var mid = modelToWorld((w.x1 + w.x2) / 2, (w.y1 + w.y2) / 2);
     positionFloatingPanel(gizmoEl, mid.x, yOffset + Scene3DRenderer.FLOOR_STACK_HEIGHT_GETTER(), mid.z, 0);
     gizmoEl.classList.add('visible');
-  }
-
-  function renderFinishSwatches(category: any, currentProductId: any) {
-    finishPanelEl.innerHTML = '';
-    Catalog.getProductsByCategory(category).forEach(function (p) {
-      var btn = document.createElement('button');
-      btn.className = 'fn' + (p.id === currentProductId ? ' active' : '');
-      btn.title = p.name;
-      btn.style.background = p.assets.colorHex;
-      btn.dataset.product = p.id;
-      finishPanelEl.appendChild(btn);
-    });
-  }
-
-  // Painel de acabamento contextual. A pintura de paredes pertence
-  // exclusivamente à ferramenta paintBucket e à sua paleta fixa; uma
-  // seleção comum de parede/cômodo nunca deve exibir cores. O painel
-  // contextual permanece apenas para materiais de telhado.
-  function refreshFinishPanel() {
-    var yOffset = currentFloorYOffset();
-    if (gizmoMenuOpen && selectedRoofId) {
-      var r = Store.findRoof(selectedRoofId);
-      if (r) {
-        var mid2 = modelToWorld((r.x1 + r.x2) / 2, (r.y1 + r.y2) / 2);
-        var topY2 = yOffset + Scene3DRenderer.FLOOR_STACK_HEIGHT_GETTER();
-        positionFloatingPanel(finishPanelEl, mid2.x, topY2, mid2.z, -100);
-        renderFinishSwatches('roof_tile', r.finishProductId);
-        finishPanelEl.classList.add('visible');
-        stackLeftOf(finishPanelEl, roofTypePanelEl, 8);
-        return;
-      }
-    }
-    finishPanelEl.classList.remove('visible');
   }
 
   // Cota ao vivo enquanto arrasta — mesma ideia do "readout" do Sims: ao
@@ -1660,7 +1632,6 @@ import {
       steelFrameConfigMode: !!steelFrameSurfaceSelectionHandler
     });
     positionGizmoAndShapePanel();
-    refreshFinishPanel();
     updateDimLabels();
   }
 
@@ -3574,6 +3545,15 @@ import {
           }
         }
         Store.commands.updateRoofPitchLive(selectedRoofId, finalPitch);
+        if (rNow && roofPitchDragCotaEl) {
+          var pitchMid = modelToWorld((rNow.x1 + rNow.x2) / 2, (rNow.y1 + rNow.y2) / 2);
+          var pitchBaseM = rNow.baseHeightM || Scene3DRenderer.WALL_HEIGHT_GETTER();
+          var pitchHalfSpanM = (rNow.ridgeAxis === 'x' ? Math.abs(rNow.y2 - rNow.y1) : Math.abs(rNow.x2 - rNow.x1)) / Core.GRID / 2;
+          var pitchPeakY = currentFloorYOffset() + pitchBaseM + pitchHalfSpanM * Math.tan(finalPitch * Math.PI / 180);
+          roofPitchDragCotaEl.textContent = Math.round(finalPitch) + '°';
+          roofPitchDragCotaEl.style.display = 'block';
+          positionFloatingPanel(roofPitchDragCotaEl, pitchMid.x, pitchPeakY, pitchMid.z, 0);
+        }
       }
       return;
     }
@@ -4277,6 +4257,7 @@ import {
       return;
     }
     if (dragMode === 'roofRidge' || dragMode === 'roofParapetHeight') {
+      if (roofPitchDragCotaEl) roofPitchDragCotaEl.style.display = 'none';
       if (selectedRoofId && fuseRoofsIfTouching(selectedRoofId)) {
         hintEl.textContent = 'Telhados fundidos — a cumeeira agora é uma só.';
         onModelChanged();
@@ -5307,17 +5288,15 @@ import {
     layersContextMenuEl = document.getElementById('layersContextMenu');
     columnShapePanelEl = document.getElementById('columnShapePanel');
     roofTypePanelEl = document.getElementById('roofTypePanel');
-    roofPitchInputEl = document.getElementById('roofPitchInput');
     roofElevationControlEl = document.getElementById('roofElevationControl');
     roofElevationInputEl = document.getElementById('roofElevationInput');
     roofElevationValueEl = document.getElementById('roofElevationValue');
+    roofPitchDragCotaEl = document.getElementById('roofPitchDragCota');
     varandaTypePanelEl = document.getElementById('varandaTypePanel');
     varandaWidthInputEl = document.getElementById('varandaWidthInput');
     varandaHeightInputEl = document.getElementById('varandaHeightInput');
     varandaPitchInputEl = document.getElementById('varandaPitchInput');
-    roofPitchControlEl = document.getElementById('roofPitchControl');
     generateAtticBtnEl = document.getElementById('generateAtticBtn');
-    finishPanelEl = document.getElementById('finishPanel');
     paintPickerPanelEl = document.getElementById('paintPickerPanel');
     openingPickerPanelEl = document.getElementById('openingPickerPanel');
     objectPanelEl = document.getElementById('objectPanel');
@@ -5397,25 +5376,14 @@ import {
       var axisBtn = e.target.closest('button.roof-axis');
       if (axisBtn && selectedRoofId) {
         Store.commands.rotateRoofAxis(selectedRoofId);
+        // Girar o eixo pode tornar dois telhados vizinhos elegíveis (ou não)
+        // pra composição automática — sem isso, um telhado em L só se
+        // compõe se o usuário também arrastar uma borda depois.
+        Store.commands.autoComposeRoofs();
         render();
         return;
       }
-      var btn = e.target.closest('button.rt');
-      if (!btn || !selectedRoofId) return;
-      Store.commands.setRoofPieceType(selectedRoofId, btn.dataset.rooftype);
     });
-    if (roofPitchInputEl) {
-      roofPitchInputEl.addEventListener('change', function () {
-        if (!selectedRoofId) return;
-        var pitch = Number(roofPitchInputEl.value);
-        if (!Number.isFinite(pitch)) return;
-        Store.commands.setRoofPitch(selectedRoofId, pitch);
-        render();
-      });
-      roofPitchInputEl.addEventListener('keydown', function (e: any) {
-        if (e.key === 'Enter') { roofPitchInputEl.blur(); e.preventDefault(); }
-      });
-    }
     if (roofElevationInputEl) {
       roofElevationInputEl.addEventListener('pointerdown', function () { Store.commands.beginTransaction(); });
       roofElevationInputEl.addEventListener('input', function () {
@@ -5452,13 +5420,6 @@ import {
         hintEl.textContent = 'Ático gerado. As paredes agora acompanham o telhado de forma paramétrica.';
       });
     }
-    finishPanelEl.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
-    finishPanelEl.addEventListener('click', function (e: any) {
-      var btn = e.target.closest('button.fn');
-      if (!btn) return;
-      var productId = btn.dataset.product;
-      if (selectedRoofId) { Store.commands.setRoofFinish(selectedRoofId, productId); return; }
-    });
     if (paintPickerPanelEl) {
       paintPickerPanelEl.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
       paintPickerPanelEl.addEventListener('click', function (e: any) {

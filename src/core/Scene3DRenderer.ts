@@ -4747,6 +4747,31 @@ export function hashColorHex(key: string): number {
 
     renderHydraulics(scene, project, scale, offsetX, offsetY, viewState);
 
+    // Caixa (pegada × altura própria) de cada cômodo de CADA pavimento, em Y
+    // absoluto (yOffset do próprio pavimento) — precisa existir ANTES do
+    // loop de pavimentos porque um telhado do térreo (processado primeiro)
+    // pode precisar esconder a parte que hoje invade um cômodo empilhado no
+    // 1º pavimento (processado só depois). Mesmo formato de RoomClipBox já
+    // usado por applyRoomBoxClipping; ver função abaixo pro caso mesmo-
+    // pavimento (roomHeightBoxes).
+    function buildRoomHeightBoxesForFloor(fd: any, fWallHeight: number, fYOffset: number): RoomClipBox[] {
+      var fGeometry = getFloorGeometry(fd, fWallHeight);
+      return fGeometry.rooms.map(function (room: any) {
+        var wallIdsForRoom = Core.findRoomWallIds(fd.walls, room);
+        var ownHeightM = Core.roomOwnHeightM(fd.walls, wallIdsForRoom, fWallHeight);
+        var xs = room.points.map(function (p: any) { return p.x; });
+        var ys = room.points.map(function (p: any) { return p.y; });
+        return {
+          minX: (Math.min.apply(null, xs) - offsetX) * scale, maxX: (Math.max.apply(null, xs) - offsetX) * scale,
+          minZ: (Math.min.apply(null, ys) - offsetY) * scale, maxZ: (Math.max.apply(null, ys) - offsetY) * scale,
+          baseY: fYOffset + ownHeightM, peakAboveBase: 0, tanPitch: 0, ridgeCoord: 0, halfSpan: 0, axisIsZ: 0,
+        };
+      });
+    }
+    var allFloorRoomClipBoxes = project.floors.map(function (fd, fIdx) {
+      return buildRoomHeightBoxesForFloor(fd, floorWallHeight(fd, WALL_HEIGHT), fIdx * FLOOR_STACK_HEIGHT);
+    });
+
     project.floors.forEach(function (floorData, floorIdx) {
       // Selecionar um nível muda somente o contexto de edição. A casa
       // inteira continua visível, inclusive todos os volumes superiores,
@@ -5263,17 +5288,18 @@ export function hashColorHex(key: string): number {
         // exato) — mais simples e robusto pro shader; a única contrapartida
         // é um cômodo em L "emprestar" seu corte pro canto que não existe
         // de verdade, um exagero de recorte, nunca falta de recorte.
-        var roomHeightBoxes = rooms.map(function (room: any) {
-          var wallIdsForRoom = Core.findRoomWallIds(floorData.walls, room);
-          var ownHeightM = Core.roomOwnHeightM(floorData.walls, wallIdsForRoom, currentWallHeight);
-          var xs = room.points.map(function (p: any) { return p.x; });
-          var ys = room.points.map(function (p: any) { return p.y; });
-          return {
-            minX: (Math.min.apply(null, xs) - offsetX) * scale, maxX: (Math.max.apply(null, xs) - offsetX) * scale,
-            minZ: (Math.min.apply(null, ys) - offsetY) * scale, maxZ: (Math.max.apply(null, ys) - offsetY) * scale,
-            baseY: yOffset + ownHeightM, peakAboveBase: 0, tanPitch: 0, ridgeCoord: 0, halfSpan: 0, axisIsZ: 0,
-          };
-        });
+        var roomHeightBoxes = allFloorRoomClipBoxes[floorIdx] || [];
+        // Cômodo empilhado num pavimento SUPERIOR ocupa, em Y absoluto, uma
+        // faixa bem acima de qualquer telhado deste pavimento — então
+        // qualquer pedaço de telhado que caia dentro da pegada dele já
+        // está, na prática, embaixo do piso de cima (não existe mais
+        // "telhado visível de fora" ali). Reaproveita o mesmo mecanismo de
+        // recorte por pixel, só estendendo de quais pavimentos vêm as
+        // caixas — sem recortar malha nenhuma, só oculta o pixel.
+        var higherFloorRoomHeightBoxes: RoomClipBox[] = [];
+        for (var higherFloorIdx = floorIdx + 1; higherFloorIdx < allFloorRoomClipBoxes.length; higherFloorIdx++) {
+          higherFloorRoomHeightBoxes = higherFloorRoomHeightBoxes.concat(allFloorRoomClipBoxes[higherFloorIdx] || []);
+        }
         // Mesma ideia, mas telhado-vs-telhado (DEC-125/126): pegada ×
         // SUPERFÍCIE de cada telhado do pavimento (não uma altura plana no
         // pico — isso cortava um retângulo reto em vez de seguir a
@@ -5323,7 +5349,7 @@ export function hashColorHex(key: string): number {
           // Só cômodos ESTRITAMENTE mais altos que este telhado entram —
           // o próprio cômodo do telhado tem baseY == pieceBaseY (não >),
           // então nunca se auto-esconde.
-          var roomClipBoxes = roomHeightBoxes.filter(function (b: any) { return b.baseY > pieceBaseY + 1e-4; });
+          var roomClipBoxes = roomHeightBoxes.concat(higherFloorRoomHeightBoxes).filter(function (b: any) { return b.baseY > pieceBaseY + 1e-4; });
           // E só telhados ESTRITAMENTE de cumeeira mais alta que a PRÓPRIA
           // cumeeira deste (não a base) — ver comentário acima de
           // roofPeakBoxes.

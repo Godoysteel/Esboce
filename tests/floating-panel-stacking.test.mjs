@@ -34,18 +34,16 @@ test('painel de tipo de telhado (roofTypePanel) encosta no gizmo com stackLeftOf
   assert.match(body, /stackLeftOf\(roofTypePanelEl, gizmoEl, 8\);/);
 });
 
-test('paleta de cor do telhado (finishPanel) encosta no roofTypePanel com stackLeftOf, na mesma sequência de render que já posicionou o roofTypePanel', () => {
-  const start = viewportControllerSource.indexOf('function refreshFinishPanel() {');
-  const end = viewportControllerSource.indexOf('\n  }', start);
-  const body = viewportControllerSource.slice(start, end);
-  assert.match(body, /stackLeftOf\(finishPanelEl, roofTypePanelEl, 8\);/);
+test('painel de acabamento de telhado (finishPanel/refreshFinishPanel) foi removido — cor da telha agora vem do catálogo', () => {
+  assert.doesNotMatch(viewportControllerSource, /finishPanelEl/);
+  assert.doesNotMatch(viewportControllerSource, /function refreshFinishPanel/);
+  assert.doesNotMatch(viewportControllerSource, /function renderFinishSwatches/);
+});
 
-  // positionGizmoAndShapePanel() (que posiciona gizmo+roofTypePanel)
-  // precisa rodar ANTES de refreshFinishPanel() no mesmo ciclo, senão
-  // o finishPanel se ancora numa posição desatualizada do
-  // roofTypePanel.
-  const renderStart = viewportControllerSource.indexOf('positionGizmoAndShapePanel();');
-  const finishCallIdx = viewportControllerSource.indexOf('refreshFinishPanel();', renderStart);
-  assert.ok(renderStart !== -1 && finishCallIdx !== -1 && finishCallIdx > renderStart,
-    'refreshFinishPanel() precisa ser chamada DEPOIS de positionGizmoAndShapePanel() no render()');
+test('painel de tipo de telhado ancora no PICO real do telhado, não numa altura genérica de piso', () => {
+  const start = viewportControllerSource.indexOf('if (selectedRoofId) {');
+  const end = viewportControllerSource.indexOf('stackLeftOf(roofTypePanelEl, gizmoEl, 8);', start);
+  const body = viewportControllerSource.slice(start, end);
+  assert.match(body, /roofHalfSpanM \* Math\.tan\(r\.pitchDeg \* Math\.PI \/ 180\)/);
+  assert.match(body, /Math\.max\(Scene3DRenderer\.FLOOR_STACK_HEIGHT_GETTER\(\), roofBaseM \+ roofRiseM\)/);
 });

@@ -1192,12 +1192,14 @@ export const commands = {
     } else {
       // Cobertura escalonada: a peça principal permanece na altura
       // normal e a segunda nasce elevada, com cumeeira paralela. A linha
-      // de encontro vira uma parede REAL do pavimento, controlada pelo
-      // telhado elevado; por isso recebe acabamento e esquadrias como
-      // qualquer outra parede, em vez de ser apenas uma saia decorativa.
+      // de encontro vira um volume visual derivado (steppedWallVolume),
+      // nunca uma Wall real do pavimento — ver buildSteppedRoofVisualVolume
+      // em Scene3DRenderer.ts. O acabamento dessa face usa o catálogo de
+      // fechamentos Steel Frame (steppedWallFaceA/BAssemblyId), não o
+      // fluxo normal de acabamento/esquadria de parede.
       // Um pequeno desnível arquitetônico, não a altura de um segundo
       // pavimento. As duas coberturas ocupam regiões vizinhas e nunca se
-      // sobrepõem — o degrau aparece apenas na parede do encontro.
+      // sobrepõem — o degrau aparece apenas nesse volume de encontro.
       const raisedBaseHeightM = Core.WALL_HEIGHT + 0.45;
       let lower: Roof;
       let raised: Roof;

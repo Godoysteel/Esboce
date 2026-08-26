@@ -64,7 +64,7 @@ test('Gerar laje ignora cômodos que já têm laje automática de base', () => {
 
 test('encontros transversais de coberturas são compostos sem botão manual', () => {
   assert.doesNotMatch(html, /button class="roof-commit"/);
-  assert.match(html, /Encontro automático/);
+  assert.doesNotMatch(html, /class="roof-auto-compose"/);
   assert.match(store, /function autoComposeCurrentRoofs\(\): string\[\]\[\]/);
   assert.match(store, /candidate\.ridgeAxis === roof\.ridgeAxis/);
   assert.match(store, /Core\.rectsNearby\(roof, candidate, Core\.SNAP_UNIT\)/);

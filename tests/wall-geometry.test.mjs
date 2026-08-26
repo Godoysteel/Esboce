@@ -1528,11 +1528,35 @@ test('Scene3DRenderer: cada telhado calcula a caixa dos cômodos ESTRITAMENTE ma
   const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
   assert.notEqual(roofsStart, -1);
   const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 9000);
-  assert.match(roofsBlock, /var roomHeightBoxes = rooms\.map\(function \(room: any\) \{/);
-  assert.match(roofsBlock, /baseY: yOffset \+ ownHeightM, peakAboveBase: 0, tanPitch: 0, ridgeCoord: 0, halfSpan: 0, axisIsZ: 0,/);
-  assert.match(roofsBlock, /var roomClipBoxes = roomHeightBoxes\.filter\(function \(b: any\) \{ return b\.baseY > pieceBaseY \+ 1e-4; \}\);/);
+  assert.match(roofsBlock, /var roomHeightBoxes = allFloorRoomClipBoxes\[floorIdx\] \|\| \[\];/);
+  assert.match(roofsBlock, /var roomClipBoxes = roomHeightBoxes\.concat\(higherFloorRoomHeightBoxes\)\.filter\(function \(b: any\) \{ return b\.baseY > pieceBaseY \+ 1e-4; \}\);/);
   assert.match(roofsBlock, /var clipBoxesForThisRoof = roomClipBoxes\.concat\(tallerRoofClipBoxes\);/);
   assert.match(roofsBlock, /applyRoomBoxClipping\(material, clipBoxesForThisRoof\)/);
+});
+
+// Empilhamento de cômodos (raiseRoom/SPEC-005): um cômodo elevado pro
+// 1º pavimento ocupa, em Y absoluto, uma faixa bem acima de qualquer
+// telhado do térreo — a parte do telhado do térreo que cai dentro
+// dessa pegada já está fisicamente embaixo do piso de cima, então
+// precisa sumir por pixel (mesmo mecanismo do DEC-124), sem recortar
+// malha nenhuma e sem depender de o pavimento superior estar visível.
+test('telhado de um pavimento também soma as caixas de cômodo de pavimentos SUPERIORES, calculadas antes do loop de pavimentos', () => {
+  const preloopStart = scene3DRendererSource.indexOf('function buildRoomHeightBoxesForFloor(');
+  assert.notEqual(preloopStart, -1);
+  const preloopBlock = scene3DRendererSource.slice(preloopStart, preloopStart + 1600);
+  assert.match(preloopBlock, /baseY: fYOffset \+ ownHeightM, peakAboveBase: 0, tanPitch: 0, ridgeCoord: 0, halfSpan: 0, axisIsZ: 0,/);
+  assert.match(preloopBlock, /var allFloorRoomClipBoxes = project\.floors\.map\(function \(fd, fIdx\) \{/);
+  assert.match(preloopBlock, /buildRoomHeightBoxesForFloor\(fd, floorWallHeight\(fd, WALL_HEIGHT\), fIdx \* FLOOR_STACK_HEIGHT\)/);
+  // A pré-computação precisa vir ANTES do loop de pavimentos — senão o
+  // térreo (processado primeiro) não teria como enxergar os cômodos do
+  // 1º pavimento (processado só depois, na mesma passada).
+  const loopIdx = scene3DRendererSource.indexOf('project.floors.forEach(function (floorData, floorIdx) {');
+  assert.ok(loopIdx > preloopStart, 'allFloorRoomClipBoxes precisa ser calculado antes do project.floors.forEach principal');
+
+  const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 9000);
+  assert.match(roofsBlock, /for \(var higherFloorIdx = floorIdx \+ 1; higherFloorIdx < allFloorRoomClipBoxes\.length; higherFloorIdx\+\+\) \{/);
+  assert.match(roofsBlock, /higherFloorRoomHeightBoxes = higherFloorRoomHeightBoxes\.concat\(allFloorRoomClipBoxes\[higherFloorIdx\] \|\| \[\]\);/);
 });
 
 // DEC-125/126 — mesma ideia do DEC-124, agora telhado-vs-telhado: quando
