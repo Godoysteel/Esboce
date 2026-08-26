@@ -51,6 +51,10 @@ test('wallsTransparent é calculado ANTES de ser usado (bug de ordem já corrigi
 });
 
 test('paredes de fechamento do telhado superior possuem face interna completa e acompanham a transparência das paredes', () => {
+  const closureFacesBlock = rendererSource.slice(
+    rendererSource.indexOf('function buildRaisedClosureWallMeshes'),
+    rendererSource.indexOf('// Fechamento próprio da "Cumeeira em níveis"'),
+  );
   const steppedClosureBlock = rendererSource.slice(
     rendererSource.indexOf('function buildSteppedRidgeClosure'),
     rendererSource.indexOf('function buildRaisedRoofPerimeterClosures'),
@@ -59,9 +63,14 @@ test('paredes de fechamento do telhado superior possuem face interna completa e 
     rendererSource.indexOf('function buildRaisedRoofPerimeterClosures'),
     rendererSource.indexOf('function buildAtticWallFaceExtensions'),
   );
-  // Triângulos dos dois lados da espessura: externo e interno sobem até highA/highB.
-  assert.match(steppedClosureBlock, /0,2,6,0,6,4, 1,5,7,1,7,3/);
-  assert.match(perimeterClosureBlock, /0,2,6,0,6,4, 1,5,7,1,7,3/);
+  // Exterior e interior são malhas independentes, não apenas um material
+  // DoubleSide sobre uma única superfície.
+  assert.match(closureFacesBlock, /name: 'externa', indices: \[0,2,6,0,6,4\]/);
+  assert.match(closureFacesBlock, /name: 'interna', indices: \[1,5,7,1,7,3\]/);
+  assert.match(closureFacesBlock, /mesh\.userData\.roofWallFace = face\.name/);
+  assert.match(closureFacesBlock, /face\.name === 'interna'\) mesh\.renderOrder = 1/);
+  assert.match(steppedClosureBlock, /buildRaisedClosureWallMeshes\(vertices, material\)/);
+  assert.match(perimeterClosureBlock, /buildRaisedClosureWallMeshes\(vertices, material\)/);
   for (const block of [steppedClosureBlock, perimeterClosureBlock]) {
     assert.match(block, /side: THREE\.DoubleSide/);
     assert.match(block, /transparent: wallsTransparent/);

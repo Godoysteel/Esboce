@@ -1499,6 +1499,35 @@ export function hashColorHex(key: string): number {
     });
   }
 
+  // Cada lado do fechamento elevado precisa ser uma superfície própria.
+  // Um único BufferGeometry com material DoubleSide parece sólido sem
+  // transparência, mas não oferece uma face interna independente e a
+  // ordenação de transparência pode fazê-la desaparecer. Mantemos os oito
+  // vértices do volume, porém criamos malhas separadas para exterior,
+  // interior, duas pontas, topo e base.
+  function buildRaisedClosureWallMeshes(vertices: Float32Array, material: THREE.MeshStandardMaterial) {
+    var faces = [
+      { name: 'externa', indices: [0,2,6,0,6,4] },
+      { name: 'interna', indices: [1,5,7,1,7,3] },
+      { name: 'inicio', indices: [0,4,5,0,5,1] },
+      { name: 'fim', indices: [2,3,7,2,7,6] },
+      { name: 'topo', indices: [4,6,7,4,7,5] },
+      { name: 'base', indices: [0,1,3,0,3,2] },
+    ];
+    return faces.map(function (face) {
+      var geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+      geometry.setIndex(face.indices);
+      geometry.computeVertexNormals();
+      var mesh = new THREE.Mesh(geometry, material);
+      mesh.userData.roofWallFace = face.name;
+      // A face interna deve ganhar prioridade consistente na vista de
+      // dentro quando o material estiver transparente.
+      if (face.name === 'interna') mesh.renderOrder = 1;
+      return mesh;
+    });
+  }
+
   // Fechamento próprio da "Cumeeira em níveis". É deliberadamente uma
   // peça da COBERTURA: não entra em Floor.walls, detectRooms,
   // computeWallFootprints nem nas junções T. O perfil inferior acompanha
@@ -1529,7 +1558,8 @@ export function hashColorHex(key: string): number {
       depthWrite: !wallsTransparent
     });
     function pointAt(t: number) { return { x: wall.x1 + dx * t, y: wall.y1 + dy * t }; }
-    return ([[0, 0.5], [0.5, 1]] as [number, number][]).map(function (range) {
+    var meshes: THREE.Mesh[] = [];
+    ([[0, 0.5], [0.5, 1]] as [number, number][]).forEach(function (range) {
       var a = pointAt(range[0]), b = pointAt(range[1]);
       var ax = (a.x - offsetX) * scale, az = (a.y - offsetY) * scale;
       var bx = (b.x - offsetX) * scale, bz = (b.y - offsetY) * scale;
@@ -1541,12 +1571,9 @@ export function hashColorHex(key: string): number {
         ax+nx,lowA,az+nz, ax-nx,lowA,az-nz, bx+nx,lowB,bz+nz, bx-nx,lowB,bz-nz,
         ax+nx,highA,az+nz, ax-nx,highA,az-nz, bx+nx,highB,bz+nz, bx-nx,highB,bz-nz
       ]);
-      var indices = [0,2,6,0,6,4, 1,5,7,1,7,3, 0,4,5,0,5,1, 2,3,7,2,7,6, 4,6,7,4,7,5, 0,1,3,0,3,2];
-      var geometry = new THREE.BufferGeometry();
-      geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-      geometry.setIndex(indices); geometry.computeVertexNormals();
-      return new THREE.Mesh(geometry, material);
+      meshes.push.apply(meshes, buildRaisedClosureWallMeshes(vertices, material));
     });
+    return meshes;
   }
 
   // Complementos laterais e de fundo do trecho elevado. Assim como o
@@ -1595,11 +1622,7 @@ export function hashColorHex(key: string): number {
           ax+nx,lowA,az+nz, ax-nx,lowA,az-nz, bx+nx,lowB,bz+nz, bx-nx,lowB,bz-nz,
           ax+nx,highA,az+nz, ax-nx,highA,az-nz, bx+nx,highB,bz+nz, bx-nx,highB,bz-nz
         ]);
-        var indices = [0,2,6,0,6,4, 1,5,7,1,7,3, 0,4,5,0,5,1, 2,3,7,2,7,6, 4,6,7,4,7,5, 0,1,3,0,3,2];
-        var geometry = new THREE.BufferGeometry();
-        geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-        geometry.setIndex(indices); geometry.computeVertexNormals();
-        meshes.push(new THREE.Mesh(geometry, material));
+        meshes.push.apply(meshes, buildRaisedClosureWallMeshes(vertices, material));
       }
     });
     return meshes;
