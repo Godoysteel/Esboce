@@ -2580,6 +2580,11 @@ import {
           dragElementStart = { pitchDeg: rrT ? rrT.pitchDeg : 28, startScreenY: e.clientY };
         } else if (handleT === 'roofBaseHeight') {
           dragElementStart = { baseHeightM: rrT ? rrT.baseHeightM : 1.2, startScreenY: e.clientY };
+          // A cena é reconstruída enquanto a altura muda. Capturar o
+          // ponteiro no canvas mantém todos os movimentos e o pointerup
+          // ligados ao mesmo gesto, mesmo quando a esfera original deixa
+          // de existir no meio do arraste por causa desse rebuild.
+          try { if (container.setPointerCapture) container.setPointerCapture(e.pointerId); } catch (_) {}
         } else if (handleT === 'roofParapetHeight') {
           dragElementStart = { parapetHeight: rrT ? rrT.parapetHeight : 0.5, startScreenY: e.clientY };
         } else if (rrT) {
@@ -4223,6 +4228,7 @@ import {
       if (elevatedRoof) {
         hintEl.textContent = 'Telhado inteiro posicionado individualmente — base em ' + (elevatedRoof.baseHeightM || Core.WALL_HEIGHT).toFixed(2).replace('.', ',') + ' m.';
       }
+      try { if (container.hasPointerCapture && container.hasPointerCapture(e.pointerId)) container.releasePointerCapture(e.pointerId); } catch (_) {}
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }
