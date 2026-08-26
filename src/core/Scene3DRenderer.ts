@@ -1586,19 +1586,28 @@ export function hashColorHex(key: string): number {
   // exatamente no topo das paredes estruturais existentes. Nenhuma
   // Wall é criada, esticada ou dividida para fechar esse espaço.
   function buildRaisedRoofPerimeterClosures(roof: any, scale: number, offsetX: number, offsetY: number, yOffset: number, structuralWallHeightM: number, raisedBaseM: number, color: any, wallsTransparent: boolean) {
-    var segments = roof.ridgeAxis === 'x'
+    // Quatro paredes sintéticas fecham o retângulo apenas para calcular o
+    // footprint/mitre exatamente como num cômodo comum. A parede da junção
+    // não é renderizada aqui porque buildSteppedRidgeClosure cuida dela.
+    var segmentDefs = roof.ridgeAxis === 'x'
       ? [
-          { x1: roof.x1, y1: roof.y1, x2: roof.x2, y2: roof.y1, slices: 1 },
-          { x1: roof.x1, y1: roof.y2, x2: roof.x2, y2: roof.y2, slices: 1 },
-          { x1: roof.x2, y1: roof.y1, x2: roof.x2, y2: roof.y2, slices: 2 },
+          { x1: roof.x1, y1: roof.y1, x2: roof.x2, y2: roof.y1, render: true },
+          { x1: roof.x2, y1: roof.y1, x2: roof.x2, y2: roof.y2, render: true },
+          { x1: roof.x2, y1: roof.y2, x2: roof.x1, y2: roof.y2, render: true },
+          { x1: roof.x1, y1: roof.y2, x2: roof.x1, y2: roof.y1, render: false },
         ]
       : [
-          { x1: roof.x1, y1: roof.y1, x2: roof.x1, y2: roof.y2, slices: 1 },
-          { x1: roof.x2, y1: roof.y1, x2: roof.x2, y2: roof.y2, slices: 1 },
-          { x1: roof.x1, y1: roof.y2, x2: roof.x2, y2: roof.y2, slices: 2 },
+          { x1: roof.x1, y1: roof.y1, x2: roof.x1, y2: roof.y2, render: true },
+          { x1: roof.x1, y1: roof.y2, x2: roof.x2, y2: roof.y2, render: true },
+          { x1: roof.x2, y1: roof.y2, x2: roof.x2, y2: roof.y1, render: true },
+          { x1: roof.x2, y1: roof.y1, x2: roof.x1, y2: roof.y1, render: false },
         ];
+    var syntheticWalls: Wall[] = segmentDefs.map(function (segment, index) {
+      return Core.createWallEntity(segment.x1, segment.y1, segment.x2, segment.y2, 'raised-roof-wall-' + index);
+    });
+    var footprints = Core.computeWallFootprints(syntheticWalls);
     var profile = Object.assign({}, roof, { baseHeightM: raisedBaseM });
-    var material = new THREE.MeshStandardMaterial({
+    function makeMaterial() { return new THREE.MeshStandardMaterial({
       color: color,
       side: THREE.DoubleSide,
       flatShading: true,
@@ -1606,29 +1615,33 @@ export function hashColorHex(key: string): number {
       transparent: wallsTransparent,
       opacity: wallsTransparent ? WALL_TRANSPARENT_OPACITY : 1,
       depthWrite: !wallsTransparent
-    });
+    }); }
+    var topMaterial = makeMaterial();
     var meshes: any[] = [];
-    segments.forEach(function (segment) {
-      var dx = segment.x2 - segment.x1, dy = segment.y2 - segment.y1, len = Math.hypot(dx, dy);
-      if (len < 1e-6) return;
-      var nx = -dy / len * Core.WALL_THICK / 2;
-      var nz = dx / len * Core.WALL_THICK / 2;
-      function pointAt(t: number) { return { x: segment.x1 + dx * t, y: segment.y1 + dy * t }; }
-      for (var index = 0; index < segment.slices; index++) {
-        var t0 = index / segment.slices, t1 = (index + 1) / segment.slices;
-        var a = pointAt(t0), b = pointAt(t1);
-        var ax = (a.x - offsetX) * scale, az = (a.y - offsetY) * scale;
-        var bx = (b.x - offsetX) * scale, bz = (b.y - offsetY) * scale;
-        var lowA = yOffset + structuralWallHeightM, lowB = lowA;
-        var highA = yOffset + Core.roofHeightAtModelPoint(profile, a.x, a.y);
-        var highB = yOffset + Core.roofHeightAtModelPoint(profile, b.x, b.y);
-        if (highA <= lowA + 1e-4 && highB <= lowB + 1e-4) continue;
-        var vertices = new Float32Array([
-          ax+nx,lowA,az+nz, ax-nx,lowA,az-nz, bx+nx,lowB,bz+nz, bx-nx,lowB,bz-nz,
-          ax+nx,highA,az+nz, ax-nx,highA,az-nz, bx+nx,highB,bz+nz, bx-nx,highB,bz-nz
-        ]);
-        meshes.push.apply(meshes, buildRaisedClosureWallMeshes(vertices, material));
-      }
+    syntheticWalls.forEach(function (wall, index) {
+      if (!segmentDefs[index]!.render) return;
+      var fpModel = footprints[wall.id]!;
+      function toScene(p: any) { return { x: (p.x - offsetX) * scale, z: (p.y - offsetY) * scale }; }
+      var fp = {
+        p1a: toScene(fpModel.p1a), p1b: toScene(fpModel.p1b),
+        p2a: toScene(fpModel.p2a), p2b: toScene(fpModel.p2b),
+        p1Free: fpModel.p1Free, p2Free: fpModel.p2Free,
+        p1Extended: fpModel.p1Extended, p2Extended: fpModel.p2Extended,
+      };
+      var rectangularHeightM = Math.max(0, raisedBaseM - structuralWallHeightM);
+      (['a', 'b'] as const).forEach(function (side) {
+        var faceMaterial = makeMaterial();
+        var face = buildFaceStripMesh(fp, rectangularHeightM, yOffset + structuralWallHeightM, faceMaterial, side);
+        face.userData.roofWallFace = side === 'a' ? 'externa' : 'interna';
+        meshes.push(face);
+        buildAtticWallFaceExtensions(wall, profile, [], fp, yOffset, faceMaterial, side).forEach(function (extension) {
+          extension.userData.roofWallFace = side === 'a' ? 'externa-oitão' : 'interna-oitão';
+          meshes.push(extension);
+        });
+      });
+      meshes.push(buildWallTopCapMesh(fp, yOffset + raisedBaseM, topMaterial));
+      if (fp.p1Free !== false || fp.p1Extended) meshes.push(buildWallEndCapMesh(fp, rectangularHeightM, yOffset + structuralWallHeightM, topMaterial, 1));
+      if (fp.p2Free !== false || fp.p2Extended) meshes.push(buildWallEndCapMesh(fp, rectangularHeightM, yOffset + structuralWallHeightM, topMaterial, 2));
     });
     return meshes;
   }

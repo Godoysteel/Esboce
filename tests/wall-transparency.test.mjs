@@ -70,13 +70,16 @@ test('paredes de fechamento do telhado superior possuem face interna completa e 
   assert.match(closureFacesBlock, /mesh\.userData\.roofWallFace = face\.name/);
   assert.match(closureFacesBlock, /face\.name === 'interna'\) mesh\.renderOrder = 1/);
   assert.match(steppedClosureBlock, /buildRaisedClosureWallMeshes\(vertices, material\)/);
-  assert.match(perimeterClosureBlock, /buildRaisedClosureWallMeshes\(vertices, material\)/);
+  // Laterais/fundos agora reutilizam literalmente o footprint, as faces
+  // A/B e o complemento de oitão usados pelas paredes dos cômodos.
+  assert.match(perimeterClosureBlock, /Core\.computeWallFootprints\(syntheticWalls\)/);
+  assert.match(perimeterClosureBlock, /buildFaceStripMesh\(fp, rectangularHeightM/);
+  assert.match(perimeterClosureBlock, /buildAtticWallFaceExtensions\(wall, profile/);
+  assert.match(perimeterClosureBlock, /side === 'a' \? 'externa' : 'interna'/);
   // A normal já é unitária: meia espessura precisa ser 0,06 m em cada
   // direção, sem aplicar novamente o scale=1/GRID.
   assert.match(steppedClosureBlock, /Core\.WALL_THICK \/ 2;/);
   assert.doesNotMatch(steppedClosureBlock, /Core\.WALL_THICK \/ 2 \* scale/);
-  assert.match(perimeterClosureBlock, /Core\.WALL_THICK \/ 2;/);
-  assert.doesNotMatch(perimeterClosureBlock, /Core\.WALL_THICK \/ 2 \* scale/);
   assert.equal(Core.WALL_THICK, 0.12);
   for (const block of [steppedClosureBlock, perimeterClosureBlock]) {
     assert.match(block, /side: THREE\.DoubleSide/);
