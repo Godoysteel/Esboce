@@ -1504,7 +1504,7 @@ export function hashColorHex(key: string): number {
   // computeWallFootprints nem nas junções T. O perfil inferior acompanha
   // a água do telhado baixo e o superior acompanha a mesma água elevada,
   // formando somente a faixa transversal realmente visível.
-  function buildSteppedRidgeClosure(raised: any, lower: any, scale: number, offsetX: number, offsetY: number, yOffset: number, lowerBaseM: number, raisedBaseM: number, color: any) {
+  function buildSteppedRidgeClosure(raised: any, lower: any, scale: number, offsetX: number, offsetY: number, yOffset: number, lowerBaseM: number, raisedBaseM: number, color: any, wallsTransparent: boolean) {
     var wall = raised.ridgeAxis === 'x'
       ? { x1: raised.x1, y1: raised.y1, x2: raised.x1, y2: raised.y2 }
       : { x1: raised.x1, y1: raised.y1, x2: raised.x2, y2: raised.y1 };
@@ -1514,7 +1514,20 @@ export function hashColorHex(key: string): number {
     var nz = dx / len * Core.WALL_THICK / 2 * scale;
     var lowerProfile = Object.assign({}, lower, { baseHeightM: lowerBaseM });
     var raisedProfile = Object.assign({}, raised, { baseHeightM: raisedBaseM });
-    var material = new THREE.MeshStandardMaterial({ color: color, side: THREE.DoubleSide, flatShading: true, roughness: 1 });
+    // O fechamento é uma parede completa: os índices abaixo possuem uma
+    // face externa (0,2,6...) e outra interna (1,5,7...), ambas chegando
+    // ao perfil do telhado elevado. DoubleSide mantém cada face visível
+    // também em vistas internas; a camada de transparência deve afetar o
+    // volume inteiro, como ocorre nas paredes estruturais comuns.
+    var material = new THREE.MeshStandardMaterial({
+      color: color,
+      side: THREE.DoubleSide,
+      flatShading: true,
+      roughness: 1,
+      transparent: wallsTransparent,
+      opacity: wallsTransparent ? WALL_TRANSPARENT_OPACITY : 1,
+      depthWrite: !wallsTransparent
+    });
     function pointAt(t: number) { return { x: wall.x1 + dx * t, y: wall.y1 + dy * t }; }
     return ([[0, 0.5], [0.5, 1]] as [number, number][]).map(function (range) {
       var a = pointAt(range[0]), b = pointAt(range[1]);
@@ -1540,7 +1553,7 @@ export function hashColorHex(key: string): number {
   // fechamento transversal acima, são peças da cobertura e começam
   // exatamente no topo das paredes estruturais existentes. Nenhuma
   // Wall é criada, esticada ou dividida para fechar esse espaço.
-  function buildRaisedRoofPerimeterClosures(roof: any, scale: number, offsetX: number, offsetY: number, yOffset: number, structuralWallHeightM: number, raisedBaseM: number, color: any) {
+  function buildRaisedRoofPerimeterClosures(roof: any, scale: number, offsetX: number, offsetY: number, yOffset: number, structuralWallHeightM: number, raisedBaseM: number, color: any, wallsTransparent: boolean) {
     var segments = roof.ridgeAxis === 'x'
       ? [
           { x1: roof.x1, y1: roof.y1, x2: roof.x2, y2: roof.y1, slices: 1 },
@@ -1553,7 +1566,15 @@ export function hashColorHex(key: string): number {
           { x1: roof.x1, y1: roof.y2, x2: roof.x2, y2: roof.y2, slices: 2 },
         ];
     var profile = Object.assign({}, roof, { baseHeightM: raisedBaseM });
-    var material = new THREE.MeshStandardMaterial({ color: color, side: THREE.DoubleSide, flatShading: true, roughness: 1 });
+    var material = new THREE.MeshStandardMaterial({
+      color: color,
+      side: THREE.DoubleSide,
+      flatShading: true,
+      roughness: 1,
+      transparent: wallsTransparent,
+      opacity: wallsTransparent ? WALL_TRANSPARENT_OPACITY : 1,
+      depthWrite: !wallsTransparent
+    });
     var meshes: any[] = [];
     segments.forEach(function (segment) {
       var dx = segment.x2 - segment.x1, dy = segment.y2 - segment.y1, len = Math.hypot(dx, dy);
@@ -5291,7 +5312,7 @@ export function hashColorHex(key: string): number {
             var lowerRoof = floorData.roofs.find(function (candidate) { return candidate.id === roof.steppedLowerRoofId; });
             if (lowerRoof) {
               var lowerBaseM = Core.roofHeightAtRect(floorData.walls, lowerRoof.x1, lowerRoof.y1, lowerRoof.x2, lowerRoof.y2, currentWallHeight);
-              buildSteppedRidgeClosure(roof, lowerRoof, scale, offsetX, offsetY, yOffset, lowerBaseM, roofOwnHeight, wallMatchColor).forEach(function (closure) {
+              buildSteppedRidgeClosure(roof, lowerRoof, scale, offsetX, offsetY, yOffset, lowerBaseM, roofOwnHeight, wallMatchColor, !!layers.paredesTransparentes).forEach(function (closure) {
                 tagCategory(closure, 'telhado');
                 closure.userData.roofId = roof.id;
                 closure.userData.roofClosure = 'transversal';
@@ -5299,7 +5320,7 @@ export function hashColorHex(key: string): number {
                 scene.add(closure);
                 registry.structureMeshes.push(closure);
               });
-              buildRaisedRoofPerimeterClosures(roof, scale, offsetX, offsetY, yOffset, currentWallHeight, roofOwnHeight, wallMatchColor).forEach(function (closure) {
+              buildRaisedRoofPerimeterClosures(roof, scale, offsetX, offsetY, yOffset, currentWallHeight, roofOwnHeight, wallMatchColor, !!layers.paredesTransparentes).forEach(function (closure) {
                 tagCategory(closure, 'telhado');
                 closure.userData.roofId = roof.id;
                 closure.userData.roofClosure = 'perimetral';

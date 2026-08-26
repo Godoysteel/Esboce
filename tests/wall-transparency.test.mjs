@@ -49,3 +49,24 @@ test('wallsTransparent é calculado ANTES de ser usado (bug de ordem já corrigi
   assert.ok(declIndex < topMatIndex, 'wallsTransparent precisa vir ANTES de topMat');
   assert.ok(declIndex < faceMatIndex, 'wallsTransparent precisa vir ANTES de faceMat');
 });
+
+test('paredes de fechamento do telhado superior possuem face interna completa e acompanham a transparência das paredes', () => {
+  const steppedClosureBlock = rendererSource.slice(
+    rendererSource.indexOf('function buildSteppedRidgeClosure'),
+    rendererSource.indexOf('function buildRaisedRoofPerimeterClosures'),
+  );
+  const perimeterClosureBlock = rendererSource.slice(
+    rendererSource.indexOf('function buildRaisedRoofPerimeterClosures'),
+    rendererSource.indexOf('function buildAtticWallFaceExtensions'),
+  );
+  // Triângulos dos dois lados da espessura: externo e interno sobem até highA/highB.
+  assert.match(steppedClosureBlock, /0,2,6,0,6,4, 1,5,7,1,7,3/);
+  assert.match(perimeterClosureBlock, /0,2,6,0,6,4, 1,5,7,1,7,3/);
+  for (const block of [steppedClosureBlock, perimeterClosureBlock]) {
+    assert.match(block, /side: THREE\.DoubleSide/);
+    assert.match(block, /transparent: wallsTransparent/);
+    assert.match(block, /opacity: wallsTransparent \? WALL_TRANSPARENT_OPACITY : 1/);
+    assert.match(block, /depthWrite: !wallsTransparent/);
+  }
+  assert.match(rendererSource, /wallMatchColor, !!layers\.paredesTransparentes/);
+});
