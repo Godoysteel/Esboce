@@ -68,6 +68,24 @@ function pendingGuide(issues: SteelFrameSpecificationIssue[]): string {
     ${wallStage(issues) ? '<div class="sf-future-stage"><strong>Depois das paredes</strong><span>Escolha do sistema da laje (em implantação) e liberação do próximo pavimento.</span></div>' : ''}`;
 }
 
+function pendingSummary(issues: SteelFrameSpecificationIssue[]): string {
+  const counts = new Map<string, number>();
+  const names: Record<SteelFrameSpecificationIssue['kind'], [string, string]> = {
+    'wall-face': ['face de parede', 'faces de parede'],
+    'wall-cavity': ['isolamento', 'isolamentos'],
+    'gable-face': ['oitão', 'oitões'],
+    'stepped-wall-face': ['face da extensão', 'faces da extensão'],
+    'soffit': ['beiral', 'beirais'],
+    'fascia': ['tabeira', 'tabeiras'],
+    'parapet-face': ['face da platibanda', 'faces da platibanda'],
+  };
+  issues.forEach((issue) => counts.set(issue.kind, (counts.get(issue.kind) || 0) + 1));
+  return Array.from(counts.entries()).map(([kind, count]) => {
+    const labels = names[kind as SteelFrameSpecificationIssue['kind']];
+    return `${count} ${count === 1 ? labels[0] : labels[1]}`;
+  }).join(' + ') + (issues.length ? ' pendentes' : '');
+}
+
 function targetIsConfigured(target: SurfaceTarget): boolean {
   if (target.kind === 'wall-face') {
     const wall = allWalls().find((item) => item.id === target.entityId);
@@ -200,11 +218,7 @@ function render(): void {
   const panel = ensurePanel();
   const issues = steelFrameSpecificationIssues(Store.getProject());
   ViewportController.setSteelFrameRoofHidden(wallStage(issues));
-  const insulationPending = issues.filter((issue) => issue.kind === 'wall-cavity').length;
-  const surfacePending = issues.length - insulationPending;
-  panel.querySelector<HTMLElement>('[data-sf-progress]')!.textContent = issues.length
-    ? [surfacePending ? `${surfacePending} faces` : '', insulationPending ? `${insulationPending} isolamentos` : ''].filter(Boolean).join(' + ') + ' pendentes'
-    : 'Configuração completa';
+  panel.querySelector<HTMLElement>('[data-sf-progress]')!.textContent = issues.length ? pendingSummary(issues) : 'Configuração completa';
   panel.querySelector<HTMLElement>('[data-sf-guidance]')!.textContent = issues.length ? `Conclua ${issueLabel(issues[0]!).toLocaleLowerCase('pt-BR')}.` : 'Todas as superfícies foram configuradas.';
   const quantityButton = panel.querySelector<HTMLButtonElement>('[data-sf-quantity]')!;
   quantityButton.disabled = issues.length > 0;
@@ -226,6 +240,13 @@ export function open(onComplete: () => void): void {
     if (activeFloor >= 0 && targetFloorIndex(target) !== activeFloor) {
       ensurePanel().querySelector<HTMLElement>('[data-sf-body]')!.innerHTML = `<div class="sf-click-instruction sf-complete-notice">Conclua primeiro a etapa de ${floorLabel(activeFloor)}. O próximo pavimento será liberado depois.</div>`;
       return false;
+    }
+    if (target.kind === 'roof') {
+      const verticalPending = issues.find((issue) => issue.entityId === target.entityId && (issue.kind === 'gable-face' || issue.kind === 'stepped-wall-face'));
+      if (verticalPending) {
+        ensurePanel().querySelector<HTMLElement>('[data-sf-body]')!.innerHTML = `<div class="sf-click-instruction sf-attention-notice"><strong>O clique foi na telha.</strong><br>O próximo item é <b>${issueLabel(verticalPending)}</b>.<br><br>Gire a construção e clique diretamente na face vertical indicada.</div>`;
+        return false;
+      }
     }
     if (targetIsConfigured(target)) {
       ensurePanel().querySelector<HTMLElement>('[data-sf-body]')!.innerHTML = '<div class="sf-click-instruction sf-complete-notice">Esta face já está configurada e marcada em verde. Escolha uma face que ainda não foi concluída.</div>';

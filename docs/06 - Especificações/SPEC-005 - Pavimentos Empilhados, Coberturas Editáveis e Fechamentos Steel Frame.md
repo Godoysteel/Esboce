@@ -67,6 +67,9 @@ Características de UX relevantes:
 - progresso por pavimento: o pavimento seguinte só libera a seleção de superfícies depois que o pavimento atual está 100% configurado;
 - cada face já configurada recebe uma cor de identificação visual na cena 3D (`steelFrameAssemblyColorHex`), permitindo conferência visual rápida de quais sistemas foram escolhidos onde;
 - clicar numa face já configurada não a reabre silenciosamente — mostra aviso explícito para o usuário escolher uma face pendente.
+- o progresso nunca agrupa tudo sob o rótulo genérico "faces": discrimina faces de parede, isolamentos, oitões, faces da extensão de cumeeira, beirais, tabeiras e faces de platibanda;
+- quando ainda falta um oitão ou uma face vertical da extensão e o usuário clica na telha, o painel não abre a configuração errada de beiral/tabeira: informa qual superfície vertical falta e orienta girar a construção para clicar diretamente nela;
+- marcos de portas e janelas e as tampas superiores das paredes são geometria de acabamento visual, não superfícies configuráveis, e nunca entram nas pendências do quantitativo LSF.
 
 ### 4.2 Catálogo técnico de composições (`SteelFrameAssemblies.ts`)
 

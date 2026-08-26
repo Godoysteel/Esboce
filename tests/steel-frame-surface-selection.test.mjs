@@ -83,3 +83,12 @@ test('extensão vertical da cumeeira em níveis é selecionável como parede', (
   assert.match(renderer, /steppedWallFaceAAssemblyId/);
   assert.match(renderer, /steppedWallFaceBAssemblyId/);
 });
+
+test('pendências de cobertura são nomeadas e clique na telha orienta para a face vertical', () => {
+  assert.match(app, /function pendingSummary/);
+  assert.match(app, /face da extensão/);
+  assert.match(app, /face da platibanda/);
+  assert.match(app, /O clique foi na telha/);
+  assert.match(app, /Gire a construção e clique diretamente na face vertical indicada/);
+  assert.match(html, /\.sf-attention-notice/);
+});
