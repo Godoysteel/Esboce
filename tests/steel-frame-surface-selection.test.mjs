@@ -63,4 +63,5 @@ test('somente a face definida fica verde imediatamente, sem seleção laranja da
   assert.doesNotMatch(renderer, /steelFrameFaceConfigured.*cavityAssembly/);
   assert.match(renderer, /!viewState\.steelFrameConfigMode && \(isSelected/);
   assert.match(viewport, /selectedWall: steelFrameSurfaceSelectionHandler \? null : selectedWall/);
+  assert.match(viewport, /highlightedCategory: steelFrameSurfaceSelectionHandler \? null : highlightedCategory/);
 });

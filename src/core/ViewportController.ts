@@ -1637,7 +1637,7 @@ import {
     var selectedVaranda = selectedVarandaId ? Store.findVaranda(selectedVarandaId) : null;
     var selectedLaje = selectedLajeId ? Store.findLaje(selectedLajeId) : null;
     Scene3DRenderer.rebuild(scene, project, { width: 0, height: 0 }, {
-      highlightedCategory: highlightedCategory,
+      highlightedCategory: steelFrameSurfaceSelectionHandler ? null : highlightedCategory,
       editingFloorIndex: project.currentFloorIndex,
       editingYOffset: currentFloorYOffset(),
       selectedWall: steelFrameSurfaceSelectionHandler ? null : selectedWall,
