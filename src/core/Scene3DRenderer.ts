@@ -1589,8 +1589,16 @@ export function hashColorHex(key: string): number {
   function buildSteppedRoofVisualVolume(roof: any, scale: number, offsetX: number, offsetY: number, yOffset: number, structuralWallHeightM: number, raisedBaseM: number, color: any, wallsTransparent: boolean) {
     // O volume pertence exclusivamente ao telhado elevado. Não recebe
     // coordenadas, movimento ou dimensões de qualquer outro telhado.
-    var volumeX1 = roof.x1, volumeX2 = roof.x2;
-    var volumeY1 = roof.y1, volumeY2 = roof.y2;
+    // Roof.x1/y1/x2/y2 descrevem o LIMITE EXTERNO vindo de
+    // roomModelBounds (que já soma meia espessura). Paredes de cômodo,
+    // porém, são definidas pelo EIXO. Recuar meia espessura devolve o
+    // mesmo eixo estrutural; computeWallFootprints então distribui os
+    // 12 cm igualmente e as faces superiores coincidem com as inferiores.
+    var halfWallModel = (Core.WALL_THICK / 2) * Core.GRID;
+    var volumeX1 = Math.min(roof.x1, roof.x2) + halfWallModel;
+    var volumeX2 = Math.max(roof.x1, roof.x2) - halfWallModel;
+    var volumeY1 = Math.min(roof.y1, roof.y2) + halfWallModel;
+    var volumeY2 = Math.max(roof.y1, roof.y2) - halfWallModel;
     var segmentDefs = [
       { x1: volumeX1, y1: volumeY1, x2: volumeX2, y2: volumeY1 },
       { x1: volumeX2, y1: volumeY1, x2: volumeX2, y2: volumeY2 },

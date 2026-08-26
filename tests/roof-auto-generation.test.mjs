@@ -43,7 +43,8 @@ test('cumeeira em níveis usa volume visual fechado sem alterar paredes estrutur
   assert.match(renderer, /function buildSteppedRoofVisualVolume/);
   assert.match(renderer, /if \(roof\.steppedWallVolume \|\| roof\.steppedLowerRoofId\)/);
   assert.match(renderer, /buildSteppedRoofVisualVolume\(roof, scale/);
-  assert.match(renderer, /var volumeX1 = roof\.x1, volumeX2 = roof\.x2/);
+  assert.match(renderer, /var halfWallModel = \(Core\.WALL_THICK \/ 2\) \* Core\.GRID/);
+  assert.match(renderer, /volumeX1 = Math\.min\(roof\.x1, roof\.x2\) \+ halfWallModel/);
   assert.match(store, /if \(roof\.steppedWallVolume \|\| candidate\.steppedWallVolume\) return/);
   assert.match(renderer, /closure\.userData\.roofClosure = 'volume-visual'/);
   assert.match(renderer, /var visualBottomM = structuralWallHeightM - 0\.05/);
