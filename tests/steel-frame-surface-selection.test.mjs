@@ -35,3 +35,15 @@ test('faces concluídas ficam verdes, não podem ser selecionadas novamente e bl
   assert.match(renderer, /0x3FAE67/);
   assert.match(html, /data-sf-quantity\]:disabled/);
 });
+
+test('painel orienta o usuário pelo próximo item e lista pendências com nomes compreensíveis', () => {
+  assert.match(app, /function issueLabel/);
+  assert.match(app, /PRÓXIMO PASSO/);
+  assert.match(app, /Ainda falta configurar/);
+  assert.match(app, /Parede.*isolamento térmico e acústico/);
+  assert.match(app, /oitão/);
+  assert.match(app, /beiral/);
+  assert.match(app, /tabeira/);
+  assert.match(app, /platibanda/);
+  assert.match(html, /\.sf-next-step/);
+});

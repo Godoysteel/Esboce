@@ -1,6 +1,7 @@
 import { Store } from './Store.js';
 import { ViewportController } from './ViewportController.js';
 import { STEEL_FRAME_FACE_ASSEMBLIES, steelFrameSpecificationIssues } from './SteelFrameAssemblies.js';
+import type { SteelFrameSpecificationIssue } from './SteelFrameAssemblies.js';
 import type { Roof, Wall, WallCavityAssembly } from './types.js';
 
 type SurfaceTarget = { kind: 'wall-face' | 'gable-face' | 'roof'; entityId: string; side?: 'a' | 'b' };
@@ -20,6 +21,27 @@ function allWalls(): Wall[] { return Store.getProject().floors.flatMap((floor) =
 function allRoofs(): Roof[] { return Store.getProject().floors.flatMap((floor) => floor.roofs || []); }
 function selectedWall(): Wall | undefined { return selectedTarget ? allWalls().find((wall) => wall.id === selectedTarget!.entityId) : undefined; }
 function selectedRoof(): Roof | undefined { return selectedTarget ? allRoofs().find((roof) => roof.id === selectedTarget!.entityId) : undefined; }
+
+function issueLabel(issue: SteelFrameSpecificationIssue): string {
+  const walls = allWalls();
+  const roofs = allRoofs();
+  const wallNumber = walls.findIndex((item) => item.id === issue.entityId) + 1;
+  const roofNumber = roofs.findIndex((item) => item.id === issue.entityId) + 1;
+  if (issue.kind === 'wall-face') return `Parede ${wallNumber} · face ${issue.side?.toUpperCase()}`;
+  if (issue.kind === 'wall-cavity') return `Parede ${wallNumber} · isolamento térmico e acústico`;
+  if (issue.kind === 'gable-face') return `Telhado ${roofNumber} · oitão ${issue.side?.toUpperCase()}`;
+  if (issue.kind === 'soffit') return `Telhado ${roofNumber} · beiral`;
+  if (issue.kind === 'fascia') return `Telhado ${roofNumber} · tabeira`;
+  return `Telhado ${roofNumber} · platibanda ${issue.side === 'outer' ? 'externa' : 'interna'}`;
+}
+
+function pendingGuide(issues: SteelFrameSpecificationIssue[]): string {
+  if (!issues.length) return '<div class="sf-completion-card"><strong>✓ Tudo configurado</strong><span>O quantitativo está liberado.</span></div>';
+  const visible = issues.slice(0, 6);
+  return `<div class="sf-next-step"><small>PRÓXIMO PASSO</small><strong>${issueLabel(issues[0]!)}</strong><span>Clique nessa face na construção e escolha o sistema.</span></div>
+    <div class="sf-pending-list"><h4>Ainda falta configurar</h4>${visible.map((issue) => `<div><span>○</span>${issueLabel(issue)}</div>`).join('')}${issues.length > visible.length ? `<small>e mais ${issues.length - visible.length} itens…</small>` : ''}</div>
+    <div class="sf-color-legend"><i></i><span>As faces concluídas ficam verdes e não precisam ser clicadas novamente.</span></div>`;
+}
 
 function targetIsConfigured(target: SurfaceTarget): boolean {
   if (target.kind === 'wall-face') {
@@ -54,7 +76,7 @@ function ensurePanel(): HTMLElement {
   if (panel) return panel;
   panel = document.createElement('aside');
   panel.id = 'steelFrameConfigurator';
-  panel.innerHTML = `<header><div><strong>Fechamentos Steel Frame</strong><p>Clique em uma face da construção.</p></div><button type="button" data-sf-close>×</button></header><div data-sf-body></div><footer><span data-sf-progress></span><button type="button" data-sf-quantity>Ver quantitativo</button></footer>`;
+  panel.innerHTML = `<header><div><strong>Fechamentos Steel Frame</strong><p data-sf-guidance>Clique em uma face da construção.</p></div><button type="button" data-sf-close>×</button></header><div data-sf-body></div><footer><span data-sf-progress></span><button type="button" data-sf-quantity>Ver quantitativo</button></footer>`;
   document.body.appendChild(panel);
   panel.querySelector('[data-sf-close]')!.addEventListener('click', close);
   panel.querySelector('[data-sf-quantity]')!.addEventListener('click', () => {
@@ -137,6 +159,7 @@ function render(): void {
   const panel = ensurePanel();
   const issues = steelFrameSpecificationIssues(Store.getProject());
   panel.querySelector<HTMLElement>('[data-sf-progress]')!.textContent = issues.length ? `${issues.length} seleções pendentes` : 'Configuração completa';
+  panel.querySelector<HTMLElement>('[data-sf-guidance]')!.textContent = issues.length ? `Conclua ${issueLabel(issues[0]!).toLocaleLowerCase('pt-BR')}.` : 'Todas as superfícies foram configuradas.';
   const quantityButton = panel.querySelector<HTMLButtonElement>('[data-sf-quantity]')!;
   quantityButton.disabled = issues.length > 0;
   quantityButton.title = issues.length ? 'Conclua todas as faces para liberar o quantitativo.' : 'Abrir quantitativo';
@@ -144,7 +167,7 @@ function render(): void {
   const roof = selectedRoof();
   if (selectedTarget?.kind === 'wall-face' && wall) renderWall(panel, wall);
   else if (selectedTarget && roof) renderRoof(panel, roof);
-  else panel.querySelector<HTMLElement>('[data-sf-body]')!.innerHTML = '<div class="sf-click-instruction"><strong>1.</strong> Gire a casa se necessário.<br><strong>2.</strong> Clique em uma face de parede, oitão ou cobertura.<br><strong>3.</strong> Escolha o sistema nesta lista.</div>';
+  else panel.querySelector<HTMLElement>('[data-sf-body]')!.innerHTML = pendingGuide(issues);
 }
 
 export function open(onComplete: () => void): void {
