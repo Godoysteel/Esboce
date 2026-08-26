@@ -45,7 +45,8 @@ test('cumeeira em níveis usa volume visual fechado sem alterar paredes estrutur
   assert.match(renderer, /return !steppedRidgePair/);
   assert.match(renderer, /function buildSteppedRoofVisualVolume/);
   assert.match(renderer, /if \(roof\.steppedLowerRoofId\)/);
-  assert.match(renderer, /buildSteppedRoofVisualVolume\(roof, scale/);
+  assert.match(renderer, /buildSteppedRoofVisualVolume\(roof, lowerRoof, scale/);
+  assert.match(renderer, /volumeY1 = roof\.ridgeAxis === 'x' \? lowerRoof\.y1 : roof\.y1/);
   assert.match(viewport, /roof\.steppedLowerRoofId === o\.id \|\| o\.steppedLowerRoofId === roof\.id/);
   assert.match(store, /const steppedPair = roof\.steppedLowerRoofId === candidate\.id \|\| candidate\.steppedLowerRoofId === roof\.id/);
   assert.match(store, /if \(!steppedPair && candidate\.ridgeAxis === roof\.ridgeAxis\) return/);

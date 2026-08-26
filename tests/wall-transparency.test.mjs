@@ -67,7 +67,8 @@ test('paredes de fechamento do telhado superior possuem face interna completa e 
   assert.match(closureFacesBlock, /face\.name === 'interna'\) mesh\.renderOrder = 1/);
   // O volume é fechado nas quatro faces e segue somente o retângulo do
   // telhado, sem procurar ou alterar paredes estruturais inferiores.
-  assert.match(visualVolumeBlock, /roof\.x1, y1: roof\.y1, x2: roof\.x2/);
+  assert.match(visualVolumeBlock, /volumeX1 = roof\.ridgeAxis === 'x' \? roof\.x1 : lowerRoof\.x1/);
+  assert.match(visualVolumeBlock, /volumeY1 = roof\.ridgeAxis === 'x' \? lowerRoof\.y1 : roof\.y1/);
   assert.match(visualVolumeBlock, /Core\.computeWallFootprints\(syntheticWalls\)/);
   assert.doesNotMatch(visualVolumeBlock, /nearestStructuralAxis/);
   assert.doesNotMatch(visualVolumeBlock, /structuralWalls/);

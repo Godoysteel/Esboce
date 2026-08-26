@@ -1586,12 +1586,19 @@ export function hashColorHex(key: string): number {
   // cômodos. Ao dimensionar o telhado, as quatro faces são reconstruídas
   // diretamente a partir do seu retângulo. A base penetra alguns centímetros
   // na construção inferior para que imprecisões no encontro fiquem ocultas.
-  function buildSteppedRoofVisualVolume(roof: any, scale: number, offsetX: number, offsetY: number, yOffset: number, structuralWallHeightM: number, raisedBaseM: number, color: any, wallsTransparent: boolean) {
+  function buildSteppedRoofVisualVolume(roof: any, lowerRoof: any, scale: number, offsetX: number, offsetY: number, yOffset: number, structuralWallHeightM: number, raisedBaseM: number, color: any, wallsTransparent: boolean) {
+    // A alça lateral do telhado controla a cobertura/beiral, não a parede.
+    // Por isso o eixo transversal permanece ancorado ao volume inferior;
+    // somente o comprimento do trecho elevado acompanha seu próprio roof.
+    var volumeX1 = roof.ridgeAxis === 'x' ? roof.x1 : lowerRoof.x1;
+    var volumeX2 = roof.ridgeAxis === 'x' ? roof.x2 : lowerRoof.x2;
+    var volumeY1 = roof.ridgeAxis === 'x' ? lowerRoof.y1 : roof.y1;
+    var volumeY2 = roof.ridgeAxis === 'x' ? lowerRoof.y2 : roof.y2;
     var segmentDefs = [
-      { x1: roof.x1, y1: roof.y1, x2: roof.x2, y2: roof.y1 },
-      { x1: roof.x2, y1: roof.y1, x2: roof.x2, y2: roof.y2 },
-      { x1: roof.x2, y1: roof.y2, x2: roof.x1, y2: roof.y2 },
-      { x1: roof.x1, y1: roof.y2, x2: roof.x1, y2: roof.y1 },
+      { x1: volumeX1, y1: volumeY1, x2: volumeX2, y2: volumeY1 },
+      { x1: volumeX2, y1: volumeY1, x2: volumeX2, y2: volumeY2 },
+      { x1: volumeX2, y1: volumeY2, x2: volumeX1, y2: volumeY2 },
+      { x1: volumeX1, y1: volumeY2, x2: volumeX1, y2: volumeY1 },
     ];
     var syntheticWalls: Wall[] = segmentDefs.map(function (segment, index) {
       return Core.createWallEntity(segment.x1, segment.y1, segment.x2, segment.y2, 'raised-roof-wall-' + index);
@@ -5353,7 +5360,7 @@ export function hashColorHex(key: string): number {
           if (roof.steppedLowerRoofId) {
             var lowerRoof = floorData.roofs.find(function (candidate) { return candidate.id === roof.steppedLowerRoofId; });
             if (lowerRoof) {
-              buildSteppedRoofVisualVolume(roof, scale, offsetX, offsetY, yOffset, currentWallHeight, roofOwnHeight, wallMatchColor, !!layers.paredesTransparentes).forEach(function (closure) {
+              buildSteppedRoofVisualVolume(roof, lowerRoof, scale, offsetX, offsetY, yOffset, currentWallHeight, roofOwnHeight, wallMatchColor, !!layers.paredesTransparentes).forEach(function (closure) {
                 tagCategory(closure, 'telhado');
                 closure.userData.roofId = roof.id;
                 closure.userData.roofClosure = 'volume-visual';
