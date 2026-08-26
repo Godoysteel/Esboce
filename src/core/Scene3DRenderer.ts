@@ -1310,7 +1310,12 @@ export function hashColorHex(key: string): number {
   // parede e a borda do avanço do telhado — em vez do próprio telhado
   // inclinado aparecer por baixo (era assim antes, "beiral aberto"). Um
   // box simples e plano, sem seguir a água — Product Owner pediu forro
-  // EM NÍVEL, não uma continuação da inclinação.
+  // EM NÍVEL, não uma continuação da inclinação. `topYForPanel` é o
+  // topo do painel — os chamadores passam `topY - verticalDrop` (a
+  // parte INFERIOR da tabeira na borda do beiral, não o topo da água),
+  // pra o forro encostar exatamente onde a tabeira termina, sem vão nem
+  // sobreposição (Product Owner: "o forro do beiral deve ficar no
+  // nível da parte inferior da tabeira").
   function buildEaveSoffitPanel(centerX: any, centerZ: any, sizeX: any, sizeZ: any, topYForPanel: any, colorOrMat: any) {
     var res = resolveFaceMaterial(colorOrMat);
     var geo = new THREE.BoxGeometry(Math.max(sizeX, 0.01), SOFFIT_THICKNESS, Math.max(sizeZ, 0.01));
@@ -2174,8 +2179,8 @@ export function hashColorHex(key: string): number {
         { x: gMaxX, y: gableBaseUnderY, z: gMaxZ }
       ], gableColors.b), 'b');
       meshes.push(buildRidgeCapMesh({ x: eMinX, y: ridgeY, z: ridgeZ }, { x: eMaxX, y: ridgeY, z: ridgeZ }, roofColor, pitchRad));
-      meshes.push(buildEaveSoffitPanel((eMinX + eMaxX) / 2, topBounds.minZ - ROOF_OVERHANG / 2, eMaxX - eMinX, ROOF_OVERHANG, topY, soffitColor));
-      meshes.push(buildEaveSoffitPanel((eMinX + eMaxX) / 2, topBounds.maxZ + ROOF_OVERHANG / 2, eMaxX - eMinX, ROOF_OVERHANG, topY, soffitColor));
+      meshes.push(buildEaveSoffitPanel((eMinX + eMaxX) / 2, topBounds.minZ - ROOF_OVERHANG / 2, eMaxX - eMinX, ROOF_OVERHANG, topY - verticalDrop, soffitColor));
+      meshes.push(buildEaveSoffitPanel((eMinX + eMaxX) / 2, topBounds.maxZ + ROOF_OVERHANG / 2, eMaxX - eMinX, ROOF_OVERHANG, topY - verticalDrop, soffitColor));
     } else {
       var eMinX2 = topBounds.minX - ROOF_OVERHANG, eMaxX2 = topBounds.maxX + ROOF_OVERHANG;
       var eMinZ2 = topBounds.minZ - RAKE_OVERHANG, eMaxZ2 = topBounds.maxZ + RAKE_OVERHANG;
@@ -2206,8 +2211,8 @@ export function hashColorHex(key: string): number {
         { x: gMaxX2, y: gableBaseUnderY2, z: gMaxZ2 }
       ], gableColors.b), 'b');
       meshes.push(buildRidgeCapMesh({ x: ridgeX, y: ridgeY2, z: eMinZ2 }, { x: ridgeX, y: ridgeY2, z: eMaxZ2 }, roofColor, pitchRad));
-      meshes.push(buildEaveSoffitPanel(topBounds.minX - ROOF_OVERHANG / 2, (eMinZ2 + eMaxZ2) / 2, ROOF_OVERHANG, eMaxZ2 - eMinZ2, topY, soffitColor));
-      meshes.push(buildEaveSoffitPanel(topBounds.maxX + ROOF_OVERHANG / 2, (eMinZ2 + eMaxZ2) / 2, ROOF_OVERHANG, eMaxZ2 - eMinZ2, topY, soffitColor));
+      meshes.push(buildEaveSoffitPanel(topBounds.minX - ROOF_OVERHANG / 2, (eMinZ2 + eMaxZ2) / 2, ROOF_OVERHANG, eMaxZ2 - eMinZ2, topY - verticalDrop, soffitColor));
+      meshes.push(buildEaveSoffitPanel(topBounds.maxX + ROOF_OVERHANG / 2, (eMinZ2 + eMaxZ2) / 2, ROOF_OVERHANG, eMaxZ2 - eMinZ2, topY - verticalDrop, soffitColor));
     }
     return meshes;
   }
@@ -2225,10 +2230,10 @@ export function hashColorHex(key: string): number {
     // em diagonal), então o forro em nível fecha o anel inteiro —
     // faixas frente/fundo já avançam pelas quinas (+2*ROOF_OVERHANG em
     // X) pra não sobrar buraco no canto com as faixas laterais.
-    meshes.push(buildEaveSoffitPanel((topBounds.minX + topBounds.maxX) / 2, topBounds.minZ - ROOF_OVERHANG / 2, (topBounds.maxX - topBounds.minX) + 2 * ROOF_OVERHANG, ROOF_OVERHANG, topY, soffitColor));
-    meshes.push(buildEaveSoffitPanel((topBounds.minX + topBounds.maxX) / 2, topBounds.maxZ + ROOF_OVERHANG / 2, (topBounds.maxX - topBounds.minX) + 2 * ROOF_OVERHANG, ROOF_OVERHANG, topY, soffitColor));
-    meshes.push(buildEaveSoffitPanel(topBounds.minX - ROOF_OVERHANG / 2, (topBounds.minZ + topBounds.maxZ) / 2, ROOF_OVERHANG, topBounds.maxZ - topBounds.minZ, topY, soffitColor));
-    meshes.push(buildEaveSoffitPanel(topBounds.maxX + ROOF_OVERHANG / 2, (topBounds.minZ + topBounds.maxZ) / 2, ROOF_OVERHANG, topBounds.maxZ - topBounds.minZ, topY, soffitColor));
+    meshes.push(buildEaveSoffitPanel((topBounds.minX + topBounds.maxX) / 2, topBounds.minZ - ROOF_OVERHANG / 2, (topBounds.maxX - topBounds.minX) + 2 * ROOF_OVERHANG, ROOF_OVERHANG, topY - verticalDrop, soffitColor));
+    meshes.push(buildEaveSoffitPanel((topBounds.minX + topBounds.maxX) / 2, topBounds.maxZ + ROOF_OVERHANG / 2, (topBounds.maxX - topBounds.minX) + 2 * ROOF_OVERHANG, ROOF_OVERHANG, topY - verticalDrop, soffitColor));
+    meshes.push(buildEaveSoffitPanel(topBounds.minX - ROOF_OVERHANG / 2, (topBounds.minZ + topBounds.maxZ) / 2, ROOF_OVERHANG, topBounds.maxZ - topBounds.minZ, topY - verticalDrop, soffitColor));
+    meshes.push(buildEaveSoffitPanel(topBounds.maxX + ROOF_OVERHANG / 2, (topBounds.minZ + topBounds.maxZ) / 2, ROOF_OVERHANG, topBounds.maxZ - topBounds.minZ, topY - verticalDrop, soffitColor));
 
     if (ridgeAlongX) {
       var ridgeZ = (topBounds.minZ + topBounds.maxZ) / 2;
@@ -2336,7 +2341,7 @@ export function hashColorHex(key: string): number {
       // Só o beiral baixo (lado de verdade com avanço) ganha forro em
       // nível — o lado alto encosta na parede (sem beiral) e os dois
       // lados em rampa (RAKE_OVERHANG) continuam com o forro aberto.
-      meshes.push(buildEaveSoffitPanel((eMinX + eMaxX) / 2, topBounds.minZ - ROOF_OVERHANG / 2, eMaxX - eMinX, ROOF_OVERHANG, topY, soffitColor));
+      meshes.push(buildEaveSoffitPanel((eMinX + eMaxX) / 2, topBounds.minZ - ROOF_OVERHANG / 2, eMaxX - eMinX, ROOF_OVERHANG, topY - verticalDrop, soffitColor));
     } else {
       var eMinZ2 = topBounds.minZ - RAKE_OVERHANG, eMaxZ2 = topBounds.maxZ + RAKE_OVERHANG;
       var eMinX2 = topBounds.minX - ROOF_OVERHANG, eMaxX2 = topBounds.maxX + ROOF_OVERHANG;
@@ -2361,7 +2366,7 @@ export function hashColorHex(key: string): number {
         { x: gMaxX, y: topY, z: gMinZ }, { x: gMaxX, y: topY, z: gMaxZ },
         { x: gMaxX, y: gHighUnderY2, z: gMaxZ }, { x: gMaxX, y: gHighUnderY2, z: gMinZ }
       ], backWallColor));
-      meshes.push(buildEaveSoffitPanel(topBounds.minX - ROOF_OVERHANG / 2, (eMinZ2 + eMaxZ2) / 2, ROOF_OVERHANG, eMaxZ2 - eMinZ2, topY, soffitColor));
+      meshes.push(buildEaveSoffitPanel(topBounds.minX - ROOF_OVERHANG / 2, (eMinZ2 + eMaxZ2) / 2, ROOF_OVERHANG, eMaxZ2 - eMinZ2, topY - verticalDrop, soffitColor));
     }
     return meshes;
   }

@@ -34,8 +34,8 @@ test('duas-águas fecha o forro só nos dois beirais de verdade (ROOF_OVERHANG),
   assert.match(body, /function buildRoofDuasAguas\([^)]*soffitColor: any\)/);
   const soffitCallCount = (body.match(/buildEaveSoffitPanel\(/g) || []).length;
   assert.equal(soffitCallCount, 4, 'esperava 4 chamadas (2 beirais × 2 branches de ridgeAxis)');
-  assert.match(body, /buildEaveSoffitPanel\(\(eMinX \+ eMaxX\) \/ 2, topBounds\.minZ - ROOF_OVERHANG \/ 2, eMaxX - eMinX, ROOF_OVERHANG, topY, soffitColor\)/);
-  assert.match(body, /buildEaveSoffitPanel\(topBounds\.minX - ROOF_OVERHANG \/ 2, \(eMinZ2 \+ eMaxZ2\) \/ 2, ROOF_OVERHANG, eMaxZ2 - eMinZ2, topY, soffitColor\)/);
+  assert.match(body, /buildEaveSoffitPanel\(\(eMinX \+ eMaxX\) \/ 2, topBounds\.minZ - ROOF_OVERHANG \/ 2, eMaxX - eMinX, ROOF_OVERHANG, topY - verticalDrop, soffitColor\)/);
+  assert.match(body, /buildEaveSoffitPanel\(topBounds\.minX - ROOF_OVERHANG \/ 2, \(eMinZ2 \+ eMaxZ2\) \/ 2, ROOF_OVERHANG, eMaxZ2 - eMinZ2, topY - verticalDrop, soffitColor\)/);
 });
 
 test('quatro-águas fecha o forro no anel inteiro (todo lado é beiral de verdade, sem oitão)', () => {
@@ -47,7 +47,7 @@ test('quatro-águas fecha o forro no anel inteiro (todo lado é beiral de verdad
   assert.equal(soffitCallCount, 4, 'esperava 4 chamadas (4 lados do anel)');
   // Frente/fundo avançam pelas quinas (+2*ROOF_OVERHANG) pra não sobrar
   // buraco onde encontram as faixas laterais.
-  assert.match(body, /\(topBounds\.maxX - topBounds\.minX\) \+ 2 \* ROOF_OVERHANG, ROOF_OVERHANG, topY, soffitColor/);
+  assert.match(body, /\(topBounds\.maxX - topBounds\.minX\) \+ 2 \* ROOF_OVERHANG, ROOF_OVERHANG, topY - verticalDrop, soffitColor/);
 });
 
 test('uma-água fecha o forro só no beiral baixo — lado alto (sem avanço) e os dois lados em rampa continuam abertos', () => {
@@ -57,8 +57,8 @@ test('uma-água fecha o forro só no beiral baixo — lado alto (sem avanço) e 
   assert.match(body, /function buildRoofUmaAgua\([^)]*soffitColor: any\)/);
   const soffitCallCount = (body.match(/buildEaveSoffitPanel\(/g) || []).length;
   assert.equal(soffitCallCount, 2, 'esperava 2 chamadas (1 beiral baixo × 2 branches de ridgeAxis)');
-  assert.match(body, /buildEaveSoffitPanel\(\(eMinX \+ eMaxX\) \/ 2, topBounds\.minZ - ROOF_OVERHANG \/ 2, eMaxX - eMinX, ROOF_OVERHANG, topY, soffitColor\)/);
-  assert.match(body, /buildEaveSoffitPanel\(topBounds\.minX - ROOF_OVERHANG \/ 2, \(eMinZ2 \+ eMaxZ2\) \/ 2, ROOF_OVERHANG, eMaxZ2 - eMinZ2, topY, soffitColor\)/);
+  assert.match(body, /buildEaveSoffitPanel\(\(eMinX \+ eMaxX\) \/ 2, topBounds\.minZ - ROOF_OVERHANG \/ 2, eMaxX - eMinX, ROOF_OVERHANG, topY - verticalDrop, soffitColor\)/);
+  assert.match(body, /buildEaveSoffitPanel\(topBounds\.minX - ROOF_OVERHANG \/ 2, \(eMinZ2 \+ eMaxZ2\) \/ 2, ROOF_OVERHANG, eMaxZ2 - eMinZ2, topY - verticalDrop, soffitColor\)/);
 });
 
 test('buildRoofPiece calcula soffitColor a partir da cor da parede da casa e repassa pra cada tipo de telhado', () => {
