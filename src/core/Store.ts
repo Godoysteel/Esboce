@@ -47,6 +47,8 @@ function autoComposeCurrentRoofs(): string[][] {
       component.push(roof);
       roofs.forEach((candidate) => {
         if (visited.has(candidate.id)) return;
+        // O telhado com parede de extensão é sempre uma peça autônoma.
+        if (roof.steppedWallVolume || candidate.steppedWallVolume) return;
         const steppedPair = roof.steppedLowerRoofId === candidate.id || candidate.steppedLowerRoofId === roof.id;
         if (!steppedPair && candidate.ridgeAxis === roof.ridgeAxis) return;
         if (!steppedPair && !Core.rectsNearby(roof, candidate, Core.SNAP_UNIT)) return;
@@ -1186,13 +1188,13 @@ export const commands = {
         raised = Core.createRoofEntity(base.x1, joinY, base.x2, base.y2, 'duasAguas', 26, 'y');
       }
       raised.baseHeightM = raisedBaseHeightM;
-      raised.steppedLowerRoofId = lower.id;
+      raised.steppedWallVolume = true;
       roofs.push(
         lower,
         raised,
       );
     }
-    roofs.forEach((roof) => { roof.compoundGroupId = groupId; });
+    if (kind === 'extensaoLateral') roofs.forEach((roof) => { roof.compoundGroupId = groupId; });
     floor.roofs.push(...roofs);
     emit({ type: 'RoofCompositePresetCreated', kind, roofIds: roofs.map((roof) => roof.id), groupId });
     return roofs.length;
@@ -1509,6 +1511,7 @@ export const commands = {
     const offset = Core.GRID;
     const copy = Core.createRoofEntity(r.x1 + offset, r.y1 + offset, r.x2 + offset, r.y2 + offset, r.type, r.pitchDeg, r.ridgeAxis, undefined, r.parapetHeight, r.atticMode, r.baseHeightM);
     if (r.steppedLowerRoofId) copy.steppedLowerRoofId = r.steppedLowerRoofId;
+    if (r.steppedWallVolume) copy.steppedWallVolume = true;
     currentRoofs().push(copy);
     emit({ type: 'RoofCreated', floorIndex: project.currentFloorIndex, roofId: copy.id, duplicatedFrom: roofId });
     return copy;
@@ -2261,8 +2264,8 @@ export const commands = {
   },
 
   updateRoofBaseHeightLive(roofId: string, heightM: number): void {
-    const r = findRoof(roofId); if (!r || (!r.atticMode && !r.steppedLowerRoofId)) return;
-    const minimumHeightM = r.steppedLowerRoofId ? Core.WALL_HEIGHT + 0.15 : 0.1;
+    const r = findRoof(roofId); if (!r || (!r.atticMode && !r.steppedWallVolume && !r.steppedLowerRoofId)) return;
+    const minimumHeightM = (r.steppedWallVolume || r.steppedLowerRoofId) ? Core.WALL_HEIGHT + 0.15 : 0.1;
     r.baseHeightM = Math.max(minimumHeightM, Math.min(8, heightM));
     emit({ type: 'RoofBaseHeightChanged', roofId, live: true });
   },

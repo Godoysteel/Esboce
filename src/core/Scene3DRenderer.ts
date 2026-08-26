@@ -1586,14 +1586,11 @@ export function hashColorHex(key: string): number {
   // cômodos. Ao dimensionar o telhado, as quatro faces são reconstruídas
   // diretamente a partir do seu retângulo. A base penetra alguns centímetros
   // na construção inferior para que imprecisões no encontro fiquem ocultas.
-  function buildSteppedRoofVisualVolume(roof: any, lowerRoof: any, scale: number, offsetX: number, offsetY: number, yOffset: number, structuralWallHeightM: number, raisedBaseM: number, color: any, wallsTransparent: boolean) {
-    // A alça lateral do telhado controla a cobertura/beiral, não a parede.
-    // Por isso o eixo transversal permanece ancorado ao volume inferior;
-    // somente o comprimento do trecho elevado acompanha seu próprio roof.
-    var volumeX1 = roof.ridgeAxis === 'x' ? roof.x1 : lowerRoof.x1;
-    var volumeX2 = roof.ridgeAxis === 'x' ? roof.x2 : lowerRoof.x2;
-    var volumeY1 = roof.ridgeAxis === 'x' ? lowerRoof.y1 : roof.y1;
-    var volumeY2 = roof.ridgeAxis === 'x' ? lowerRoof.y2 : roof.y2;
+  function buildSteppedRoofVisualVolume(roof: any, scale: number, offsetX: number, offsetY: number, yOffset: number, structuralWallHeightM: number, raisedBaseM: number, color: any, wallsTransparent: boolean) {
+    // O volume pertence exclusivamente ao telhado elevado. Não recebe
+    // coordenadas, movimento ou dimensões de qualquer outro telhado.
+    var volumeX1 = roof.x1, volumeX2 = roof.x2;
+    var volumeY1 = roof.y1, volumeY2 = roof.y2;
     var segmentDefs = [
       { x1: volumeX1, y1: volumeY1, x2: volumeX2, y2: volumeY1 },
       { x1: volumeX2, y1: volumeY1, x2: volumeX2, y2: volumeY2 },
@@ -4474,7 +4471,7 @@ export function hashColorHex(key: string): number {
     }
     if (viewState.selectedRoof) {
       var r = viewState.selectedRoof, roofYOffset = viewState.editingYOffset;
-      var selectedRoofBaseM = r.steppedLowerRoofId
+      var selectedRoofBaseM = (r.steppedWallVolume || r.steppedLowerRoofId)
         ? Math.max(r.baseHeightM || wallHeight, wallHeight + 0.15)
         : (r.atticMode ? (r.baseHeightM || 1.2) : wallHeight);
       var topY = roofYOffset + selectedRoofBaseM;
@@ -5276,7 +5273,7 @@ export function hashColorHex(key: string): number {
         // ao outro ao mesmo tempo sempre que as bases se sobrepõem, abrindo
         // um buraco onde nenhum dos dois desenha nada.
         var roofPeakBoxes = floorData.roofs.map(function (r: any) {
-          var rOwnHeight = r.steppedLowerRoofId
+          var rOwnHeight = (r.steppedWallVolume || r.steppedLowerRoofId)
             ? Math.max(r.baseHeightM || currentWallHeight, currentWallHeight + 0.15)
             : (r.atticMode ? (r.baseHeightM || 1.2) : Core.roofHeightAtRect(floorData.walls, r.x1, r.y1, r.x2, r.y2, currentWallHeight));
           var rFootprint = roofWorldFootprint(r, scale, offsetX, offsetY);
@@ -5297,7 +5294,7 @@ export function hashColorHex(key: string): number {
           // espírito de Core.resolvedWallHeights). Cai pro padrão do
           // pavimento quando não há cômodo fechado sob o telhado. Ático
           // continua usando `baseHeightM` — campo próprio, deliberado.
-          var roofOwnHeight = roof.steppedLowerRoofId
+          var roofOwnHeight = (roof.steppedWallVolume || roof.steppedLowerRoofId)
             ? Math.max(roof.baseHeightM || currentWallHeight, currentWallHeight + 0.15)
             : (roof.atticMode ? (roof.baseHeightM || 1.2) : Core.roofHeightAtRect(floorData.walls, roof.x1, roof.y1, roof.x2, roof.y2, currentWallHeight));
           var pieceBaseY = yOffset + roofOwnHeight;
@@ -5321,6 +5318,7 @@ export function hashColorHex(key: string): number {
           var tallerRoofClipBoxes = roofPeakBoxes.filter(function (b: any) {
             if (b.id === roof.id || b.peakY <= ownPeakY + 1e-4) return false;
             var tallerRoof = floorData.roofs.find(function (candidate) { return candidate.id === b.id; });
+            if (tallerRoof && tallerRoof.steppedWallVolume && tallerRoof.ridgeAxis === roof.ridgeAxis) return false;
             // Cumeeira em níveis: os dois trechos consecutivos pertencem
             // ao mesmo conjunto, mantêm o mesmo eixo e um deles controla
             // a parede elevada (atticMode). Nesse encontro o beiral do
@@ -5357,10 +5355,8 @@ export function hashColorHex(key: string): number {
             scene.add(m);
             registry.structureMeshes.push(m);
           });
-          if (roof.steppedLowerRoofId) {
-            var lowerRoof = floorData.roofs.find(function (candidate) { return candidate.id === roof.steppedLowerRoofId; });
-            if (lowerRoof) {
-              buildSteppedRoofVisualVolume(roof, lowerRoof, scale, offsetX, offsetY, yOffset, currentWallHeight, roofOwnHeight, wallMatchColor, !!layers.paredesTransparentes).forEach(function (closure) {
+          if (roof.steppedWallVolume || roof.steppedLowerRoofId) {
+              buildSteppedRoofVisualVolume(roof, scale, offsetX, offsetY, yOffset, currentWallHeight, roofOwnHeight, wallMatchColor, !!layers.paredesTransparentes).forEach(function (closure) {
                 tagCategory(closure, 'telhado');
                 closure.userData.roofId = roof.id;
                 closure.userData.roofClosure = 'volume-visual';
@@ -5368,7 +5364,6 @@ export function hashColorHex(key: string): number {
                 scene.add(closure);
                 registry.structureMeshes.push(closure);
               });
-            }
           }
         });
       }

@@ -238,6 +238,14 @@ function parseRoof(value: unknown, path: string): Roof {
   if (roof.atticMode || roof.steppedLowerRoofId) {
     roof.baseHeightM = number(v.baseHeightM, `${path}.baseHeightM`, 1.2);
   }
+  // Projetos antigos vinculavam o telhado elevado ao telhado baixo. Ao
+  // carregar, convertemos o vínculo para o novo volume autônomo.
+  if (v.steppedWallVolume === true || roof.steppedLowerRoofId) {
+    roof.steppedWallVolume = true;
+    delete roof.steppedLowerRoofId;
+    delete roof.compoundGroupId;
+    roof.baseHeightM = number(v.baseHeightM, `${path}.baseHeightM`, 3.15);
+  }
   if (roof.atticMode) {
     roof.atticWallIds = array(v.atticWallIds, `${path}.atticWallIds`, true).map((id, index) => string(id, `${path}.atticWallIds[${index}]`));
   }

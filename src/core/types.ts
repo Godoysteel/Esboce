@@ -58,6 +58,8 @@ export interface Roof {
   /** Telhado inferior do mesmo eixo numa cumeeira interrompida. O
    * fechamento entre ambos pertence à cobertura, nunca a Floor.walls. */
   steppedLowerRoofId?: string;
+  /** Telhado elevado autônomo com um volume visual de parede próprio. */
+  steppedWallVolume?: boolean;
   /** Altura do parapeito acima do topo da parede, em metros — só relevante pra type === 'platibanda'. */
   parapetHeight?: number;
   /** Fluxo paramétrico do ático: prévia transparente ou recorte confirmado. */
