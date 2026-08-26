@@ -66,4 +66,6 @@ test('cumeeira em níveis preserva o beiral inferior contra o oitão elevado', (
   assert.match(viewport, /var wholeRoofHit = hits\.find/);
   assert.match(renderer, /Math\.max\(roof\.baseHeightM \|\| currentWallHeight, currentWallHeight \+ 0\.15\)/);
   assert.match(renderer, /baseHandle\.position\.set\(wx2 \+ 0\.85/);
+  assert.match(viewport, /var finalWholeRoofHeight = dragElementStart\.baseHeightM \+ \(dragElementStart\.startScreenY - e\.clientY\) \* 0\.01/);
+  assert.match(viewport, /updateRoofBaseHeightLive\(selectedRoofId, finalWholeRoofHeight\)/);
 });

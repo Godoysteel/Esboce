@@ -4215,6 +4215,10 @@ import {
     // cobertura podia voltar ao topo das paredes e os fechamentos próprios
     // dela pareciam desaparecer. O gesto agora termina exatamente ao soltar.
     if (dragMode === 'roofBaseHeight') {
+      if (selectedRoofId && dragElementStart && dragElementStart.startScreenY != null) {
+        var finalWholeRoofHeight = dragElementStart.baseHeightM + (dragElementStart.startScreenY - e.clientY) * 0.01;
+        Store.commands.updateRoofBaseHeightLive(selectedRoofId, finalWholeRoofHeight);
+      }
       var elevatedRoof = selectedRoofId ? Store.findRoof(selectedRoofId) : null;
       if (elevatedRoof) {
         hintEl.textContent = 'Telhado inteiro posicionado individualmente — base em ' + (elevatedRoof.baseHeightM || Core.WALL_HEIGHT).toFixed(2).replace('.', ',') + ' m.';
