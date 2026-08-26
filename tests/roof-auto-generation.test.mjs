@@ -46,7 +46,7 @@ test('cumeeira em níveis preserva o beiral inferior contra o oitão elevado', (
   assert.match(renderer, /function buildSteppedRidgeClosure/);
   assert.match(renderer, /function buildRaisedRoofPerimeterClosures/);
   assert.match(renderer, /if \(roof\.steppedLowerRoofId\)/);
-  assert.match(renderer, /buildRaisedRoofPerimeterClosures\(roof, scale/);
+  assert.match(renderer, /buildRaisedRoofPerimeterClosures\(roof, floorData\.walls, scale/);
   assert.match(viewport, /roof\.steppedLowerRoofId === o\.id \|\| o\.steppedLowerRoofId === roof\.id/);
   assert.match(store, /const steppedPair = roof\.steppedLowerRoofId === candidate\.id \|\| candidate\.steppedLowerRoofId === roof\.id/);
   assert.match(store, /if \(!steppedPair && candidate\.ridgeAxis === roof\.ridgeAxis\) return/);

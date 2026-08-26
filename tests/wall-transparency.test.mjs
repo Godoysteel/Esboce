@@ -73,8 +73,12 @@ test('paredes de fechamento do telhado superior possuem face interna completa e 
   // Laterais/fundos agora reutilizam literalmente o footprint, as faces
   // A/B e o complemento de oitão usados pelas paredes dos cômodos.
   assert.match(perimeterClosureBlock, /Core\.computeWallFootprints\(syntheticWalls\)/);
+  assert.match(perimeterClosureBlock, /nearestStructuralAxis/);
+  assert.match(perimeterClosureBlock, /structuralWalls\.forEach/);
   assert.match(perimeterClosureBlock, /buildFaceStripMesh\(fp, rectangularHeightM/);
   assert.match(perimeterClosureBlock, /buildAtticWallFaceExtensions\(wall, profile/);
+  assert.match(perimeterClosureBlock, /buildWallFootprintEdgeLines\(fp, rectangularHeightM/);
+  assert.match(perimeterClosureBlock, /new THREE\.EdgesGeometry\(extension\.geometry\)/);
   assert.match(perimeterClosureBlock, /side === 'a' \? 'externa' : 'interna'/);
   // A normal já é unitária: meia espessura precisa ser 0,06 m em cada
   // direção, sem aplicar novamente o scale=1/GRID.

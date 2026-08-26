@@ -1585,22 +1585,47 @@ export function hashColorHex(key: string): number {
   // fechamento transversal acima, são peças da cobertura e começam
   // exatamente no topo das paredes estruturais existentes. Nenhuma
   // Wall é criada, esticada ou dividida para fechar esse espaço.
-  function buildRaisedRoofPerimeterClosures(roof: any, scale: number, offsetX: number, offsetY: number, yOffset: number, structuralWallHeightM: number, raisedBaseM: number, color: any, wallsTransparent: boolean) {
+  function buildRaisedRoofPerimeterClosures(roof: any, structuralWalls: Wall[], scale: number, offsetX: number, offsetY: number, yOffset: number, structuralWallHeightM: number, raisedBaseM: number, color: any, wallsTransparent: boolean) {
+    function nearestStructuralAxis(axis: 'x' | 'y', desired: number, span1: number, span2: number) {
+      var best = desired, bestDistance = Infinity;
+      structuralWalls.forEach(function (wall) {
+        var horizontal = Math.abs(wall.y2 - wall.y1) < 1e-4;
+        var vertical = Math.abs(wall.x2 - wall.x1) < 1e-4;
+        if ((axis === 'x' && !vertical) || (axis === 'y' && !horizontal)) return;
+        var wallSpan1 = axis === 'x' ? Math.min(wall.y1, wall.y2) : Math.min(wall.x1, wall.x2);
+        var wallSpan2 = axis === 'x' ? Math.max(wall.y1, wall.y2) : Math.max(wall.x1, wall.x2);
+        if (Math.min(span2, wallSpan2) < Math.max(span1, wallSpan1) - Core.COINCIDENCE_TOL) return;
+        var candidate = axis === 'x' ? wall.x1 : wall.y1;
+        var distance = Math.abs(candidate - desired);
+        if (distance < bestDistance && distance <= Core.SNAP_UNIT * 2) { best = candidate; bestDistance = distance; }
+      });
+      return best;
+    }
+    var alignedX1 = roof.x1, alignedX2 = roof.x2, alignedY1 = roof.y1, alignedY2 = roof.y2;
+    if (roof.ridgeAxis === 'x') {
+      alignedY1 = nearestStructuralAxis('y', roof.y1, roof.x1, roof.x2);
+      alignedY2 = nearestStructuralAxis('y', roof.y2, roof.x1, roof.x2);
+      alignedX2 = nearestStructuralAxis('x', roof.x2, roof.y1, roof.y2);
+    } else {
+      alignedX1 = nearestStructuralAxis('x', roof.x1, roof.y1, roof.y2);
+      alignedX2 = nearestStructuralAxis('x', roof.x2, roof.y1, roof.y2);
+      alignedY2 = nearestStructuralAxis('y', roof.y2, roof.x1, roof.x2);
+    }
     // Quatro paredes sintéticas fecham o retângulo apenas para calcular o
     // footprint/mitre exatamente como num cômodo comum. A parede da junção
     // não é renderizada aqui porque buildSteppedRidgeClosure cuida dela.
     var segmentDefs = roof.ridgeAxis === 'x'
       ? [
-          { x1: roof.x1, y1: roof.y1, x2: roof.x2, y2: roof.y1, render: true },
-          { x1: roof.x2, y1: roof.y1, x2: roof.x2, y2: roof.y2, render: true },
-          { x1: roof.x2, y1: roof.y2, x2: roof.x1, y2: roof.y2, render: true },
-          { x1: roof.x1, y1: roof.y2, x2: roof.x1, y2: roof.y1, render: false },
+          { x1: alignedX1, y1: alignedY1, x2: alignedX2, y2: alignedY1, render: true },
+          { x1: alignedX2, y1: alignedY1, x2: alignedX2, y2: alignedY2, render: true },
+          { x1: alignedX2, y1: alignedY2, x2: alignedX1, y2: alignedY2, render: true },
+          { x1: alignedX1, y1: alignedY2, x2: alignedX1, y2: alignedY1, render: false },
         ]
       : [
-          { x1: roof.x1, y1: roof.y1, x2: roof.x1, y2: roof.y2, render: true },
-          { x1: roof.x1, y1: roof.y2, x2: roof.x2, y2: roof.y2, render: true },
-          { x1: roof.x2, y1: roof.y2, x2: roof.x2, y2: roof.y1, render: true },
-          { x1: roof.x2, y1: roof.y1, x2: roof.x1, y2: roof.y1, render: false },
+          { x1: alignedX1, y1: alignedY1, x2: alignedX1, y2: alignedY2, render: true },
+          { x1: alignedX1, y1: alignedY2, x2: alignedX2, y2: alignedY2, render: true },
+          { x1: alignedX2, y1: alignedY2, x2: alignedX2, y2: alignedY1, render: true },
+          { x1: alignedX2, y1: alignedY1, x2: alignedX1, y2: alignedY1, render: false },
         ];
     var syntheticWalls: Wall[] = segmentDefs.map(function (segment, index) {
       return Core.createWallEntity(segment.x1, segment.y1, segment.x2, segment.y2, 'raised-roof-wall-' + index);
@@ -1629,6 +1654,7 @@ export function hashColorHex(key: string): number {
         p1Extended: fpModel.p1Extended, p2Extended: fpModel.p2Extended,
       };
       var rectangularHeightM = Math.max(0, raisedBaseM - structuralWallHeightM);
+      var extensionSlices = atticWallExtensionSlices(wall, profile, []);
       (['a', 'b'] as const).forEach(function (side) {
         var faceMaterial = makeMaterial();
         var face = buildFaceStripMesh(fp, rectangularHeightM, yOffset + structuralWallHeightM, faceMaterial, side);
@@ -1637,8 +1663,14 @@ export function hashColorHex(key: string): number {
         buildAtticWallFaceExtensions(wall, profile, [], fp, yOffset, faceMaterial, side).forEach(function (extension) {
           extension.userData.roofWallFace = side === 'a' ? 'externa-oitão' : 'interna-oitão';
           meshes.push(extension);
+          var extensionEdges = new THREE.LineSegments(new THREE.EdgesGeometry(extension.geometry), new THREE.LineBasicMaterial({ color: WALL_EDGE_COLOR }));
+          extensionEdges.userData.roofWallFace = 'contorno-oitão';
+          meshes.push(extensionEdges);
         });
       });
+      var edgeLines = buildWallFootprintEdgeLines(fp, rectangularHeightM, yOffset + structuralWallHeightM, extensionSlices.length === 0);
+      edgeLines.userData.roofWallFace = 'contorno';
+      meshes.push(edgeLines);
       meshes.push(buildWallTopCapMesh(fp, yOffset + raisedBaseM, topMaterial));
       if (fp.p1Free !== false || fp.p1Extended) meshes.push(buildWallEndCapMesh(fp, rectangularHeightM, yOffset + structuralWallHeightM, topMaterial, 1));
       if (fp.p2Free !== false || fp.p2Extended) meshes.push(buildWallEndCapMesh(fp, rectangularHeightM, yOffset + structuralWallHeightM, topMaterial, 2));
@@ -5361,7 +5393,7 @@ export function hashColorHex(key: string): number {
                 scene.add(closure);
                 registry.structureMeshes.push(closure);
               });
-              buildRaisedRoofPerimeterClosures(roof, scale, offsetX, offsetY, yOffset, currentWallHeight, roofOwnHeight, wallMatchColor, !!layers.paredesTransparentes).forEach(function (closure) {
+              buildRaisedRoofPerimeterClosures(roof, floorData.walls, scale, offsetX, offsetY, yOffset, currentWallHeight, roofOwnHeight, wallMatchColor, !!layers.paredesTransparentes).forEach(function (closure) {
                 tagCategory(closure, 'telhado');
                 closure.userData.roofId = roof.id;
                 closure.userData.roofClosure = 'perimetral';
