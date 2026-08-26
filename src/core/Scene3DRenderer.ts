@@ -25,6 +25,7 @@ import { RAILING_FRAME_DEPTH_M, RAILING_POST_WIDTH_M, RAILING_TOP_RAIL_HEIGHT_M,
 import type { Project, Wall, Column, Roof, Varanda, Laje, Opening } from './types.js';
 import { floorWallHeight } from './Attic.js';
 import { hydraulicFixtureVisualPosition } from './Hydraulics.js';
+import { steelFrameAssemblyColorHex } from './SteelFrameAssemblies.js';
 
 export interface ViewState {
   drawPreview?: any;
@@ -5128,8 +5129,9 @@ export function hashColorHex(key: string): number {
             var wallPbrMaps = hasRealTexture ? buildWallFaceMaterial(product) : null;
             var faceColorHex = product ? parseInt(product.assets.colorHex.slice(1), 16) : wallDefaultColor;
             if (isCeramic || hasRealTexture) faceColorHex = 0xFFFFFF;
-            var steelFrameFaceConfigured = project.constructionSystem === 'light_steel_frame' && !!(side === 'a' ? w.faceAAssemblyId : w.faceBAssemblyId);
-            var faceColor = highlighted ? SELECTED_ACCENT : steelFrameFaceConfigured ? 0x3FAE67 : (DEBUG_COLOR_MODE ? hashColorHex(w.id + '-' + side) : faceColorHex);
+            var steelFrameFaceAssemblyId = side === 'a' ? w.faceAAssemblyId : w.faceBAssemblyId;
+            var steelFrameFaceConfigured = project.constructionSystem === 'light_steel_frame' && !!steelFrameFaceAssemblyId;
+            var faceColor = highlighted ? SELECTED_ACCENT : steelFrameFaceConfigured ? steelFrameAssemblyColorHex(steelFrameFaceAssemblyId) : (DEBUG_COLOR_MODE ? hashColorHex(w.id + '-' + side) : faceColorHex);
             var faceMat = new THREE.MeshStandardMaterial({
               color: (floorIdx === editingIdx && !DEBUG_COLOR_MODE) ? pickColor(faceColor, wallCategory, viewState) : faceColor,
               map: DEBUG_COLOR_MODE ? null : (hasRealTexture ? wallPbrMaps!.map : ceramicMap),
@@ -5366,8 +5368,12 @@ export function hashColorHex(key: string): number {
                   && (roof.type !== 'platibanda' || (!!roof.parapetOuterAssemblyId && !!roof.parapetInnerAssemblyId))
             );
             if (steelFrameRoofConfigured) {
-              m.material = Array.isArray(m.material) ? m.material.map(function (material: any) { var marked = material.clone(); marked.color.setHex(0x3FAE67); return marked; }) : m.material.clone();
-              if (!Array.isArray(m.material)) m.material.color.setHex(0x3FAE67);
+              var roofAssemblyId = m.userData.gableSide
+                ? (m.userData.gableSide === 'a' ? roof.gableFaceAAssemblyId : roof.gableFaceBAssemblyId)
+                : (roof.parapetOuterAssemblyId || roof.soffitAssemblyId || roof.fasciaAssemblyId);
+              var roofSystemColor = steelFrameAssemblyColorHex(roofAssemblyId);
+              m.material = Array.isArray(m.material) ? m.material.map(function (material: any) { var marked = material.clone(); marked.color.setHex(roofSystemColor); return marked; }) : m.material.clone();
+              if (!Array.isArray(m.material)) m.material.color.setHex(roofSystemColor);
             }
             clipMeshOutsideRects(m, trimRects);
             tagCategory(m, m.userData.gableSide ? wallCategory : 'telhado');

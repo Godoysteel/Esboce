@@ -100,6 +100,19 @@ export const STEEL_FRAME_FACE_ASSEMBLIES: readonly WallFaceAssemblyDefinition[] 
 
 export const STEEL_FRAME_STRUCTURE_WASTE_PERCENT = 5;
 
+/** Cor de conferência visual de cada sistema no assistente. */
+export function steelFrameAssemblyColorHex(assemblyId?: string): number {
+  const colors: Record<string, number> = {
+    'eifs': 0x2563EB, 'cement-board-direct': 0x0891B2,
+    'cement-board-osb': 0xD97706, 'glasroc-x-direct': 0x7C3AED,
+    'glasroc-x-therm': 0xDB2777, 'vinyl-siding-osb': 0x0F766E,
+    'drywall-st': 0x3FAE67, 'drywall-ru': 0x0EA5E9,
+    'drywall-rf': 0xDC2626, 'soffit-cement-board': 0x64748B,
+    'soffit-vinyl': 0xA855F7,
+  };
+  return assemblyId ? (colors[assemblyId] ?? 0x3FAE67) : 0x3FAE67;
+}
+
 export function quantityWithWaste(areaM2: number, layer: AssemblyLayerDefinition): number {
   const raw = Math.max(0, areaM2) * layer.consumptionPerM2 * (1 + layer.wastePercent / 100);
   return layer.unit === 'unit' ? Math.ceil(raw) : Math.round(raw * 100) / 100;

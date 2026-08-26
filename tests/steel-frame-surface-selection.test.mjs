@@ -24,7 +24,7 @@ test('lista contextual oferece sistemas externos e drywall interno', () => {
   assert.match(app, /data-sf-system/);
 });
 
-test('faces concluídas ficam verdes, não podem ser selecionadas novamente e bloqueiam o quantitativo enquanto houver pendências', () => {
+test('faces concluídas ficam coloridas, não podem ser selecionadas novamente e bloqueiam o quantitativo enquanto houver pendências', () => {
   assert.match(app, /targetIsConfigured/);
   assert.match(app, /return false/);
   assert.match(app, /quantityButton\.disabled = issues\.length > 0/);
@@ -32,7 +32,7 @@ test('faces concluídas ficam verdes, não podem ser selecionadas novamente e bl
   const renderer = readFileSync(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
   assert.match(renderer, /steelFrameFaceConfigured/);
   assert.match(renderer, /steelFrameRoofConfigured/);
-  assert.match(renderer, /0x3FAE67/);
+  assert.match(renderer, /steelFrameAssemblyColorHex/);
   assert.match(html, /data-sf-quantity\]:disabled/);
 });
 
@@ -57,11 +57,20 @@ test('fluxo oculta o telhado durante paredes e libera pavimentos em sequência',
   assert.match(renderer, /if \(!viewState\.hideRoofs\)/);
 });
 
-test('somente a face definida fica verde imediatamente, sem seleção laranja da parede inteira', () => {
+test('somente a face definida fica colorida imediatamente, sem seleção laranja da parede inteira', () => {
   const renderer = readFileSync(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
-  assert.match(renderer, /steelFrameFaceConfigured.*faceAAssemblyId.*faceBAssemblyId/);
+  assert.match(renderer, /steelFrameFaceAssemblyId = side === 'a' \? w\.faceAAssemblyId : w\.faceBAssemblyId/);
   assert.doesNotMatch(renderer, /steelFrameFaceConfigured.*cavityAssembly/);
   assert.match(renderer, /!viewState\.steelFrameConfigMode && \(isSelected/);
   assert.match(viewport, /selectedWall: steelFrameSurfaceSelectionHandler \? null : selectedWall/);
   assert.match(viewport, /highlightedCategory: steelFrameSurfaceSelectionHandler \? null : highlightedCategory/);
+});
+
+test('cada sistema usa uma cor própria e a pendência separa faces de isolamentos', () => {
+  const assemblies = readFileSync(new URL('../src/core/SteelFrameAssemblies.ts', import.meta.url), 'utf8');
+  assert.match(assemblies, /function steelFrameAssemblyColorHex/);
+  assert.match(app, /steelFrameAssemblyColorHex\(system\.id\)/);
+  assert.match(app, /isolamentos/);
+  assert.match(app, /Marcos de portas\/janelas e o topo das paredes não entram/);
+  assert.match(html, /--sf-system-color/);
 });

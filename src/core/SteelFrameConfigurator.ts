@@ -1,6 +1,6 @@
 import { Store } from './Store.js';
 import { ViewportController } from './ViewportController.js';
-import { STEEL_FRAME_FACE_ASSEMBLIES, steelFrameSpecificationIssues } from './SteelFrameAssemblies.js';
+import { STEEL_FRAME_FACE_ASSEMBLIES, steelFrameAssemblyColorHex, steelFrameSpecificationIssues } from './SteelFrameAssemblies.js';
 import type { SteelFrameSpecificationIssue } from './SteelFrameAssemblies.js';
 import type { Roof, Wall, WallCavityAssembly } from './types.js';
 
@@ -63,7 +63,7 @@ function pendingGuide(issues: SteelFrameSpecificationIssue[]): string {
   return `<div class="sf-stage"><span>ETAPA ATUAL</span><strong>${stage} · ${floorLabel(activeFloor)}</strong></div>
     <div class="sf-next-step"><small>PRÓXIMO PASSO</small><strong>${issueLabel(issues[0]!)}</strong><span>Clique nessa face na construção e escolha o sistema.</span></div>
     <div class="sf-pending-list"><h4>Ainda falta configurar</h4>${visible.map((issue) => `<div><span>○</span>${issueLabel(issue)}</div>`).join('')}${issues.length > visible.length ? `<small>e mais ${issues.length - visible.length} itens…</small>` : ''}</div>
-    <div class="sf-color-legend"><i></i><span>As faces concluídas ficam verdes e não precisam ser clicadas novamente.</span></div>
+    <div class="sf-color-legend"><i></i><span>Cada cor identifica um sistema escolhido. Marcos de portas/janelas e o topo das paredes não entram na seleção.</span></div>
     ${wallStage(issues) ? '<div class="sf-future-stage"><strong>Depois das paredes</strong><span>Escolha do sistema da laje (em implantação) e liberação do próximo pavimento.</span></div>' : ''}`;
 }
 
@@ -91,7 +91,7 @@ function systemButtons(selectedId?: string): string {
     ['Revestimentos internos', faceSystems.filter((item) => item.use === 'internal')],
   ] as const;
   return groups.map(([label, systems]) => `<div class="sf-side-group"><h4>${label}</h4>${systems.map((system) =>
-    `<button type="button" class="sf-system-option ${system.id === selectedId ? 'selected' : ''}" data-sf-system="${system.id}"><strong>${system.label}</strong><small>${system.layers.length} camadas</small></button>`
+    `<button type="button" class="sf-system-option ${system.id === selectedId ? 'selected' : ''}" data-sf-system="${system.id}"><i style="--sf-system-color:#${steelFrameAssemblyColorHex(system.id).toString(16).padStart(6, '0')}"></i><strong>${system.label}</strong><small>${system.layers.length} camadas</small></button>`
   ).join('')}</div>`).join('');
 }
 
@@ -183,7 +183,11 @@ function render(): void {
   const panel = ensurePanel();
   const issues = steelFrameSpecificationIssues(Store.getProject());
   ViewportController.setSteelFrameRoofHidden(wallStage(issues));
-  panel.querySelector<HTMLElement>('[data-sf-progress]')!.textContent = issues.length ? `${issues.length} seleções pendentes` : 'Configuração completa';
+  const insulationPending = issues.filter((issue) => issue.kind === 'wall-cavity').length;
+  const surfacePending = issues.length - insulationPending;
+  panel.querySelector<HTMLElement>('[data-sf-progress]')!.textContent = issues.length
+    ? [surfacePending ? `${surfacePending} faces` : '', insulationPending ? `${insulationPending} isolamentos` : ''].filter(Boolean).join(' + ') + ' pendentes'
+    : 'Configuração completa';
   panel.querySelector<HTMLElement>('[data-sf-guidance]')!.textContent = issues.length ? `Conclua ${issueLabel(issues[0]!).toLocaleLowerCase('pt-BR')}.` : 'Todas as superfícies foram configuradas.';
   const quantityButton = panel.querySelector<HTMLButtonElement>('[data-sf-quantity]')!;
   quantityButton.disabled = issues.length > 0;
