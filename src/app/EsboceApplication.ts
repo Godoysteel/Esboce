@@ -315,7 +315,7 @@ export class EsboceApplication {
     });
     this.requireElement("roofPresetParallel").addEventListener("click", () => {
       const count = Store.commands.createRoofCompositePreset('cumeeirasParalelas');
-      this.requireElement('viewportHint').textContent = count ? 'Telhado em dois níveis criado. Selecione a cobertura elevada e arraste a alça laranja para ajustar a altura.' : 'Crie ao menos um cômodo fechado antes de inserir o modelo.';
+      this.requireElement('viewportHint').textContent = count ? 'Telhado em dois níveis criado. Selecione qualquer parte do conjunto e use “Subir telhado inteiro” para ajustar a cobertura elevada.' : 'Crie ao menos um cômodo fechado antes de inserir o modelo.';
     });
     document.querySelectorAll<HTMLElement>('.contour-varanda-btn').forEach((button) => {
       button.addEventListener('click', () => {

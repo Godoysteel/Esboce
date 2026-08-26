@@ -888,7 +888,7 @@ import {
     render();
   }
   function selectColumn(columnId: any) { selectedWallId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedColumnId = columnId; gizmoMenuOpen = false; render(); }
-  function selectRoof(roofId: any) { selectedWallId = null; selectedColumnId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedRoofId = roofId; gizmoMenuOpen = false; render(); var selectedRoof = Store.findRoof(roofId); if (selectedRoof && selectedRoof.steppedLowerRoofId) hintEl.textContent = 'Alça laranja: subir o telhado inteiro. Alça branca: ajustar somente a cumeeira.'; }
+  function selectRoof(roofId: any) { selectedWallId = null; selectedColumnId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedRoofId = roofId; gizmoMenuOpen = false; render(); var selectedRoof = Store.findRoof(roofId); var raisedPartner = selectedRoof && Store.currentRoofs().find(function (candidate) { return candidate.steppedLowerRoofId === selectedRoof!.id; }); if (selectedRoof && (selectedRoof.steppedLowerRoofId || raisedPartner)) hintEl.textContent = 'Use “Subir telhado inteiro” no painel para ajustar a parte elevada. As alças brancas ajustam a cumeeira e as bordas.'; }
 
   function connectedRoofIds(startId: any) {
     var selected = Store.findRoof(startId);
@@ -1407,11 +1407,13 @@ import {
       roofTypePanelEl.querySelectorAll('.rt').forEach(function (btn: any) { btn.classList.toggle('active', btn.dataset.rooftype === r!.type); });
       if (roofPitchInputEl && document.activeElement !== roofPitchInputEl) roofPitchInputEl.value = String(Math.round(r.pitchDeg * 10) / 10);
       if (roofPitchControlEl) roofPitchControlEl.style.display = r.type === 'platibanda' ? 'none' : 'grid';
-      var canElevateWholeRoof = !!(r.atticMode || r.steppedLowerRoofId);
+      var steppedRaisedRoof = r.steppedLowerRoofId ? r : Store.currentRoofs().find(function (candidate) { return candidate.steppedLowerRoofId === r!.id; });
+      var elevationRoof = r.atticMode ? r : steppedRaisedRoof;
+      var canElevateWholeRoof = !!elevationRoof;
       if (roofElevationControlEl) roofElevationControlEl.style.display = canElevateWholeRoof ? 'grid' : 'none';
-      if (canElevateWholeRoof && roofElevationInputEl && document.activeElement !== roofElevationInputEl) {
+      if (elevationRoof && roofElevationInputEl && document.activeElement !== roofElevationInputEl) {
         var currentWallHeightM = Scene3DRenderer.WALL_HEIGHT_GETTER();
-        var elevationM = r.steppedLowerRoofId ? Math.max(r.baseHeightM || currentWallHeightM, currentWallHeightM + 0.15) : (r.baseHeightM || 1.2);
+        var elevationM = elevationRoof.steppedLowerRoofId ? Math.max(elevationRoof.baseHeightM || currentWallHeightM, currentWallHeightM + 0.15) : (elevationRoof.baseHeightM || 1.2);
         roofElevationInputEl.value = String(elevationM);
         if (roofElevationValueEl) roofElevationValueEl.textContent = elevationM.toFixed(2).replace('.', ',') + ' m';
       }
@@ -5386,8 +5388,13 @@ import {
         if (!selectedRoofId) return;
         var heightM = Number(roofElevationInputEl.value);
         if (!Number.isFinite(heightM)) return;
-        Store.commands.updateRoofBaseHeightLive(selectedRoofId, heightM);
-        var appliedRoof = Store.findRoof(selectedRoofId);
+        var selectedRoof = Store.findRoof(selectedRoofId);
+        if (!selectedRoof) return;
+        var raisedPartner = selectedRoof.steppedLowerRoofId ? selectedRoof : Store.currentRoofs().find(function (candidate) { return candidate.steppedLowerRoofId === selectedRoof!.id; });
+        var elevationTarget = selectedRoof.atticMode ? selectedRoof : raisedPartner;
+        if (!elevationTarget) return;
+        Store.commands.updateRoofBaseHeightLive(elevationTarget.id, heightM);
+        var appliedRoof = Store.findRoof(elevationTarget.id);
         var appliedHeightM = appliedRoof && appliedRoof.baseHeightM != null ? appliedRoof.baseHeightM : heightM;
         if (roofElevationValueEl) roofElevationValueEl.textContent = appliedHeightM.toFixed(2).replace('.', ',') + ' m';
         hintEl.textContent = 'Telhado inteiro elevado individualmente — base em ' + appliedHeightM.toFixed(2).replace('.', ',') + ' m.';
