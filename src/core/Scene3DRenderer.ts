@@ -1597,7 +1597,11 @@ export function hashColorHex(key: string): number {
         if (Math.min(span2, wallSpan2) < Math.max(span1, wallSpan1) - Core.COINCIDENCE_TOL) return;
         var candidate = axis === 'x' ? wall.x1 : wall.y1;
         var distance = Math.abs(candidate - desired);
-        if (distance < bestDistance && distance <= Core.SNAP_UNIT * 2) { best = candidate; bestDistance = distance; }
+        // Só herda o eixo inferior quando já está geometricamente
+        // coincidente (até 1 cm). Depois que a pessoa arrasta uma borda do
+        // telhado, a parede elevada acompanha a nova borda em vez de ficar
+        // magnetizada à parede antiga e abrir uma cunha no encontro.
+        if (distance < bestDistance && distance <= Core.GRID * 0.01) { best = candidate; bestDistance = distance; }
       });
       return best;
     }
@@ -1671,7 +1675,10 @@ export function hashColorHex(key: string): number {
       var edgeLines = buildWallFootprintEdgeLines(fp, rectangularHeightM, yOffset + structuralWallHeightM, extensionSlices.length === 0);
       edgeLines.userData.roofWallFace = 'contorno';
       meshes.push(edgeLines);
-      meshes.push(buildWallTopCapMesh(fp, yOffset + raisedBaseM, topMaterial));
+      // Mesma regra das paredes comuns com oitão: não desenhar uma tampa
+      // horizontal na base do triângulo. Ela aparecia como a faixa/cunha
+      // branca mostrada no encontro após redimensionar a lateral.
+      if (extensionSlices.length === 0) meshes.push(buildWallTopCapMesh(fp, yOffset + raisedBaseM, topMaterial));
       if (fp.p1Free !== false || fp.p1Extended) meshes.push(buildWallEndCapMesh(fp, rectangularHeightM, yOffset + structuralWallHeightM, topMaterial, 1));
       if (fp.p2Free !== false || fp.p2Extended) meshes.push(buildWallEndCapMesh(fp, rectangularHeightM, yOffset + structuralWallHeightM, topMaterial, 2));
     });
