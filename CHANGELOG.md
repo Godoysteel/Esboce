@@ -2,6 +2,9 @@
 
 ## Alterado — 27/08/2026
 
+- Os sistemas Glasroc X e Glasroc X Therm passam a usar a composição oficial pesquisada na Placo: Placa Glasroc X 12,5 mm, Placoplast Basecoat, Malha GRX para Superfície, Membrana Hidrófuga Tyvek HomeWrap e Parafuso Glasroc PB; o Therm acrescenta placa EPS para EIFS. Cinco imagens oficiais da Placo foram incorporadas ao catálogo.
+- Placo permanece identificada como fabricante e Vórtice Materiais como fornecedora da referência de preço médio. Os valores são regionais, datados em 27/08/2026 e apresentados como estimativa, não como oferta comercial.
+- O consumo do Placoplast Basecoat foi corrigido para 5 kg/m² na camada de revestimento. O fixador mecânico de EPS foi removido do Glasroc X Therm porque a especificação oficial consultada determina a colagem do EPS diretamente ao substrato.
 - No configurador de Light Steel Frame, o revestimento do forro do beiral e o material da tabeira passam a ser escolhas globais: uma seleção é aplicada a toda a construção, sem clicar em cada telhado. A tabeira agora oferece opções próprias de placa cimentícia e madeira. Projetos antigos reaproveitam automaticamente a primeira configuração de cobertura já salva.
 - A estimativa preliminar da estrutura engenheirada de Light Steel Frame passa a usar o parâmetro de orçamento de 30 kg/m², mantendo 5% de perda calculados separadamente e o caráter preliminar explícito no quantitativo e no PDF.
 - As composições de Light Steel Frame passam a incluir os complementos antes ausentes: Base Coat, fita, tela Fiberglass e cantoneira PVC telada nas placas cimentícias; massa e fita telada nas chapas de drywall; e manta asfáltica sob a guia inferior. O quantitativo agora preserva as unidades corretas de cada insumo (kg, metro linear, m² e unidade).
