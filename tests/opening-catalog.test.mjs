@@ -106,11 +106,11 @@ test('linha PVC Tomelin oferece as duas famílias oficiais de portas', () => {
   });
 });
 
-test('persiana integrada fica faceada externamente e encontra o perfil horizontal sem fresta', () => {
+test('persiana integrada fica faceada no lado externo correto e encontra o perfil horizontal sem fresta', () => {
   const renderer = readFileSync(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
   assert.match(renderer, /var glassH = innerH - shutterH;/);
-  assert.match(renderer, /var shutterZ = depth \/ 2 - shutterDepth \/ 2;/);
-  assert.match(renderer, /var slatZ = depth \/ 2 - slatDepth \/ 2;/);
+  assert.match(renderer, /var shutterZ = -depth \/ 2 \+ shutterDepth \/ 2;/);
+  assert.match(renderer, /var slatZ = -depth \/ 2 \+ slatDepth \/ 2;/);
 });
 
 test('detalhes das portas de madeira são gerados nas faces externa e interna', () => {

@@ -2245,13 +2245,15 @@ export function hashColorHex(key: string): number {
       var glassY = frame + glassH / 2;
       glazedLeaf(-innerW / 4, glassY, innerW / 2, glassH, 0.004);
       glazedLeaf(innerW / 4, glassY, innerW / 2, glassH, 0.008);
-      // A face externa da persiana coincide com a face externa do marco.
+      // No sistema de coordenadas local das aberturas, a fachada fica no
+      // lado Z negativo. A persiana deve facear esse lado; Z positivo a
+      // colocava voltada para dentro da edificação.
       var shutterDepth = depth * 0.48;
-      var shutterZ = depth / 2 - shutterDepth / 2;
+      var shutterZ = -depth / 2 + shutterDepth / 2;
       box(innerW, shutterH, shutterDepth, 0, op.height - frame - shutterH / 2, shutterZ, pvc);
       var slatCount = Math.max(7, Math.round(shutterH / 0.055));
       var slatDepth = depth * 0.12;
-      var slatZ = depth / 2 - slatDepth / 2;
+      var slatZ = -depth / 2 + slatDepth / 2;
       for (var s = 1; s < slatCount; s++) box(innerW * 0.96, 0.009, slatDepth, 0, op.height - frame - shutterH + s * shutterH / slatCount, slatZ, seal);
       box(op.width, frame * 1.35, depth * 1.06, 0, op.height - frame * 0.68, 0, pvc);
     } else if (style === 'pvc-window-sliding' || style === 'pvc-door-sliding') {
