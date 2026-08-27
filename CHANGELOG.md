@@ -2,6 +2,7 @@
 
 ## Alterado — 27/08/2026
 
+- A identificação visual do isolamento em paredes Steel Frame foi reforçada com uma hachura diagonal semitransparente sobre a cor do sistema aplicado. A hachura acompanha os recortes de portas e janelas e complementa a faixa turquesa no topo.
 - Paredes de Light Steel Frame com isolamento térmico/acústico aplicado agora recebem uma faixa turquesa persistente no topo. Assim, o usuário confere visualmente quais paredes estão isoladas sem precisar selecionar uma por uma; a legenda do configurador explica o marcador.
 - O quantitativo de Steel Frame passa a apresentar unidades reais de compra: chapas de drywall em placas, massa para juntas em baldes de 25 kg, Basecoat em sacos de 20 kg, pingadeira em barras de 2,5 m e parafusos em unidades. A quantidade técnica original continua preservada internamente para o cálculo dos preços por m², kg ou metro.
 - Corrigido: os cinco componentes Placo/Glasroc cadastrados no banco agora aparecem também na vitrine visual. A antiga aba exclusiva "PlacLux" passa a se chamar "Construção a seco" e reúne, em seções separadas, Placo Glasroc X/Therm e PlacLux, exibindo foto, fabricante, fornecedor Vórtice e preço de referência.

@@ -89,7 +89,17 @@ test('paredes com isolamento recebem faixa turquesa persistente sem precisar cli
   assert.match(renderer, /insulationSystemId !== 'none'/);
   assert.match(renderer, /steelFrameInsulationMarker = true/);
   assert.match(renderer, /color: 0x06B6D4/);
-  assert.match(app, /faixa turquesa no topo identifica uma parede com isolamento/);
+  assert.match(app, /faixa turquesa no topo identificam uma parede com isolamento/);
+});
+
+test('hachura de isolamento aparece sobre a cor do sistema e respeita portas e janelas', () => {
+  const renderer = readFileSync(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
+  assert.match(renderer, /function buildSteelFrameInsulationHatchMaterial/);
+  assert.match(renderer, /steelFrameFaceConfigured && wallHasSteelFrameInsulation/);
+  assert.match(renderer, /steelFrameInsulationHatch = true/);
+  assert.match(renderer, /buildFaceBandMesh\([^;]+insulationHatchMat/);
+  assert.match(renderer, /insulationBandHatchMesh\.raycast = function \(\) \{\}/);
+  assert.match(app, /hachura diagonal sobre a cor/);
 });
 
 test('pendências de cobertura são nomeadas e clique na telha orienta para a face vertical', () => {

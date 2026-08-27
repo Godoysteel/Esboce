@@ -6,7 +6,8 @@ Permitir a conferência imediata das paredes que receberam isolamento térmico/a
 
 ## Identificação visual
 
-- Toda parede de Light Steel Frame cujo núcleo tenha um isolamento diferente de `Sem isolamento` recebe uma faixa turquesa no topo.
+- Toda parede de Light Steel Frame cujo núcleo tenha um isolamento diferente de `Sem isolamento` recebe uma hachura diagonal semitransparente sobre a cor do sistema e uma faixa turquesa no topo.
+- A hachura é aplicada somente às faces que já possuem um sistema escolhido, preserva a cor-base e acompanha os recortes de portas e janelas.
 - A faixa permanece visível sem seleção e não interfere no clique, na geometria, nas aberturas ou no quantitativo.
 - A opção `Sem isolamento` continua sendo uma escolha explícita válida e não recebe o marcador.
 - A legenda do configurador explica o significado da faixa.

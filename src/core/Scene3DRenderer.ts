@@ -4299,6 +4299,30 @@ export function hashColorHex(key: string): number {
     return texture;
   }
 
+  // Hachura leve que representa a manta/lã dentro da parede sem apagar
+  // a cor do sistema escolhido.
+  function buildSteelFrameInsulationHatchMaterial() {
+    var canvas = document.createElement('canvas');
+    canvas.width = 64; canvas.height = 64;
+    var ctx = canvas.getContext('2d')!;
+    ctx.clearRect(0, 0, 64, 64);
+    ctx.strokeStyle = 'rgba(8, 47, 73, 0.72)';
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(-16, 64); ctx.lineTo(64, -16);
+    ctx.moveTo(16, 80); ctx.lineTo(80, 16);
+    ctx.stroke();
+    var texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(2.5, 2.5);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    return new THREE.MeshBasicMaterial({
+      map: texture, transparent: true, opacity: 0.72, depthWrite: false,
+      side: THREE.DoubleSide, polygonOffset: true,
+      polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+    });
+  }
+
   function rectShape(bounds: any) {
     var shape = new THREE.Shape();
     shape.moveTo(bounds.minX, bounds.minZ);
@@ -5358,6 +5382,8 @@ export function hashColorHex(key: string): number {
           // cada face. "Sem isolamento" é uma escolha válida, mas não recebe
           // faixa. O marcador é apenas visual e não participa do picking.
           var insulationSystemId = w.cavityAssembly && w.cavityAssembly.insulationSystemId;
+          var wallHasSteelFrameInsulation = project.constructionSystem === 'light_steel_frame' && !!insulationSystemId && insulationSystemId !== 'none';
+          var insulationHatchMat = wallHasSteelFrameInsulation ? buildSteelFrameInsulationHatchMaterial() : null;
           if (project.constructionSystem === 'light_steel_frame' && insulationSystemId && insulationSystemId !== 'none' && !generatedAtticRoof) {
             var insulationMarker = new THREE.Mesh(
               new THREE.BoxGeometry(length, 0.075, 0.075),
@@ -5511,6 +5537,14 @@ export function hashColorHex(key: string): number {
               faceMesh.userData.debugSide = side;
               scene.add(faceMesh);
               registry.wallMeshes.push(faceMesh);
+              if (steelFrameFaceConfigured && wallHasSteelFrameInsulation) {
+                var insulationHatchMesh = buildFaceStripMesh(fp, renderedWallHeight, yOffset, insulationHatchMat, side);
+                insulationHatchMesh.userData.debugWallId = w.id;
+                insulationHatchMesh.userData.steelFrameInsulationHatch = true;
+                insulationHatchMesh.raycast = function () {};
+                scene.add(insulationHatchMesh);
+                registry.wallMeshes.push(insulationHatchMesh);
+              }
             } else {
               bands.forEach(function (band) {
                 var faceBandMesh = buildFaceBandMesh(fp, wallAxisStart, wallAxisEnd, yOffset + band.y0, yOffset + band.y1, band.dA, band.dB, faceMat, side);
@@ -5519,6 +5553,14 @@ export function hashColorHex(key: string): number {
                 faceBandMesh.userData.debugSide = side;
                 scene.add(faceBandMesh);
                 registry.wallMeshes.push(faceBandMesh);
+                if (steelFrameFaceConfigured && wallHasSteelFrameInsulation) {
+                  var insulationBandHatchMesh = buildFaceBandMesh(fp, wallAxisStart, wallAxisEnd, yOffset + band.y0, yOffset + band.y1, band.dA, band.dB, insulationHatchMat, side);
+                  insulationBandHatchMesh.userData.debugWallId = w.id;
+                  insulationBandHatchMesh.userData.steelFrameInsulationHatch = true;
+                  insulationBandHatchMesh.raycast = function () {};
+                  scene.add(insulationBandHatchMesh);
+                  registry.wallMeshes.push(insulationBandHatchMesh);
+                }
               });
             }
             if (generatedAtticRoof) {
