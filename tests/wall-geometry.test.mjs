@@ -1564,7 +1564,7 @@ test('Scene3DRenderer.applyRoomBoxClipping: telhado quatro-águas (isHip) usa ca
 test('Scene3DRenderer: cada telhado calcula a caixa dos cômodos ESTRITAMENTE mais altos que ele (nunca a própria) e aplica applyRoomBoxClipping em toda peça', () => {
   const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
   assert.notEqual(roofsStart, -1);
-  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 15000);
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 18000);
   assert.match(roofsBlock, /var roomHeightBoxes = allFloorRoomClipBoxes\[floorIdx\] \|\| \[\];/);
   assert.match(roofsBlock, /var roomClipBoxes = roomHeightBoxes\.concat\(higherFloorRoomHeightBoxes\)\.filter\(function \(b: any\) \{ return b\.baseY > pieceBaseY \+ 1e-4; \}\);/);
   assert.match(roofsBlock, /var clipBoxesForThisRoof = roomClipBoxes\.concat\(otherRoofClipBoxes\);/);
@@ -1591,7 +1591,7 @@ test('telhado de um pavimento também soma as caixas de cômodo de pavimentos SU
   assert.ok(loopIdx > preloopStart, 'allFloorRoomClipBoxes precisa ser calculado antes do project.floors.forEach principal');
 
   const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
-  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 15000);
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 18000);
   assert.match(roofsBlock, /for \(var higherFloorIdx = floorIdx \+ 1; higherFloorIdx < allFloorRoomClipBoxes\.length; higherFloorIdx\+\+\) \{/);
   assert.match(roofsBlock, /higherFloorRoomHeightBoxes = higherFloorRoomHeightBoxes\.concat\(allFloorRoomClipBoxes\[higherFloorIdx\] \|\| \[\]\);/);
 });
@@ -1631,7 +1631,7 @@ test('Scene3DRenderer.roofSlopeSurfaceParams: mesma matemática de vão/beiral j
 test('Scene3DRenderer: caixa de telhado-vs-telhado compara a SUPERFÍCIE REAL ponto a ponto (nem pico nem área decidem um vencedor pro par inteiro) — isHip pra quatro-águas, sem pré-filtro', () => {
   const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
   assert.notEqual(roofsStart, -1);
-  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 15000);
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 18000);
   assert.match(roofsBlock, /var roofPeakBoxes = floorData\.roofs\.map\(function \(r: any\) \{/);
   assert.match(roofsBlock, /var rSlope = roofSlopeSurfaceParams\(r, scale, offsetX, offsetY\);/);
   assert.match(roofsBlock, /isHip: r\.type === 'quatroAguas' \? 1 : 0,/);
@@ -1681,6 +1681,57 @@ test('tieBias (ROOF_VS_ROOF_TIE_EPS): desempate determinístico elimina o z-figh
   assert.equal(discardB(10, 10), true, 'B (id maior) é escondido no empate exato');
 });
 
+// A comparação pixel a pixel acima (useOwnSurface/tieBias) resolveu a
+// água e a tabeira, mas o Product Owner reportou (com print marcado)
+// que o espigão continuava sobrevivendo bem na parte onde dois
+// quatro-águas se sobrepõem de verdade — só o espigão da quina EXTERNA
+// devia sobrar. Pedido explícito: em vez de tentar mais uma comparação
+// pixel a pixel pra essa peça fina e arqueada, simplesmente OMITE o
+// espigão de canto (buildRidgeCapMesh nos 4 cantos do hip) cujo canto
+// do beiral cai DENTRO da pegada (com beiral) de outro telhado que
+// realmente sobrepõe — cada cap carrega o próprio canto em
+// userData.hipCornerXZ pra o laço principal decidir.
+test('Scene3DRenderer.buildRoofQuatroAguas: cada espigão de canto marca o próprio canto do beiral em userData.hipCornerXZ', () => {
+  const start = scene3DRendererSource.indexOf('function buildRoofQuatroAguas(');
+  const end = scene3DRendererSource.indexOf('\n  function buildRoofUmaAgua(', start);
+  const body = scene3DRendererSource.slice(start, end);
+  const tagCount = (body.match(/cap\.userData\.hipCornerXZ = \{ x: pair\[0\]!\.x, z: pair\[0\]!\.z \};/g) || []).length;
+  assert.equal(tagCount, 2, 'um em cada branch de ridgeAxis (x e y)');
+});
+
+test('Scene3DRenderer: espigão de canto some quando o próprio canto do beiral cai dentro da pegada de outro telhado que se sobrepõe de verdade — sobra só a quina externa', () => {
+  const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
+  assert.notEqual(roofsStart, -1);
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 18000);
+  assert.match(roofsBlock, /if \(other\.id === roof\.id \|\| valleyPartnerIds\[other\.id\]\) return false;\s*var otherFootprint = roofWorldFootprint\(other, scale, offsetX, offsetY\);\s*return rectsOverlapArea\(ownFootprint, otherFootprint\) > 1e-6;\s*\}\)\.map\(function \(other\) \{ return roofWorldFootprint\(other, scale, offsetX, offsetY\); \}\);/);
+  assert.match(roofsBlock, /function hipCornerInsideOtherRoof\(pt: any\) \{/);
+  assert.match(roofsBlock, /pt\.x > r\.minX \+ 1e-6 && pt\.x < r\.maxX - 1e-6 && pt\.z > r\.minZ \+ 1e-6 && pt\.z < r\.maxZ - 1e-6;/);
+  assert.match(roofsBlock, /if \(m\.userData\.hipCornerXZ && hipCornerInsideOtherRoof\(m\.userData\.hipCornerXZ\)\) return;/);
+  // Pares já resolvidos pela bissetriz do vale (valleyPartnerIds) ficam
+  // de fora — ali as pegadas só se TOCAM, nenhum canto cairia dentro do
+  // outro mesmo sem este filtro, e não deveria disputar de novo aqui.
+  assert.match(roofsBlock, /var overlappingFootprintsForHipCorners = floorData\.roofs\.filter\(function \(other\) \{\s*if \(other\.id === roof\.id \|\| valleyPartnerIds\[other\.id\]\) return false;/);
+
+  // Prova numérica: pegada A é o telhado "já existia" (0..300 × 0..240),
+  // pegada B "engastou" nela (200..500 × -50..200) — sobrepõem de
+  // verdade numa área real (x:200..300, z:0..200), não um degrau
+  // simples encostando numa aresta. Os 4 cantos do beiral de A são os
+  // próprios eMinX/eMaxX/eMinZ/eMaxZ — só o canto que cai FORA de B é a
+  // quina externa de verdade.
+  function pointInRect(pt, r) {
+    return pt.x > r.minX + 1e-6 && pt.x < r.maxX - 1e-6 && pt.z > r.minZ + 1e-6 && pt.z < r.maxZ - 1e-6;
+  }
+  const B = { minX: 200, maxX: 500, minZ: -50, maxZ: 200 };
+  const cornersOfA = [
+    { x: 0, z: 0 }, { x: 0, z: 240 }, { x: 300, z: 0 }, { x: 300, z: 240 },
+  ];
+  const survivors = cornersOfA.filter(function (c) { return !pointInRect(c, B); });
+  const hidden = cornersOfA.filter(function (c) { return pointInRect(c, B); });
+  assert.equal(hidden.length, 1, 'só o canto (300,0) — estritamente dentro da pegada de B — deveria ser escondido');
+  assert.equal(hidden[0].x, 300); assert.equal(hidden[0].z, 0);
+  assert.equal(survivors.length, 3, 'os outros 3 cantos de A (incluindo as duas quinas externas de verdade) continuam de fora da pegada de B');
+});
+
 // Bug real (Product Owner, com print): dois quatroAguas do mesmo grupo
 // composto (compoundGroupId, eixos de cumeeira diferentes — o par de
 // "asas" perpendiculares de uma Cumeeira em níveis/Extensão lateral)
@@ -1701,7 +1752,7 @@ test('tieBias (ROOF_VS_ROOF_TIE_EPS): desempate determinístico elimina o z-figh
 test('Scene3DRenderer: trimRects (corte de malha real, não por pixel) só se aplica a pares duasAguas×duasAguas — quatroAguas nunca cai nesse corte reto na vertical', () => {
   const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
   assert.notEqual(roofsStart, -1);
-  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 14000);
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 18000);
   assert.match(roofsBlock, /var trimRects = roof\.type !== 'duasAguas' \? \[\] : floorData\.roofs\.filter\(function \(other\) \{/);
   assert.match(roofsBlock, /other\.ridgeAxis === roof\.ridgeAxis \|\| other\.type !== 'duasAguas'\) return false;/);
 });
@@ -1721,7 +1772,7 @@ test('Scene3DRenderer: trimRects (corte de malha real, não por pixel) só se ap
 // é os dois dividirem a linha do meio).
 test('Scene3DRenderer: pegadas em L (canto reentrante) resolvem o encontro pela bissetriz do vale, não pela disputa de área — cada uma escondendo só o que atravessa pro lado da outra', () => {
   const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
-  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 15000);
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 18000);
   // Detecção usa o retângulo NOMINAL (sem ROOF_OVERHANG) — roofWorldFootprint
   // já infla a pegada pelo beiral, então duas pegadas encostadas na
   // parede de verdade chegam SOBREPOSTAS (não só tocando) e a detecção

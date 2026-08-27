@@ -2315,7 +2315,7 @@ export function hashColorHex(key: string): number {
       [[A, R1], [D, R1], [B, R2], [C, R2]].forEach(function (pair) {
         var cornerStart = extendBeyond(pair[0], pair[1], HIP_CORNER_OVERSHOOT);
         var cap = buildRidgeCapMesh(cornerStart, pair[1], roofColor, pitchRad);
-        if (cap) meshes.push(cap);
+        if (cap) { cap.userData.hipCornerXZ = { x: pair[0]!.x, z: pair[0]!.z }; meshes.push(cap); }
       });
     } else {
       var ridgeX = (topBounds.minX + topBounds.maxX) / 2;
@@ -2332,7 +2332,7 @@ export function hashColorHex(key: string): number {
       [[A, R1b], [B, R1b], [D, R2b], [C, R2b]].forEach(function (pair) {
         var cornerStart = extendBeyond(pair[0], pair[1], HIP_CORNER_OVERSHOOT);
         var cap = buildRidgeCapMesh(cornerStart, pair[1], roofColor, pitchRad);
-        if (cap) meshes.push(cap);
+        if (cap) { cap.userData.hipCornerXZ = { x: pair[0]!.x, z: pair[0]!.z }; meshes.push(cap); }
       });
     }
     return meshes;
@@ -5563,12 +5563,33 @@ export function hashColorHex(key: string): number {
             .map(function (b: any) { return { minX: b.minX, maxX: b.maxX, minZ: b.minZ, maxZ: b.maxZ, baseY: b.baseY, peakAboveBase: b.peakAboveBase, tanPitch: b.tanPitch, ridgeCoord: b.ridgeCoord, halfSpan: b.halfSpan, axisIsZ: b.axisIsZ, isHip: b.isHip, useOwnSurface: 1, tieBias: roof.id < b.id ? ROOF_VS_ROOF_TIE_EPS : -ROOF_VS_ROOF_TIE_EPS }; });
           var clipBoxesForThisRoof = roomClipBoxes.concat(otherRoofClipBoxes);
           var ownSurfaceBox = roofPeakBoxes.find(function (b: any) { return b.id === roof.id; });
-          if (otherRoofClipBoxes.length) console.log('DEBUG roof-vs-roof', roof.id, roof.type, JSON.stringify(ownSurfaceBox), 'vs', JSON.stringify(otherRoofClipBoxes));
           if (clipBoxesForThisRoof.length || diagonalValleyCuts.length) pieces.forEach(function (piece) {
             var materials = Array.isArray(piece.material) ? piece.material : [piece.material];
             materials.forEach(function (material: any) { applyRoomBoxClipping(material, clipBoxesForThisRoof, diagonalValleyCuts, ownSurfaceBox); });
           });
           var ownFootprint = ownFootprintForValley;
+          // Espigão (canto do hip, quatro-águas) que cai na parte onde
+          // dois telhados realmente se SOBREPÕEM (não apenas se tocam —
+          // pares já resolvidos pela bissetriz do vale, valleyPartnerIds,
+          // ficam de fora: ali as pegadas só se tocam, nenhum canto
+          // cairia dentro do outro de qualquer forma): em vez de
+          // comparar essa peça decorativa pixel a pixel (ambíguo pro
+          // arco fino do espigão, que sobe um pouco acima da água de
+          // verdade), simplesmente OMITE o espigão cujo canto do beiral
+          // cai DENTRO da pegada (com beiral) do outro telhado — sobra
+          // só o espigão que fica de verdade sobre a quina externa
+          // (Product Owner, com print marcando o espigão que devia
+          // sumir).
+          var overlappingFootprintsForHipCorners = floorData.roofs.filter(function (other) {
+            if (other.id === roof.id || valleyPartnerIds[other.id]) return false;
+            var otherFootprint = roofWorldFootprint(other, scale, offsetX, offsetY);
+            return rectsOverlapArea(ownFootprint, otherFootprint) > 1e-6;
+          }).map(function (other) { return roofWorldFootprint(other, scale, offsetX, offsetY); });
+          function hipCornerInsideOtherRoof(pt: any) {
+            return overlappingFootprintsForHipCorners.some(function (r) {
+              return pt.x > r.minX + 1e-6 && pt.x < r.maxX - 1e-6 && pt.z > r.minZ + 1e-6 && pt.z < r.maxZ - 1e-6;
+            });
+          }
           // roofCutRegions só sabe calcular o plano inclinado de verdade
           // (a água-furtada real) pro tipo duasAguas — pra qualquer outro
           // tipo (quatroAguas incluso) ele cai num retângulo cru, SEM
@@ -5593,6 +5614,7 @@ export function hashColorHex(key: string): number {
           }, []);
           pieces.forEach(function (m) {
             if (roof.atticMode === 'generated' && m.userData.gableSide) return;
+            if (m.userData.hipCornerXZ && hipCornerInsideOtherRoof(m.userData.hipCornerXZ)) return;
             var steelFrameRoofConfigured = project.constructionSystem === 'light_steel_frame' && (
               m.userData.gableSide
                 ? !!(m.userData.gableSide === 'a' ? roof.gableFaceAAssemblyId : roof.gableFaceBAssemblyId)
