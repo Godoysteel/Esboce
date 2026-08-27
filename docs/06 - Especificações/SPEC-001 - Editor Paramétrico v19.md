@@ -89,3 +89,12 @@ Comprimentos, áreas e estimativas de materiais são derivados do modelo confirm
 - As dimensões explicitadas nos nomes de arquivo de origem foram preservadas. Nos casos sem medida declarada, foram adotadas dimensões iniciais usuais apenas para modelagem: porta frisada 0,80 x 2,10 m, maxim-ar 0,60 x 0,60 m, janela de correr 1,50 x 1,20 m e veneziana 1,20 x 1,20 m. O usuário pode ajustar o vão posteriormente.
 - Ao inserir uma janela escolhida no catálogo, o topo nasce na linha de 2,10 m das portas. Portanto, a maxim-ar de banheiro com 0,60 m de altura usa peitoril inicial de 1,50 m, enquanto uma janela de 1,20 m usa peitoril inicial de 0,90 m.
 - Os itens não afirmam fabricante, SKU comercial ou preço das imagens de referência; custo zero no catálogo interno significa **sob consulta**.
+
+## 12. Linha de janelas PVC Tomelin
+
+- A aba **PVC** do seletor de Aberturas oferece as cinco famílias publicadas pela Tomelin: janela integrada com persiana, janela de correr, janela de giro, janela maxim-ar e janela oscilo-batente.
+- Marca, nomenclatura, fotografias e limites técnicos são referenciados no [catálogo oficial de janelas PVC Tomelin](https://www.tomelin.com.br/produtos/janelas-de-pvc-tomelin). As imagens ficam armazenadas localmente para evitar miniaturas quebradas e preservar a correspondência de cada produto.
+- Como a linha é fabricada sob medida, cada família recebe uma configuração inicial editável: integrada e correr 1,50 x 1,20 m; giro e oscilo-batente 0,80 x 1,20 m; maxim-ar 0,60 x 0,60 m.
+- A representação 3D procedural diferencia marco branco de PVC, vidro, folhas, puxadores, persiana integrada e ferragens aparentes. A geometria acompanha qualquer redimensionamento do vão.
+- As páginas oficiais informam vidros de 4 a 26 mm, inclusive vidro duplo, e opções que variam conforme a tipologia. Essas alternativas ainda não são parâmetros separados no editor.
+- O preço permanece **sob consulta**, porque o fabricante não publica preço fixo para produtos sob medida.

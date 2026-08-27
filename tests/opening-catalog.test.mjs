@@ -61,9 +61,9 @@ test('seletor de esquadria (ViewportController) guarda o produto escolhido antes
   assert.match(source, /Padrão \(editável depois\)/);
 });
 
-test('todas as 23 esquadrias têm thumbnail', () => {
+test('todas as 28 esquadrias têm thumbnail', () => {
   const doorsAndWindows = [...Catalog.getProductsByCategory('door'), ...Catalog.getProductsByCategory('window')];
-  assert.equal(doorsAndWindows.length, 23);
+  assert.equal(doorsAndWindows.length, 28);
   doorsAndWindows.forEach((p) => {
     assert.ok(p.assets.thumbnailUrl, `${p.id} ainda sem thumbnailUrl`);
   });
@@ -74,6 +74,24 @@ test('todas as 23 esquadrias têm thumbnail', () => {
   assert.ok(basculante);
   assert.equal(basculante.name, 'Basculante 700x500');
   assert.equal(basculante.assets.thumbnailUrl, 'images/esquadrias/janela-basculante-700x500.png');
+});
+
+test('linha PVC Tomelin oferece as cinco tipologias oficiais com foto e modelo procedural próprios', () => {
+  const pvc = Catalog.getProductsByCategory('window').filter((p) => p.frameMaterial === 'pvc');
+  assert.equal(pvc.length, 5);
+  assert.deepEqual(new Set(pvc.map((p) => p.manufacturer)), new Set(['tomelin']));
+  assert.equal(new Set(pvc.map((p) => p.assets.proceduralOpeningStyle)).size, 5);
+  pvc.forEach((p) => {
+    assert.match(p.id, /^tomelin\.janela\.pvc-/);
+    assert.match(p.assets.thumbnailUrl, /^images\/esquadrias\/tomelin\//);
+  });
+  const renderer = readFileSync(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
+  assert.match(renderer, /function buildProceduralPvcOpening/);
+  assert.match(renderer, /pvc-window-integrated/);
+  assert.match(renderer, /pvc-window-sliding/);
+  assert.match(renderer, /pvc-window-casement/);
+  assert.match(renderer, /pvc-window-awning/);
+  assert.match(renderer, /pvc-window-tilt-turn/);
 });
 
 test('vidro dos modelos de esquadria usa o mesmo material de vidro do envidraçamento, mas com transparência real (não o padrão 100% opaco da fachada) e reflexo reduzido (DEC-99)', () => {

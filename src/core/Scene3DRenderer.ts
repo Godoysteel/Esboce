@@ -2189,6 +2189,76 @@ export function hashColorHex(key: string): number {
     return group;
   }
 
+  function buildProceduralPvcOpening(op: any, style: string) {
+    var group = new THREE.Group();
+    var pvc = new THREE.MeshStandardMaterial({ color: 0xF4F4F0, roughness: 0.42, metalness: 0.03 });
+    var seal = new THREE.MeshStandardMaterial({ color: 0x303536, roughness: 0.68, metalness: 0.05 });
+    var handleMat = new THREE.MeshStandardMaterial({ color: 0xE4E5E2, roughness: 0.24, metalness: 0.42 });
+    var glass = buildGlazingGlassMaterial({ ...DEFAULT_GLAZING_GLASS_MATERIAL, opacity: 0.30, roughness: 0.20, reflectionIntensity: 0.95 });
+    var depth = Math.min(Core.WALL_THICK * 0.78, 0.09);
+    var frame = Math.max(0.045, Math.min(Math.min(op.width, op.height) * 0.085, 0.095));
+    function box(sx: number, sy: number, sz: number, x: number, y: number, z: number, material: any) {
+      var mesh = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), material);
+      mesh.position.set(x, y, z);
+      group.add(mesh);
+      return mesh;
+    }
+    function outerFrame() {
+      box(op.width, frame, depth, 0, frame / 2, 0, pvc);
+      box(op.width, frame, depth, 0, op.height - frame / 2, 0, pvc);
+      box(frame, op.height - frame * 2, depth, -op.width / 2 + frame / 2, op.height / 2, 0, pvc);
+      box(frame, op.height - frame * 2, depth, op.width / 2 - frame / 2, op.height / 2, 0, pvc);
+    }
+    function glazedLeaf(cx: number, cy: number, width: number, height: number, z: number) {
+      box(width, height, depth * 0.20, cx, cy, z, glass);
+      box(width, frame * 0.58, depth * 0.68, cx, cy - height / 2 + frame * 0.29, z + 0.004, pvc);
+      box(width, frame * 0.58, depth * 0.68, cx, cy + height / 2 - frame * 0.29, z + 0.004, pvc);
+      box(frame * 0.58, height, depth * 0.68, cx - width / 2 + frame * 0.29, cy, z + 0.004, pvc);
+      box(frame * 0.58, height, depth * 0.68, cx + width / 2 - frame * 0.29, cy, z + 0.004, pvc);
+      box(Math.max(0.012, frame * 0.12), Math.max(0.012, height - frame * 1.2), depth * 0.72, cx - width / 2 + frame * 0.62, cy, z + 0.006, seal);
+    }
+    function handle(x: number, y: number, horizontal: boolean) {
+      box(horizontal ? frame * 0.72 : frame * 0.20, horizontal ? frame * 0.20 : frame * 0.72, 0.022, x, y, depth / 2 + 0.018, handleMat);
+    }
+    outerFrame();
+    var innerW = Math.max(0.08, op.width - frame * 2.05);
+    var innerH = Math.max(0.08, op.height - frame * 2.05);
+    var centerY = op.height / 2;
+    if (style === 'pvc-window-integrated') {
+      var shutterH = innerH * 0.42;
+      var glassH = innerH - shutterH - frame * 0.40;
+      var glassY = frame + glassH / 2;
+      glazedLeaf(-innerW / 4, glassY, innerW / 2, glassH, 0.004);
+      glazedLeaf(innerW / 4, glassY, innerW / 2, glassH, 0.008);
+      box(innerW, shutterH, depth * 0.48, 0, op.height - frame - shutterH / 2, 0.008, pvc);
+      var slatCount = Math.max(7, Math.round(shutterH / 0.055));
+      for (var s = 1; s < slatCount; s++) box(innerW * 0.96, 0.009, depth * 0.54, 0, op.height - frame - shutterH + s * shutterH / slatCount, 0.016, seal);
+      box(op.width, frame * 1.35, depth * 1.06, 0, op.height - frame * 0.68, 0, pvc);
+    } else if (style === 'pvc-window-sliding') {
+      glazedLeaf(-innerW / 4, centerY, innerW / 2, innerH, -0.008);
+      glazedLeaf(innerW / 4, centerY, innerW / 2, innerH, 0.010);
+      handle(-frame * 0.45, centerY, false);
+      handle(frame * 0.45, centerY, false);
+    } else if (style === 'pvc-window-casement' || style === 'pvc-window-awning' || style === 'pvc-window-tilt-turn') {
+      glazedLeaf(0, centerY, innerW, innerH, 0.008);
+      if (style === 'pvc-window-awning') {
+        handle(0, frame * 1.25, true);
+        // Travessas laterais inclinadas sugerem a abertura maxim-ar.
+        for (var side = -1; side <= 1; side += 2) {
+          var arm = box(frame * 0.12, innerH * 0.42, frame * 0.14, side * (innerW / 2 - frame * 0.5), centerY - innerH * 0.20, depth * 0.62, handleMat);
+          arm.rotation.z = side * 0.24;
+        }
+      } else {
+        handle(-innerW / 2 + frame * 0.82, centerY, false);
+        if (style === 'pvc-window-tilt-turn') {
+          // Pequeno marcador superior diferencia a ferragem de dupla ação.
+          handle(0, op.height - frame * 1.18, true);
+        }
+      }
+    }
+    return group;
+  }
+
   function buildOpeningModelPiece(op: any, product: any, w: any, scale: any, offsetX: any, offsetY: any, yOffset: any) {
     var proceduralStyle = product && product.assets && product.assets.proceduralOpeningStyle;
     var modelUrl = product && product.assets && product.assets.modelUrl;
@@ -2196,7 +2266,9 @@ export function hashColorHex(key: string): number {
     var instance: any;
     var template: any = null;
     if (proceduralStyle) {
-      instance = buildProceduralWoodOpening(op, proceduralStyle);
+      instance = /^pvc-/.test(proceduralStyle)
+        ? buildProceduralPvcOpening(op, proceduralStyle)
+        : buildProceduralWoodOpening(op, proceduralStyle);
     } else {
       var resolvedUrl = (import.meta as any).env.BASE_URL + modelUrl;
       template = getFurnitureModel(resolvedUrl);
