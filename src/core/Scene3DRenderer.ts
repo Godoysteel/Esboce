@@ -5563,6 +5563,7 @@ export function hashColorHex(key: string): number {
             .map(function (b: any) { return { minX: b.minX, maxX: b.maxX, minZ: b.minZ, maxZ: b.maxZ, baseY: b.baseY, peakAboveBase: b.peakAboveBase, tanPitch: b.tanPitch, ridgeCoord: b.ridgeCoord, halfSpan: b.halfSpan, axisIsZ: b.axisIsZ, isHip: b.isHip, useOwnSurface: 1, tieBias: roof.id < b.id ? ROOF_VS_ROOF_TIE_EPS : -ROOF_VS_ROOF_TIE_EPS }; });
           var clipBoxesForThisRoof = roomClipBoxes.concat(otherRoofClipBoxes);
           var ownSurfaceBox = roofPeakBoxes.find(function (b: any) { return b.id === roof.id; });
+          if (otherRoofClipBoxes.length) console.log('DEBUG roof-vs-roof', roof.id, roof.type, JSON.stringify(ownSurfaceBox), 'vs', JSON.stringify(otherRoofClipBoxes));
           if (clipBoxesForThisRoof.length || diagonalValleyCuts.length) pieces.forEach(function (piece) {
             var materials = Array.isArray(piece.material) ? piece.material : [piece.material];
             materials.forEach(function (material: any) { applyRoomBoxClipping(material, clipBoxesForThisRoof, diagonalValleyCuts, ownSurfaceBox); });
