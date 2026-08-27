@@ -819,6 +819,87 @@ export function rectsNearby(a: RectLike, b: RectLike, toleranceUnits: number): b
   return overlapX > -toleranceUnits && overlapY > -toleranceUnits;
 }
 
+export interface AxisRect { minX: number; maxX: number; minZ: number; maxZ: number; }
+export interface RoofValleyCorner { cornerX: number; cornerZ: number; dirX: number; dirZ: number; }
+
+// Duas coberturas retangulares encostadas formando um L (uma "degrau"
+// mais curta que a outra ao longo da borda compartilhada) têm o vale
+// nascendo exatamente no canto reentrante, na BISSETRIZ do ângulo — reta
+// a 45° partindo do canto, avançando pro lado de fora da casa (nunca
+// pelo lado onde as duas coberturas já se sobrepõem sem ambiguidade
+// nenhuma). Isso só vale quando as duas águas têm inclinação/altura de
+// beiral iguais (o caso comum); com águas desiguais o ângulo da
+// bissetriz muda, fora de escopo por ora.
+//
+// Devolve null quando as duas pegadas não formam esse "degrau" simples
+// (bordas não encostam, extensão idêntica nos dois lados — union vira
+// um retângulo só, sem canto reentrante — ou deslocadas nos dois
+// extremos ao mesmo tempo — um nicho no meio, dois cantos, não suportado).
+export function roofFootprintValleyCorner(a: AxisRect, b: AxisRect): RoofValleyCorner | null {
+  const EPS = 1e-3;
+  function vertical(left: AxisRect, right: AxisRect): RoofValleyCorner | null {
+    if (Math.abs(left.maxX - right.minX) > EPS) return null;
+    const sameMin = Math.abs(left.minZ - right.minZ) < EPS;
+    const sameMax = Math.abs(left.maxZ - right.maxZ) < EPS;
+    if (sameMin === sameMax) return null;
+    return {
+      cornerX: left.maxX,
+      cornerZ: sameMin ? Math.min(left.maxZ, right.maxZ) : Math.max(left.minZ, right.minZ),
+      dirX: 1,
+      dirZ: sameMin ? 1 : -1,
+    };
+  }
+  function horizontal(bottom: AxisRect, top: AxisRect): RoofValleyCorner | null {
+    if (Math.abs(bottom.maxZ - top.minZ) > EPS) return null;
+    const sameMin = Math.abs(bottom.minX - top.minX) < EPS;
+    const sameMax = Math.abs(bottom.maxX - top.maxX) < EPS;
+    if (sameMin === sameMax) return null;
+    return {
+      cornerX: sameMin ? Math.min(bottom.maxX, top.maxX) : Math.max(bottom.minX, top.minX),
+      cornerZ: bottom.maxZ,
+      dirX: sameMin ? 1 : -1,
+      dirZ: 1,
+    };
+  }
+  return vertical(a, b) || vertical(b, a) || horizontal(a, b) || horizontal(b, a);
+}
+
+// Lado da bissetriz (ver roofFootprintValleyCorner) a que um ponto
+// pertence — usado pra decidir, por telhado, qual sinal de cruz ele deve
+// ESCONDER (o lado oposto ao próprio centro, ver applyRoomBoxClipping).
+//
+// Devolve 0 (neutro, "sem ambiguidade, não recorta aqui") fora do
+// quadrante que a bissetriz realmente separa — só além do canto nos DOIS
+// eixos de fuga (dirX e dirZ) ao mesmo tempo. Sem esse filtro, a reta
+// infinita também "corta" pontos bem longe do canto que só encostam na
+// mesma parede compartilhada sem ambiguidade nenhuma (ex.: a beirada de
+// A rente à parede, só que na outra ponta, longe de B) — a reta pura
+// classificava esses pontos do lado errado.
+export function roofValleySide(corner: RoofValleyCorner, pointX: number, pointZ: number): number {
+  const pastCornerX = (pointX - corner.cornerX) * corner.dirX;
+  const pastCornerZ = (pointZ - corner.cornerZ) * corner.dirZ;
+  if (pastCornerX < 0 || pastCornerZ < 0) return 0;
+  const cross = (pointX - corner.cornerX) * corner.dirZ - (pointZ - corner.cornerZ) * corner.dirX;
+  return Math.sign(cross);
+}
+
+// Lado da bissetriz que pertence à pegada `rect` de verdade — usado pra
+// decidir o sinal que CADA telhado deve ESCONDER (o oposto do próprio).
+// Não amostra um ponto qualquer de dentro de `rect` (o sinal da reta
+// crua muda dependendo de ONDE dentro do retângulo se mede — só é
+// estável perto do canto reentrante) — deriva direto da geometria:
+// a pegada MAIS CURTA ao longo da aresta compartilhada tem seu PRÓPRIO
+// canto exatamente sobre o canto reentrante (toca as duas coordenadas
+// do canto); a MAIS COMPRIDA só cruza a aresta compartilhada por dentro,
+// sem tocar o canto. As duas sempre saem com sinais opostos.
+export function roofValleyOwnSign(corner: RoofValleyCorner, rect: AxisRect): number {
+  const EPS = 1e-2;
+  const touchesCornerX = Math.abs(rect.minX - corner.cornerX) < EPS || Math.abs(rect.maxX - corner.cornerX) < EPS;
+  const touchesCornerZ = Math.abs(rect.minZ - corner.cornerZ) < EPS || Math.abs(rect.maxZ - corner.cornerZ) < EPS;
+  const base = Math.sign(corner.dirX * corner.dirZ);
+  return touchesCornerX && touchesCornerZ ? base : -base;
+}
+
 // Projeta um ponto (ex.: clique do mouse) na RETA da parede, devolvendo a
 // distância em metros a partir de x1,y1 — pode vir negativa ou maior que
 // o comprimento da parede se o ponto ficar fora do segmento.
@@ -2164,7 +2245,7 @@ export const Core = {
   findRoomsAdjacentToOpening,
   roofRidgeHeightMeters, roofPitchForRidgeHeight, roofsCanFuse, fusedRoofBounds, roofGenerationRects,
   rectPoints, lajeBounds,
-  rectsNearby, pointInPolygon, roomModelBounds, findRoomWallIds, findIsolatedRoomWallIds, wallResizeTopology, resolveWallResizeOffset, computeWallFootprints,
+  rectsNearby, roofFootprintValleyCorner, roofValleySide, roofValleyOwnSign, pointInPolygon, roomModelBounds, findRoomWallIds, findIsolatedRoomWallIds, wallResizeTopology, resolveWallResizeOffset, computeWallFootprints,
   roomsContainingWall, roomHeightM, roomOwnHeightM, resolveRoomHeightUpdate, resolvedWallHeights,
   roomAtPoint, roofHeightAtRect,
   wallResizeEndpointNeedsBridge,

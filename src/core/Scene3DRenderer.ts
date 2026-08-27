@@ -1128,8 +1128,14 @@ export function hashColorHex(key: string): number {
     // geométrico que já define onde fica a cumeeira em buildRoofQuatroAguas.
     isHip: number;
   };
-  function applyRoomBoxClipping(material: any, boxes: RoomClipBox[]) {
-    if (!material || !boxes.length) return;
+  var VALLEY_CUT_LIMIT = 4;
+  type ValleyCut = { cornerX: number; cornerZ: number; dirX: number; dirZ: number; hideSign: number };
+  function applyRoomBoxClipping(material: any, boxes: RoomClipBox[], valleyCuts?: ValleyCut[]) {
+    var cuts = valleyCuts || [];
+    if (!material || (!boxes.length && !cuts.length)) return;
+    var cappedCuts = cuts.slice(0, VALLEY_CUT_LIMIT);
+    var paddedCuts = cappedCuts.slice();
+    while (paddedCuts.length < VALLEY_CUT_LIMIT) paddedCuts.push({ cornerX: 0, cornerZ: 0, dirX: 1, dirZ: 1, hideSign: 0 });
     var capped = boxes.slice(0, ROOM_CLIP_BOX_LIMIT);
     // O array do uniform precisa ter o MESMO tamanho declarado no GLSL
     // (ROOM_CLIP_BOX_LIMIT) sempre — o THREE lê `value.length` pra fazer o
@@ -1153,6 +1159,10 @@ export function hashColorHex(key: string): number {
       shader.uniforms.uRoomClipHalfSpan = { value: padded.map(function (b) { return b.halfSpan; }) };
       shader.uniforms.uRoomClipAxisIsZ = { value: padded.map(function (b) { return b.axisIsZ; }) };
       shader.uniforms.uRoomClipIsHip = { value: padded.map(function (b) { return b.isHip; }) };
+      shader.uniforms.uValleyCutCount = { value: cappedCuts.length };
+      shader.uniforms.uValleyCorner = { value: paddedCuts.map(function (c) { return new THREE.Vector2(c.cornerX, c.cornerZ); }) };
+      shader.uniforms.uValleyDir = { value: paddedCuts.map(function (c) { return new THREE.Vector2(c.dirX, c.dirZ); }) };
+      shader.uniforms.uValleyHideSign = { value: paddedCuts.map(function (c) { return c.hideSign; }) };
       shader.vertexShader = shader.vertexShader
         .replace('#include <common>', '#include <common>\nvarying vec3 vRoomClipWorldPos;')
         // Posição mundial calculada direto (não reaproveita a `worldPosition`
@@ -1163,11 +1173,11 @@ export function hashColorHex(key: string): number {
       shader.fragmentShader = shader.fragmentShader
         .replace(
           '#include <common>',
-          '#include <common>\nvarying vec3 vRoomClipWorldPos;\nuniform int uRoomClipCount;\nuniform vec2 uRoomClipMin[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform vec2 uRoomClipMax[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipBaseY[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipPeak[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipTanPitch[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipRidgeCoord[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipHalfSpan[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipAxisIsZ[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipIsHip[' + ROOM_CLIP_BOX_LIMIT + '];'
+          '#include <common>\nvarying vec3 vRoomClipWorldPos;\nuniform int uRoomClipCount;\nuniform vec2 uRoomClipMin[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform vec2 uRoomClipMax[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipBaseY[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipPeak[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipTanPitch[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipRidgeCoord[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipHalfSpan[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipAxisIsZ[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipIsHip[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform int uValleyCutCount;\nuniform vec2 uValleyCorner[' + VALLEY_CUT_LIMIT + '];\nuniform vec2 uValleyDir[' + VALLEY_CUT_LIMIT + '];\nuniform float uValleyHideSign[' + VALLEY_CUT_LIMIT + '];'
         )
         .replace(
           '#include <clipping_planes_fragment>',
-          '#include <clipping_planes_fragment>\n  for ( int i = 0; i < ' + ROOM_CLIP_BOX_LIMIT + '; i ++ ) {\n    if ( i >= uRoomClipCount ) break;\n    if ( vRoomClipWorldPos.x > uRoomClipMin[ i ].x && vRoomClipWorldPos.x < uRoomClipMax[ i ].x && vRoomClipWorldPos.z > uRoomClipMin[ i ].y && vRoomClipWorldPos.z < uRoomClipMax[ i ].y ) {\n      float surfaceY;\n      if ( uRoomClipIsHip[ i ] > 0.5 ) {\n        float distX = min( vRoomClipWorldPos.x - uRoomClipMin[ i ].x, uRoomClipMax[ i ].x - vRoomClipWorldPos.x );\n        float distZ = min( vRoomClipWorldPos.z - uRoomClipMin[ i ].y, uRoomClipMax[ i ].y - vRoomClipWorldPos.z );\n        surfaceY = uRoomClipBaseY[ i ] + uRoomClipTanPitch[ i ] * min( distX, distZ );\n      } else {\n        float coord = uRoomClipAxisIsZ[ i ] > 0.5 ? vRoomClipWorldPos.z : vRoomClipWorldPos.x;\n        surfaceY = uRoomClipBaseY[ i ] + uRoomClipPeak[ i ] - uRoomClipTanPitch[ i ] * abs( coord - uRoomClipRidgeCoord[ i ] );\n      }\n      if ( vRoomClipWorldPos.y < surfaceY ) discard;\n    }\n  }'
+          '#include <clipping_planes_fragment>\n  for ( int i = 0; i < ' + ROOM_CLIP_BOX_LIMIT + '; i ++ ) {\n    if ( i >= uRoomClipCount ) break;\n    if ( vRoomClipWorldPos.x > uRoomClipMin[ i ].x && vRoomClipWorldPos.x < uRoomClipMax[ i ].x && vRoomClipWorldPos.z > uRoomClipMin[ i ].y && vRoomClipWorldPos.z < uRoomClipMax[ i ].y ) {\n      float surfaceY;\n      if ( uRoomClipIsHip[ i ] > 0.5 ) {\n        float distX = min( vRoomClipWorldPos.x - uRoomClipMin[ i ].x, uRoomClipMax[ i ].x - vRoomClipWorldPos.x );\n        float distZ = min( vRoomClipWorldPos.z - uRoomClipMin[ i ].y, uRoomClipMax[ i ].y - vRoomClipWorldPos.z );\n        surfaceY = uRoomClipBaseY[ i ] + uRoomClipTanPitch[ i ] * min( distX, distZ );\n      } else {\n        float coord = uRoomClipAxisIsZ[ i ] > 0.5 ? vRoomClipWorldPos.z : vRoomClipWorldPos.x;\n        surfaceY = uRoomClipBaseY[ i ] + uRoomClipPeak[ i ] - uRoomClipTanPitch[ i ] * abs( coord - uRoomClipRidgeCoord[ i ] );\n      }\n      if ( vRoomClipWorldPos.y < surfaceY ) discard;\n    }\n  }\n  for ( int j = 0; j < ' + VALLEY_CUT_LIMIT + '; j ++ ) {\n    if ( j >= uValleyCutCount ) break;\n    float pastX = ( vRoomClipWorldPos.x - uValleyCorner[ j ].x ) * uValleyDir[ j ].x;\n    float pastZ = ( vRoomClipWorldPos.z - uValleyCorner[ j ].y ) * uValleyDir[ j ].y;\n    if ( pastX >= 0.0 && pastZ >= 0.0 ) {\n      float cross = ( vRoomClipWorldPos.x - uValleyCorner[ j ].x ) * uValleyDir[ j ].y - ( vRoomClipWorldPos.z - uValleyCorner[ j ].y ) * uValleyDir[ j ].x;\n      if ( sign( cross ) == uValleyHideSign[ j ] ) discard;\n    }\n  }'
         );
     };
     material.needsUpdate = true;
@@ -5431,12 +5441,47 @@ export function hashColorHex(key: string): number {
           // o próprio cômodo do telhado tem baseY == pieceBaseY (não >),
           // então nunca se auto-esconde.
           var roomClipBoxes = roomHeightBoxes.concat(higherFloorRoomHeightBoxes).filter(function (b: any) { return b.baseY > pieceBaseY + 1e-4; });
+          // Vale reentrante em L (Core.roofFootprintValleyCorner): quando
+          // a pegada deste telhado forma um "degrau" com a de outro (nem
+          // sobrepõe nem tem o mesmo tamanho na aresta compartilhada), o
+          // encontro certo é a bissetriz a partir do canto reentrante —
+          // cada um escondendo só a parte que atravessa pro lado do
+          // outro, formando a água-furtada (Product Owner). Esses pares
+          // ficam de fora do "pegada maior vence tudo" abaixo — a
+          // bissetriz já resolve os dois lados com precisão.
+          //
+          // A detecção usa o retângulo NOMINAL (sem ROOF_OVERHANG), não
+          // roofWorldFootprint — o beiral infla a pegada de cada telhado
+          // pra além da própria parede, então duas pegadas "encostadas"
+          // na parede de verdade chegam aqui SOBREPOSTAS (não apenas
+          // tocando), e a detecção de aresta compartilhada nunca batia
+          // (bug real encontrado testando com os números exatos antes de
+          // confiar no visual). O canto reentrante nasce sempre na
+          // parede de verdade, nunca no beiral.
+          function nominalWallRect(r: any) {
+            return {
+              minX: (Math.min(r.x1, r.x2) - offsetX) * scale, maxX: (Math.max(r.x1, r.x2) - offsetX) * scale,
+              minZ: (Math.min(r.y1, r.y2) - offsetY) * scale, maxZ: (Math.max(r.y1, r.y2) - offsetY) * scale,
+            };
+          }
+          var ownFootprintForValley = roofWorldFootprint(roof, scale, offsetX, offsetY);
+          var ownWallRectForValley = nominalWallRect(roof);
+          var valleyPartnerIds: Record<string, true> = {};
+          var diagonalValleyCuts: any[] = [];
+          floorData.roofs.forEach(function (other) {
+            if (other.id === roof.id) return;
+            var corner = Core.roofFootprintValleyCorner(ownWallRectForValley, nominalWallRect(other));
+            if (!corner) return;
+            valleyPartnerIds[other.id] = true;
+            var ownSign = Core.roofValleyOwnSign(corner, ownWallRectForValley);
+            diagonalValleyCuts.push({ cornerX: corner.cornerX, cornerZ: corner.cornerZ, dirX: corner.dirX, dirZ: corner.dirZ, hideSign: -ownSign });
+          });
           // E só telhados de pegada ESTRITAMENTE maior que a PRÓPRIA
-          // pegada deste (nunca a própria) — ver comentário acima de
-          // roofPeakBoxes.
+          // pegada deste (nunca a própria, nunca um parceiro de vale já
+          // resolvido acima) — ver comentário acima de roofPeakBoxes.
           var ownArea = Math.abs(roof.x2 - roof.x1) * Math.abs(roof.y2 - roof.y1);
           var biggerRoofClipBoxes = roofPeakBoxes.filter(function (b: any) {
-            if (b.id === roof.id || b.area <= ownArea + 1e-4) return false;
+            if (b.id === roof.id || b.area <= ownArea + 1e-4 || valleyPartnerIds[b.id]) return false;
             var biggerRoof = floorData.roofs.find(function (candidate) { return candidate.id === b.id; });
             if (biggerRoof && biggerRoof.steppedWallVolume && biggerRoof.ridgeAxis === roof.ridgeAxis) return false;
             // Cumeeira em níveis: os dois trechos consecutivos pertencem
@@ -5455,11 +5500,11 @@ export function hashColorHex(key: string): number {
           })
             .map(function (b: any) { return { minX: b.minX, maxX: b.maxX, minZ: b.minZ, maxZ: b.maxZ, baseY: b.baseY, peakAboveBase: b.peakAboveBase, tanPitch: b.tanPitch, ridgeCoord: b.ridgeCoord, halfSpan: b.halfSpan, axisIsZ: b.axisIsZ, isHip: b.isHip }; });
           var clipBoxesForThisRoof = roomClipBoxes.concat(biggerRoofClipBoxes);
-          if (clipBoxesForThisRoof.length) pieces.forEach(function (piece) {
+          if (clipBoxesForThisRoof.length || diagonalValleyCuts.length) pieces.forEach(function (piece) {
             var materials = Array.isArray(piece.material) ? piece.material : [piece.material];
-            materials.forEach(function (material: any) { applyRoomBoxClipping(material, clipBoxesForThisRoof); });
+            materials.forEach(function (material: any) { applyRoomBoxClipping(material, clipBoxesForThisRoof, diagonalValleyCuts); });
           });
-          var ownFootprint = roofWorldFootprint(roof, scale, offsetX, offsetY);
+          var ownFootprint = ownFootprintForValley;
           var trimRects = floorData.roofs.filter(function (other) {
             if (!roof.compoundGroupId || other.compoundGroupId !== roof.compoundGroupId || other.id === roof.id || other.ridgeAxis === roof.ridgeAxis) return false;
             var otherFootprint = roofWorldFootprint(other, scale, offsetX, offsetY);
