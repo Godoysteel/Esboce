@@ -962,7 +962,7 @@ function productLine(productId: string, areaM2: number): string {
   return '<div class="materials-line"><span>' + name + '</span><span>' + fmtM2(areaM2) + extra + '</span></div>';
 }
 
-interface SteelFrameQuantityLine { id: string; label: string; quantity: number; unit: 'm²' | 'kg' | 'un'; }
+interface SteelFrameQuantityLine { id: string; label: string; quantity: number; unit: 'm²' | 'm' | 'kg' | 'un'; }
 // Parâmetro preliminar de orçamento definido pelo Product Owner em
 // 27/08/2026. Não representa dimensionamento estrutural; a origem e o
 // caráter estimativo permanecem visíveis na linha do quantitativo.
@@ -978,6 +978,7 @@ function steelFrameQuantities(project: Project): SteelFrameQuantityLine[] {
     else totals.set(key, { id, label, quantity, unit });
   };
   let structuralArea = 0;
+  let lowerGuideLengthM = 0;
   project.floors.forEach((floor) => {
     const wallHeight = floorWallHeight(floor, Scene3DRenderer.WALL_HEIGHT_GETTER());
     floor.walls.forEach((wall) => {
@@ -986,9 +987,10 @@ function steelFrameQuantities(project: Project): SteelFrameQuantityLine[] {
         .reduce((sum, opening) => sum + opening.width * opening.height, 0);
       const faceArea = Math.max(0, Core.wallLengthMeters(wall) * wallHeight - openingsArea);
       structuralArea += faceArea;
+      lowerGuideLengthM += Core.wallLengthMeters(wall);
       [wall.faceAAssemblyId, wall.faceBAssemblyId].forEach((assemblyId) => {
         const assembly = STEEL_FRAME_FACE_ASSEMBLIES.find((item) => item.id === assemblyId);
-        assembly?.layers.forEach((layer) => add(layer.id, layer.label, quantityWithWaste(faceArea, layer), layer.unit === 'unit' ? 'un' : 'm²'));
+        assembly?.layers.forEach((layer) => add(layer.id, layer.label, quantityWithWaste(faceArea, layer), layer.unit === 'unit' ? 'un' : layer.unit === 'm2' ? 'm²' : layer.unit));
       });
       const insulationId = wall.cavityAssembly?.insulationSystemId;
       if (insulationId && insulationId !== 'none') {
@@ -1007,12 +1009,15 @@ function steelFrameQuantities(project: Project): SteelFrameQuantityLine[] {
       const extensionFaceAreaM2 = 2 * (widthM + depthM) * rectangularHeightM + slopedClosuresM2;
       [roof.steppedWallFaceAAssemblyId, roof.steppedWallFaceBAssemblyId].forEach((assemblyId) => {
         const assembly = STEEL_FRAME_FACE_ASSEMBLIES.find((item) => item.id === assemblyId);
-        assembly?.layers.forEach((layer) => add(layer.id, layer.label, quantityWithWaste(extensionFaceAreaM2, layer), layer.unit === 'unit' ? 'un' : 'm²'));
+        assembly?.layers.forEach((layer) => add(layer.id, layer.label, quantityWithWaste(extensionFaceAreaM2, layer), layer.unit === 'unit' ? 'un' : layer.unit === 'm2' ? 'm²' : layer.unit));
       });
     });
   });
   if (structuralArea > 0) {
     add('steel-frame-structure', 'Estrutura e fixadores estruturais (parâmetro preliminar 30 kg/m² + 5% de perda)', Math.round(structuralArea * STEEL_FRAME_STRUCTURE_KG_PER_M2 * 1.05 * 100) / 100, 'kg');
+  }
+  if (lowerGuideLengthM > 0) {
+    add('steel-frame-sill-asphalt-membrane', 'Manta asfáltica sob a guia inferior (+ 10% de perda)', Math.round(lowerGuideLengthM * 1.1 * 100) / 100, 'm');
   }
   return Array.from(totals.values()).map((line) => ({ ...line, quantity: line.unit === 'un' ? Math.ceil(line.quantity) : Math.round(line.quantity * 100) / 100 }));
 }

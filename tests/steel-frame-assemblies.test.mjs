@@ -62,6 +62,29 @@ test('estrutura engenheirada usa parâmetro preliminar de 30 kg/m² e mantém 5%
   assert.match(materialsSource, /structuralArea \* STEEL_FRAME_STRUCTURE_KG_PER_M2 \* 1\.05/);
 });
 
+test('placa cimentícia inclui Base Coat, fita e tela Fiberglass com unidades corretas', () => {
+  for (const assemblyId of ['cement-board-direct', 'cement-board-osb', 'soffit-cement-board', 'fascia-cement-board']) {
+    const assembly = STEEL_FRAME_FACE_ASSEMBLIES.find((item) => item.id === assemblyId);
+    assert.equal(assembly.layers.find((layer) => layer.id === 'placlux.base-coat-20kg')?.unit, 'kg');
+    assert.equal(assembly.layers.find((layer) => layer.id === 'placlux.fita-fiberglass-10cm-50m')?.unit, 'm');
+    assert.equal(assembly.layers.find((layer) => layer.id === 'placlux.tela-fiberglass-1x50m')?.unit, 'm2');
+  }
+});
+
+test('drywall inclui massa e fita telada para tratamento de juntas', () => {
+  for (const assemblyId of ['drywall-st', 'drywall-ru', 'drywall-rf']) {
+    const assembly = STEEL_FRAME_FACE_ASSEMBLIES.find((item) => item.id === assemblyId);
+    assert.equal(assembly.layers.find((layer) => layer.id === 'placlux.massa-drywall')?.unit, 'kg');
+    assert.equal(assembly.layers.find((layer) => layer.id === 'drywall-joint-tape')?.unit, 'm');
+  }
+});
+
+test('quantitativo inclui manta asfáltica sob toda guia inferior com 10% de perda', () => {
+  assert.match(materialsSource, /lowerGuideLengthM \+= Core\.wallLengthMeters\(wall\)/);
+  assert.match(materialsSource, /Manta asfáltica sob a guia inferior \(\+ 10% de perda\)/);
+  assert.match(materialsSource, /lowerGuideLengthM \* 1\.1/);
+});
+
 test('quantitativo de steel frame aponta faces e isolamento ainda não especificados', () => {
   const project = createProject('light_steel_frame');
   project.floors[0].walls.push(createWallEntity(0, 0, 100, 0));

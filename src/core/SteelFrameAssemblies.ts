@@ -7,7 +7,7 @@ export interface AssemblyLayerDefinition {
   id: string;
   label: string;
   role: 'finish' | 'basecoat' | 'mesh' | 'external_insulation' | 'external_board'
-    | 'water_barrier' | 'structural_sheathing' | 'internal_board';
+    | 'water_barrier' | 'structural_sheathing' | 'internal_board' | 'joint_tape' | 'joint_compound';
   unit: QuantityUnit;
   /** Consumo antes da perda. Para fixadores, unidades por m². */
   consumptionPerM2: number;
@@ -26,6 +26,19 @@ const area = (id: string, label: string, role: AssemblyLayerDefinition['role'], 
   ({ id, label, role, unit: 'm2', consumptionPerM2: 1, wastePercent });
 const fixers = (id: string, label: string, unitsPerM2: number): AssemblyLayerDefinition =>
   ({ id, label, role: 'finish', unit: 'unit', consumptionPerM2: unitsPerM2, wastePercent: 5, fastener: true });
+const measured = (id: string, label: string, role: AssemblyLayerDefinition['role'], unit: 'm' | 'kg', consumptionPerM2: number, wastePercent = 10): AssemblyLayerDefinition =>
+  ({ id, label, role, unit, consumptionPerM2, wastePercent });
+
+const profortJointTreatment: readonly AssemblyLayerDefinition[] = [
+  measured('placlux.base-coat-20kg', 'Massa Base Coat ProFort System', 'basecoat', 'kg', 20 / 6, 5),
+  measured('placlux.fita-fiberglass-10cm-50m', 'Fita Fiberglass para juntas', 'joint_tape', 'm', 1.25),
+  area('placlux.tela-fiberglass-1x50m', 'Tela Fiberglass', 'mesh'),
+];
+
+const drywallJointTreatment: readonly AssemblyLayerDefinition[] = [
+  measured('placlux.massa-drywall', 'Massa para tratamento de juntas de drywall', 'joint_compound', 'kg', 0.5, 10),
+  measured('drywall-joint-tape', 'Fita telada para juntas de drywall', 'joint_tape', 'm', 1.25, 10),
+];
 
 /**
  * Presets técnicos iniciais. Consumos de fixadores são parâmetros de orçamento,
@@ -42,12 +55,14 @@ export const STEEL_FRAME_FACE_ASSEMBLIES: readonly WallFaceAssemblyDefinition[] 
   { id: 'cement-board-direct', label: 'Placa cimentícia sem OSB', use: 'external', layers: [
     area('placlux.profort-next-12-5mm', 'ProFort Next 12,5 mm', 'external_board'),
     area('placlux.membrana-hidrofuga-52-5m2', 'Membrana Hidrófuga ProFort', 'water_barrier'),
+    ...profortJointTreatment,
     fixers('placlux.parafuso-pb-032', 'Parafusos Rusper PB 032', 20),
   ] },
   { id: 'cement-board-osb', label: 'OSB + placa cimentícia', use: 'external', layers: [
     area('placlux.profort-next-10mm', 'ProFort Next 10 mm', 'external_board'),
     area('placlux.membrana-hidrofuga-52-5m2', 'Membrana Hidrófuga ProFort', 'water_barrier'),
     area('osb', 'Painel OSB estrutural', 'structural_sheathing'),
+    ...profortJointTreatment,
     fixers('placlux.parafuso-pa-032', 'Parafusos Rusper PA 032', 20),
     fixers('osb-screws', 'Parafusos para OSB', 18),
   ] },
@@ -78,18 +93,22 @@ export const STEEL_FRAME_FACE_ASSEMBLIES: readonly WallFaceAssemblyDefinition[] 
   ] },
   { id: 'drywall-st', label: 'Drywall Standard (ST)', use: 'internal', layers: [
     area('drywall-st', 'Chapa de drywall ST', 'internal_board'),
+    ...drywallJointTreatment,
     fixers('drywall-screws', 'Parafusos para drywall', 15),
   ] },
   { id: 'drywall-ru', label: 'Drywall resistente à umidade (RU)', use: 'internal', layers: [
     area('drywall-ru', 'Chapa de drywall RU', 'internal_board'),
+    ...drywallJointTreatment,
     fixers('drywall-screws', 'Parafusos para drywall', 15),
   ] },
   { id: 'drywall-rf', label: 'Drywall resistente ao fogo (RF)', use: 'internal', layers: [
     area('drywall-rf', 'Chapa de drywall RF', 'internal_board'),
+    ...drywallJointTreatment,
     fixers('drywall-screws', 'Parafusos para drywall', 15),
   ] },
   { id: 'soffit-cement-board', label: 'Beiral em placa cimentícia', use: 'soffit', layers: [
     area('placlux.profort-next-10mm', 'ProFort Next 10 mm para beiral', 'external_board'),
+    ...profortJointTreatment,
     fixers('placlux.parafuso-pb-032', 'Parafusos Rusper PB 032', 20),
   ] },
   { id: 'soffit-vinyl', label: 'Beiral vinílico', use: 'soffit', layers: [
@@ -98,6 +117,7 @@ export const STEEL_FRAME_FACE_ASSEMBLIES: readonly WallFaceAssemblyDefinition[] 
   ] },
   { id: 'fascia-cement-board', label: 'Tabeira em placa cimentícia', use: 'fascia', layers: [
     area('placlux.profort-next-10mm', 'ProFort Next 10 mm para tabeira', 'external_board'),
+    ...profortJointTreatment,
     fixers('placlux.parafuso-pb-032', 'Parafusos Rusper PB 032', 20),
   ] },
   { id: 'fascia-wood', label: 'Tabeira de madeira', use: 'fascia', layers: [

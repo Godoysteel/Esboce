@@ -1642,3 +1642,14 @@ Status: Implementado, testado (suíte completa + teste novo confirmando a marca�
 **Decisão:** o quantitativo de estrutura e fixadores estruturais passa a calcular `área estrutural × 30 kg/m² × 1,05`. Os 5% permanecem identificados como perda. A linha do orçamento usa a expressão “parâmetro preliminar” para não apresentar o índice como dimensionamento estrutural, em conformidade com a ADR-006. A origem desta premissa é esta decisão do Product Owner; uma evolução posterior deverá permitir parâmetros comerciais configuráveis e rastreáveis por fornecedor ou projetista.
 
 ---
+
+# DEC-154 — Complementos obrigatórios nas composições de fechamento Light Steel Frame
+
+**Data:** 27/08/2026
+**Status:** Implementado
+
+**Contexto:** a revisão do orçamento revelou que as placas principais e os parafusos eram contabilizados, mas materiais indispensáveis de tratamento de juntas, reforço superficial e separação da guia inferior não apareciam no PDF, apesar de vários já existirem no catálogo PlacLux.
+
+**Decisão:** as composições ProFort passam a incluir Base Coat (parâmetro de 20 kg para 6 m²), Fita Fiberglass (1,25 m/m²) e Tela Fiberglass (1 m²/m²), com perdas explícitas. As composições de drywall passam a incluir massa (0,50 kg/m²) e fita telada (1,25 m/m²). Toda parede LSF contabiliza manta asfáltica sob a guia inferior pelo comprimento da parede mais 10% de perda. `MaterialsPanel.steelFrameQuantities` passa a preservar a unidade técnica de cada camada em vez de converter todo item não unitário para m². Os consumos sem rendimento comercial completo são parâmetros preliminares de orçamento e deverão ser substituíveis por fichas de fabricante.
+
+---
