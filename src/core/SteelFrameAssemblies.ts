@@ -96,6 +96,14 @@ export const STEEL_FRAME_FACE_ASSEMBLIES: readonly WallFaceAssemblyDefinition[] 
     area('vinyl-soffit', 'Forro de beiral vinílico', 'finish'),
     fixers('vinyl-soffit-fixers', 'Fixadores para beiral vinílico', 8),
   ] },
+  { id: 'fascia-cement-board', label: 'Tabeira em placa cimentícia', use: 'fascia', layers: [
+    area('placlux.profort-next-10mm', 'ProFort Next 10 mm para tabeira', 'external_board'),
+    fixers('placlux.parafuso-pb-032', 'Parafusos Rusper PB 032', 20),
+  ] },
+  { id: 'fascia-wood', label: 'Tabeira de madeira', use: 'fascia', layers: [
+    area('wood-fascia-board', 'Tábua de madeira para tabeira', 'finish'),
+    fixers('wood-fascia-fixers', 'Fixadores para tabeira de madeira', 8),
+  ] },
 ] as const;
 
 export const STEEL_FRAME_STRUCTURE_WASTE_PERCENT = 5;
@@ -108,7 +116,8 @@ export function steelFrameAssemblyColorHex(assemblyId?: string): number {
     'glasroc-x-therm': 0xDB2777, 'vinyl-siding-osb': 0x0F766E,
     'drywall-st': 0x3FAE67, 'drywall-ru': 0x0EA5E9,
     'drywall-rf': 0xDC2626, 'soffit-cement-board': 0x64748B,
-    'soffit-vinyl': 0xA855F7,
+    'soffit-vinyl': 0xA855F7, 'fascia-cement-board': 0x475569,
+    'fascia-wood': 0x92400E,
   };
   return assemblyId ? (colors[assemblyId] ?? 0x3FAE67) : 0x3FAE67;
 }
@@ -148,13 +157,13 @@ export function steelFrameSpecificationIssues(project: Project): SteelFrameSpeci
         if (!roof.gableFaceAAssemblyId) issues.push({ kind: 'gable-face', entityId: roof.id, side: 'a' });
         if (!roof.gableFaceBAssemblyId) issues.push({ kind: 'gable-face', entityId: roof.id, side: 'b' });
       }
-      if (!roof.soffitAssemblyId) issues.push({ kind: 'soffit', entityId: roof.id });
-      if (!roof.fasciaAssemblyId) issues.push({ kind: 'fascia', entityId: roof.id });
       if (roof.type === 'platibanda') {
         if (!roof.parapetOuterAssemblyId) issues.push({ kind: 'parapet-face', entityId: roof.id, side: 'outer' });
         if (!roof.parapetInnerAssemblyId) issues.push({ kind: 'parapet-face', entityId: roof.id, side: 'inner' });
       }
     });
   });
+  if (!project.steelFrameSoffitAssemblyId) issues.push({ kind: 'soffit', entityId: '__project__' });
+  if (!project.steelFrameFasciaAssemblyId) issues.push({ kind: 'fascia', entityId: '__project__' });
   return issues;
 }

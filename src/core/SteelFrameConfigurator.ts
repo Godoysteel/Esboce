@@ -7,6 +7,7 @@ import type { Roof, Wall, WallCavityAssembly } from './types.js';
 type SurfaceTarget = { kind: 'wall-face' | 'gable-face' | 'stepped-wall-face' | 'roof'; entityId: string; side?: 'a' | 'b' };
 const faceSystems = STEEL_FRAME_FACE_ASSEMBLIES.filter((item) => item.use === 'external' || item.use === 'internal' || item.use === 'both');
 const soffitSystems = STEEL_FRAME_FACE_ASSEMBLIES.filter((item) => item.use === 'soffit');
+const fasciaSystems = STEEL_FRAME_FACE_ASSEMBLIES.filter((item) => item.use === 'fascia');
 const insulationOptions = [
   { id: 'none', label: 'Sem isolamento', thickness: 0 },
   { id: 'placlux.la-de-rocha', label: 'Lã de rocha PlacLux', thickness: 50 },
@@ -29,6 +30,7 @@ function targetFloorIndex(target: SurfaceTarget): number {
 }
 
 function issueFloorIndex(issue: SteelFrameSpecificationIssue): number {
+  if (issue.entityId === '__project__') return 0;
   return Store.getProject().floors.findIndex((floor) => issue.kind === 'wall-face' || issue.kind === 'wall-cavity'
     ? floor.walls.some((wall) => wall.id === issue.entityId)
     : floor.roofs.some((roof) => roof.id === issue.entityId));
@@ -51,8 +53,8 @@ function issueLabel(issue: SteelFrameSpecificationIssue): string {
   if (issue.kind === 'wall-cavity') return `Parede ${wallNumber} · isolamento térmico e acústico`;
   if (issue.kind === 'gable-face') return `Telhado ${roofNumber} · oitão ${issue.side?.toUpperCase()}`;
   if (issue.kind === 'stepped-wall-face') return `Telhado ${roofNumber} · extensão de parede ${issue.side === 'a' ? 'externa' : 'interna'}`;
-  if (issue.kind === 'soffit') return `Telhado ${roofNumber} · beiral`;
-  if (issue.kind === 'fascia') return `Telhado ${roofNumber} · tabeira`;
+  if (issue.kind === 'soffit') return 'Todos os beirais · revestimento global';
+  if (issue.kind === 'fascia') return 'Todas as tabeiras · revestimento global';
   return `Telhado ${roofNumber} · platibanda ${issue.side === 'outer' ? 'externa' : 'interna'}`;
 }
 
@@ -66,6 +68,28 @@ function pendingGuide(issues: SteelFrameSpecificationIssue[]): string {
     <div class="sf-pending-list"><h4>Ainda falta configurar</h4>${visible.map((issue) => `<div><span>○</span>${issueLabel(issue)}</div>`).join('')}${issues.length > visible.length ? `<small>e mais ${issues.length - visible.length} itens…</small>` : ''}</div>
     <div class="sf-color-legend"><i></i><span>Cada cor identifica um sistema escolhido. Marcos de portas/janelas e o topo das paredes não entram na seleção.</span></div>
     ${wallStage(issues) ? '<div class="sf-future-stage"><strong>Depois das paredes</strong><span>Escolha do sistema da laje (em implantação) e liberação do próximo pavimento.</span></div>' : ''}`;
+}
+
+function globalRoofFinishButtons(): string {
+  const project = Store.getProject();
+  const buttons = (systems: typeof soffitSystems, field: 'soffitAssemblyId' | 'fasciaAssemblyId', selectedId?: string) => systems.map((item) =>
+    `<button type="button" class="sf-system-option ${selectedId === item.id ? 'selected' : ''}" data-sf-global-roof-field="${field}" data-sf-system="${item.id}"><i style="--sf-system-color:#${steelFrameAssemblyColorHex(item.id).toString(16).padStart(6, '0')}"></i><strong>${item.label}</strong><small>Aplicar em toda a construção</small></button>`
+  ).join('');
+  return `<div class="sf-selected-label">Acabamentos globais da cobertura</div>
+    <div class="sf-side-group"><h4>Forro de todos os beirais</h4>${buttons(soffitSystems, 'soffitAssemblyId', project.steelFrameSoffitAssemblyId)}</div>
+    <div class="sf-side-group"><h4>Todas as tabeiras</h4>${buttons(fasciaSystems, 'fasciaAssemblyId', project.steelFrameFasciaAssemblyId)}</div>`;
+}
+
+function bindGlobalRoofFinishButtons(panel: HTMLElement): void {
+  panel.querySelectorAll<HTMLButtonElement>('[data-sf-global-roof-field]').forEach((button) => button.addEventListener('click', () => {
+    const field = button.dataset.sfGlobalRoofField;
+    const systemId = button.dataset.sfSystem;
+    if (!systemId) return;
+    Store.commands.setSteelFrameGlobalRoofFinishes(field === 'soffitAssemblyId'
+      ? { soffitAssemblyId: systemId }
+      : { fasciaAssemblyId: systemId });
+    render();
+  }));
 }
 
 function pendingSummary(issues: SteelFrameSpecificationIssue[]): string {
@@ -95,7 +119,7 @@ function targetIsConfigured(target: SurfaceTarget): boolean {
   if (!roof) return false;
   if (target.kind === 'gable-face') return !!(target.side === 'a' ? roof.gableFaceAAssemblyId : roof.gableFaceBAssemblyId);
   if (target.kind === 'stepped-wall-face') return !!(target.side === 'a' ? roof.steppedWallFaceAAssemblyId : roof.steppedWallFaceBAssemblyId);
-  return !!roof.soffitAssemblyId && !!roof.fasciaAssemblyId
+  return !!Store.getProject().steelFrameSoffitAssemblyId && !!Store.getProject().steelFrameFasciaAssemblyId
     && (roof.type !== 'platibanda' || (!!roof.parapetOuterAssemblyId && !!roof.parapetInnerAssemblyId));
 }
 
@@ -196,16 +220,12 @@ function renderRoof(panel: HTMLElement, roof: Roof): void {
     return;
   }
   panel.querySelector<HTMLElement>('[data-sf-body]')!.innerHTML = `<div class="sf-selected-label">Cobertura selecionada</div>
-    <div class="sf-side-group"><h4>Beiral</h4>${soffitSystems.map((item) => `<button type="button" class="sf-system-option ${roof.soffitAssemblyId === item.id ? 'selected' : ''}" data-roof-field="soffitAssemblyId" data-sf-system="${item.id}"><strong>${item.label}</strong></button>`).join('')}</div>
-    <div class="sf-side-group"><h4>Tabeira</h4>${systemButtons(roof.fasciaAssemblyId)}</div>
     ${roof.type === 'platibanda' ? `<div class="sf-side-group"><h4>Platibanda externa</h4>${systemButtons(roof.parapetOuterAssemblyId)}</div><div class="sf-side-group"><h4>Platibanda interna</h4>${systemButtons(roof.parapetInnerAssemblyId)}</div>` : ''}`;
   Array.from(panel.querySelectorAll<HTMLButtonElement>('[data-sf-system]')).forEach((button) => button.addEventListener('click', () => {
     const title = button.closest('.sf-side-group')?.querySelector('h4')?.textContent || '';
-    const field = button.dataset.roofField || (title === 'Tabeira' ? 'fasciaAssemblyId' : title.includes('externa') ? 'parapetOuterAssemblyId' : 'parapetInnerAssemblyId');
+    const field = title.includes('externa') ? 'parapetOuterAssemblyId' : 'parapetInnerAssemblyId';
     Store.commands.setSteelFrameRoofSpecification(roof.id, {
       gableFaceAAssemblyId: roof.gableFaceAAssemblyId, gableFaceBAssemblyId: roof.gableFaceBAssemblyId,
-      soffitAssemblyId: field === 'soffitAssemblyId' ? button.dataset.sfSystem : roof.soffitAssemblyId,
-      fasciaAssemblyId: field === 'fasciaAssemblyId' ? button.dataset.sfSystem : roof.fasciaAssemblyId,
       parapetOuterAssemblyId: field === 'parapetOuterAssemblyId' ? button.dataset.sfSystem : roof.parapetOuterAssemblyId,
       parapetInnerAssemblyId: field === 'parapetInnerAssemblyId' ? button.dataset.sfSystem : roof.parapetInnerAssemblyId,
     });
@@ -225,7 +245,11 @@ function render(): void {
   quantityButton.title = issues.length ? 'Conclua todas as faces para liberar o quantitativo.' : 'Abrir quantitativo';
   const wall = selectedWall();
   const roof = selectedRoof();
-  if (selectedTarget?.kind === 'wall-face' && wall) renderWall(panel, wall);
+  if (issues[0]?.entityId === '__project__') {
+    selectedTarget = null;
+    panel.querySelector<HTMLElement>('[data-sf-body]')!.innerHTML = globalRoofFinishButtons();
+    bindGlobalRoofFinishButtons(panel);
+  } else if (selectedTarget?.kind === 'wall-face' && wall) renderWall(panel, wall);
   else if (selectedTarget && roof) renderRoof(panel, roof);
   else panel.querySelector<HTMLElement>('[data-sf-body]')!.innerHTML = pendingGuide(issues);
 }

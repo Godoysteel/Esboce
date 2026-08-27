@@ -5800,13 +5800,13 @@ export function hashColorHex(key: string): number {
             var steelFrameRoofConfigured = project.constructionSystem === 'light_steel_frame' && (
               m.userData.gableSide
                 ? !!(m.userData.gableSide === 'a' ? roof.gableFaceAAssemblyId : roof.gableFaceBAssemblyId)
-                : !!roof.soffitAssemblyId && !!roof.fasciaAssemblyId
+                : !!project.steelFrameSoffitAssemblyId && !!project.steelFrameFasciaAssemblyId
                   && (roof.type !== 'platibanda' || (!!roof.parapetOuterAssemblyId && !!roof.parapetInnerAssemblyId))
             );
             if (steelFrameRoofConfigured) {
               var roofAssemblyId = m.userData.gableSide
                 ? (m.userData.gableSide === 'a' ? roof.gableFaceAAssemblyId : roof.gableFaceBAssemblyId)
-                : (roof.parapetOuterAssemblyId || roof.soffitAssemblyId || roof.fasciaAssemblyId);
+                : (roof.parapetOuterAssemblyId || project.steelFrameSoffitAssemblyId || project.steelFrameFasciaAssemblyId);
               var roofSystemColor = steelFrameAssemblyColorHex(roofAssemblyId);
               m.material = Array.isArray(m.material) ? m.material.map(function (material: any) { var marked = material.clone(); marked.color.setHex(roofSystemColor); return marked; }) : m.material.clone();
               if (!Array.isArray(m.material)) m.material.color.setHex(roofSystemColor);

@@ -479,6 +479,9 @@ export interface Project {
   layers: ProjectLayers;
   foundationType: FoundationType;
   constructionSystem: ConstructionSystem;
+  /** Revestimentos globais do LSF: uma escolha vale para todos os telhados. */
+  steelFrameSoffitAssemblyId?: string;
+  steelFrameFasciaAssemblyId?: string;
   hydraulics: HydraulicSystem;
   /** Snapshot comercial por alvo aplicado; preço histórico não muda com o catálogo. */
   commercialSelections?: Record<string, CommercialSelection>;

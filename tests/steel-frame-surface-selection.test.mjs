@@ -92,3 +92,14 @@ test('pendências de cobertura são nomeadas e clique na telha orienta para a fa
   assert.match(app, /Gire a construção e clique diretamente na face vertical indicada/);
   assert.match(html, /\.sf-attention-notice/);
 });
+
+test('beiral e tabeira são configurados globalmente sem selecionar telhado por telhado', () => {
+  assert.match(app, /Acabamentos globais da cobertura/);
+  assert.match(app, /Forro de todos os beirais/);
+  assert.match(app, /Todas as tabeiras/);
+  assert.match(app, /Aplicar em toda a construção/);
+  assert.match(app, /setSteelFrameGlobalRoofFinishes/);
+  assert.match(app, /fasciaSystems/);
+  assert.doesNotMatch(app, /<h4>Beiral<\/h4>/);
+  assert.doesNotMatch(app, /<h4>Tabeira<\/h4>/);
+});

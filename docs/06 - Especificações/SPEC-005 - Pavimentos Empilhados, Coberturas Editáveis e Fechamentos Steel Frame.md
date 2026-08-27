@@ -6,6 +6,8 @@
 
 **Escopo:** três evoluções do editor de geometria, desenvolvidas em sequência na mesma branch e documentadas juntas por formarem uma cadeia única de causa e efeito — empilhar cômodos exige compor coberturas automaticamente; compor coberturas automaticamente exige presets editáveis e um telhado escalonado de verdade; e ter um telhado escalonado com faces novas (paredes de extensão, oitões, beiral, tabeira) é o que torna necessário um fluxo de fechamento técnico completo para Light Steel Frame.
 
+**Revisão de 27/08/2026:** o forro do beiral e a tabeira são acabamentos globais da construção. O usuário escolhe cada um uma única vez, sem selecionar telhados individualmente. A tabeira admite placa cimentícia ou madeira; a escolha global é persistida no projeto e aplicada ao conjunto das coberturas.
+
 Este documento formaliza retroativamente o que já foi implementado e testado, conforme ADR-003 (Documentação como Fonte da Verdade) — a documentação não antecedeu o código nesta branch, mas a divergência foi resolvida antes da mesclagem a `main`.
 
 ## 1. Visão

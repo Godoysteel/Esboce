@@ -9,7 +9,7 @@ import {
   steelFrameSpecificationIssues,
 } from '../src/core/SteelFrameAssemblies.ts';
 
-test('catálogo inicial cobre fechamentos externos, drywall e beiral', () => {
+test('catálogo inicial cobre fechamentos externos, drywall, beiral e tabeira de madeira', () => {
   const ids = STEEL_FRAME_FACE_ASSEMBLIES.map((item) => item.id);
   assert.deepEqual(ids.slice(0, 6), [
     'eifs', 'cement-board-direct', 'cement-board-osb', 'glasroc-x-direct',
@@ -17,6 +17,33 @@ test('catálogo inicial cobre fechamentos externos, drywall e beiral', () => {
   ]);
   assert.ok(ids.includes('drywall-st'));
   assert.ok(ids.includes('soffit-cement-board'));
+  assert.ok(ids.includes('fascia-cement-board'));
+  assert.ok(ids.includes('fascia-wood'));
+});
+
+test('beiral e tabeira são escolhas globais únicas, não uma pendência por telhado', () => {
+  const project = createProject('light_steel_frame');
+  project.floors[0].roofs.push(
+    { id: 'roof-a', x1: 0, y1: 0, x2: 100, y2: 100, type: 'quatroAguas', pitchDeg: 28, ridgeAxis: 'x' },
+    { id: 'roof-b', x1: 100, y1: 0, x2: 200, y2: 100, type: 'quatroAguas', pitchDeg: 28, ridgeAxis: 'x' },
+  );
+  let issues = steelFrameSpecificationIssues(project);
+  assert.equal(issues.filter((issue) => issue.kind === 'soffit').length, 1);
+  assert.equal(issues.filter((issue) => issue.kind === 'fascia').length, 1);
+  assert.equal(issues.find((issue) => issue.kind === 'soffit').entityId, '__project__');
+  project.steelFrameSoffitAssemblyId = 'soffit-vinyl';
+  project.steelFrameFasciaAssemblyId = 'fascia-wood';
+  issues = steelFrameSpecificationIssues(project);
+  assert.equal(issues.filter((issue) => issue.kind === 'soffit' || issue.kind === 'fascia').length, 0);
+});
+
+test('acabamentos globais de beiral e tabeira sobrevivem ao salvamento', () => {
+  const project = createProject('light_steel_frame');
+  project.steelFrameSoffitAssemblyId = 'soffit-cement-board';
+  project.steelFrameFasciaAssemblyId = 'fascia-wood';
+  const restored = decodeProjectDocument(encodeProjectDocument(project)).project;
+  assert.equal(restored.steelFrameSoffitAssemblyId, 'soffit-cement-board');
+  assert.equal(restored.steelFrameFasciaAssemblyId, 'fascia-wood');
 });
 
 test('fixadores de revestimento são unidades e arredondam para cima após a perda', () => {

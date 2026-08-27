@@ -1,5 +1,9 @@
 # Changelog
 
+## Alterado — 27/08/2026
+
+- No configurador de Light Steel Frame, o revestimento do forro do beiral e o material da tabeira passam a ser escolhas globais: uma seleção é aplicada a toda a construção, sem clicar em cada telhado. A tabeira agora oferece opções próprias de placa cimentícia e madeira. Projetos antigos reaproveitam automaticamente a primeira configuração de cobertura já salva.
+
 ## Em desenvolvimento — catálogo comercial unificado
 
 - Formalizado o catálogo único para o usuário, mantendo aparência PBR,

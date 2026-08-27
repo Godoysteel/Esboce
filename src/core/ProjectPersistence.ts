@@ -54,7 +54,10 @@ import type {
 // o campo, todo forro usa o tipo padrão ST.
 // v18: adiciona `Project.commercialSelections`, snapshots das ofertas
 // escolhidas por alvo aplicado. Projetos anteriores seguem sem escolhas.
-export const CURRENT_PROJECT_SCHEMA_VERSION = 18;
+// v19: beiral e tabeira do Steel Frame passam a ser escolhas globais do
+// projeto. Ao abrir documento antigo, reaproveita a primeira escolha por
+// telhado encontrada para não obrigar o usuário a configurar tudo de novo.
+export const CURRENT_PROJECT_SCHEMA_VERSION = 19;
 
 export interface StoredProjectDocument {
   schemaVersion: number;
@@ -630,6 +633,13 @@ function normalizeProject(value: unknown): Project {
     ),
     hydraulics: { nodes: [], segments: [] },
   };
+  const legacyRoofs = floors.flatMap((floor) => floor.roofs || []);
+  const steelFrameSoffitAssemblyId = optionalString(source.steelFrameSoffitAssemblyId, 'project.steelFrameSoffitAssemblyId')
+    ?? legacyRoofs.find((roof) => roof.soffitAssemblyId)?.soffitAssemblyId;
+  const steelFrameFasciaAssemblyId = optionalString(source.steelFrameFasciaAssemblyId, 'project.steelFrameFasciaAssemblyId')
+    ?? legacyRoofs.find((roof) => roof.fasciaAssemblyId)?.fasciaAssemblyId;
+  if (steelFrameSoffitAssemblyId) project.steelFrameSoffitAssemblyId = steelFrameSoffitAssemblyId;
+  if (steelFrameFasciaAssemblyId) project.steelFrameFasciaAssemblyId = steelFrameFasciaAssemblyId;
   if (source.hydraulics != null) {
     const hydraulics = record(source.hydraulics, 'project.hydraulics');
     project.hydraulics = {

@@ -242,6 +242,13 @@ function applyBody(w: Wall, x1: number, y1: number, x2: number, y2: number): voi
 }
 
 export const commands = {
+  setSteelFrameGlobalRoofFinishes(values: { soffitAssemblyId?: string; fasciaAssemblyId?: string }): void {
+    pushUndoSnapshot();
+    if (values.soffitAssemblyId) project.steelFrameSoffitAssemblyId = values.soffitAssemblyId;
+    if (values.fasciaAssemblyId) project.steelFrameFasciaAssemblyId = values.fasciaAssemblyId;
+    emit({ type: 'SteelFrameGlobalRoofFinishesSet' });
+  },
+
   setSteelFrameWallSpecification(
     wallId: string,
     values: { faceAAssemblyId: string | undefined; faceBAssemblyId: string | undefined; cavityAssembly: Wall['cavityAssembly'] | undefined },
