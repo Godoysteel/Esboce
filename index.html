@@ -1426,14 +1426,17 @@
     <label hidden><input type="checkbox" id="varandaToggle" checked> Varanda (projetos antigos)</label>
   </div>
   <!-- Coluna de categorias do botão "Quantitativo" — Geral abre o
-       painel completo de sempre (CSV/planilha/totais); Forro/Hidráulica/
-       Pintura abrem cada um um PDF isolado de visualizar/baixar (ver
-       MaterialsPanel.exportCategoryPdf). Elétrica ainda não existe no
-       app (nenhuma ferramenta elétrica) — fica "em breve", mesmo padrão
-       de outros recursos não prontos. -->
+       painel completo de sempre (CSV/planilha/totais); Steel Frame/Forro/
+       Hidráulica/Pintura abrem cada um um PDF isolado de visualizar/
+       baixar (Steel Frame em tabela com bordas — ver
+       MaterialsPanel.exportSteelFramePdf; os demais em lista compacta —
+       ver exportCategoryPdf). Elétrica ainda não existe no app (nenhuma
+       ferramenta elétrica) — fica "em breve", mesmo padrão de outros
+       recursos não prontos. -->
   <div id="materialsCategoryMenu" class="ctx-menu">
     <div class="ctx-menu-title">Quantitativo</div>
     <button class="ctx-menu-btn" data-materials-category="geral">Geral</button>
+    <button class="ctx-menu-btn" data-materials-category="steel-frame">Steel Frame</button>
     <button class="ctx-menu-btn" data-materials-category="forro">Forro</button>
     <button class="ctx-menu-btn" data-materials-category="hidraulica">Hidráulica</button>
     <button class="ctx-menu-btn ts-disabled" data-disabled-label="Elétrica" title="Elétrica — em breve">Elétrica <span class="ts-badge-soon">em breve</span></button>

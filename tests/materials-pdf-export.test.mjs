@@ -106,24 +106,57 @@ test('não adiciona biblioteca de geração de PDF nova — usa window.print() n
 // completo de sempre; Forro/Hidráulica/Pintura abrem cada um um PDF
 // isolado; Elétrica fica desativada "em breve" (nenhum dado elétrico
 // existe no app ainda).
-test('index.html tem o popover de categorias com Geral/Forro/Hidráulica/Pintura clicáveis e Elétrica desativada', () => {
+test('index.html tem o popover de categorias com Geral/Steel Frame/Forro/Hidráulica/Pintura clicáveis e Elétrica desativada', () => {
   assert.match(indexHtmlSource, /id="materialsCategoryMenu"/);
   assert.match(indexHtmlSource, /data-materials-category="geral"/);
+  assert.match(indexHtmlSource, /data-materials-category="steel-frame"/);
   assert.match(indexHtmlSource, /data-materials-category="forro"/);
   assert.match(indexHtmlSource, /data-materials-category="hidraulica"/);
   assert.match(indexHtmlSource, /data-materials-category="pintura"/);
   assert.match(indexHtmlSource, /data-disabled-label="Elétrica"/);
 });
 
-test('init() liga o popover de categorias: Geral abre o painel, Forro/Hidráulica/Pintura chamam exportCategoryPdf com a categoria certa', () => {
+test('init() liga o popover de categorias: Geral abre o painel, Steel Frame/Forro/Hidráulica/Pintura chamam a exportação certa', () => {
   const start = materialsSource.indexOf("categoryMenuEl.addEventListener('click', function (e: any) {");
   assert.notEqual(start, -1);
   const end = materialsSource.indexOf('\n    });', start);
   const body = materialsSource.slice(start, end);
   assert.match(body, /panelEl!\.classList\.add\('visible'\);/);
+  assert.match(body, /exportSteelFramePdf\(\);/);
   assert.match(body, /exportCategoryPdf\('Forro', 'Orçamento — Forro de Drywall'\);/);
   assert.match(body, /exportCategoryPdf\('Instalações hidrossanitárias', 'Orçamento — Hidráulica'\);/);
   assert.match(body, /exportCategoryPdf\('Pintura', 'Orçamento — Pintura'\);/);
+});
+
+// Formato pedido pelo Product Owner (referência: calculadora Trevo
+// Drywall) — tabela com bordas (Produto/Quantidade/Preço/Valor total),
+// só pro Steel Frame; os outros PDFs de categoria continuam na lista
+// compacta de sempre (pdfSections).
+test('exportSteelFramePdf() valida sistema construtivo, especificação completa e quantitativo não vazio antes de gerar a tabela', () => {
+  const start = materialsSource.indexOf('function exportSteelFramePdf(): void {');
+  const end = materialsSource.indexOf('\n}', start);
+  const body = materialsSource.slice(start, end);
+  assert.match(body, /project\.constructionSystem !== 'light_steel_frame'/);
+  assert.match(body, /steelFrameSpecificationIssues\(project\)\.length/);
+  assert.match(body, /steelFrameQuantities\(project\)/);
+  assert.match(body, /exportPdfRows\(rows, 'Orçamento — Steel Frame', \{/);
+  assert.match(body, /table: true/);
+});
+
+test('pdfTableHtml gera uma tabela com bordas e as colunas Produto/Quantidade/Preço/Valor total', () => {
+  const start = materialsSource.indexOf('function pdfTableHtml(');
+  const end = materialsSource.indexOf('\n}', start);
+  const body = materialsSource.slice(start, end);
+  assert.match(body, /<th>Produto<\/th><th>Quantidade<\/th><th>Preço<\/th><th>Valor total<\/th>/);
+  assert.match(body, /r\[0\] !== 'TOTAL'/);
+});
+
+test('exportPdfRows aceita options.table (troca pdfSections por pdfTableHtml) e options.subtitle', () => {
+  const start = materialsSource.indexOf('function exportPdfRows(');
+  const end = materialsSource.indexOf('\n}', start);
+  const body = materialsSource.slice(start, end);
+  assert.match(body, /options\?\.table \? pdfTableHtml\(rows\) : pdfSections\(rows\)/);
+  assert.match(body, /options\?\.subtitle \? '<p class="pdf-subtitle">'/);
 });
 
 test('init() conecta o botão novo à exportPdf, sem mexer nos outros dois (planilha e CSV) já existentes', () => {

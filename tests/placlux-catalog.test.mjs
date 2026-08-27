@@ -37,6 +37,10 @@ test('produtos sem ficha individual permanecem sem dimensões inventadas', () =>
   assert.equal(getPlacluxProduct('placlux.total-wall').coverageM2, undefined);
 });
 
+test('fita fiberglass publica o comprimento do rolo (lengthM), base pra conversão em quantidade comercial', () => {
+  assert.equal(getPlacluxProduct('placlux.fita-fiberglass-10cm-50m').lengthM, 50);
+});
+
 test('composição cimentícia usa PB direto no perfil e PA sobre OSB', () => {
   const direct = STEEL_FRAME_FACE_ASSEMBLIES.find((item) => item.id === 'cement-board-direct');
   const withOsb = STEEL_FRAME_FACE_ASSEMBLIES.find((item) => item.id === 'cement-board-osb');

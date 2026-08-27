@@ -962,7 +962,31 @@ function productLine(productId: string, areaM2: number): string {
   return '<div class="materials-line"><span>' + name + '</span><span>' + fmtM2(areaM2) + extra + '</span></div>';
 }
 
-interface SteelFrameQuantityLine { id: string; label: string; quantity: number; unit: 'm²' | 'm' | 'kg' | 'un'; }
+interface SteelFrameQuantityLine { id: string; label: string; quantity: number; unit: string; whole?: boolean; }
+
+// Converte quantidade técnica (m²/m/kg) em quantidade comercial (placas,
+// rolos, sacos) quando o catálogo PlacLux já publica o rendimento oficial
+// do produto (coverageM2/weightKg/lengthM) — nunca inventa embalagem pra
+// item sem essa ficha (ver PlacluxCatalog.ts, "sem preços ou SKUs
+// comerciais inventados"); nesse caso a linha permanece em m²/m/kg, como
+// hoje. Ver ADR-006 §9 — distinção entre quantitativo técnico e comercial.
+function steelFrameCommercialUnit(productId: string, technicalUnit: string, rawQuantity: number): { quantity: number; unit: string } | null {
+  const product = getPlacluxProduct(productId);
+  if (!product) return null;
+  if (technicalUnit === 'm²' && product.coverageM2) {
+    const noun = product.category === 'board' ? 'placa' : 'rolo';
+    const count = Math.ceil(rawQuantity / product.coverageM2);
+    return { quantity: count, unit: noun + (count === 1 ? '' : 's') + (product.dimensions ? ' (' + product.dimensions + ')' : '') };
+  }
+  if (technicalUnit === 'kg' && product.weightKg) {
+    return { quantity: Math.ceil(rawQuantity / product.weightKg), unit: 'sc(' + product.weightKg + 'kg)' };
+  }
+  if (technicalUnit === 'm' && product.lengthM) {
+    const count = Math.ceil(rawQuantity / product.lengthM);
+    return { quantity: count, unit: 'rolo' + (count === 1 ? '' : 's') + ' (' + product.lengthM + 'm)' };
+  }
+  return null;
+}
 // Parâmetro preliminar de orçamento definido pelo Product Owner em
 // 27/08/2026. Não representa dimensionamento estrutural; a origem e o
 // caráter estimativo permanecem visíveis na linha do quantitativo.
@@ -987,10 +1011,14 @@ function steelFrameQuantities(project: Project): SteelFrameQuantityLine[] {
         .reduce((sum, opening) => sum + opening.width * opening.height, 0);
       const faceArea = Math.max(0, Core.wallLengthMeters(wall) * wallHeight - openingsArea);
       structuralArea += faceArea;
-      lowerGuideLengthM += Core.wallLengthMeters(wall);
+      const wallLengthM = Core.wallLengthMeters(wall);
+      lowerGuideLengthM += wallLengthM;
       [wall.faceAAssemblyId, wall.faceBAssemblyId].forEach((assemblyId) => {
         const assembly = STEEL_FRAME_FACE_ASSEMBLIES.find((item) => item.id === assemblyId);
-        assembly?.layers.forEach((layer) => add(layer.id, layer.label, quantityWithWaste(faceArea, layer), layer.unit === 'unit' ? 'un' : layer.unit === 'm2' ? 'm²' : layer.unit));
+        assembly?.layers.forEach((layer) => {
+          const basisValue = layer.basis === 'length' ? wallLengthM : faceArea;
+          add(layer.id, layer.label, quantityWithWaste(basisValue, layer), layer.unit === 'unit' ? 'un' : layer.unit === 'm2' ? 'm²' : layer.unit);
+        });
       });
       const insulationId = wall.cavityAssembly?.insulationSystemId;
       if (insulationId && insulationId !== 'none') {
@@ -1009,7 +1037,11 @@ function steelFrameQuantities(project: Project): SteelFrameQuantityLine[] {
       const extensionFaceAreaM2 = 2 * (widthM + depthM) * rectangularHeightM + slopedClosuresM2;
       [roof.steppedWallFaceAAssemblyId, roof.steppedWallFaceBAssemblyId].forEach((assemblyId) => {
         const assembly = STEEL_FRAME_FACE_ASSEMBLIES.find((item) => item.id === assemblyId);
-        assembly?.layers.forEach((layer) => add(layer.id, layer.label, quantityWithWaste(extensionFaceAreaM2, layer), layer.unit === 'unit' ? 'un' : layer.unit === 'm2' ? 'm²' : layer.unit));
+        // Camadas com basis 'length' (ex.: pingadeira de base) correm no
+        // rodapé externo da construção, no nível do térreo — uma extensão
+        // de parede sobre um telhado inferior não fica no térreo, então
+        // não entra nesse cálculo.
+        assembly?.layers.filter((layer) => layer.basis !== 'length').forEach((layer) => add(layer.id, layer.label, quantityWithWaste(extensionFaceAreaM2, layer), layer.unit === 'unit' ? 'un' : layer.unit === 'm2' ? 'm²' : layer.unit));
       });
     });
   });
@@ -1019,7 +1051,11 @@ function steelFrameQuantities(project: Project): SteelFrameQuantityLine[] {
   if (lowerGuideLengthM > 0) {
     add('steel-frame-sill-asphalt-membrane', 'Manta asfáltica sob a guia inferior (+ 10% de perda)', Math.round(lowerGuideLengthM * 1.1 * 100) / 100, 'm');
   }
-  return Array.from(totals.values()).map((line) => ({ ...line, quantity: line.unit === 'un' ? Math.ceil(line.quantity) : Math.round(line.quantity * 100) / 100 }));
+  return Array.from(totals.values()).map((line) => {
+    const commercial = line.unit !== 'un' ? steelFrameCommercialUnit(line.id, line.unit, line.quantity) : null;
+    if (commercial) return { id: line.id, label: line.label, quantity: commercial.quantity, unit: commercial.unit, whole: true };
+    return { ...line, quantity: line.unit === 'un' ? Math.ceil(line.quantity) : Math.round(line.quantity * 100) / 100, whole: line.unit === 'un' };
+  });
 }
 
 function groupSection(title: string, map: Record<string, number>): string {
@@ -1054,7 +1090,7 @@ export function render(): void {
       const sfLines = steelFrameQuantities(Store.getProject());
       if (sfLines.length) {
         html += '<div class="object-panel-section-label">Steel Frame — estrutura, fechamentos e fixadores</div>';
-        sfLines.forEach((line) => { html += '<div class="materials-line"><span>' + line.label + '</span><span>' + line.quantity.toFixed(line.unit === 'un' ? 0 : 2).replace('.', ',') + ' ' + line.unit + '</span></div>'; });
+        sfLines.forEach((line) => { html += '<div class="materials-line"><span>' + line.label + '</span><span>' + line.quantity.toFixed(line.whole ? 0 : 2).replace('.', ',') + ' ' + line.unit + '</span></div>'; });
       }
     }
   }
@@ -1998,7 +2034,12 @@ const PDF_STYLE = '' +
   '.pdf-header{display:flex; justify-content:space-between; align-items:flex-end; border-bottom:2px solid #534AB7; padding-bottom:10px; margin-bottom:4px;}' +
   '.pdf-header h1{font-size:22px; margin:0; color:#534AB7;}' +
   '.pdf-header .date{font-size:12px; color:#5F5E5A;}' +
+  '.pdf-subtitle{font-size:12px; color:#5F5E5A; margin:6px 0 0;}' +
   '.pdf-disclaimer{font-size:10.5px; color:#5F5E5A; background:#F4F1EA; border-radius:6px; padding:8px 10px; margin:12px 0 18px; line-height:1.4;}' +
+  '.pdf-table{width:100%; border-collapse:collapse; font-size:12.5px; margin-top:6px;}' +
+  '.pdf-table th{background:#F4F1EA; text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.02em; color:#534AB7; padding:8px 10px; border:1px solid #D3D1C7;}' +
+  '.pdf-table td{padding:8px 10px; border:1px solid #D3D1C7; vertical-align:top;}' +
+  '.pdf-table td.num{text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap;}' +
   '.pdf-section{margin-bottom:14px; break-inside:avoid;}' +
   '.pdf-section h2{font-size:13px; text-transform:uppercase; letter-spacing:.03em; color:#534AB7; border-bottom:1px solid #D3D1C7; padding-bottom:4px; margin:0 0 6px;}' +
   '.pdf-row{display:flex; justify-content:space-between; gap:12px; padding:4px 0; font-size:13px; border-bottom:1px solid #F0EEE7;}' +
@@ -2036,11 +2077,29 @@ function escapeCell(s: unknown): string {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+// Tabela com bordas (Produto/Quantidade/Preço/Valor total) — formato
+// pedido pelo Product Owner, no mesmo padrão visual das calculadoras de
+// fabricante (ex.: Trevo Drywall). Preço/Valor total aparecem como '—'
+// quando ainda não há preço resolvido pra aquele item (nenhum número
+// inventado, mesmo princípio do resto do orçamento — ver DOM-002).
+function pdfTableHtml(rows: (string | number)[][]): string {
+  const body = rows.filter((r) => r[0] !== 'TOTAL').map((r) => {
+    const item = r[1], qty = r[2] + ' ' + r[3];
+    const price = r[4] != null && r[4] !== '' ? r[4] : '—';
+    const cost = r[5] != null && r[5] !== '' ? r[5] : '—';
+    return '<tr><td>' + escapeCell(item) + '</td><td>' + escapeCell(qty) + '</td><td class="num">' + escapeCell(price) + '</td><td class="num">' + escapeCell(cost) + '</td></tr>';
+  }).join('');
+  return '<table class="pdf-table"><thead><tr><th>Produto</th><th>Quantidade</th><th>Preço</th><th>Valor total</th></tr></thead><tbody>' + body + '</tbody></table>';
+}
+
 // Genérico o bastante pra servir tanto o PDF do orçamento completo
 // (exportPdf, título fixo "Orçamento Estimado") quanto um PDF ISOLADO
-// de uma categoria só (exportCategoryPdf — Forro/Hidráulica/Pintura),
-// que passa uma fatia filtrada de buildRows() com o mesmo formato.
-function exportPdfRows(rows: (string | number)[][], title: string): void {
+// de uma categoria só (exportCategoryPdf — Forro/Hidráulica/Pintura/Steel
+// Frame), que passa uma fatia filtrada de buildRows() com o mesmo
+// formato. `options.table` troca a lista compacta (pdfSections) por uma
+// tabela com bordas (pdfTableHtml); `options.subtitle` some abaixo do
+// título quando informado.
+function exportPdfRows(rows: (string | number)[][], title: string, options?: { table?: boolean; subtitle?: string }): void {
   const totalRow = rows.length && rows[rows.length - 1]![0] === 'TOTAL' ? rows[rows.length - 1]! : null;
   const win = window.open('', 'esboce-orcamento-pdf');
   if (!win) return; // pop-up bloqueado pelo navegador
@@ -2050,8 +2109,9 @@ function exportPdfRows(rows: (string | number)[][], title: string): void {
   win.document.body.innerHTML =
     '<div class="pdf-noprint"><button onclick="window.print()">Imprimir / Salvar como PDF</button></div>' +
     '<div class="pdf-header"><h1>' + escapeCell(title) + '</h1><span class="date">' + today + '</span></div>' +
+    (options?.subtitle ? '<p class="pdf-subtitle">' + escapeCell(options.subtitle) + '</p>' : '') +
     '<div class="pdf-disclaimer">' + PDF_DISCLAIMER + '</div>' +
-    pdfSections(rows) +
+    (options?.table ? pdfTableHtml(rows) : pdfSections(rows)) +
     (totalRow ? '<div class="pdf-total"><span class="label">Total estimado</span><span class="value">' + totalRow[5] + '</span></div>' : '') +
     '<div class="pdf-footer">Orçamento gerado por esboce.com.br</div>';
   win.focus();
@@ -2084,6 +2144,36 @@ function exportCategoryPdf(categoryLabel: string, title: string): void {
   const subtotal = filtered.reduce(function (sum, r) { return sum + parseBRL(r[5]!); }, 0);
   if (subtotal > 0) filtered.push(['TOTAL', 'Custo estimado (soma dos itens com preço)', '', '', '', fmtBRL(subtotal)]);
   exportPdfRows(filtered, title);
+}
+
+// Orçamento de Steel Frame em tabela com bordas (Produto/Quantidade/
+// Preço/Valor total) — mesmo formato pedido pelo Product Owner, visto em
+// calculadoras de fabricante (Trevo Drywall). Usa steelFrameQuantities()
+// diretamente (já em unidade comercial — placa(s), rolo(s), sc(kg) — ver
+// steelFrameCommercialUnit), não buildRows(), porque ainda não há preço
+// resolvido pra fechamentos/estrutura Steel Frame (Preço e Valor total
+// aparecem como '—', nunca um número inventado).
+function exportSteelFramePdf(): void {
+  const project = Store.getProject();
+  if (project.constructionSystem !== 'light_steel_frame') {
+    window.alert('O projeto atual não usa Steel Frame — não há quantitativo pra exportar nesse formato.');
+    return;
+  }
+  if (steelFrameSpecificationIssues(project).length) {
+    window.alert('Conclua a especificação dos fechamentos Steel Frame antes de gerar o orçamento.');
+    return;
+  }
+  const lines = steelFrameQuantities(project);
+  if (!lines.length) {
+    window.alert('Nada gerado ainda no quantitativo de Steel Frame.');
+    return;
+  }
+  const rows: (string | number)[][] = lines.map((line) => ['Steel Frame', line.label, line.quantity, line.unit, '—', '—']);
+  rows.push(['TOTAL', 'Total estimado', '', '', '', '—']);
+  exportPdfRows(rows, 'Orçamento — Steel Frame', {
+    table: true,
+    subtitle: 'Quantitativo estimado — fechamentos, isolamento e estrutura (parâmetro preliminar de peso)',
+  });
 }
 
 function exportSupplierPdf(supplierId: string): void {
@@ -2143,6 +2233,8 @@ export function init(): void {
         }
         panelEl!.classList.add('visible');
         render();
+      } else if (category === 'steel-frame') {
+        exportSteelFramePdf();
       } else if (category === 'forro') {
         exportCategoryPdf('Forro', 'Orçamento — Forro de Drywall');
       } else if (category === 'hidraulica') {

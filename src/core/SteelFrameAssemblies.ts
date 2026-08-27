@@ -7,12 +7,18 @@ export interface AssemblyLayerDefinition {
   id: string;
   label: string;
   role: 'finish' | 'basecoat' | 'mesh' | 'external_insulation' | 'external_board'
-    | 'water_barrier' | 'structural_sheathing' | 'internal_board' | 'joint_tape' | 'joint_compound';
+    | 'water_barrier' | 'structural_sheathing' | 'internal_board' | 'joint_tape' | 'joint_compound' | 'base_trim';
   unit: QuantityUnit;
-  /** Consumo antes da perda. Para fixadores, unidades por m². */
+  /**
+   * Consumo antes da perda. Para fixadores, unidades por m². Quando
+   * `basis === 'length'`, o consumo é por metro de comprimento da parede
+   * (não por m² de face) — caso da pingadeira de base, que corre uma vez
+   * no rodapé externo e não escala com o pé-direito.
+   */
   consumptionPerM2: number;
   wastePercent: number;
   fastener?: boolean;
+  basis?: 'length';
 }
 
 export interface WallFaceAssemblyDefinition {
@@ -30,6 +36,8 @@ const measured = (id: string, label: string, role: AssemblyLayerDefinition['role
   ({ id, label, role, unit, consumptionPerM2, wastePercent });
 const pieces = (id: string, label: string, role: AssemblyLayerDefinition['role'], piecesPerM2: number, wastePercent = 10): AssemblyLayerDefinition =>
   ({ id, label, role, unit: 'unit', consumptionPerM2: piecesPerM2, wastePercent });
+const baseFlashing = (id: string, label: string, piecesPerLengthM: number, wastePercent = 10): AssemblyLayerDefinition =>
+  ({ id, label, role: 'base_trim', unit: 'unit', consumptionPerM2: piecesPerLengthM, wastePercent, basis: 'length' });
 
 const profortJointTreatment: readonly AssemblyLayerDefinition[] = [
   measured('placlux.base-coat-20kg', 'Massa Base Coat ProFort System', 'basecoat', 'kg', 20 / 6, 5),
@@ -57,8 +65,8 @@ export const STEEL_FRAME_FACE_ASSEMBLIES: readonly WallFaceAssemblyDefinition[] 
   ] },
   { id: 'cement-board-direct', label: 'Placa cimentícia sem OSB', use: 'external', layers: [
     area('placlux.profort-next-12-5mm', 'ProFort Next 12,5 mm', 'external_board'),
-    area('placlux.membrana-hidrofuga-52-5m2', 'Membrana Hidrófuga ProFort', 'water_barrier'),
     ...profortJointTreatment,
+    baseFlashing('placlux.pingadeira-pvc-2-5m', 'Pingadeira de base', 1 / 2.5),
     fixers('placlux.parafuso-pb-032', 'Parafusos Rusper PB 032', 20),
   ] },
   { id: 'cement-board-osb', label: 'OSB + placa cimentícia', use: 'external', layers: [

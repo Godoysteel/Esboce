@@ -89,9 +89,44 @@ test('drywall inclui massa e fita telada para tratamento de juntas', () => {
 });
 
 test('quantitativo inclui manta asfáltica sob toda guia inferior com 10% de perda', () => {
-  assert.match(materialsSource, /lowerGuideLengthM \+= Core\.wallLengthMeters\(wall\)/);
+  assert.match(materialsSource, /lowerGuideLengthM \+= wallLengthM/);
   assert.match(materialsSource, /Manta asfáltica sob a guia inferior \(\+ 10% de perda\)/);
   assert.match(materialsSource, /lowerGuideLengthM \* 1\.1/);
+});
+
+test('placa cimentícia sem OSB inclui pingadeira de base e não repete a membrana da composição com OSB', () => {
+  const direct = STEEL_FRAME_FACE_ASSEMBLIES.find((item) => item.id === 'cement-board-direct');
+  const withOsb = STEEL_FRAME_FACE_ASSEMBLIES.find((item) => item.id === 'cement-board-osb');
+  const flashing = direct.layers.find((layer) => layer.id === 'placlux.pingadeira-pvc-2-5m');
+  assert.ok(flashing, 'pingadeira ausente em cement-board-direct');
+  assert.equal(flashing.basis, 'length');
+  assert.equal(flashing.unit, 'unit');
+  assert.ok(!direct.layers.some((layer) => layer.id === 'placlux.membrana-hidrofuga-52-5m2'), 'sistema sem OSB não deveria levar a membrana hidrófuga');
+  assert.ok(withOsb.layers.some((layer) => layer.id === 'placlux.membrana-hidrofuga-52-5m2'), 'sistema com OSB continua precisando da membrana hidrófuga');
+});
+
+test('camada com basis "length" usa o comprimento da parede, não a área da face, no quantitativo', () => {
+  assert.match(materialsSource, /layer\.basis === 'length' \? wallLengthM : faceArea/);
+});
+
+// ADR-006 §9 — quantitativo comercial (placas/rolos/sacos), não só
+// técnico (m²/m/kg) — só quando o catálogo PlacLux já publica o
+// rendimento oficial do produto (coverageM2/weightKg/lengthM); sem essa
+// ficha, a linha continua em m²/m/kg, sem embalagem inventada.
+test('steelFrameCommercialUnit converte m²→placa(s)/rolo(s), kg→sc(peso) e m→rolo(s) só quando o catálogo publica o rendimento', () => {
+  const start = materialsSource.indexOf('function steelFrameCommercialUnit(');
+  const end = materialsSource.indexOf('\n}', start);
+  const body = materialsSource.slice(start, end);
+  assert.match(body, /if \(!product\) return null;/);
+  assert.match(body, /product\.category === 'board' \? 'placa' : 'rolo'/);
+  assert.match(body, /Math\.ceil\(rawQuantity \/ product\.coverageM2\)/);
+  assert.match(body, /'sc\(' \+ product\.weightKg \+ 'kg\)'/);
+  assert.match(body, /Math\.ceil\(rawQuantity \/ product\.lengthM\)/);
+});
+
+test('quantitativo final aplica a conversão comercial e marca quantidades sem casa decimal (whole)', () => {
+  assert.match(materialsSource, /const commercial = line\.unit !== 'un' \? steelFrameCommercialUnit\(line\.id, line\.unit, line\.quantity\) : null;/);
+  assert.match(materialsSource, /if \(commercial\) return \{ id: line\.id, label: line\.label, quantity: commercial\.quantity, unit: commercial\.unit, whole: true \};/);
 });
 
 test('quantitativo de steel frame aponta faces e isolamento ainda não especificados', () => {

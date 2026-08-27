@@ -5,6 +5,9 @@
 - No configurador de Light Steel Frame, o revestimento do forro do beiral e o material da tabeira passam a ser escolhas globais: uma seleção é aplicada a toda a construção, sem clicar em cada telhado. A tabeira agora oferece opções próprias de placa cimentícia e madeira. Projetos antigos reaproveitam automaticamente a primeira configuração de cobertura já salva.
 - A estimativa preliminar da estrutura engenheirada de Light Steel Frame passa a usar o parâmetro de orçamento de 30 kg/m², mantendo 5% de perda calculados separadamente e o caráter preliminar explícito no quantitativo e no PDF.
 - As composições de Light Steel Frame passam a incluir os complementos antes ausentes: Base Coat, fita, tela Fiberglass e cantoneira PVC telada nas placas cimentícias; massa e fita telada nas chapas de drywall; e manta asfáltica sob a guia inferior. O quantitativo agora preserva as unidades corretas de cada insumo (kg, metro linear, m² e unidade).
+- A composição "Placa cimentícia sem OSB" passa a incluir Pingadeira de base (calculada pelo comprimento da parede, não pela área da face) e deixa de levar a Membrana Hidrófuga — item que permanece na composição com OSB, onde protege o painel de madeira.
+- O quantitativo de Steel Frame agora converte placas, rolos e sacos para a quantidade comercial (ex.: "62 placas (1200 x 2400 x 12,5 mm)", "29 sc(20kg)", "5 rolos (50m)") sempre que o catálogo PlacLux já publica o rendimento do produto, em vez de mostrar só m²/m/kg técnico.
+- Novo PDF isolado do quantitativo de Steel Frame (menu "Quantitativo" → "Steel Frame"), em formato de tabela com bordas (Produto/Quantidade/Preço/Valor total) — mesmo padrão visual de calculadoras de fabricante (ex.: Trevo Drywall).
 
 ## Em desenvolvimento — catálogo comercial unificado
 
