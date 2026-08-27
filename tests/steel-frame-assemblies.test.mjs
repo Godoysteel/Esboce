@@ -166,7 +166,7 @@ test('itens de Steel Frame com preço pesquisado (Espaço Smart) calculam custo 
   const buildRowsEnd = materialsSource.indexOf('});', buildRowsStart);
   const buildRowsBody = materialsSource.slice(buildRowsStart, buildRowsEnd);
   assert.match(buildRowsBody, /const priceKey = STEEL_FRAME_PRICE_KEY_BY_LAYER_ID\[line\.id\];/);
-  assert.match(buildRowsBody, /if \(priceKey\) pushMaterial\('Steel Frame', line\.label, line\.quantity, line\.unit, line\.quantity \* materialPrice\(priceKey\), priceKey\);/);
+  assert.match(buildRowsBody, /if \(priceKey\) pushMaterial\('Steel Frame', line\.label, line\.quantity, line\.unit, \(line\.technicalQuantity \?\? line\.quantity\) \* materialPrice\(priceKey\), priceKey\);/);
   assert.match(buildRowsBody, /else push\('Steel Frame', line\.label, line\.quantity, line\.unit, null\);/);
 });
 
@@ -207,20 +207,25 @@ test('membrana hidrófuga nunca desconta aberturas (sempre face total) e ganha 0
 // técnico (m²/m/kg) — só quando o catálogo PlacLux já publica o
 // rendimento oficial do produto (coverageM2/weightKg/lengthM); sem essa
 // ficha, a linha continua em m²/m/kg, sem embalagem inventada.
-test('steelFrameCommercialUnit converte m²→placa(s)/rolo(s), kg→sc(peso) e m→rolo(s) só quando o catálogo publica o rendimento', () => {
+test('steelFrameCommercialUnit converte quantidades técnicas em unidades reais de compra', () => {
   const start = materialsSource.indexOf('function steelFrameCommercialUnit(');
   const end = materialsSource.indexOf('\n}', start);
   const body = materialsSource.slice(start, end);
-  assert.match(body, /if \(!product\) return null;/);
+  assert.match(materialsSource, /'drywall-st': \{ size: 2\.16, unit: 'placas \(1,20 x 1,80 m\)'/);
+  assert.match(materialsSource, /'placlux\.massa-drywall': \{ size: 25, unit: 'baldes \(25 kg\)'/);
+  assert.match(materialsSource, /'glasroc-basecoat': \{ size: 20, unit: 'sacos \(20 kg\)'/);
+  assert.match(materialsSource, /'glasroc-x': \{ size: 2\.88, unit: 'placas \(1,20 x 2,40 m\)'/);
+  assert.match(materialsSource, /'placlux\.pingadeira-pvc-2-5m': \{ size: 1, unit: 'barras \(2,5 m\)'/);
   assert.match(body, /product\.category === 'board' \? 'placa' : 'rolo'/);
   assert.match(body, /Math\.ceil\(rawQuantity \/ product\.coverageM2\)/);
-  assert.match(body, /'sc\(' \+ product\.weightKg \+ 'kg\)'/);
+  assert.match(body, /product\.unit === 'bucket' \? 'balde' : 'saco'/);
   assert.match(body, /Math\.ceil\(rawQuantity \/ product\.lengthM\)/);
 });
 
 test('quantitativo final aplica a conversão comercial e marca quantidades sem casa decimal (whole)', () => {
-  assert.match(materialsSource, /const commercial = line\.unit !== 'un' \? steelFrameCommercialUnit\(line\.id, line\.unit, line\.quantity\) : null;/);
-  assert.match(materialsSource, /if \(commercial\) return \{ id: line\.id, label: line\.label, quantity: commercial\.quantity, unit: commercial\.unit, whole: true \};/);
+  assert.match(materialsSource, /const commercial = steelFrameCommercialUnit\(line\.id, line\.unit, technicalQuantity\);/);
+  assert.match(materialsSource, /unit: 'unidades'/);
+  assert.match(materialsSource, /technicalQuantity/);
 });
 
 test('quantitativo de steel frame aponta faces e isolamento ainda não especificados', () => {

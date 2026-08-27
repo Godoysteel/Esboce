@@ -66,7 +66,7 @@ function pendingGuide(issues: SteelFrameSpecificationIssue[]): string {
   return `<div class="sf-stage"><span>ETAPA ATUAL</span><strong>${stage} · ${floorLabel(activeFloor)}</strong></div>
     <div class="sf-next-step"><small>PRÓXIMO PASSO</small><strong>${issueLabel(issues[0]!)}</strong><span>Clique nessa face na construção e escolha o sistema.</span></div>
     <div class="sf-pending-list"><h4>Ainda falta configurar</h4>${visible.map((issue) => `<div><span>○</span>${issueLabel(issue)}</div>`).join('')}${issues.length > visible.length ? `<small>e mais ${issues.length - visible.length} itens…</small>` : ''}</div>
-    <div class="sf-color-legend"><i></i><span>Cada cor identifica um sistema escolhido. Marcos de portas/janelas e o topo das paredes não entram na seleção.</span></div>
+    <div class="sf-color-legend"><i></i><span>Cada cor identifica um sistema escolhido. A faixa turquesa no topo identifica uma parede com isolamento térmico/acústico aplicado. Marcos de portas/janelas e o topo das paredes não entram na seleção.</span></div>
     ${wallStage(issues) ? '<div class="sf-future-stage"><strong>Depois das paredes</strong><span>Escolha do sistema da laje (em implantação) e liberação do próximo pavimento.</span></div>' : ''}`;
 }
 

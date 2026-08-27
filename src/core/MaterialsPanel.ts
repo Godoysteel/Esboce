@@ -962,7 +962,29 @@ function productLine(productId: string, areaM2: number): string {
   return '<div class="materials-line"><span>' + name + '</span><span>' + fmtM2(areaM2) + extra + '</span></div>';
 }
 
-interface SteelFrameQuantityLine { id: string; label: string; quantity: number; unit: string; whole?: boolean; }
+interface SteelFrameQuantityLine {
+  id: string;
+  label: string;
+  quantity: number;
+  unit: string;
+  whole?: boolean;
+  /** Quantidade de cálculo preservada para preços cadastrados por m²/m/kg. */
+  technicalQuantity?: number;
+}
+
+const STEEL_FRAME_PURCHASE_PACKAGING: Partial<Record<string, { size: number; unit: string; technicalUnit: string }>> = {
+  // Chapa comercial usada pelo catálogo/preço de referência do projeto.
+  'drywall-st': { size: 2.16, unit: 'placas (1,20 x 1,80 m)', technicalUnit: 'm²' },
+  'drywall-ru': { size: 2.16, unit: 'placas (1,20 x 1,80 m)', technicalUnit: 'm²' },
+  'drywall-rf': { size: 2.16, unit: 'placas (1,20 x 1,80 m)', technicalUnit: 'm²' },
+  'glasroc-x': { size: 2.88, unit: 'placas (1,20 x 2,40 m)', technicalUnit: 'm²' },
+  // O catálogo oficial PlacLux informa embalagens de 25 kg e 6 kg;
+  // o quantitativo adota o balde comercial maior para reduzir sobras.
+  'placlux.massa-drywall': { size: 25, unit: 'baldes (25 kg)', technicalUnit: 'kg' },
+  'glasroc-basecoat': { size: 20, unit: 'sacos (20 kg)', technicalUnit: 'kg' },
+  'glasroc-therm-basecoat': { size: 20, unit: 'sacos (20 kg)', technicalUnit: 'kg' },
+  'placlux.pingadeira-pvc-2-5m': { size: 1, unit: 'barras (2,5 m)', technicalUnit: 'un' },
+};
 
 // Converte quantidade técnica (m²/m/kg) em quantidade comercial (placas,
 // rolos, sacos) quando o catálogo PlacLux já publica o rendimento oficial
@@ -971,6 +993,10 @@ interface SteelFrameQuantityLine { id: string; label: string; quantity: number; 
 // comerciais inventados"); nesse caso a linha permanece em m²/m/kg, como
 // hoje. Ver ADR-006 §9 — distinção entre quantitativo técnico e comercial.
 function steelFrameCommercialUnit(productId: string, technicalUnit: string, rawQuantity: number): { quantity: number; unit: string } | null {
+  const packaging = STEEL_FRAME_PURCHASE_PACKAGING[productId];
+  if (packaging && packaging.technicalUnit === technicalUnit) {
+    return { quantity: Math.ceil(rawQuantity / packaging.size), unit: packaging.unit };
+  }
   const product = getPlacluxProduct(productId);
   if (!product) return null;
   if (technicalUnit === 'm²' && product.coverageM2) {
@@ -979,7 +1005,9 @@ function steelFrameCommercialUnit(productId: string, technicalUnit: string, rawQ
     return { quantity: count, unit: noun + (count === 1 ? '' : 's') + (product.dimensions ? ' (' + product.dimensions + ')' : '') };
   }
   if (technicalUnit === 'kg' && product.weightKg) {
-    return { quantity: Math.ceil(rawQuantity / product.weightKg), unit: 'sc(' + product.weightKg + 'kg)' };
+    const noun = product.unit === 'bucket' ? 'balde' : 'saco';
+    const count = Math.ceil(rawQuantity / product.weightKg);
+    return { quantity: count, unit: noun + (count === 1 ? '' : 's') + ' (' + product.weightKg + ' kg)' };
   }
   if (technicalUnit === 'm' && product.lengthM) {
     const count = Math.ceil(rawQuantity / product.lengthM);
@@ -1065,9 +1093,11 @@ function steelFrameQuantities(project: Project): SteelFrameQuantityLine[] {
     add('placlux.pingadeira-pvc-2-5m', 'Pingadeira de base (perímetro das paredes, + 10% de perda)', (lowerGuideLengthM * 1.1) / 2.5, 'un');
   }
   return Array.from(totals.values()).map((line) => {
-    const commercial = line.unit !== 'un' ? steelFrameCommercialUnit(line.id, line.unit, line.quantity) : null;
-    if (commercial) return { id: line.id, label: line.label, quantity: commercial.quantity, unit: commercial.unit, whole: true };
-    return { ...line, quantity: line.unit === 'un' ? Math.ceil(line.quantity) : Math.round(line.quantity * 100) / 100, whole: line.unit === 'un' };
+    const technicalQuantity = line.quantity;
+    const commercial = steelFrameCommercialUnit(line.id, line.unit, technicalQuantity);
+    if (commercial) return { id: line.id, label: line.label, quantity: commercial.quantity, unit: commercial.unit, whole: true, technicalQuantity };
+    if (line.unit === 'un') return { ...line, quantity: Math.ceil(line.quantity), unit: 'unidades', whole: true, technicalQuantity };
+    return { ...line, quantity: Math.round(line.quantity * 100) / 100, technicalQuantity };
   });
 }
 
@@ -1769,7 +1799,7 @@ export function buildRows(): (string | number)[][] {
   if (q.constructionSystem === 'light_steel_frame') {
     steelFrameQuantities(Store.getProject()).forEach((line) => {
       const priceKey = STEEL_FRAME_PRICE_KEY_BY_LAYER_ID[line.id];
-      if (priceKey) pushMaterial('Steel Frame', line.label, line.quantity, line.unit, line.quantity * materialPrice(priceKey), priceKey);
+      if (priceKey) pushMaterial('Steel Frame', line.label, line.quantity, line.unit, (line.technicalQuantity ?? line.quantity) * materialPrice(priceKey), priceKey);
       else push('Steel Frame', line.label, line.quantity, line.unit, null);
     });
   }

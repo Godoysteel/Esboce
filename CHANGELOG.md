@@ -2,6 +2,8 @@
 
 ## Alterado — 27/08/2026
 
+- Paredes de Light Steel Frame com isolamento térmico/acústico aplicado agora recebem uma faixa turquesa persistente no topo. Assim, o usuário confere visualmente quais paredes estão isoladas sem precisar selecionar uma por uma; a legenda do configurador explica o marcador.
+- O quantitativo de Steel Frame passa a apresentar unidades reais de compra: chapas de drywall em placas, massa para juntas em baldes de 25 kg, Basecoat em sacos de 20 kg, pingadeira em barras de 2,5 m e parafusos em unidades. A quantidade técnica original continua preservada internamente para o cálculo dos preços por m², kg ou metro.
 - Corrigido: os cinco componentes Placo/Glasroc cadastrados no banco agora aparecem também na vitrine visual. A antiga aba exclusiva "PlacLux" passa a se chamar "Construção a seco" e reúne, em seções separadas, Placo Glasroc X/Therm e PlacLux, exibindo foto, fabricante, fornecedor Vórtice e preço de referência.
 - Os sistemas Glasroc X e Glasroc X Therm passam a usar a composição oficial pesquisada na Placo: Placa Glasroc X 12,5 mm, Placoplast Basecoat, Malha GRX para Superfície, Membrana Hidrófuga Tyvek HomeWrap e Parafuso Glasroc PB; o Therm acrescenta placa EPS para EIFS. Cinco imagens oficiais da Placo foram incorporadas ao catálogo.
 - Placo permanece identificada como fabricante e Vórtice Materiais como fornecedora da referência de preço médio. Os valores são regionais, datados em 27/08/2026 e apresentados como estimativa, não como oferta comercial.

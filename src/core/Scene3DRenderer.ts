@@ -5353,6 +5353,24 @@ export function hashColorHex(key: string): number {
             registry.wallMeshes.push(topCapMesh);
           }
 
+          // Identificação persistente do isolamento no núcleo: uma faixa
+          // turquesa acima da parede permite conferir a aplicação sem abrir
+          // cada face. "Sem isolamento" é uma escolha válida, mas não recebe
+          // faixa. O marcador é apenas visual e não participa do picking.
+          var insulationSystemId = w.cavityAssembly && w.cavityAssembly.insulationSystemId;
+          if (project.constructionSystem === 'light_steel_frame' && insulationSystemId && insulationSystemId !== 'none' && !generatedAtticRoof) {
+            var insulationMarker = new THREE.Mesh(
+              new THREE.BoxGeometry(length, 0.075, 0.075),
+              new THREE.MeshStandardMaterial({ color: 0x06B6D4, emissive: 0x064E5A, emissiveIntensity: 0.55, roughness: 0.45 })
+            );
+            insulationMarker.position.set((x1 + x2) / 2, yOffset + renderedWallHeight + 0.085, (z1 + z2) / 2);
+            insulationMarker.rotation.y = -Math.atan2(z2 - z1, x2 - x1);
+            insulationMarker.userData.debugWallId = w.id;
+            insulationMarker.userData.steelFrameInsulationMarker = true;
+            scene.add(insulationMarker);
+            registry.wallMeshes.push(insulationMarker);
+          }
+
           // Tampa(s) VISÍVEL de ponta livre — mesma condição que a caixa
           // de referência já usava só pra clique (ver
           // buildWallMeshFromFootprint). Reaproveita o topMat (mesmo

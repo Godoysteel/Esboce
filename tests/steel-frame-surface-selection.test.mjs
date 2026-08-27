@@ -84,6 +84,14 @@ test('extensão vertical da cumeeira em níveis é selecionável como parede', (
   assert.match(renderer, /steppedWallFaceBAssemblyId/);
 });
 
+test('paredes com isolamento recebem faixa turquesa persistente sem precisar clicar', () => {
+  const renderer = readFileSync(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
+  assert.match(renderer, /insulationSystemId !== 'none'/);
+  assert.match(renderer, /steelFrameInsulationMarker = true/);
+  assert.match(renderer, /color: 0x06B6D4/);
+  assert.match(app, /faixa turquesa no topo identifica uma parede com isolamento/);
+});
+
 test('pendências de cobertura são nomeadas e clique na telha orienta para a face vertical', () => {
   assert.match(app, /function pendingSummary/);
   assert.match(app, /face da extensão/);
