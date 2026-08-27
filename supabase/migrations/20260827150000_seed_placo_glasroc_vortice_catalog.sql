@@ -15,7 +15,7 @@ with source(categoria, nome, sku, preco, unidade, foto_url, specs) as (
 insert into public.products (id, manufacturer_id, categoria, nome, sku, preco, unidade, specs, foto_url, origem, ativo)
 select gen_random_uuid(), manufacturer.id, source.categoria, source.nome, source.sku, source.preco, source.unidade,
        source.specs || jsonb_build_object('sistema','Glasroc X / Glasroc X Therm','fonte_preco','Média/mediana de mercado pesquisada em 27/08/2026','fontes',jsonb_build_array('Você Constrói','Mercado Livre','Artesana','DryStore','DryDepot','Serit','Fast Sistemas','Gesso 3 Mil','Fast Framing Brasil'),'data_preco','2026-08-27','regiao','Brasil'),
-       source.foto_url, 'catalogo_fabricante', true
+       source.foto_url, 'fornecedor', true
 from source
 cross join (select id from public.manufacturers where lower(nome) = 'placo' limit 1) manufacturer
 where not exists (select 1 from public.products product where product.sku = source.sku);
