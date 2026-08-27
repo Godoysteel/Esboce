@@ -100,6 +100,13 @@ Comprimentos, áreas e estimativas de materiais são derivados do modelo confirm
 - As páginas oficiais informam vidros de 4 a 26 mm, inclusive vidro duplo, e opções que variam conforme a tipologia. Essas alternativas ainda não são parâmetros separados no editor.
 - O preço permanece **sob consulta**, porque o fabricante não publica preço fixo para produtos sob medida.
 
-### 12.1 Simetria visual das portas de madeira
+### 12.1 Portas PVC Tomelin
+
+- A aba **PVC** da seção Portas oferece as duas famílias do [catálogo oficial de portas PVC Tomelin](https://www.tomelin.com.br/produtos/portas-de-pvc-tomelin): porta de correr e porta de giro.
+- As configurações iniciais são 1,50 x 2,10 m para correr e 0,90 x 2,10 m para giro, ambas editáveis. A página oficial informa porta de correr com 2, 3, 4 ou 6 folhas, entre 1,00 x 1,00 m e 11,00 x 3,00 m; para a porta de giro, cada folha pode variar de 0,60 x 1,80 m a 1,20 x 2,50 m.
+- As fotografias oficiais são miniaturas locais do catálogo. Os modelos procedurais representam perfis brancos, vidro, duas folhas sobrepostas na porta de correr e folha única na porta de giro.
+- Vidros e configurações adicionais são sob medida e o preço permanece **sob consulta**.
+
+### 12.2 Simetria visual das portas de madeira
 
 Frisos, painéis e ferragens das portas de madeira são representados nas duas faces. O lado interno não pode perder o desenho ou apresentar uma folha visualmente diferente do lado externo.

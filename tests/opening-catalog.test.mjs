@@ -61,9 +61,9 @@ test('seletor de esquadria (ViewportController) guarda o produto escolhido antes
   assert.match(source, /Padrão \(editável depois\)/);
 });
 
-test('todas as 28 esquadrias têm thumbnail', () => {
+test('todas as 30 esquadrias têm thumbnail', () => {
   const doorsAndWindows = [...Catalog.getProductsByCategory('door'), ...Catalog.getProductsByCategory('window')];
-  assert.equal(doorsAndWindows.length, 28);
+  assert.equal(doorsAndWindows.length, 30);
   doorsAndWindows.forEach((p) => {
     assert.ok(p.assets.thumbnailUrl, `${p.id} ainda sem thumbnailUrl`);
   });
@@ -92,6 +92,18 @@ test('linha PVC Tomelin oferece as cinco tipologias oficiais com foto e modelo p
   assert.match(renderer, /pvc-window-casement/);
   assert.match(renderer, /pvc-window-awning/);
   assert.match(renderer, /pvc-window-tilt-turn/);
+});
+
+test('linha PVC Tomelin oferece as duas famílias oficiais de portas', () => {
+  const portas = Catalog.getProductsByCategory('door').filter((p) => p.frameMaterial === 'pvc');
+  assert.equal(portas.length, 2);
+  assert.deepEqual(new Set(portas.map((p) => p.assets.proceduralOpeningStyle)), new Set(['pvc-door-sliding', 'pvc-door-casement']));
+  portas.forEach((p) => {
+    assert.equal(p.manufacturer, 'tomelin');
+    assert.match(p.id, /^tomelin\.porta\.pvc-/);
+    assert.match(p.assets.thumbnailUrl, /^images\/esquadrias\/tomelin\/porta-/);
+    assert.equal(p.assets.nominalHeightM, 2.10);
+  });
 });
 
 test('persiana integrada fica faceada externamente e encontra o perfil horizontal sem fresta', () => {

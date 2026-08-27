@@ -2254,12 +2254,12 @@ export function hashColorHex(key: string): number {
       var slatZ = depth / 2 - slatDepth / 2;
       for (var s = 1; s < slatCount; s++) box(innerW * 0.96, 0.009, slatDepth, 0, op.height - frame - shutterH + s * shutterH / slatCount, slatZ, seal);
       box(op.width, frame * 1.35, depth * 1.06, 0, op.height - frame * 0.68, 0, pvc);
-    } else if (style === 'pvc-window-sliding') {
+    } else if (style === 'pvc-window-sliding' || style === 'pvc-door-sliding') {
       glazedLeaf(-innerW / 4, centerY, innerW / 2, innerH, -0.008);
       glazedLeaf(innerW / 4, centerY, innerW / 2, innerH, 0.010);
       handle(-frame * 0.45, centerY, false);
       handle(frame * 0.45, centerY, false);
-    } else if (style === 'pvc-window-casement' || style === 'pvc-window-awning' || style === 'pvc-window-tilt-turn') {
+    } else if (style === 'pvc-window-casement' || style === 'pvc-door-casement' || style === 'pvc-window-awning' || style === 'pvc-window-tilt-turn') {
       glazedLeaf(0, centerY, innerW, innerH, 0.008);
       if (style === 'pvc-window-awning') {
         handle(0, frame * 1.25, true);
