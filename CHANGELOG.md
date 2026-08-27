@@ -4,7 +4,7 @@
 
 - No configurador de Light Steel Frame, o revestimento do forro do beiral e o material da tabeira passam a ser escolhas globais: uma seleção é aplicada a toda a construção, sem clicar em cada telhado. A tabeira agora oferece opções próprias de placa cimentícia e madeira. Projetos antigos reaproveitam automaticamente a primeira configuração de cobertura já salva.
 - A estimativa preliminar da estrutura engenheirada de Light Steel Frame passa a usar o parâmetro de orçamento de 30 kg/m², mantendo 5% de perda calculados separadamente e o caráter preliminar explícito no quantitativo e no PDF.
-- As composições de Light Steel Frame passam a incluir os complementos antes ausentes: Base Coat, fita e tela Fiberglass nas placas cimentícias; massa e fita telada nas chapas de drywall; e manta asfáltica sob a guia inferior. O quantitativo agora preserva as unidades corretas de cada insumo (kg, metro linear, m² e unidade).
+- As composições de Light Steel Frame passam a incluir os complementos antes ausentes: Base Coat, fita, tela Fiberglass e cantoneira PVC telada nas placas cimentícias; massa e fita telada nas chapas de drywall; e manta asfáltica sob a guia inferior. O quantitativo agora preserva as unidades corretas de cada insumo (kg, metro linear, m² e unidade).
 
 ## Em desenvolvimento — catálogo comercial unificado
 

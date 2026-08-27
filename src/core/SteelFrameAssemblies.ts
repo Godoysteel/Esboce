@@ -28,11 +28,14 @@ const fixers = (id: string, label: string, unitsPerM2: number): AssemblyLayerDef
   ({ id, label, role: 'finish', unit: 'unit', consumptionPerM2: unitsPerM2, wastePercent: 5, fastener: true });
 const measured = (id: string, label: string, role: AssemblyLayerDefinition['role'], unit: 'm' | 'kg', consumptionPerM2: number, wastePercent = 10): AssemblyLayerDefinition =>
   ({ id, label, role, unit, consumptionPerM2, wastePercent });
+const pieces = (id: string, label: string, role: AssemblyLayerDefinition['role'], piecesPerM2: number, wastePercent = 10): AssemblyLayerDefinition =>
+  ({ id, label, role, unit: 'unit', consumptionPerM2: piecesPerM2, wastePercent });
 
 const profortJointTreatment: readonly AssemblyLayerDefinition[] = [
   measured('placlux.base-coat-20kg', 'Massa Base Coat ProFort System', 'basecoat', 'kg', 20 / 6, 5),
   measured('placlux.fita-fiberglass-10cm-50m', 'Fita Fiberglass para juntas', 'joint_tape', 'm', 1.25),
   area('placlux.tela-fiberglass-1x50m', 'Tela Fiberglass', 'mesh'),
+  pieces('placlux.cantoneira-pvc-2-5m', 'Cantoneira PVC telada 2,5 m', 'mesh', 0.4),
 ];
 
 const drywallJointTreatment: readonly AssemblyLayerDefinition[] = [

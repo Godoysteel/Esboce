@@ -62,13 +62,22 @@ test('estrutura engenheirada usa parâmetro preliminar de 30 kg/m² e mantém 5%
   assert.match(materialsSource, /structuralArea \* STEEL_FRAME_STRUCTURE_KG_PER_M2 \* 1\.05/);
 });
 
-test('placa cimentícia inclui Base Coat, fita e tela Fiberglass com unidades corretas', () => {
+test('placa cimentícia inclui Base Coat, fita, tela Fiberglass e cantoneira telada com unidades corretas', () => {
   for (const assemblyId of ['cement-board-direct', 'cement-board-osb', 'soffit-cement-board', 'fascia-cement-board']) {
     const assembly = STEEL_FRAME_FACE_ASSEMBLIES.find((item) => item.id === assemblyId);
     assert.equal(assembly.layers.find((layer) => layer.id === 'placlux.base-coat-20kg')?.unit, 'kg');
     assert.equal(assembly.layers.find((layer) => layer.id === 'placlux.fita-fiberglass-10cm-50m')?.unit, 'm');
     assert.equal(assembly.layers.find((layer) => layer.id === 'placlux.tela-fiberglass-1x50m')?.unit, 'm2');
+    assert.equal(assembly.layers.find((layer) => layer.id === 'placlux.cantoneira-pvc-2-5m')?.unit, 'unit');
   }
+});
+
+test('cantoneira telada de 2,5 m usa parâmetro preliminar e arredonda para peças inteiras', () => {
+  const assembly = STEEL_FRAME_FACE_ASSEMBLIES.find((item) => item.id === 'cement-board-direct');
+  const corner = assembly.layers.find((layer) => layer.id === 'placlux.cantoneira-pvc-2-5m');
+  assert.equal(corner.consumptionPerM2, 0.4);
+  assert.equal(corner.wastePercent, 10);
+  assert.equal(quantityWithWaste(10, corner), 5);
 });
 
 test('drywall inclui massa e fita telada para tratamento de juntas', () => {

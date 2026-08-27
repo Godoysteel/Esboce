@@ -47,7 +47,7 @@ test('composição cimentícia usa PB direto no perfil e PA sobre OSB', () => {
 test('composições cimentícias consomem os complementos oficiais já existentes no catálogo PlacLux', () => {
   for (const assemblyId of ['cement-board-direct', 'cement-board-osb']) {
     const ids = new Set(STEEL_FRAME_FACE_ASSEMBLIES.find((item) => item.id === assemblyId).layers.map((layer) => layer.id));
-    for (const productId of ['placlux.base-coat-20kg', 'placlux.fita-fiberglass-10cm-50m', 'placlux.tela-fiberglass-1x50m']) {
+    for (const productId of ['placlux.base-coat-20kg', 'placlux.fita-fiberglass-10cm-50m', 'placlux.tela-fiberglass-1x50m', 'placlux.cantoneira-pvc-2-5m']) {
       assert.ok(ids.has(productId), `${productId} ausente em ${assemblyId}`);
       assert.ok(getPlacluxProduct(productId), `${productId} não existe no catálogo`);
     }
