@@ -1732,6 +1732,71 @@ test('Scene3DRenderer: espigão de canto some quando o próprio canto do beiral 
   assert.equal(survivors.length, 3, 'os outros 3 cantos de A (incluindo as duas quinas externas de verdade) continuam de fora da pegada de B');
 });
 
+// DEC-152 continuava aberto mesmo depois do filtro de canto acima: o PO
+// reprovou de novo em teste ao vivo. Causa (achada instrumentando a cena
+// real do app, não só lendo o código): a cumeeira CENTRAL/CONTÍNUA — o
+// trecho R1-R2 de um quatro-águas, ou a cumeeira inteira de um
+// duas-águas — nunca ganha userData.hipCornerXZ (essa tag só existe nos
+// 4 caps de canto do hip), então o filtro de canto é um no-op pra ela; e
+// ela SIM pode cair inteira dentro da pegada do telhado vizinho numa
+// junção em L, sobrando visível por cima dele. Números abaixo são a
+// reprodução real: duas casas em L (retângulo 10×6 + retângulo 6×8,
+// telhados quatro-águas automáticos) montadas ao vivo no app
+// (Store.commands.createRoom + generateRoofsForCurrentFloor), com a
+// cena instrumentada (userData de cada peça) pra extrair as pegadas e as
+// pontas reais das duas cumeeiras centrais.
+test('Scene3DRenderer: cumeeira central/contínua (sem hipCornerXZ) marca as duas pontas em userData.ridgeCapEndsXZ', () => {
+  const start = scene3DRendererSource.indexOf('function buildRoofDuasAguas(');
+  const end = scene3DRendererSource.indexOf('\n  function buildRoofQuatroAguas(');
+  const duasAguasBody = scene3DRendererSource.slice(start, end);
+  assert.match(duasAguasBody, /ridgeCapX\.userData\.ridgeCapEndsXZ = \{ a: \{ x: eMinX, z: ridgeZ \}, b: \{ x: eMaxX, z: ridgeZ \} \};/);
+  assert.match(duasAguasBody, /ridgeCapZ\.userData\.ridgeCapEndsXZ = \{ a: \{ x: ridgeX, z: eMinZ2 \}, b: \{ x: ridgeX, z: eMaxZ2 \} \};/);
+
+  const quatroStart = scene3DRendererSource.indexOf('function buildRoofQuatroAguas(');
+  const quatroEnd = scene3DRendererSource.indexOf('\n  function buildRoofUmaAgua(', quatroStart);
+  const quatroAguasBody = scene3DRendererSource.slice(quatroStart, quatroEnd);
+  assert.match(quatroAguasBody, /centralCapX\.userData\.ridgeCapEndsXZ = \{ a: \{ x: R1\.x, z: R1\.z \}, b: \{ x: R2\.x, z: R2\.z \} \};/);
+  assert.match(quatroAguasBody, /centralCapZ\.userData\.ridgeCapEndsXZ = \{ a: \{ x: R1b\.x, z: R1b\.z \}, b: \{ x: R2b\.x, z: R2b\.z \} \};/);
+});
+
+test('Scene3DRenderer: cumeeira central some quando as DUAS pontas caem dentro da pegada do telhado vizinho — reprodução real do L em quatro-águas', () => {
+  const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 18000);
+  assert.match(roofsBlock, /function ridgeCapFullyInsideOtherRoof\(ends: any\) \{\s*return hipCornerInsideOtherRoof\(ends\.a\) && hipCornerInsideOtherRoof\(ends\.b\);\s*\}/);
+  assert.match(roofsBlock, /if \(m\.userData\.ridgeCapEndsXZ && ridgeCapFullyInsideOtherRoof\(m\.userData\.ridgeCapEndsXZ\)\) return;/);
+
+  function pointInRect(pt, r) {
+    return pt.x > r.minX + 1e-6 && pt.x < r.maxX - 1e-6 && pt.z > r.minZ + 1e-6 && pt.z < r.maxZ - 1e-6;
+  }
+  function ridgeCapFullyInside(ends, footprints) {
+    return footprints.some((r) => pointInRect(ends.a, r)) && footprints.some((r) => pointInRect(ends.b, r));
+  }
+
+  // Reprodução real (quatro-águas, caso "automático" default — o mais
+  // comum): duas casas em L, extraído ao vivo do app.
+  const roofAFootprint = { minX: -0.46, maxX: 0.96, minZ: -0.46, maxZ: 0.71 };
+  const roofBFootprint = { minX: -0.46, maxX: 0.71, minZ: -0.21, maxZ: 1.21 };
+  const centralCapA = { a: { x: 0.13, z: 0.02 }, b: { x: 0.38, z: 0.23 } }; // cumeeira central do telhado A
+  const centralCapB = { a: { x: 0.02, z: 0.38 }, b: { x: 0.23, z: 0.63 } }; // cumeeira central do telhado B
+  assert.equal(ridgeCapFullyInside(centralCapA, [roofBFootprint]), true, 'cumeeira central de A cai inteira dentro da pegada de B — deve sumir');
+  assert.equal(ridgeCapFullyInside(centralCapB, [roofAFootprint]), true, 'cumeeira central de B cai inteira dentro da pegada de A — deve sumir');
+
+  // Caso conhecido, ainda NÃO coberto por este filtro (documentado, não
+  // corrigido nesta rodada): duas-águas × duas-águas no mesmo L — a
+  // cumeeira é a peça INTEIRA (não só o trecho central do hip), então só
+  // UMA ponta cai dentro do vizinho (a outra continua fora, cumeeira de
+  // verdade continuando além da junção) — omitir a peça inteira cortaria
+  // cumeeira de verdade. Fica só no sombreamento por pixel (mesma
+  // limitação já registrada no DEC-151).
+  const duasAguasFootprintA = { minX: -0.51, maxX: 0.76, minZ: -0.46, maxZ: 0.71 };
+  const duasAguasFootprintB = { minX: -0.46, maxX: 0.71, minZ: -0.51, maxZ: 1.01 };
+  const fullRidgeA = { a: { x: -0.26, z: 0.125 }, b: { x: 0.76, z: 0.125 } };
+  assert.equal(pointInRect(fullRidgeA.a, duasAguasFootprintB), true, 'ponta interna da cumeeira inteira cai dentro do vizinho');
+  assert.equal(pointInRect(fullRidgeA.b, duasAguasFootprintB), false, 'ponta externa continua fora — cumeeira de verdade além da junção');
+  assert.equal(ridgeCapFullyInside(fullRidgeA, [duasAguasFootprintB]), false, 'com só uma ponta dentro, a regra (as duas pontas) corretamente NÃO omite a peça inteira');
+  void duasAguasFootprintA;
+});
+
 // Bug real (Product Owner, com print): dois quatroAguas do mesmo grupo
 // composto (compoundGroupId, eixos de cumeeira diferentes — o par de
 // "asas" perpendiculares de uma Cumeeira em níveis/Extensão lateral)

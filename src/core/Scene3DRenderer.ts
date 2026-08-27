@@ -2423,7 +2423,9 @@ export function hashColorHex(key: string): number {
         { x: gMaxX, y: gableBaseUnderY, z: gMinZ }, { x: gMaxX, y: gableRidgeUnderY, z: ridgeZ },
         { x: gMaxX, y: gableBaseUnderY, z: gMaxZ }
       ], gableColors.b), 'b');
-      meshes.push(buildRidgeCapMesh({ x: eMinX, y: ridgeY, z: ridgeZ }, { x: eMaxX, y: ridgeY, z: ridgeZ }, roofColor, pitchRad));
+      var ridgeCapX = buildRidgeCapMesh({ x: eMinX, y: ridgeY, z: ridgeZ }, { x: eMaxX, y: ridgeY, z: ridgeZ }, roofColor, pitchRad);
+      if (ridgeCapX) ridgeCapX.userData.ridgeCapEndsXZ = { a: { x: eMinX, z: ridgeZ }, b: { x: eMaxX, z: ridgeZ } };
+      meshes.push(ridgeCapX);
       meshes.push(buildEaveSoffitPanel((eMinX + eMaxX) / 2, topBounds.minZ - ROOF_OVERHANG / 2, eMaxX - eMinX, ROOF_OVERHANG, topY - verticalDrop, soffitColor));
       meshes.push(buildEaveSoffitPanel((eMinX + eMaxX) / 2, topBounds.maxZ + ROOF_OVERHANG / 2, eMaxX - eMinX, ROOF_OVERHANG, topY - verticalDrop, soffitColor));
     } else {
@@ -2455,7 +2457,9 @@ export function hashColorHex(key: string): number {
         { x: gMinX2, y: gableBaseUnderY2, z: gMaxZ2 }, { x: ridgeX, y: gableRidgeUnderY2, z: gMaxZ2 },
         { x: gMaxX2, y: gableBaseUnderY2, z: gMaxZ2 }
       ], gableColors.b), 'b');
-      meshes.push(buildRidgeCapMesh({ x: ridgeX, y: ridgeY2, z: eMinZ2 }, { x: ridgeX, y: ridgeY2, z: eMaxZ2 }, roofColor, pitchRad));
+      var ridgeCapZ = buildRidgeCapMesh({ x: ridgeX, y: ridgeY2, z: eMinZ2 }, { x: ridgeX, y: ridgeY2, z: eMaxZ2 }, roofColor, pitchRad);
+      if (ridgeCapZ) ridgeCapZ.userData.ridgeCapEndsXZ = { a: { x: ridgeX, z: eMinZ2 }, b: { x: ridgeX, z: eMaxZ2 } };
+      meshes.push(ridgeCapZ);
       meshes.push(buildEaveSoffitPanel(topBounds.minX - ROOF_OVERHANG / 2, (eMinZ2 + eMaxZ2) / 2, ROOF_OVERHANG, eMaxZ2 - eMinZ2, topY - verticalDrop, soffitColor));
       meshes.push(buildEaveSoffitPanel(topBounds.maxX + ROOF_OVERHANG / 2, (eMinZ2 + eMaxZ2) / 2, ROOF_OVERHANG, eMaxZ2 - eMinZ2, topY - verticalDrop, soffitColor));
     }
@@ -2493,7 +2497,10 @@ export function hashColorHex(key: string): number {
       meshes.push.apply(meshes, extrudeSlopeDown([B, C, R2], verticalDrop, roofColor, tabeiraColor));
       // Telha de cumeeira (R1-R2) + telha de espigão nos 4 cantos —
       // fecha por cima o encontro das águas, mesma textura da telha.
-      if (r2x - r1x > 1e-3) meshes.push(buildRidgeCapMesh(R1, R2, roofColor, pitchRad));
+      if (r2x - r1x > 1e-3) {
+        var centralCapX = buildRidgeCapMesh(R1, R2, roofColor, pitchRad);
+        if (centralCapX) { centralCapX.userData.ridgeCapEndsXZ = { a: { x: R1.x, z: R1.z }, b: { x: R2.x, z: R2.z } }; meshes.push(centralCapX); }
+      }
       [[A, R1], [D, R1], [B, R2], [C, R2]].forEach(function (pair) {
         var cornerStart = extendBeyond(pair[0], pair[1], HIP_CORNER_OVERSHOOT);
         var cap = buildRidgeCapMesh(cornerStart, pair[1], roofColor, pitchRad);
@@ -2510,7 +2517,10 @@ export function hashColorHex(key: string): number {
       meshes.push.apply(meshes, extrudeSlopeDown([C, B, R1b, R2b], verticalDrop, roofColor, tabeiraColor));
       meshes.push.apply(meshes, extrudeSlopeDown([A, B, R1b], verticalDrop, roofColor, tabeiraColor));
       meshes.push.apply(meshes, extrudeSlopeDown([D, C, R2b], verticalDrop, roofColor, tabeiraColor));
-      if (r2z - r1z > 1e-3) meshes.push(buildRidgeCapMesh(R1b, R2b, roofColor, pitchRad));
+      if (r2z - r1z > 1e-3) {
+        var centralCapZ = buildRidgeCapMesh(R1b, R2b, roofColor, pitchRad);
+        if (centralCapZ) { centralCapZ.userData.ridgeCapEndsXZ = { a: { x: R1b.x, z: R1b.z }, b: { x: R2b.x, z: R2b.z } }; meshes.push(centralCapZ); }
+      }
       [[A, R1b], [B, R1b], [D, R2b], [C, R2b]].forEach(function (pair) {
         var cornerStart = extendBeyond(pair[0], pair[1], HIP_CORNER_OVERSHOOT);
         var cap = buildRidgeCapMesh(cornerStart, pair[1], roofColor, pitchRad);
@@ -5832,6 +5842,20 @@ export function hashColorHex(key: string): number {
               return pt.x > r.minX + 1e-6 && pt.x < r.maxX - 1e-6 && pt.z > r.minZ + 1e-6 && pt.z < r.maxZ - 1e-6;
             });
           }
+          // Cumeeira central/contínua (duas-águas inteira, ou o trecho
+          // central R1-R2 de um quatro-águas) nunca ganhava a tag de
+          // canto (hipCornerXZ é só pros 4 caps de hip), então o filtro
+          // acima era um no-op pra ela — sobrava flutuando por cima do
+          // telhado vizinho numa junção em L (DEC-152 continuava aberto
+          // porque a peça que sobrava não era um canto, era essa).
+          // Mesma regra do canto, mas só omite quando as DUAS pontas caem
+          // dentro do vizinho — se só uma ponta cair dentro, a cumeeira
+          // continua de verdade além da junção e cortar tudo apagaria um
+          // trecho real de cumeeira (aí fica por conta do sombreamento
+          // por pixel, igual antes).
+          function ridgeCapFullyInsideOtherRoof(ends: any) {
+            return hipCornerInsideOtherRoof(ends.a) && hipCornerInsideOtherRoof(ends.b);
+          }
           // roofCutRegions só sabe calcular o plano inclinado de verdade
           // (a água-furtada real) pro tipo duasAguas — pra qualquer outro
           // tipo (quatroAguas incluso) ele cai num retângulo cru, SEM
@@ -5857,6 +5881,7 @@ export function hashColorHex(key: string): number {
           pieces.forEach(function (m) {
             if (roof.atticMode === 'generated' && m.userData.gableSide) return;
             if (m.userData.hipCornerXZ && hipCornerInsideOtherRoof(m.userData.hipCornerXZ)) return;
+            if (m.userData.ridgeCapEndsXZ && ridgeCapFullyInsideOtherRoof(m.userData.ridgeCapEndsXZ)) return;
             var steelFrameRoofConfigured = project.constructionSystem === 'light_steel_frame' && (
               m.userData.gableSide
                 ? !!(m.userData.gableSide === 'a' ? roof.gableFaceAAssemblyId : roof.gableFaceBAssemblyId)
