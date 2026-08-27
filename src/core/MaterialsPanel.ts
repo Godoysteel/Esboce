@@ -1277,7 +1277,7 @@ interface RealPriceMatch {
   kind: CommercialSelection['kind'];
   estimated?: boolean;
 }
-type MaterialPriceKey = 'cementPerKg' | 'limePerKg' | 'sandPerM3' | 'concretePerM3' | 'steelPerKg' | 'brickPerUnit' | 'woodPerM3' | 'windowPerM2' | 'nailPerKg' | 'forroPlacaSTPerM2' | 'forroPlacaRUPerM2' | 'forroPlacaRFPerM2' | 'forroPlacaCimenticiaPerM2' | 'forroF530PerM' | 'forroTabicaPerM' | 'forroPenduralPerUnit' | 'baseboardPerM' | 'woodDoorPerUnit' | 'sillPerM' | 'glazingPanelPerM2' | 'balconyRailingPerM' | 'varandaPerM2' | 'volumeBoxGenericPerM2' | 'stairPerUnit' | 'hydraulicDestinationBoxPerUnit' | 'eifsWasherPerUnit' | 'pingadeiraPerUnit' | 'glasrocXBoardPerM2' | 'substrateBoardPerM2';
+type MaterialPriceKey = 'cementPerKg' | 'limePerKg' | 'sandPerM3' | 'concretePerM3' | 'steelPerKg' | 'brickPerUnit' | 'woodPerM3' | 'windowPerM2' | 'nailPerKg' | 'forroPlacaSTPerM2' | 'forroPlacaRUPerM2' | 'forroPlacaRFPerM2' | 'forroPlacaCimenticiaPerM2' | 'forroF530PerM' | 'forroTabicaPerM' | 'forroPenduralPerUnit' | 'baseboardPerM' | 'woodDoorPerUnit' | 'sillPerM' | 'glazingPanelPerM2' | 'balconyRailingPerM' | 'varandaPerM2' | 'volumeBoxGenericPerM2' | 'stairPerUnit' | 'hydraulicDestinationBoxPerUnit' | 'eifsWasherPerUnit' | 'pingadeiraPerUnit' | 'glasrocXBoardPerM2' | 'glasrocBasecoatPerKg' | 'glasrocMeshPerM2' | 'glasrocWrbPerM2' | 'glasrocScrewPerUnit' | 'glasrocEpsPerM2' | 'substrateBoardPerM2';
 let realPrices: { [K in MaterialPriceKey]?: RealPriceMatch } = {};
 let realHydraulicPrices: Record<string, RealPriceMatch> = {};
 let realPricesFetchStarted = false;
@@ -1316,7 +1316,12 @@ const VORTICE_MATERIAL_SKUS: Record<MaterialPriceKey, { sku: string; unitDivisor
   hydraulicDestinationBoxPerUnit: { sku: 'vortice-caixa-hidraulica-un', unitDivisor: 1 },
   eifsWasherPerUnit: { sku: 'vortice-eifs-arandela-pct100', unitDivisor: 100 },
   pingadeiraPerUnit: { sku: 'vortice-pingadeira-pvc-2-5m', unitDivisor: 1 },
-  glasrocXBoardPerM2: { sku: 'vortice-glasroc-x-12-5mm', unitDivisor: 2.88 },
+  glasrocXBoardPerM2: { sku: 'placo-glasroc-x-12-5mm', unitDivisor: 2.88 },
+  glasrocBasecoatPerKg: { sku: 'placo-placoplast-basecoat-20kg', unitDivisor: 20 },
+  glasrocMeshPerM2: { sku: 'placo-malha-grx-superficie-1x50m', unitDivisor: 50 },
+  glasrocWrbPerM2: { sku: 'placo-tyvek-homewrap-0-91x30-5m', unitDivisor: 27.8 },
+  glasrocScrewPerUnit: { sku: 'placo-parafuso-glasroc-pb-25mm-cx1000', unitDivisor: 1000 },
+  glasrocEpsPerM2: { sku: 'vortice-eps-eifs-t7f-30mm-m2', unitDivisor: 1 },
   substrateBoardPerM2: { sku: 'vortice-osb-11-1mm', unitDivisor: 2.88 },
 };
 
@@ -1331,6 +1336,13 @@ const STEEL_FRAME_PRICE_KEY_BY_LAYER_ID: Partial<Record<string, MaterialPriceKey
   'eifs-eps-fixers-arandela': 'eifsWasherPerUnit',
   'placlux.pingadeira-pvc-2-5m': 'pingadeiraPerUnit',
   'glasroc-x': 'glasrocXBoardPerM2',
+  'glasroc-basecoat': 'glasrocBasecoatPerKg',
+  'glasroc-therm-basecoat': 'glasrocBasecoatPerKg',
+  'glasroc-mesh': 'glasrocMeshPerM2',
+  'glasroc-therm-mesh': 'glasrocMeshPerM2',
+  'wrb': 'glasrocWrbPerM2',
+  'glasroc-screws': 'glasrocScrewPerUnit',
+  'glasroc-therm-eps': 'glasrocEpsPerM2',
   'osb': 'substrateBoardPerM2',
   'cement-board-substrate': 'substrateBoardPerM2',
 };
@@ -1401,19 +1413,23 @@ async function ensureRealPrices(): Promise<void> {
       (Object.keys(VORTICE_MATERIAL_SKUS) as MaterialPriceKey[]).forEach(function (key) {
         if (realPrices[key]) return; // já resolvido por fornecedor real
         const cfg = VORTICE_MATERIAL_SKUS[key];
-        const product = products.find(function (p) { return p.manufacturer_id === vortice.id && p.sku === cfg.sku; });
-        if (product) {
+        const product = products.find(function (p) { return p.sku === cfg.sku; });
+        const offer = product && offers.find(function (candidate) {
+          return candidate.product_id === product.id && candidate.kind === 'market_reference' && candidate.supplier_name === 'Vórtice Materiais';
+        });
+        if (product && offer) {
           const specs = product.specs || {};
           realPrices[key] = {
-            value: product.preco / cfg.unitDivisor,
+            value: offer.price / cfg.unitDivisor,
             source: product.nome + ' — Estimativa Vórtice; não constitui oferta comercial',
             productId: product.id,
-            supplierId: vortice.id,
-            supplierName: 'Vórtice Materiais',
-            ...(product.sku ? { supplierSku: product.sku } : {}),
-            region: String(specs.regiao || 'Brasil'),
-            priceDate: String(specs.data_preco || '2026-08-01'),
-            kind: 'market_reference',
+            offerId: offer.id,
+            supplierId: offer.supplier_id,
+            supplierName: offer.supplier_name,
+            ...(offer.supplier_sku ? { supplierSku: offer.supplier_sku } : {}),
+            region: offer.region || String(specs.regiao || 'Brasil'),
+            priceDate: offer.price_date || String(specs.data_preco || '2026-08-01'),
+            kind: offer.kind,
             estimated: true,
           };
         }
@@ -1480,6 +1496,11 @@ const REFERENCE_PRICES = {
   eifsWasherPerUnit: 0.4792,
   pingadeiraPerUnit: 101.88,
   glasrocXBoardPerM2: 76.35,
+  glasrocBasecoatPerKg: 6.21,
+  glasrocMeshPerM2: 10.00,
+  glasrocWrbPerM2: 10.31,
+  glasrocScrewPerUnit: 0.20,
+  glasrocEpsPerM2: 64.99,
   substrateBoardPerM2: 69.44,
 };
 

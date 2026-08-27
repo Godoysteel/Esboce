@@ -141,7 +141,12 @@ test('EIFS tem duas variantes de substrato — a fixação do EPS/XPS muda confo
 test('itens de Steel Frame com preço pesquisado (Espaço Smart) calculam custo em buildRows(); os demais continuam sem preço', () => {
   assert.match(materialsSource, /eifsWasherPerUnit: \{ sku: 'vortice-eifs-arandela-pct100', unitDivisor: 100 \}/);
   assert.match(materialsSource, /pingadeiraPerUnit: \{ sku: 'vortice-pingadeira-pvc-2-5m', unitDivisor: 1 \}/);
-  assert.match(materialsSource, /glasrocXBoardPerM2: \{ sku: 'vortice-glasroc-x-12-5mm', unitDivisor: 2\.88 \}/);
+  assert.match(materialsSource, /glasrocXBoardPerM2: \{ sku: 'placo-glasroc-x-12-5mm', unitDivisor: 2\.88 \}/);
+  assert.match(materialsSource, /glasrocBasecoatPerKg: \{ sku: 'placo-placoplast-basecoat-20kg', unitDivisor: 20 \}/);
+  assert.match(materialsSource, /glasrocMeshPerM2: \{ sku: 'placo-malha-grx-superficie-1x50m', unitDivisor: 50 \}/);
+  assert.match(materialsSource, /glasrocWrbPerM2: \{ sku: 'placo-tyvek-homewrap-0-91x30-5m', unitDivisor: 27\.8 \}/);
+  assert.match(materialsSource, /glasrocScrewPerUnit: \{ sku: 'placo-parafuso-glasroc-pb-25mm-cx1000', unitDivisor: 1000 \}/);
+  assert.match(materialsSource, /glasrocEpsPerM2: \{ sku: 'vortice-eps-eifs-t7f-30mm-m2', unitDivisor: 1 \}/);
   assert.match(materialsSource, /substrateBoardPerM2: \{ sku: 'vortice-osb-11-1mm', unitDivisor: 2\.88 \}/);
 
   const start = materialsSource.indexOf('const STEEL_FRAME_PRICE_KEY_BY_LAYER_ID');
@@ -150,6 +155,8 @@ test('itens de Steel Frame com preço pesquisado (Espaço Smart) calculam custo 
   assert.match(body, /'eifs-eps-fixers-arandela': 'eifsWasherPerUnit'/);
   assert.match(body, /'placlux\.pingadeira-pvc-2-5m': 'pingadeiraPerUnit'/);
   assert.match(body, /'glasroc-x': 'glasrocXBoardPerM2'/);
+  assert.match(body, /'glasroc-basecoat': 'glasrocBasecoatPerKg'/);
+  assert.match(body, /'glasroc-therm-eps': 'glasrocEpsPerM2'/);
   // 'osb' e 'cement-board-substrate' são o MESMO produto físico (painel do
   // substrato) em composições diferentes — apontam pra chave única.
   assert.match(body, /'osb': 'substrateBoardPerM2'/);
