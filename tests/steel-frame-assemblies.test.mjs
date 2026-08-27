@@ -88,25 +88,19 @@ test('drywall inclui massa e fita telada para tratamento de juntas', () => {
   }
 });
 
-test('quantitativo inclui manta asfáltica sob toda guia inferior com 10% de perda', () => {
-  assert.match(materialsSource, /lowerGuideLengthM \+= wallLengthM/);
+test('quantitativo inclui manta asfáltica e pingadeira de base sob todo o perímetro das paredes, com 10% de perda', () => {
+  assert.match(materialsSource, /lowerGuideLengthM \+= Core\.wallLengthMeters\(wall\)/);
   assert.match(materialsSource, /Manta asfáltica sob a guia inferior \(\+ 10% de perda\)/);
   assert.match(materialsSource, /lowerGuideLengthM \* 1\.1/);
+  assert.match(materialsSource, /'placlux\.pingadeira-pvc-2-5m', 'Pingadeira de base \(perímetro das paredes, \+ 10% de perda\)', \(lowerGuideLengthM \* 1\.1\) \/ 2\.5/);
 });
 
-test('placa cimentícia sem OSB inclui pingadeira de base e não repete a membrana da composição com OSB', () => {
+test('placa cimentícia com e sem OSB levam a mesma Membrana Hidrófuga — pingadeira não é uma camada por composição', () => {
   const direct = STEEL_FRAME_FACE_ASSEMBLIES.find((item) => item.id === 'cement-board-direct');
   const withOsb = STEEL_FRAME_FACE_ASSEMBLIES.find((item) => item.id === 'cement-board-osb');
-  const flashing = direct.layers.find((layer) => layer.id === 'placlux.pingadeira-pvc-2-5m');
-  assert.ok(flashing, 'pingadeira ausente em cement-board-direct');
-  assert.equal(flashing.basis, 'length');
-  assert.equal(flashing.unit, 'unit');
-  assert.ok(!direct.layers.some((layer) => layer.id === 'placlux.membrana-hidrofuga-52-5m2'), 'sistema sem OSB não deveria levar a membrana hidrófuga');
-  assert.ok(withOsb.layers.some((layer) => layer.id === 'placlux.membrana-hidrofuga-52-5m2'), 'sistema com OSB continua precisando da membrana hidrófuga');
-});
-
-test('camada com basis "length" usa o comprimento da parede, não a área da face, no quantitativo', () => {
-  assert.match(materialsSource, /layer\.basis === 'length' \? wallLengthM : faceArea/);
+  assert.ok(direct.layers.some((layer) => layer.id === 'placlux.membrana-hidrofuga-52-5m2'), 'sistema sem OSB também precisa da membrana hidrófuga');
+  assert.ok(withOsb.layers.some((layer) => layer.id === 'placlux.membrana-hidrofuga-52-5m2'));
+  assert.ok(!direct.layers.some((layer) => layer.id === 'placlux.pingadeira-pvc-2-5m'), 'pingadeira cobre o perímetro inteiro da construção, calculada à parte — não é camada de uma composição específica');
 });
 
 // ADR-006 §9 — quantitativo comercial (placas/rolos/sacos), não só

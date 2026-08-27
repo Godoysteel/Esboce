@@ -1011,14 +1011,10 @@ function steelFrameQuantities(project: Project): SteelFrameQuantityLine[] {
         .reduce((sum, opening) => sum + opening.width * opening.height, 0);
       const faceArea = Math.max(0, Core.wallLengthMeters(wall) * wallHeight - openingsArea);
       structuralArea += faceArea;
-      const wallLengthM = Core.wallLengthMeters(wall);
-      lowerGuideLengthM += wallLengthM;
+      lowerGuideLengthM += Core.wallLengthMeters(wall);
       [wall.faceAAssemblyId, wall.faceBAssemblyId].forEach((assemblyId) => {
         const assembly = STEEL_FRAME_FACE_ASSEMBLIES.find((item) => item.id === assemblyId);
-        assembly?.layers.forEach((layer) => {
-          const basisValue = layer.basis === 'length' ? wallLengthM : faceArea;
-          add(layer.id, layer.label, quantityWithWaste(basisValue, layer), layer.unit === 'unit' ? 'un' : layer.unit === 'm2' ? 'm²' : layer.unit);
-        });
+        assembly?.layers.forEach((layer) => add(layer.id, layer.label, quantityWithWaste(faceArea, layer), layer.unit === 'unit' ? 'un' : layer.unit === 'm2' ? 'm²' : layer.unit));
       });
       const insulationId = wall.cavityAssembly?.insulationSystemId;
       if (insulationId && insulationId !== 'none') {
@@ -1037,11 +1033,7 @@ function steelFrameQuantities(project: Project): SteelFrameQuantityLine[] {
       const extensionFaceAreaM2 = 2 * (widthM + depthM) * rectangularHeightM + slopedClosuresM2;
       [roof.steppedWallFaceAAssemblyId, roof.steppedWallFaceBAssemblyId].forEach((assemblyId) => {
         const assembly = STEEL_FRAME_FACE_ASSEMBLIES.find((item) => item.id === assemblyId);
-        // Camadas com basis 'length' (ex.: pingadeira de base) correm no
-        // rodapé externo da construção, no nível do térreo — uma extensão
-        // de parede sobre um telhado inferior não fica no térreo, então
-        // não entra nesse cálculo.
-        assembly?.layers.filter((layer) => layer.basis !== 'length').forEach((layer) => add(layer.id, layer.label, quantityWithWaste(extensionFaceAreaM2, layer), layer.unit === 'unit' ? 'un' : layer.unit === 'm2' ? 'm²' : layer.unit));
+        assembly?.layers.forEach((layer) => add(layer.id, layer.label, quantityWithWaste(extensionFaceAreaM2, layer), layer.unit === 'unit' ? 'un' : layer.unit === 'm2' ? 'm²' : layer.unit));
       });
     });
   });
@@ -1050,6 +1042,10 @@ function steelFrameQuantities(project: Project): SteelFrameQuantityLine[] {
   }
   if (lowerGuideLengthM > 0) {
     add('steel-frame-sill-asphalt-membrane', 'Manta asfáltica sob a guia inferior (+ 10% de perda)', Math.round(lowerGuideLengthM * 1.1 * 100) / 100, 'm');
+    // Pingadeira cobre todo o perímetro das paredes (mesma base da manta
+    // asfáltica acima) — não é específica de uma composição de face, por
+    // isso soma aqui, não como camada de STEEL_FRAME_FACE_ASSEMBLIES.
+    add('placlux.pingadeira-pvc-2-5m', 'Pingadeira de base (perímetro das paredes, + 10% de perda)', (lowerGuideLengthM * 1.1) / 2.5, 'un');
   }
   return Array.from(totals.values()).map((line) => {
     const commercial = line.unit !== 'un' ? steelFrameCommercialUnit(line.id, line.unit, line.quantity) : null;

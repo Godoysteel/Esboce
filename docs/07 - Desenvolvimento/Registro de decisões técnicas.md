@@ -1669,3 +1669,17 @@ Status: Implementado, testado (suíte completa + teste novo confirmando a marca�
 **Pendência aberta:** o Product Owner encontrou depois, numa planilha pública da Decorlit (fabricante distinto do PlacLux), parâmetros próprios pro mesmo tipo de sistema — parafuso cimentícia a 17 un/m² (Esboce usa 20), fita telada 100mm a 1,67 m/m² (Esboce usa 1,25), tela a 1,1 m²/m² (Esboce usa 1,0) e cantoneira a 0,15 peça/m² (Esboce usa 0,4, quase o triplo). Nenhum valor foi alterado nesta sessão — os parâmetros atuais continuam sendo os definidos nas DEC-153/154. Decidir se recalibra pra Decorlit, mantém PlacLux, ou torna o índice configurável por fornecedor (ADR-006 §7) fica em aberto pro Product Owner.
 
 ---
+
+# DEC-156 — Correção da DEC-155: Membrana Hidrófuga volta pra placa cimentícia sem OSB, e Pingadeira passa a cobrir o perímetro inteiro das paredes
+
+**Data:** 27/08/2026
+**Status:** Implementado
+
+**Contexto:** a DEC-155 tinha removido a Membrana Hidrófuga de `cement-board-direct` (por não constar na lista original do Product Owner) e adicionado a Pingadeira como camada dessa mesma composição, calculada pelo comprimento de cada parede que usasse esse sistema especificamente. Revisando o resultado, o Product Owner corrigiu os dois pontos: a membrana hidrófuga deve continuar presente nessa composição também (imagens de referência anexadas mostram o reforço de canto com massa + tela + cantoneira, reforçando a necessidade dos itens de tratamento de superfície já presentes); e a pingadeira não é específica de uma composição — ela cobre o perímetro inteiro das paredes da construção.
+
+**Decisão:**
+1. `cement-board-direct` volta a incluir a camada `placlux.membrana-hidrofuga-52-5m2` (Membrana Hidrófuga ProFort), igual a `cement-board-osb`. As duas composições de placa cimentícia levam a mesma membrana.
+2. A Pingadeira de base deixa de ser uma camada de `STEEL_FRAME_FACE_ASSEMBLIES` — o campo `basis: 'length'` adicionado em `AssemblyLayerDefinition` na DEC-155 foi removido por completo (ficaria sem nenhum uso). `MaterialsPanel.steelFrameQuantities` agora soma a pingadeira uma vez, direto a partir de `lowerGuideLengthM` (a mesma soma do comprimento de TODAS as paredes do projeto, já usada pela manta asfáltica sob a guia inferior) — `(lowerGuideLengthM * 1.1) / 2.5` peças, arredondado pra cima. Não depende de qual composição de face foi escolhida em cada parede.
+3. Testado ao vivo (`Store.setProject` com projeto Light Steel Frame e uma parede de 60m com `cement-board-direct`): o PDF de tabela do Steel Frame volta a listar "Membrana Hidrófuga ProFort — 4 rolos (1,05 x 50 m)" e passa a listar "Pingadeira de base (perímetro das paredes, + 10% de perda) — 27 un" como linha própria, fora da lista por composição.
+
+---
