@@ -19,7 +19,18 @@ test('insertOpening aceita productOverride e usa o tamanho/productId do produto 
   const source = storeSource();
   assert.match(source, /insertOpening\(wallId: string, kind: OpeningKind, px: number, py: number, productOverride\?/);
   assert.match(source, /productOverride \? productOverride\.widthM/);
-  assert.match(source, /op\.height = productOverride\.heightM; op\.productId = productOverride\.productId/);
+  assert.match(source, /op\.height = productOverride\.heightM;/);
+  assert.match(source, /op\.productId = productOverride\.productId;/);
+});
+
+test('janela de catálogo nasce alinhada pelo topo às portas de 2,10 m', () => {
+  const source = storeSource();
+  assert.match(source, /kind === 'window'\) op\.sillHeight = Math\.max\(0, Core\.OPENING_DEFAULT_HEAD_HEIGHT - op\.height\)/);
+  const core = readFileSync(new URL('../src/core/Core.ts', import.meta.url), 'utf8');
+  assert.match(core, /OPENING_DEFAULT_HEAD_HEIGHT = 2\.10/);
+  // Maxim-ar 0,60 m: peitoril 1,50 m; janela grande 1,20 m: 0,90 m.
+  assert.ok(Math.abs((2.10 - 0.60) - 1.50) < 1e-9);
+  assert.ok(Math.abs((2.10 - 1.20) - 0.90) < 1e-9);
 });
 
 test('todo produto door/window tem material, dimensões e uma representação 3D', () => {

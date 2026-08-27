@@ -1382,7 +1382,15 @@ export const commands = {
     const offset = Core.findValidOpeningOffset(w, currentOpenings(), width, desired);
     if (offset == null) return null; // parede curta demais / sem espaço livre
     const op = Core.createOpeningEntity(wallId, kind, offset);
-    if (productOverride) { op.width = productOverride.widthM; op.height = productOverride.heightM; op.productId = productOverride.productId; }
+    if (productOverride) {
+      op.width = productOverride.widthM;
+      op.height = productOverride.heightM;
+      op.productId = productOverride.productId;
+      // Todas as janelas de catálogo nascem pela mesma linha superior
+      // das portas. Assim uma janela de banheiro menor sobe o peitoril,
+      // em vez de ficar visualmente caída ao lado das demais esquadrias.
+      if (kind === 'window') op.sillHeight = Math.max(0, Core.OPENING_DEFAULT_HEAD_HEIGHT - op.height);
+    }
     if (!openingFitsCurrentRoof(w, op)) return null;
     pushUndoSnapshot();
     currentOpenings().push(op);

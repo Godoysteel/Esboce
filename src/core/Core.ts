@@ -39,6 +39,10 @@ export const DOOR_DEFAULT_HEIGHT = 2.1;
 export const WINDOW_DEFAULT_WIDTH = 1.2;
 export const WINDOW_DEFAULT_HEIGHT = 1.2;
 export const WINDOW_DEFAULT_SILL = 1.0;
+// Linha de verga usada ao inserir esquadrias escolhidas no catálogo.
+// Mantém janelas baixas de banheiro alinhadas pelo topo às janelas
+// grandes e às portas padrão de 2,10 m.
+export const OPENING_DEFAULT_HEAD_HEIGHT = 2.10;
 // Arco — vão estrutural (sacada, garagem, conceito aberto), bem maior
 // que porta/janela por padrão. Sem peitoril de nascença (fechado até o
 // chão) — o usuário sobe o peitoril arrastando quando quiser o efeito
@@ -2235,7 +2239,7 @@ export function resolveWallGroupGridDelta(
 export const Core = {
   GRID, SNAP_UNIT, WALL_THICK, COINCIDENCE_TOL, COLUMN_SIZE,
   DOOR_DEFAULT_WIDTH, DOOR_DEFAULT_HEIGHT,
-  WINDOW_DEFAULT_WIDTH, WINDOW_DEFAULT_HEIGHT, WINDOW_DEFAULT_SILL,
+  WINDOW_DEFAULT_WIDTH, WINDOW_DEFAULT_HEIGHT, WINDOW_DEFAULT_SILL, OPENING_DEFAULT_HEAD_HEIGHT,
   ARCO_DEFAULT_WIDTH, ARCO_DEFAULT_HEIGHT, ARCO_DEFAULT_SILL,
   WALL_HEIGHT, OPENING_MIN_WIDTH, OPENING_MIN_HEIGHT,
   OPENING_MARGIN, OPENING_GAP, OPENING_WALL_CLEARANCE,

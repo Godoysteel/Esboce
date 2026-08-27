@@ -87,4 +87,5 @@ Comprimentos, áreas e estimativas de materiais são derivados do modelo confirm
 - Cada item usa a fotografia de referência fornecida pelo Product Owner como miniatura do catálogo.
 - A representação 3D é procedural e acompanha largura e altura do vão. Ela preserva os elementos visuais identificadores de cada referência — frisos, painéis, puxadores, travessas, vidro ou palhetas — sem depender de um arquivo GLB por dimensão.
 - As dimensões explicitadas nos nomes de arquivo de origem foram preservadas. Nos casos sem medida declarada, foram adotadas dimensões iniciais usuais apenas para modelagem: porta frisada 0,80 x 2,10 m, maxim-ar 0,60 x 0,60 m, janela de correr 1,50 x 1,20 m e veneziana 1,20 x 1,20 m. O usuário pode ajustar o vão posteriormente.
+- Ao inserir uma janela escolhida no catálogo, o topo nasce na linha de 2,10 m das portas. Portanto, a maxim-ar de banheiro com 0,60 m de altura usa peitoril inicial de 1,50 m, enquanto uma janela de 1,20 m usa peitoril inicial de 0,90 m.
 - Os itens não afirmam fabricante, SKU comercial ou preço das imagens de referência; custo zero no catálogo interno significa **sob consulta**.
