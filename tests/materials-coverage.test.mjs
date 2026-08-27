@@ -265,7 +265,10 @@ test('Bloco de Volumetria: custo usa o produto pintado (Lata de tinta) quando ex
   const start = materialsSource.indexOf('(floor.volumeBoxes || []).forEach(function (b) {');
   const end = materialsSource.indexOf('\n    });', start);
   const body = materialsSource.slice(start, end);
-  assert.match(body, /const surfaceAreaM2 = 2 \* \(b\.widthM \* b\.heightM \+ b\.widthM \* b\.depthM \+ b\.heightM \* b\.depthM\);/);
+  // Cubo moldável: área real por face (soma dos cantos de verdade),
+  // não mais a fórmula fixa de caixa reta — ver Core.volumeBoxSurfaceAreaM2
+  // e o teste de regressão numérica em tests/volumetria.test.mjs.
+  assert.match(body, /const surfaceAreaM2 = Core\.volumeBoxSurfaceAreaM2\(b\);/);
   assert.match(body, /productUnitCost\(b\.finishProductId, surfaceAreaM2, selection\?\.price\)/);
   assert.match(body, /addCommercialQuantity\(volumeBoxCommercial, b\.finishProductId, surfaceAreaM2, selection\)/);
   assert.match(materialsSource, /pushMaterial\('Volumetria', 'Bloco de Volumetria \(sem acabamento\)'/);

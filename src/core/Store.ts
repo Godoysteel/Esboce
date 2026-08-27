@@ -204,6 +204,38 @@ export function findVolumeBox(id: string): VolumeBox | null {
   for (let i = 0; i < boxes.length; i++) if (boxes[i]!.id === id) return boxes[i]!;
   return null;
 }
+
+// Cubo moldável — helpers privados compartilhados pelos 3 comandos de
+// canto/aresta/face (updateVolumeBoxCornerLive/EdgeLive/FaceLive).
+function ensureVolumeBoxCornerOffsets(b: VolumeBox): NonNullable<VolumeBox['cornerOffsets']> {
+  if (!b.cornerOffsets) {
+    b.cornerOffsets = [
+      { x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 },
+      { x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 },
+    ];
+  }
+  return b.cornerOffsets;
+}
+// Delta em coordenadas de MUNDO → deslocamento LOCAL do box, desfazendo
+// a rotação em passos de 90° (mesmo cos/sin(angle) já usado no resize
+// antigo de largura/profundidade) — Y não gira (o box só gira em torno
+// do próprio eixo Y).
+function worldDeltaToVolumeBoxLocal(b: VolumeBox, dxM: number, dyM: number, dzM: number): { x: number; y: number; z: number } {
+  const angle = (b.rotationDeg || 0) * Math.PI / 180;
+  const cos = Math.cos(angle), sin = Math.sin(angle);
+  return { x: cos * dxM + sin * dzM, y: dyM, z: -sin * dxM + cos * dzM };
+}
+// Acrescenta (nunca sobrescreve) um deslocamento local ao canto —
+// preserva qualquer torção já aplicada antes por outra alça vizinha.
+// Trava cada componente em ±VOLUME_BOX_MAX_SIZE_M — sem isso um
+// arraste enorme por engano criaria uma malha absurda sem limite.
+function addToVolumeBoxCornerOffset(offsets: NonNullable<VolumeBox['cornerOffsets']>, cornerIndex: number, delta: { x: number; y: number; z: number }): void {
+  const c = offsets[cornerIndex]; if (!c) return;
+  const clamp = (v: number) => Math.max(-Core.VOLUME_BOX_MAX_SIZE_M, Math.min(Core.VOLUME_BOX_MAX_SIZE_M, v));
+  c.x = clamp(c.x + delta.x);
+  c.y = clamp(c.y + delta.y);
+  c.z = clamp(c.z + delta.z);
+}
 export function currentStairs(): Stair[] {
   const f = currentFloor();
   if (!f.stairs) f.stairs = [];
@@ -2091,45 +2123,55 @@ export const commands = {
     emit({ type: 'VolumeBoxRotated', volumeBoxId });
   },
 
-  // Confirma o redimensionamento da largura ao soltar a alça esquerda/
-  // direita — mesmo padrão de updateBalconyRailingSizeLive.
-  updateVolumeBoxSizeLive(volumeBoxId: string, widthM: number, centerDeltaM = 0): void {
+  // Cubo moldável — substitui as antigas alças de largura/profundidade/
+  // altura/elevação (updateVolumeBoxSizeLive/DepthLive/VerticalLive):
+  // empurrar a face "direita" JÁ é o resize de largura de antes quando
+  // não há torção nenhuma, manter as duas alças ao mesmo tempo seria
+  // redundante. As três abaixo (canto/aresta/face) sempre ACRESCENTAM
+  // um delta ao(s) canto(s) já existente(s) — nunca sobrescrevem —
+  // pra preservar qualquer torção anterior num canto vizinho. dxM/dzM
+  // chegam em coordenadas de MUNDO e passam pela rotação de 90° do
+  // box (mesmo cos/sin(angle) já usado no resize antigo) antes de
+  // virar deslocamento local; dyM (vertical) não precisa de rotação —
+  // o box só gira em torno do eixo Y. Todas as três dão snapshot de
+  // undo no commit (diferente das 4 antigas, que não davam) — moldar
+  // um canto é uma mudança estrutural maior que um resize uniforme, e
+  // sem "desfazer fácil" só olhando o número.
+  updateVolumeBoxCornerLive(volumeBoxId: string, cornerIndex: number, dxM: number, dyM: number, dzM: number): void {
     const b = findVolumeBox(volumeBoxId); if (!b) return;
-    const finalWidthM = Math.max(Core.VOLUME_BOX_MIN_SIZE_M, Math.min(Core.VOLUME_BOX_MAX_SIZE_M, widthM));
-    if (centerDeltaM) {
-      const angle = (b.rotationDeg || 0) * Math.PI / 180;
-      b.x = (b.x || 0) + Math.cos(angle) * centerDeltaM * Core.GRID;
-      b.y = (b.y || 0) + Math.sin(angle) * centerDeltaM * Core.GRID;
-    }
-    b.widthM = finalWidthM;
-    emit({ type: 'VolumeBoxResized', volumeBoxId, live: true });
+    pushUndoSnapshot();
+    const offsets = ensureVolumeBoxCornerOffsets(b);
+    const local = worldDeltaToVolumeBoxLocal(b, dxM, dyM, dzM);
+    addToVolumeBoxCornerOffset(offsets, cornerIndex, local);
+    emit({ type: 'VolumeBoxCornerMoved', volumeBoxId, cornerIndex, live: true });
   },
 
-  // Mesma ideia da largura, mas ao longo do eixo PERPENDICULAR
-  // (profundidade) — alça de arraste frente/trás.
-  updateVolumeBoxDepthLive(volumeBoxId: string, depthM: number, centerDeltaM = 0): void {
+  // Move os 2 cantos da aresta juntos (mesmo delta nos dois) — meio-termo
+  // entre mexer um canto só e empurrar a face inteira.
+  updateVolumeBoxEdgeLive(volumeBoxId: string, edgeIndex: number, dxM: number, dyM: number, dzM: number): void {
     const b = findVolumeBox(volumeBoxId); if (!b) return;
-    const finalDepthM = Math.max(Core.VOLUME_BOX_MIN_SIZE_M, Math.min(Core.VOLUME_BOX_MAX_SIZE_M, depthM));
-    if (centerDeltaM) {
-      const angle = (b.rotationDeg || 0) * Math.PI / 180;
-      // Eixo perpendicular ao de largura (mesma convenção nx=-uy,ny=ux
-      // já usada em vários lugares do projeto pra normal de parede).
-      const nx = -Math.sin(angle), ny = Math.cos(angle);
-      b.x = (b.x || 0) + nx * centerDeltaM * Core.GRID;
-      b.y = (b.y || 0) + ny * centerDeltaM * Core.GRID;
-    }
-    b.depthM = finalDepthM;
-    emit({ type: 'VolumeBoxResized', volumeBoxId, live: true });
+    const edge = Core.VOLUME_BOX_EDGES[edgeIndex]; if (!edge) return;
+    pushUndoSnapshot();
+    const offsets = ensureVolumeBoxCornerOffsets(b);
+    const local = worldDeltaToVolumeBoxLocal(b, dxM, dyM, dzM);
+    edge.forEach((cornerIndex) => addToVolumeBoxCornerOffset(offsets, cornerIndex, local));
+    emit({ type: 'VolumeBoxEdgeMoved', volumeBoxId, edgeIndex, live: true });
   },
 
-  // Confirma altura/elevação ao soltar a alça de CIMA (estica heightM,
-  // sillHeightM fixo) ou a de BAIXO (sobe/desce sillHeightM, heightM
-  // fixo) — mesmo comando único de updateBalconyRailingVerticalLive.
-  updateVolumeBoxVerticalLive(volumeBoxId: string, heightM: number, sillHeightM: number): void {
+  // Push-pull: move os 4 cantos da face juntos, ao longo da PRÓPRIA
+  // normal da face (calculada uma vez, no início do arraste — ver
+  // ViewportController — pra não mudar de direção no meio do gesto se
+  // a face já estiver torta). deltaAlongNormalM > 0 empurra pra fora.
+  updateVolumeBoxFaceLive(volumeBoxId: string, faceIndex: number, deltaAlongNormalM: number): void {
     const b = findVolumeBox(volumeBoxId); if (!b) return;
-    b.heightM = Math.max(Core.VOLUME_BOX_MIN_HEIGHT_M, Math.min(Core.VOLUME_BOX_MAX_HEIGHT_M, heightM));
-    b.sillHeightM = Math.max(0, Math.min(Core.VOLUME_BOX_MAX_SILL_HEIGHT_M, sillHeightM));
-    emit({ type: 'VolumeBoxResized', volumeBoxId, live: true });
+    const face = Core.volumeBoxFaces(b)[faceIndex]; if (!face) return;
+    pushUndoSnapshot();
+    const offsets = ensureVolumeBoxCornerOffsets(b);
+    // A normal já está no espaço LOCAL do box (Core.volumeBoxFaces não
+    // conhece rotationDeg) — não passa por worldDeltaToVolumeBoxLocal.
+    const local = { x: face.normal.x * deltaAlongNormalM, y: face.normal.y * deltaAlongNormalM, z: face.normal.z * deltaAlongNormalM };
+    face.cornerIndices.forEach((cornerIndex) => addToVolumeBoxCornerOffset(offsets, cornerIndex, local));
+    emit({ type: 'VolumeBoxFaceMoved', volumeBoxId, faceIndex, live: true });
   },
 
   // Acabamento tipo parede aplicado pela ferramenta Lata de tinta —

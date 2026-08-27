@@ -296,6 +296,20 @@ export interface VolumeBox {
   colorHex?: string;
   /** Acabamento tipo parede aplicado pela ferramenta Lata de tinta (mesmo catálogo de "paint" usado em Wall.finishA/B). Presente = sobrescreve colorHex. */
   finishProductId?: string;
+  /** Deslocamento local (metros) de cada um dos 8 cantos em relação à posição
+   * "ideal" do box reto derivada de widthM/heightM/depthM — índice 0-7 =
+   * bit0:X (0=-hw,1=+hw) bit1:Y (0=-hh,1=+hh) bit2:Z (0=-hd,1=+hd); ver
+   * Core.VOLUME_BOX_CORNER_SIGNS/volumeBoxCornerLocalPositions. Ausente =
+   * box perfeitamente reto (comportamento original, projeto salvo antes
+   * desta feature não muda nada). Permite moldar o bloco puxando canto,
+   * aresta (2 cantos juntos) ou face (4 cantos juntos, push-pull) sem
+   * mudar a topologia — sempre 8 cantos, 12 arestas, 6 faces. */
+  cornerOffsets?: [
+    { x: number; y: number; z: number }, { x: number; y: number; z: number },
+    { x: number; y: number; z: number }, { x: number; y: number; z: number },
+    { x: number; y: number; z: number }, { x: number; y: number; z: number },
+    { x: number; y: number; z: number }, { x: number; y: number; z: number },
+  ];
 }
 
 // Cada modelo é uma malha .glb de verdade (ver Scene3DRenderer.STAIR_MODEL_URLS),

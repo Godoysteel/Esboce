@@ -406,6 +406,19 @@ import {
     volumeBoxResizeHiddenObject = null;
   }
 
+  // Cubo moldável — cópia independente dos 8 cantos (zero se
+  // box.cornerOffsets ainda não existe) pra servir de base de trabalho
+  // durante o arraste, sem tocar no dado persistido até o pointerup.
+  function cloneVolumeBoxCornerOffsets(box: any): { x: number; y: number; z: number }[] {
+    var base = box.cornerOffsets;
+    var out = [];
+    for (var i = 0; i < 8; i++) {
+      var o = base ? base[i] : null;
+      out.push({ x: o ? o.x : 0, y: o ? o.y : 0, z: o ? o.z : 0 });
+    }
+    return out;
+  }
+
   function beginVolumeBoxResizePreview(volumeBoxId: string) {
     clearVolumeBoxResizePreview();
     var source: any = findVolumeBoxSceneObject(volumeBoxId);
@@ -414,19 +427,27 @@ import {
     source.visible = false;
     var box = Store.findVolumeBox(volumeBoxId);
     if (!box) { source.visible = true; volumeBoxResizeHiddenObject = null; return; }
-    // Mesma técnica de "volume fantasma" da Sacada de vidro
-    // (beginBalconyResizePreview) — sem reconstruir a malha/material de
-    // verdade (com textura PBR, mais custoso) a cada frame do arraste.
-    var previewGeometry = new THREE.BoxGeometry(box.widthM, box.heightM, box.depthM);
-    var previewMaterial = new THREE.MeshBasicMaterial({
-      color: 0x79c8ee, transparent: true, opacity: 0.28,
-      depthWrite: false, side: THREE.DoubleSide,
-    });
-    volumeBoxResizePreview = new THREE.Mesh(previewGeometry, previewMaterial);
+    volumeBoxResizePreview = new THREE.Group();
     volumeBoxResizePreview.position.copy(source.position);
     volumeBoxResizePreview.rotation.copy(source.rotation);
     volumeBoxResizePreview.renderOrder = 998;
     scene.add(volumeBoxResizePreview);
+    updateVolumeBoxSkewPreview(box, box.cornerOffsets);
+  }
+
+  // Reconstrói a malha fantasma a partir de uma cópia de trabalho de
+  // cornerOffsets (Scene3DRenderer.buildVolumeBoxMesh aceita um box
+  // sintético — entidade real + cornerOffsets ainda não commitados).
+  // 8 vértices, 36 índices — barato o bastante pra rodar a cada
+  // pointermove sem preocupação de desempenho.
+  function updateVolumeBoxSkewPreview(box: any, cornerOffsets: any): void {
+    if (!volumeBoxResizePreview) return;
+    while (volumeBoxResizePreview.children.length) volumeBoxResizePreview.remove(volumeBoxResizePreview.children[0]);
+    var previewGroup: any = Scene3DRenderer.buildVolumeBoxMesh(Object.assign({}, box, { cornerOffsets: cornerOffsets }));
+    previewGroup.traverse(function (obj: any) {
+      if (obj.isMesh) obj.material = new THREE.MeshBasicMaterial({ color: 0x79c8ee, transparent: true, opacity: 0.28, depthWrite: false, side: THREE.DoubleSide });
+    });
+    volumeBoxResizePreview.add(previewGroup);
   }
 
   function clearStairResizePreview() {
@@ -2733,16 +2754,62 @@ import {
           dragElementStart = { widthM: brHeightBottom.widthM, heightM: brHeightBottom.heightM, sillHeightM: brHeightBottom.sillHeightM || 0, startScreenY: e.clientY, lastHeightM: brHeightBottom.heightM, lastSillHeightM: brHeightBottom.sillHeightM || 0 };
           beginBalconyResizePreview(brHeightBottom.id);
         }
-      } else if (handle.indexOf('volumeBoxWidth') === 0) {
-        // Bloco de Volumetria — largura (eixo local X, mesma técnica de
-        // balconyWidth).
-        var vbWidth = Store.findVolumeBox(selectedVolumeBoxId);
-        if (vbWidth) {
-          var vbAngle = (vbWidth.rotationDeg || 0) * Math.PI / 180;
-          var vbAxisX = Math.cos(vbAngle), vbAxisY = Math.sin(vbAngle);
-          var vbSide = handle === 'volumeBoxWidthRight' ? 1 : -1;
-          dragElementStart = { widthM: vbWidth.widthM, center: { x: vbWidth.x || 0, y: vbWidth.y || 0 }, axisX: vbAxisX, axisY: vbAxisY, side: vbSide, maxWidthM: Core.VOLUME_BOX_MAX_SIZE_M, lastWidthM: vbWidth.widthM, centerDeltaM: 0 };
-          beginVolumeBoxResizePreview(vbWidth.id);
+      } else if (handle.indexOf('volumeBoxCorner:') === 0) {
+        // Cubo moldável — alça de CANTO: move 1 canto livre em X/Y/Z.
+        // Horizontal (X/Z) vem do raycast contra o chão (mesma técnica
+        // de sempre); vertical (Y) vem do delta de tela, mesmo
+        // heurístico já usado pelas alças de altura antigas.
+        var vbCornerBox = Store.findVolumeBox(selectedVolumeBoxId);
+        var vbCornerGround = getGroundModelPoint(e.clientX, e.clientY);
+        if (vbCornerBox && vbCornerGround) {
+          dragElementStart = {
+            cornerIndex: parseInt(handle.slice('volumeBoxCorner:'.length), 10),
+            groundStart: vbCornerGround, startScreenY: e.clientY,
+            baseOffsets: cloneVolumeBoxCornerOffsets(vbCornerBox),
+          };
+          beginVolumeBoxResizePreview(vbCornerBox.id);
+        }
+      } else if (handle.indexOf('volumeBoxEdge:') === 0) {
+        // Alça de ARESTA: os 2 cantos da aresta se movem juntos (mesmo
+        // delta) — meio-termo entre canto único e face inteira.
+        var vbEdgeBox = Store.findVolumeBox(selectedVolumeBoxId);
+        var vbEdgeGround = getGroundModelPoint(e.clientX, e.clientY);
+        if (vbEdgeBox && vbEdgeGround) {
+          dragElementStart = {
+            edgeIndex: parseInt(handle.slice('volumeBoxEdge:'.length), 10),
+            groundStart: vbEdgeGround, startScreenY: e.clientY,
+            baseOffsets: cloneVolumeBoxCornerOffsets(vbEdgeBox),
+          };
+          beginVolumeBoxResizePreview(vbEdgeBox.id);
+        }
+      } else if (handle.indexOf('volumeBoxFace:') === 0) {
+        // Alça de FACE: push-pull ao longo da PRÓPRIA normal da face —
+        // calculada uma vez aqui (início do arraste), não muda de
+        // direção no meio do gesto mesmo que a face já esteja torta.
+        // Face majoritariamente vertical (topo/base) usa o delta de
+        // tela (mesma técnica das antigas alças de altura); as outras 4
+        // usam o raycast contra o chão, projetado na normal da face.
+        var vbFaceBox = Store.findVolumeBox(selectedVolumeBoxId);
+        if (vbFaceBox) {
+          var vbFaceIndex = parseInt(handle.slice('volumeBoxFace:'.length), 10);
+          var vbFace = Core.volumeBoxFaces(vbFaceBox)[vbFaceIndex];
+          if (vbFace) {
+            var vbFaceAngle = (vbFaceBox.rotationDeg || 0) * Math.PI / 180;
+            var vbFaceAxisX = Math.cos(vbFaceAngle), vbFaceAxisY = Math.sin(vbFaceAngle);
+            var vbFaceDepthAxisX = -Math.sin(vbFaceAngle), vbFaceDepthAxisY = Math.cos(vbFaceAngle);
+            var vbFaceVertical = Math.abs(vbFace.normal.y) >= 0.5;
+            dragElementStart = {
+              faceIndex: vbFaceIndex, faceNormal: vbFace.normal, faceVertical: vbFaceVertical,
+              // Normal (local X/Z) já rotacionada pro mundo, pra projetar
+              // o movimento do chão nela sem precisar desfazer rotação de novo.
+              worldNormalX: vbFaceAxisX * vbFace.normal.x + vbFaceDepthAxisX * vbFace.normal.z,
+              worldNormalZ: vbFaceAxisY * vbFace.normal.x + vbFaceDepthAxisY * vbFace.normal.z,
+              groundStart: getGroundModelPoint(e.clientX, e.clientY), startScreenY: e.clientY,
+              baseOffsets: cloneVolumeBoxCornerOffsets(vbFaceBox),
+              lastDeltaAlongNormalM: 0,
+            };
+            beginVolumeBoxResizePreview(vbFaceBox.id);
+          }
         }
       } else if (handle.indexOf('stairWidth') === 0) {
         // Escada — largura (eixo local X, mesma técnica de balconyWidth/
@@ -2755,30 +2822,6 @@ import {
           var stWSide = handle === 'stairWidthRight' ? 1 : -1;
           dragElementStart = { widthM: stWidth.widthM, center: { x: stWidth.x || 0, y: stWidth.y || 0 }, axisX: stWAxisX, axisY: stWAxisY, side: stWSide, maxWidthM: Core.STAIR_MAX_WIDTH_M, lastWidthM: stWidth.widthM, centerDeltaM: 0 };
           beginStairResizePreview(stWidth.id);
-        }
-      } else if (handle.indexOf('volumeBoxDepth') === 0) {
-        // Profundidade — mesma técnica, só que no eixo PERPENDICULAR ao
-        // de largura (mesma convenção nx=-uy,ny=ux já usada pra normal
-        // de parede em vários lugares do projeto).
-        var vbDepth = Store.findVolumeBox(selectedVolumeBoxId);
-        if (vbDepth) {
-          var vbDAngle = (vbDepth.rotationDeg || 0) * Math.PI / 180;
-          var vbDAxisX = -Math.sin(vbDAngle), vbDAxisY = Math.cos(vbDAngle);
-          var vbDSide = handle === 'volumeBoxDepthBack' ? 1 : -1;
-          dragElementStart = { widthM: vbDepth.depthM, center: { x: vbDepth.x || 0, y: vbDepth.y || 0 }, axisX: vbDAxisX, axisY: vbDAxisY, side: vbDSide, maxWidthM: Core.VOLUME_BOX_MAX_SIZE_M, lastWidthM: vbDepth.depthM, centerDeltaM: 0 };
-          beginVolumeBoxResizePreview(vbDepth.id);
-        }
-      } else if (handle === 'volumeBoxHeightTop') {
-        var vbHeightTop = Store.findVolumeBox(selectedVolumeBoxId);
-        if (vbHeightTop) {
-          dragElementStart = { heightM: vbHeightTop.heightM, sillHeightM: vbHeightTop.sillHeightM || 0, startScreenY: e.clientY, lastHeightM: vbHeightTop.heightM, lastSillHeightM: vbHeightTop.sillHeightM || 0 };
-          beginVolumeBoxResizePreview(vbHeightTop.id);
-        }
-      } else if (handle === 'volumeBoxHeightBottom') {
-        var vbHeightBottom = Store.findVolumeBox(selectedVolumeBoxId);
-        if (vbHeightBottom) {
-          dragElementStart = { heightM: vbHeightBottom.heightM, sillHeightM: vbHeightBottom.sillHeightM || 0, startScreenY: e.clientY, lastHeightM: vbHeightBottom.heightM, lastSillHeightM: vbHeightBottom.sillHeightM || 0 };
-          beginVolumeBoxResizePreview(vbHeightBottom.id);
         }
       } else if (handle === 'varandaTraceStart' || handle === 'varandaTraceEnd') {
         var traceVaranda = Store.findVaranda(selectedVarandaId);
@@ -3815,67 +3858,66 @@ import {
       }
       return;
     }
-    if (dragMode && dragMode.indexOf('volumeBoxWidth') === 0) {
-      // Cópia direta do redimensionamento de largura da Sacada de vidro
-      // (handle.indexOf('balconyWidth')) — mesma matemática, eixo local X.
-      var vbResizeW = Store.findVolumeBox(selectedVolumeBoxId);
-      var groundResizeVb = getGroundModelPoint(e.clientX, e.clientY);
-      if (vbResizeW && groundResizeVb && dragElementStart) {
-        var alongVb = ((groundResizeVb.x - dragElementStart.center.x) * dragElementStart.axisX + (groundResizeVb.y - dragElementStart.center.y) * dragElementStart.axisY) / Core.GRID;
-        var candidateVbW = Math.max(Core.VOLUME_BOX_MIN_SIZE_M, Math.min(dragElementStart.maxWidthM, dragElementStart.widthM / 2 + alongVb * dragElementStart.side));
-        var centerDeltaVb = dragElementStart.side * (candidateVbW - dragElementStart.widthM) / 2;
-        dragElementStart.lastWidthM = candidateVbW;
-        dragElementStart.centerDeltaM = centerDeltaVb;
-        if (volumeBoxResizePreview) {
-          volumeBoxResizePreview.scale.x = candidateVbW / vbResizeW.widthM;
-          var worldDeltaVb = centerDeltaVb * Core.GRID * scale;
-          volumeBoxResizePreview.position.x = volumeBoxResizeHiddenObject.position.x + dragElementStart.axisX * worldDeltaVb;
-          volumeBoxResizePreview.position.z = volumeBoxResizeHiddenObject.position.z + dragElementStart.axisY * worldDeltaVb;
+    if (dragMode && dragMode.indexOf('volumeBoxCorner:') === 0) {
+      var vbCornerDragBox = Store.findVolumeBox(selectedVolumeBoxId);
+      var vbCornerGroundNow = getGroundModelPoint(e.clientX, e.clientY);
+      if (vbCornerDragBox && vbCornerGroundNow && dragElementStart) {
+        var vbCornerDx = (vbCornerGroundNow.x - dragElementStart.groundStart.x) / Core.GRID;
+        var vbCornerDz = (vbCornerGroundNow.y - dragElementStart.groundStart.y) / Core.GRID;
+        var vbCornerDy = (dragElementStart.startScreenY - e.clientY) * 0.02;
+        dragElementStart.lastDelta = { x: vbCornerDx, y: vbCornerDy, z: vbCornerDz };
+        var vbCornerWorking = dragElementStart.baseOffsets.map(function (o: any) { return { x: o.x, y: o.y, z: o.z }; });
+        var vbCornerTarget = vbCornerWorking[dragElementStart.cornerIndex];
+        vbCornerTarget.x += vbCornerDx; vbCornerTarget.y += vbCornerDy; vbCornerTarget.z += vbCornerDz;
+        updateVolumeBoxSkewPreview(vbCornerDragBox, vbCornerWorking);
+      }
+      return;
+    }
+    if (dragMode && dragMode.indexOf('volumeBoxEdge:') === 0) {
+      var vbEdgeDragBox = Store.findVolumeBox(selectedVolumeBoxId);
+      var vbEdgeGroundNow = getGroundModelPoint(e.clientX, e.clientY);
+      if (vbEdgeDragBox && vbEdgeGroundNow && dragElementStart) {
+        var vbEdgeDx = (vbEdgeGroundNow.x - dragElementStart.groundStart.x) / Core.GRID;
+        var vbEdgeDz = (vbEdgeGroundNow.y - dragElementStart.groundStart.y) / Core.GRID;
+        var vbEdgeDy = (dragElementStart.startScreenY - e.clientY) * 0.02;
+        dragElementStart.lastDelta = { x: vbEdgeDx, y: vbEdgeDy, z: vbEdgeDz };
+        var vbEdgeWorking = dragElementStart.baseOffsets.map(function (o: any) { return { x: o.x, y: o.y, z: o.z }; });
+        var vbEdgePair = Core.VOLUME_BOX_EDGES[dragElementStart.edgeIndex]!;
+        vbEdgePair.forEach(function (ci: number) {
+          vbEdgeWorking[ci].x += vbEdgeDx; vbEdgeWorking[ci].y += vbEdgeDy; vbEdgeWorking[ci].z += vbEdgeDz;
+        });
+        updateVolumeBoxSkewPreview(vbEdgeDragBox, vbEdgeWorking);
+      }
+      return;
+    }
+    if (dragMode && dragMode.indexOf('volumeBoxFace:') === 0) {
+      // Push-pull: vertical usa o delta de tela (mesma heurística das
+      // antigas alças de altura); as outras 4 projetam o movimento do
+      // chão na normal da face (já calculada em coordenadas de mundo
+      // no início do arraste — ver pointerdown).
+      var vbFaceDragBox = Store.findVolumeBox(selectedVolumeBoxId);
+      if (vbFaceDragBox && dragElementStart) {
+        var vbFaceDeltaAlongNormal = 0;
+        if (dragElementStart.faceVertical) {
+          vbFaceDeltaAlongNormal = -dragElementStart.faceNormal.y * (e.clientY - dragElementStart.startScreenY) * 0.02;
+        } else {
+          var vbFaceGroundNow = getGroundModelPoint(e.clientX, e.clientY);
+          if (vbFaceGroundNow) {
+            var vbFaceGdx = (vbFaceGroundNow.x - dragElementStart.groundStart.x) / Core.GRID;
+            var vbFaceGdz = (vbFaceGroundNow.y - dragElementStart.groundStart.y) / Core.GRID;
+            vbFaceDeltaAlongNormal = vbFaceGdx * dragElementStart.worldNormalX + vbFaceGdz * dragElementStart.worldNormalZ;
+          }
         }
-      }
-      return;
-    }
-    if (dragMode && dragMode.indexOf('volumeBoxDepth') === 0) {
-      // Mesma técnica da largura, mas escalando o eixo Z local do
-      // preview (profundidade) em vez do X.
-      var vbResizeD = Store.findVolumeBox(selectedVolumeBoxId);
-      var groundResizeVbD = getGroundModelPoint(e.clientX, e.clientY);
-      if (vbResizeD && groundResizeVbD && dragElementStart) {
-        var alongVbD = ((groundResizeVbD.x - dragElementStart.center.x) * dragElementStart.axisX + (groundResizeVbD.y - dragElementStart.center.y) * dragElementStart.axisY) / Core.GRID;
-        var candidateVbD = Math.max(Core.VOLUME_BOX_MIN_SIZE_M, Math.min(dragElementStart.maxWidthM, dragElementStart.widthM / 2 + alongVbD * dragElementStart.side));
-        var centerDeltaVbD = dragElementStart.side * (candidateVbD - dragElementStart.widthM) / 2;
-        dragElementStart.lastWidthM = candidateVbD;
-        dragElementStart.centerDeltaM = centerDeltaVbD;
-        if (volumeBoxResizePreview) {
-          volumeBoxResizePreview.scale.z = candidateVbD / vbResizeD.depthM;
-          var worldDeltaVbD = centerDeltaVbD * Core.GRID * scale;
-          volumeBoxResizePreview.position.x = volumeBoxResizeHiddenObject.position.x + dragElementStart.axisX * worldDeltaVbD;
-          volumeBoxResizePreview.position.z = volumeBoxResizeHiddenObject.position.z + dragElementStart.axisY * worldDeltaVbD;
-        }
-      }
-      return;
-    }
-    if (dragMode === 'volumeBoxHeightTop') {
-      // Estica a altura pra CIMA — mesma técnica da alça de cima da
-      // Sacada de vidro (balconyHeightTop).
-      var vbTopEnt = Store.findVolumeBox(selectedVolumeBoxId);
-      if (vbTopEnt && dragElementStart && volumeBoxResizePreview) {
-        var candidateVbH = Math.max(Core.VOLUME_BOX_MIN_HEIGHT_M, dragElementStart.heightM + (dragElementStart.startScreenY - e.clientY) * 0.02);
-        dragElementStart.lastHeightM = candidateVbH;
-        volumeBoxResizePreview.scale.y = candidateVbH / vbTopEnt.heightM;
-        volumeBoxResizePreview.position.y = volumeBoxResizeHiddenObject.position.y + (candidateVbH - vbTopEnt.heightM) / 2;
-      }
-      return;
-    }
-    if (dragMode === 'volumeBoxHeightBottom') {
-      // Sobe/desce a base (sillHeightM) — heightM fixo, mesma técnica
-      // da alça de baixo da Sacada de vidro (balconyHeightBottom).
-      var vbBottomEnt = Store.findVolumeBox(selectedVolumeBoxId);
-      if (vbBottomEnt && dragElementStart && volumeBoxResizePreview) {
-        var deltaVbSillM = (dragElementStart.startScreenY - e.clientY) * 0.02;
-        var candidateVbSillM = Math.max(0, dragElementStart.sillHeightM + deltaVbSillM);
-        dragElementStart.lastSillHeightM = candidateVbSillM;
-        volumeBoxResizePreview.position.y = volumeBoxResizeHiddenObject.position.y + (candidateVbSillM - dragElementStart.sillHeightM);
+        dragElementStart.lastDeltaAlongNormalM = vbFaceDeltaAlongNormal;
+        var vbFaceWorking = dragElementStart.baseOffsets.map(function (o: any) { return { x: o.x, y: o.y, z: o.z }; });
+        var vbFaceCornerIndices = Core.volumeBoxFaces(vbFaceDragBox)[dragElementStart.faceIndex]!.cornerIndices;
+        var vbFaceLocalDx = dragElementStart.faceNormal.x * vbFaceDeltaAlongNormal;
+        var vbFaceLocalDy = dragElementStart.faceNormal.y * vbFaceDeltaAlongNormal;
+        var vbFaceLocalDz = dragElementStart.faceNormal.z * vbFaceDeltaAlongNormal;
+        vbFaceCornerIndices.forEach(function (ci: number) {
+          vbFaceWorking[ci].x += vbFaceLocalDx; vbFaceWorking[ci].y += vbFaceLocalDy; vbFaceWorking[ci].z += vbFaceLocalDz;
+        });
+        updateVolumeBoxSkewPreview(vbFaceDragBox, vbFaceWorking);
       }
       return;
     }
@@ -4243,30 +4285,29 @@ import {
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }
-    if (dragMode && dragMode.indexOf('volumeBoxWidth') === 0) {
-      var finalVbWidth = dragElementStart && dragElementStart.lastWidthM;
+    if (dragMode && dragMode.indexOf('volumeBoxCorner:') === 0) {
+      var finalVbCornerDelta = dragElementStart && dragElementStart.lastDelta;
       clearVolumeBoxResizePreview();
-      if (selectedVolumeBoxId && finalVbWidth) {
-        Store.commands.updateVolumeBoxSizeLive(selectedVolumeBoxId, finalVbWidth, dragElementStart.centerDeltaM || 0);
+      if (selectedVolumeBoxId && finalVbCornerDelta) {
+        Store.commands.updateVolumeBoxCornerLive(selectedVolumeBoxId, dragElementStart.cornerIndex, finalVbCornerDelta.x, finalVbCornerDelta.y, finalVbCornerDelta.z);
       }
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }
-    if (dragMode && dragMode.indexOf('volumeBoxDepth') === 0) {
-      var finalVbDepth = dragElementStart && dragElementStart.lastWidthM;
+    if (dragMode && dragMode.indexOf('volumeBoxEdge:') === 0) {
+      var finalVbEdgeDelta = dragElementStart && dragElementStart.lastDelta;
       clearVolumeBoxResizePreview();
-      if (selectedVolumeBoxId && finalVbDepth) {
-        Store.commands.updateVolumeBoxDepthLive(selectedVolumeBoxId, finalVbDepth, dragElementStart.centerDeltaM || 0);
+      if (selectedVolumeBoxId && finalVbEdgeDelta) {
+        Store.commands.updateVolumeBoxEdgeLive(selectedVolumeBoxId, dragElementStart.edgeIndex, finalVbEdgeDelta.x, finalVbEdgeDelta.y, finalVbEdgeDelta.z);
       }
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }
-    if (dragMode === 'volumeBoxHeightTop' || dragMode === 'volumeBoxHeightBottom') {
-      var finalVbHeight = dragElementStart && dragElementStart.lastHeightM;
-      var finalVbSill = dragElementStart && dragElementStart.lastSillHeightM;
+    if (dragMode && dragMode.indexOf('volumeBoxFace:') === 0) {
+      var finalVbFaceDelta = dragElementStart ? dragElementStart.lastDeltaAlongNormalM : 0;
       clearVolumeBoxResizePreview();
-      if (selectedVolumeBoxId && finalVbHeight != null && finalVbSill != null) {
-        Store.commands.updateVolumeBoxVerticalLive(selectedVolumeBoxId, finalVbHeight, finalVbSill);
+      if (selectedVolumeBoxId && finalVbFaceDelta) {
+        Store.commands.updateVolumeBoxFaceLive(selectedVolumeBoxId, dragElementStart.faceIndex, finalVbFaceDelta);
       }
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;

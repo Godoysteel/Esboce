@@ -3488,8 +3488,40 @@ export function hashColorHex(key: string): number {
     });
   }
 
-  function buildVolumeBoxMesh(box: any) {
-    var geo = new THREE.BoxGeometry(box.widthM, box.heightM, box.depthM);
+  // Cubo moldável: malha construída a partir dos 8 cantos reais
+  // (Core.volumeBoxCornerLocalPositions — reto quando box.cornerOffsets
+  // está ausente, torto quando alguma alça de canto/aresta/face já foi
+  // usada). Cada face ganha 4 vértices PRÓPRIOS (não os 8 compartilhados)
+  // pra manter sombreamento plano por face, igual BoxGeometry — dá pra
+  // computeVertexNormals() direto porque nenhum vértice é compartilhado
+  // entre faces.
+  function buildVolumeBoxGeometry(box: any) {
+    var corners = Core.volumeBoxCornerLocalPositions(box);
+    var faces = Core.volumeBoxFaces(box);
+    var positions: number[] = [];
+    var indices: number[] = [];
+    faces.forEach(function (face: any) {
+      var base = positions.length / 3;
+      face.cornerIndices.forEach(function (ci: number) {
+        var c = corners[ci]!;
+        positions.push(c.x, c.y, c.z);
+      });
+      indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+    });
+    var geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
+    return geo;
+  }
+
+  // Exportada (não só de uso interno) — ViewportController reconstrói a
+  // prévia de arraste chamando esta função direto com um box sintético
+  // (entidade real + cornerOffsets de trabalho), mesmo princípio de
+  // createRoofResizePreviewMeshes acima, sem precisar de um builder de
+  // prévia paralelo.
+  export function buildVolumeBoxMesh(box: any) {
+    var geo = buildVolumeBoxGeometry(box);
     var mat = buildVolumeBoxMaterial(box);
     var mesh = new THREE.Mesh(geo, mat);
     var edges = new THREE.EdgesGeometry(geo);
@@ -3501,7 +3533,7 @@ export function hashColorHex(key: string): number {
 
   function buildVolumeBoxHitMesh(box: any, scale: any, offsetX: any, offsetY: any, yOffset: any) {
     var sill = box.sillHeightM || 0;
-    var hitGeo = new THREE.BoxGeometry(box.widthM, box.heightM, box.depthM);
+    var hitGeo = buildVolumeBoxGeometry(box);
     var hitMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 });
     var hitMesh = new THREE.Mesh(hitGeo, hitMat);
     var group = buildVolumeBoxMesh(box);
@@ -4953,11 +4985,13 @@ export function hashColorHex(key: string): number {
     }
 
     if (viewState.selectedVolumeBox) {
-      // Bloco de Volumetria — 6 alças, uma por direção (Product Owner:
-      // "tirar o imã e fazer as alças em todas as direções"): esquerda/
-      // direita (largura, eixo local X), frente/trás (profundidade,
-      // eixo local Z — perpendicular ao de largura) e cima/baixo
-      // (altura/elevação, mesmo par da Sacada de vidro).
+      // Bloco de Volumetria — cubo moldável: 8 alças de canto, 12 de
+      // meio de aresta e 6 de centro de face (push-pull), substituindo
+      // as antigas 6 alças de largura/profundidade/altura/elevação —
+      // empurrar a face "direita" JÁ é o resize de largura de antes
+      // quando não há torção nenhuma (Core.volumeBoxFaces/
+      // Core.VOLUME_BOX_EDGES/Core.volumeBoxCornerLocalPositions
+      // definem a topologia fixa: sempre 8-12-6, ver Core.ts).
       var vbSel = viewState.selectedVolumeBox;
       var vbYOffset = viewState.editingYOffset;
       var vbSill = vbSel.sillHeightM || 0;
@@ -4965,29 +4999,45 @@ export function hashColorHex(key: string): number {
       var vbAxisX = Math.cos(vbAngle), vbAxisY = Math.sin(vbAngle);
       var vbDepthAxisX = -Math.sin(vbAngle), vbDepthAxisY = Math.cos(vbAngle);
       var vbCenterWorldX = (vbCx - offsetX) * scale, vbCenterWorldZ = (vbCy - offsetY) * scale;
-      var vbHandleY = vbYOffset + vbSill + vbSel.heightM / 2;
-      [-1, 1].forEach(function (side) {
-        var modelOffset = vbSel.widthM * Core.GRID / 2 * side;
-        var handle = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 12), new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false }));
-        handle.position.set(vbCenterWorldX + vbAxisX * modelOffset * scale, vbHandleY, vbCenterWorldZ + vbAxisY * modelOffset * scale);
-        handle.userData.handle = side < 0 ? 'volumeBoxWidthLeft' : 'volumeBoxWidthRight';
+      var vbCenterWorldY = vbYOffset + vbSill + vbSel.heightM / 2;
+      // Local (x=largura, y=altura, z=profundidade) → posição de mundo,
+      // pela MESMA convenção de eixo já usada acima (vbAxisX/Y = eixo
+      // local de largura, vbDepthAxisX/Y = eixo local de profundidade).
+      function vbLocalToWorld(local: any) {
+        return {
+          x: vbCenterWorldX + (vbAxisX * local.x + vbDepthAxisX * local.z) * scale,
+          y: vbCenterWorldY + local.y,
+          z: vbCenterWorldZ + (vbAxisY * local.x + vbDepthAxisY * local.z) * scale,
+        };
+      }
+      var vbCorners = Core.volumeBoxCornerLocalPositions(vbSel);
+      var vbFaces = Core.volumeBoxFaces(vbSel);
+      vbCorners.forEach(function (corner: any, i: number) {
+        var world = vbLocalToWorld(corner);
+        var handle = new THREE.Mesh(new THREE.SphereGeometry(0.09, 12, 12), new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false }));
+        handle.position.set(world.x, world.y, world.z);
+        handle.userData.handle = 'volumeBoxCorner:' + i;
         handle.renderOrder = 999; scene.add(handle); registry.handleMeshes.push(handle);
       });
-      [-1, 1].forEach(function (side) {
-        var modelOffset = vbSel.depthM * Core.GRID / 2 * side;
-        var handle = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 12), new THREE.MeshBasicMaterial({ color: 0xffd166, depthTest: false }));
-        handle.position.set(vbCenterWorldX + vbDepthAxisX * modelOffset * scale, vbHandleY, vbCenterWorldZ + vbDepthAxisY * modelOffset * scale);
-        handle.userData.handle = side < 0 ? 'volumeBoxDepthFront' : 'volumeBoxDepthBack';
+      Core.VOLUME_BOX_EDGES.forEach(function (edge: any, i: number) {
+        var a = vbCorners[edge[0]]!, b = vbCorners[edge[1]]!;
+        var mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, z: (a.z + b.z) / 2 };
+        var world = vbLocalToWorld(mid);
+        var handle = new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 12), new THREE.MeshBasicMaterial({ color: 0xffd166, depthTest: false }));
+        handle.position.set(world.x, world.y, world.z);
+        handle.userData.handle = 'volumeBoxEdge:' + i;
         handle.renderOrder = 999; scene.add(handle); registry.handleMeshes.push(handle);
       });
-      var vbTopHandle = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 12), new THREE.MeshBasicMaterial({ color: SELECTED_ACCENT, depthTest: false }));
-      vbTopHandle.position.set(vbCenterWorldX, vbYOffset + vbSill + vbSel.heightM + 0.15, vbCenterWorldZ);
-      vbTopHandle.userData.handle = 'volumeBoxHeightTop'; vbTopHandle.renderOrder = 999;
-      scene.add(vbTopHandle); registry.handleMeshes.push(vbTopHandle);
-      var vbBottomHandle = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 12), new THREE.MeshBasicMaterial({ color: SELECTED_ACCENT, depthTest: false }));
-      vbBottomHandle.position.set(vbCenterWorldX, vbYOffset + Math.max(0, vbSill - 0.15), vbCenterWorldZ);
-      vbBottomHandle.userData.handle = 'volumeBoxHeightBottom'; vbBottomHandle.renderOrder = 999;
-      scene.add(vbBottomHandle); registry.handleMeshes.push(vbBottomHandle);
+      vbFaces.forEach(function (face: any, i: number) {
+        var sum = { x: 0, y: 0, z: 0 };
+        face.cornerIndices.forEach(function (ci: number) { var c = vbCorners[ci]!; sum.x += c.x; sum.y += c.y; sum.z += c.z; });
+        var center = { x: sum.x / 4, y: sum.y / 4, z: sum.z / 4 };
+        var world = vbLocalToWorld(center);
+        var handle = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 12), new THREE.MeshBasicMaterial({ color: SELECTED_ACCENT, depthTest: false }));
+        handle.position.set(world.x, world.y, world.z);
+        handle.userData.handle = 'volumeBoxFace:' + i;
+        handle.renderOrder = 999; scene.add(handle); registry.handleMeshes.push(handle);
+      });
     }
 
     if (viewState.selectedStair) {
@@ -6377,6 +6427,7 @@ export const Scene3DRenderer = {
   rebuild,
   createRoofResizePreviewMeshes,
   createWallResizePreviewMeshes,
+  buildVolumeBoxMesh,
   setOnFurnitureAssetLoaded,
   getFurnitureMeshes,
   getOpeningModelMeshes,

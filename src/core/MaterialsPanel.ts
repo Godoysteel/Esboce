@@ -683,7 +683,12 @@ export function compute(): ComputeResult {
     // superfície total (6 faces, mesmo material nas 6); sem acabamento
     // escolhido, cai na média de mercado genérica em buildRows().
     (floor.volumeBoxes || []).forEach(function (b) {
-      const surfaceAreaM2 = 2 * (b.widthM * b.heightM + b.widthM * b.depthM + b.heightM * b.depthM);
+      // Área real por face (Core.volumeBoxSurfaceAreaM2) — soma das 6
+      // faces via os cantos de verdade (Core.volumeBoxCornerLocalPositions),
+      // não mais a fórmula fixa de caixa reta: bate exatamente com ela
+      // quando b.cornerOffsets está ausente (box reto), e continua
+      // correta depois que o cubo é moldado puxando canto/aresta/face.
+      const surfaceAreaM2 = Core.volumeBoxSurfaceAreaM2(b);
       totals.volumeBoxAreaM2 += surfaceAreaM2;
       const selection = b.finishProductId
         ? selectedOffer(project, floor.id + ':volume:' + b.id, b.finishProductId)

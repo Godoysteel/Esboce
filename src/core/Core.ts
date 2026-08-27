@@ -425,6 +425,114 @@ export function createVolumeBoxEntity(
   };
 }
 
+type Vec3 = { x: number; y: number; z: number };
+
+// Cubo moldável (Bloco de Volumetria com cantos livres) — sempre 8
+// cantos, 12 arestas, 6 faces (topologia fixa, nunca vira forma em L
+// nem ganha vértice novo — decisão explícita do Product Owner: cobre
+// fachada/marquise/calçada/parede livre/estrutura de ACM sem precisar
+// de um editor de malha genérico). Ver VolumeBox.cornerOffsets em
+// types.ts pro formato dos dados; aqui só a matemática pura, sem
+// nenhuma regra de orçamento (ADR-006 — Core fica só com a geometria).
+const VOLUME_BOX_CORNER_SIGNS: Vec3[] = [
+  { x: -1, y: -1, z: -1 }, { x: 1, y: -1, z: -1 },
+  { x: -1, y: 1, z: -1 }, { x: 1, y: 1, z: -1 },
+  { x: -1, y: -1, z: 1 }, { x: 1, y: -1, z: 1 },
+  { x: -1, y: 1, z: 1 }, { x: 1, y: 1, z: 1 },
+];
+
+// 4 índices de canto por face, sentido anti-horário visto de FORA — o
+// cross product do primeiro triângulo (p1-p0)×(p2-p0) dá a normal
+// apontando pra fora (usada tanto pelo push-pull da alça de face
+// quanto pelo sombreamento plano em Scene3DRenderer).
+const VOLUME_BOX_FACES: { corners: [number, number, number, number] }[] = [
+  { corners: [1, 3, 7, 5] }, // right  (+X)
+  { corners: [0, 4, 6, 2] }, // left   (-X)
+  { corners: [2, 6, 7, 3] }, // top    (+Y)
+  { corners: [0, 1, 5, 4] }, // bottom (-Y)
+  { corners: [4, 5, 7, 6] }, // back   (+Z)
+  { corners: [0, 2, 3, 1] }, // front  (-Z)
+];
+
+// 12 arestas (pares de índice de canto) — laço de baixo, laço de cima, 4 verticais.
+export const VOLUME_BOX_EDGES: [number, number][] = [
+  [0, 1], [1, 5], [5, 4], [4, 0],
+  [2, 3], [3, 7], [7, 6], [6, 2],
+  [0, 2], [1, 3], [5, 7], [4, 6],
+];
+
+function vec3Sub(a: Vec3, b: Vec3): Vec3 { return { x: a.x - b.x, y: a.y - b.y, z: a.z - b.z }; }
+function vec3Cross(a: Vec3, b: Vec3): Vec3 { return { x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x }; }
+function vec3Dot(a: Vec3, b: Vec3): number { return a.x * b.x + a.y * b.y + a.z * b.z; }
+function vec3Length(a: Vec3): number { return Math.sqrt(vec3Dot(a, a)); }
+
+// Posição local (metros, centrada no box) dos 8 cantos — o box "ideal"
+// derivado de widthM/heightM/depthM, deslocado por cornerOffsets[i]
+// quando presente (ausente = box perfeitamente reto).
+export function volumeBoxCornerLocalPositions(box: VolumeBox): Vec3[] {
+  const hw = box.widthM / 2, hh = box.heightM / 2, hd = box.depthM / 2;
+  return VOLUME_BOX_CORNER_SIGNS.map((sign, i) => {
+    const offset = box.cornerOffsets ? box.cornerOffsets[i] : null;
+    return {
+      x: sign.x * hw + (offset ? offset.x : 0),
+      y: sign.y * hh + (offset ? offset.y : 0),
+      z: sign.z * hd + (offset ? offset.z : 0),
+    };
+  });
+}
+
+export interface VolumeBoxFace {
+  cornerIndices: [number, number, number, number];
+  areaM2: number;
+  /** Vetor unitário apontando pra fora — direção do push-pull da alça de face. */
+  normal: Vec3;
+}
+
+// Cada face (quadrilátero, possivelmente não-planar depois de um canto
+// puxado) é triangulada em leque a partir do primeiro canto — mesma
+// divisão usada por volumeBoxVolumeM3 abaixo, pra área e volume
+// ficarem consistentes entre si.
+export function volumeBoxFaces(box: VolumeBox): VolumeBoxFace[] {
+  const corners = volumeBoxCornerLocalPositions(box);
+  return VOLUME_BOX_FACES.map((face) => {
+    const [ia, ib, ic, id] = face.corners;
+    const p0 = corners[ia]!, p1 = corners[ib]!, p2 = corners[ic]!, p3 = corners[id]!;
+    const cross1 = vec3Cross(vec3Sub(p1, p0), vec3Sub(p2, p0));
+    const cross2 = vec3Cross(vec3Sub(p2, p0), vec3Sub(p3, p0));
+    const len1 = vec3Length(cross1), len2 = vec3Length(cross2);
+    const normalLen = len1 || len2 || 1;
+    const normalSource = len1 ? cross1 : cross2;
+    return {
+      cornerIndices: face.corners,
+      areaM2: len1 / 2 + len2 / 2,
+      normal: { x: normalSource.x / normalLen, y: normalSource.y / normalLen, z: normalSource.z / normalLen },
+    };
+  });
+}
+
+export function volumeBoxSurfaceAreaM2(box: VolumeBox): number {
+  return volumeBoxFaces(box).reduce((sum, face) => sum + face.areaM2, 0);
+}
+
+// Volume da malha pelo teorema da divergência: soma de p0·(p1×p2)/6
+// sobre cada triângulo (vértices como vetores de posição a partir de
+// UM MESMO referencial — aqui o centro local do box; funciona pra
+// qualquer malha fechada bem orientada, reta ou torta, contanto que o
+// referencial seja fixo). Não trata auto-interseção (canto puxado a
+// ponto de a malha se cruzar) — caso extremo deixado sem guarda nesta
+// primeira versão.
+export function volumeBoxVolumeM3(box: VolumeBox): number {
+  const corners = volumeBoxCornerLocalPositions(box);
+  let volume = 0;
+  VOLUME_BOX_FACES.forEach((face) => {
+    const [ia, ib, ic, id] = face.corners;
+    const p0 = corners[ia]!, p1 = corners[ib]!, p2 = corners[ic]!, p3 = corners[id]!;
+    volume += vec3Dot(p0, vec3Cross(p1, p2)) / 6;
+    volume += vec3Dot(p0, vec3Cross(p2, p3)) / 6;
+  });
+  return Math.abs(volume);
+}
+
 // Escada — nasce solta, sempre livre (mesmo espírito do Bloco de
 // Volumetria: sem ímã de parede, só um aviso não-bloqueante se a base
 // ficar longe de apoio). A geometria é uma malha .glb de verdade por
@@ -2280,6 +2388,7 @@ export const Core = {
   computeBalconyRailingJoints, RAILING_JOIN_TOL_MODEL,
   createVolumeBoxEntity, VOLUME_BOX_DEFAULT_WIDTH_M, VOLUME_BOX_DEFAULT_HEIGHT_M, VOLUME_BOX_DEFAULT_DEPTH_M, VOLUME_BOX_DEFAULT_COLOR,
   VOLUME_BOX_MIN_SIZE_M, VOLUME_BOX_MAX_SIZE_M, VOLUME_BOX_MIN_HEIGHT_M, VOLUME_BOX_MAX_HEIGHT_M, VOLUME_BOX_MAX_SILL_HEIGHT_M,
+  VOLUME_BOX_EDGES, volumeBoxCornerLocalPositions, volumeBoxFaces, volumeBoxSurfaceAreaM2, volumeBoxVolumeM3,
   createStairEntity, stairFootprintRectangle, stairLegWorldRectangle, nearestSupportDistanceMeters,
   STAIR_MIN_WIDTH_M, STAIR_MAX_WIDTH_M, STAIR_DEFAULT_WIDTH_M, STAIR_SUPPORT_HINT_TOLERANCE_M,
   createPlanUnderlayEntity, PLAN_UNDERLAY_DEFAULT_WIDTH_M, PLAN_UNDERLAY_DEFAULT_OPACITY,
