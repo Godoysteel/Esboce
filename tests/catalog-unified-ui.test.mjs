@@ -45,3 +45,15 @@ test('catálogo visual mostra somente produtos que possuem foto', () => {
   assert.match(app, /const products = this\.catalogProductsWithPhotos\(\);/);
   assert.match(app, /const products = this\.catalogProductsWithPhotos\(\)\.filter/);
 });
+
+test('catálogo de construção a seco inclui os produtos Placo Glasroc com preço Vórtice', () => {
+  assert.match(app, /Construção a seco/);
+  assert.match(app, /Placo — Glasroc X e Glasroc X Therm/);
+  assert.match(app, /placoGlasrocProducts\(\)/);
+  assert.match(app, /placo-glasroc-x-12-5mm/);
+  assert.match(app, /placo-placoplast-basecoat-20kg/);
+  assert.match(app, /placo-malha-grx-superficie-1x50m/);
+  assert.match(app, /placo-tyvek-homewrap-0-91x30-5m/);
+  assert.match(app, /placo-parafuso-glasroc-pb-25mm-cx1000/);
+  assert.match(app, /Fornecedor: \$\{bestOffer\?\.supplier_name/);
+});

@@ -2,6 +2,7 @@
 
 ## Alterado — 27/08/2026
 
+- Corrigido: os cinco componentes Placo/Glasroc cadastrados no banco agora aparecem também na vitrine visual. A antiga aba exclusiva "PlacLux" passa a se chamar "Construção a seco" e reúne, em seções separadas, Placo Glasroc X/Therm e PlacLux, exibindo foto, fabricante, fornecedor Vórtice e preço de referência.
 - Os sistemas Glasroc X e Glasroc X Therm passam a usar a composição oficial pesquisada na Placo: Placa Glasroc X 12,5 mm, Placoplast Basecoat, Malha GRX para Superfície, Membrana Hidrófuga Tyvek HomeWrap e Parafuso Glasroc PB; o Therm acrescenta placa EPS para EIFS. Cinco imagens oficiais da Placo foram incorporadas ao catálogo.
 - Placo permanece identificada como fabricante e Vórtice Materiais como fornecedora da referência de preço médio. Os valores são regionais, datados em 27/08/2026 e apresentados como estimativa, não como oferta comercial.
 - O consumo do Placoplast Basecoat foi corrigido para 5 kg/m² na camada de revestimento. O fixador mecânico de EPS foi removido do Glasroc X Therm porque a especificação oficial consultada determina a colagem do EPS diretamente ao substrato.

@@ -1578,7 +1578,8 @@ export class EsboceApplication {
     tabsEl.innerHTML = "";
     const placluxTab = document.createElement("div");
     placluxTab.className = "catalog-tab" + (this.catalogActiveDeptId === PLACLUX_CATALOG_TAB ? " active" : "");
-    placluxTab.textContent = `PlacLux (${PLACLUX_PRODUCTS.length})`;
+    const placoProducts = this.placoGlasrocProducts();
+    placluxTab.textContent = `Construção a seco (${PLACLUX_PRODUCTS.length + placoProducts.length})`;
     placluxTab.addEventListener("click", () => {
       this.catalogActiveDeptId = PLACLUX_CATALOG_TAB;
       this.catalogActiveCategoriaFilter = null;
@@ -1702,8 +1703,40 @@ export class EsboceApplication {
     bodyEl.innerHTML = "";
     const intro = document.createElement("div");
     intro.style.cssText = "margin-bottom:14px;color:#5F5E5A;font-size:13px;";
-    intro.innerHTML = `<strong>Materiais PlacLux para construção a seco</strong><br>Fornecidos por ${PLACLUX_SUPPLIER.name}, de ${PLACLUX_SUPPLIER.city}/${PLACLUX_SUPPLIER.state}. Preços serão exibidos quando houver oferta comercial cadastrada.`;
+    intro.innerHTML = `<strong>Materiais para construção a seco</strong><br>Produtos PlacLux e componentes dos sistemas Placo Glasroc X e Glasroc X Therm.`;
     bodyEl.appendChild(intro);
+    const placoProducts = this.placoGlasrocProducts();
+    if (placoProducts.length) {
+      const placoTitle = document.createElement("h3");
+      placoTitle.style.cssText = "margin:0 0 10px;font-size:15px;color:#353431;";
+      placoTitle.textContent = "Placo — Glasroc X e Glasroc X Therm";
+      bodyEl.appendChild(placoTitle);
+      const placoGrid = document.createElement("div");
+      placoGrid.className = "catalog-grid";
+      placoProducts.forEach((product) => {
+        const offers = this.offersForProduct(product.id);
+        const bestOffer = offers[0];
+        const card = document.createElement("div");
+        card.className = "catalog-card";
+        const price = bestOffer
+          ? `R$ ${bestOffer.price.toFixed(2).replace(".", ",")} / ${product.unidade}`
+          : "Sob consulta";
+        card.innerHTML = `<div class="catalog-card-photo" style="background:#fff;display:flex;align-items:center;justify-content:center;"><img src="${product.foto_url}" alt="${product.nome}" loading="lazy" style="width:100%;height:100%;object-fit:contain;padding:8px;"></div>
+          <div class="catalog-card-info"><p class="catalog-card-nome">${product.nome}</p>
+          <p class="catalog-card-fabricante">Fabricante: ${this.catalogManufacturerLabel(product)}</p>
+          <p class="catalog-card-fornecedor">Fornecedor: ${bestOffer?.supplier_name ?? "Sem oferta disponível"}</p>
+          <div class="catalog-card-preco${bestOffer ? "" : " consulta"}">${price}</div>
+          ${bestOffer ? `<span class="catalog-badge generico">${this.offerKindLabel(bestOffer)}</span>` : ""}</div>`;
+        card.addEventListener("click", () => this.openCatalogDetail(product));
+        placoGrid.appendChild(card);
+      });
+      bodyEl.appendChild(placoGrid);
+
+      const placluxTitle = document.createElement("h3");
+      placluxTitle.style.cssText = "margin:18px 0 10px;font-size:15px;color:#353431;";
+      placluxTitle.textContent = "PlacLux";
+      bodyEl.appendChild(placluxTitle);
+    }
     const grid = document.createElement("div");
     grid.className = "catalog-grid";
     PLACLUX_PRODUCTS.forEach((product) => {
@@ -1719,6 +1752,17 @@ export class EsboceApplication {
       grid.appendChild(card);
     });
     bodyEl.appendChild(grid);
+  }
+
+  private placoGlasrocProducts(): CatalogProductWithDepartment[] {
+    const skus = new Set([
+      "placo-glasroc-x-12-5mm",
+      "placo-placoplast-basecoat-20kg",
+      "placo-malha-grx-superficie-1x50m",
+      "placo-tyvek-homewrap-0-91x30-5m",
+      "placo-parafuso-glasroc-pb-25mm-cx1000",
+    ]);
+    return this.catalogProductsWithPhotos().filter((product) => Boolean(product.sku && skus.has(product.sku)));
   }
 
   private catalogProductsWithPhotos(): CatalogProductWithDepartment[] {

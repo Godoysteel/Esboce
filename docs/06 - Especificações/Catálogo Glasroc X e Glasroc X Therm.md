@@ -62,6 +62,7 @@ Os preços resultam de média ou mediana de anúncios de Você Constrói, Mercad
 
 ## Implementação
 
+- Navegação visual: a aba `Construção a seco` reúne uma seção Placo — Glasroc X e Glasroc X Therm e uma seção PlacLux. Os cinco produtos Placo com foto são selecionados por SKU controlado, independentemente do mapeamento genérico de departamentos do catálogo.
 - Composições: `src/core/SteelFrameAssemblies.ts`.
 - Resolução de preços: `src/core/MaterialsPanel.ts`.
 - Cadastro e ofertas: `supabase/migrations/20260827150000_seed_placo_glasroc_vortice_catalog.sql`.
