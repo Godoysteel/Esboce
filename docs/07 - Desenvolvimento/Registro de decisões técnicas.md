@@ -1683,3 +1683,17 @@ Status: Implementado, testado (suíte completa + teste novo confirmando a marca�
 3. Testado ao vivo (`Store.setProject` com projeto Light Steel Frame e uma parede de 60m com `cement-board-direct`): o PDF de tabela do Steel Frame volta a listar "Membrana Hidrófuga ProFort — 4 rolos (1,05 x 50 m)" e passa a listar "Pingadeira de base (perímetro das paredes, + 10% de perda) — 27 un" como linha própria, fora da lista por composição.
 
 ---
+
+# DEC-157 — Substrato genérico (OSB ou Compensado), membrana hidrófuga sem desconto de aberturas e folga pra envolver a base do substrato
+
+**Data:** 27/08/2026
+**Status:** Implementado
+
+**Contexto:** o Product Owner deu três correções na composição de placa cimentícia com substrato: (1) o substrato pode ser tanto OSB quanto Compensado (Plywood), não só OSB — precisa incluir os parafusos de fixação do próprio substrato na estrutura; (2) a Membrana Hidrófuga deve levar 60cm a mais de comprimento, porque ela precisa envolver a base do substrato pra impedir entrada de umidade por baixo; (3) a Membrana Hidrófuga nunca desconta abertura de porta/janela do cálculo — é sempre comprada e instalada pela face TOTAL da parede (cortada depois pra receber a esquadria), diferente de todos os outros itens da composição, que descontam abertura normalmente.
+
+**Decisão:**
+1. `cement-board-osb` foi renomeada pra "Placa cimentícia com substrato (OSB ou Compensado)". A camada do painel (`cement-board-substrate`) e os parafusos de fixação dele (`cement-board-substrate-screws`, 18 un/m², mesmo parâmetro que já existia como "parafusos para OSB") ganharam labels genéricos — sem afetar a composição separada `vinyl-siding-osb`, que continua especificamente OSB (sistema de fabricante que não previu Compensado).
+2. `MaterialsPanel.steelFrameQuantities` agora trata qualquer camada com `role === 'water_barrier'` como caso especial dentro do loop de paredes: usa `grossFaceArea` (comprimento × pé-direito, SEM descontar `openingsArea`) em vez do `faceArea` líquido usado por todas as outras camadas; e, quando a composição da face também tem uma camada `structural_sheathing` (substrato presente), soma `wallLengthM * 0.6` m² de folga — uma faixa de 0,6m de largura ao longo de todo o comprimento da parede, representando o material extra pra dobrar e envolver a base do painel. Isso vale pra qualquer composição com membrana (cimentícia com/sem substrato, Glasroc, siding vinílico), não só a que motivou o pedido — é uma regra física geral de como membrana hidrófuga é comprada e instalada, não específica de um sistema.
+3. Testado ao vivo: parede de 60m com `cement-board-osb` e uma porta de 0,9×2,1m (1,89 m² de abertura) — a placa cimentícia e o painel do substrato descontam a abertura normalmente (176,12 m² líquidos), mas a Membrana Hidrófuga soma 5 rolos (contra 4 rolos que uma parede igual em `cement-board-direct`, sem substrato e sem abertura, precisa) — a diferença confirma as duas correções funcionando juntas: área bruta (sem desconto) + folga de 0,6m/m de substrato.
+
+---

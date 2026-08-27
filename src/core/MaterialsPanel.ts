@@ -1007,14 +1007,31 @@ function steelFrameQuantities(project: Project): SteelFrameQuantityLine[] {
     const wallHeight = floorWallHeight(floor, Scene3DRenderer.WALL_HEIGHT_GETTER());
     floor.walls.forEach((wall) => {
       if (wall.demolished) return;
+      const wallLengthM = Core.wallLengthMeters(wall);
       const openingsArea = floor.openings.filter((opening) => opening.wallId === wall.id)
         .reduce((sum, opening) => sum + opening.width * opening.height, 0);
-      const faceArea = Math.max(0, Core.wallLengthMeters(wall) * wallHeight - openingsArea);
+      const grossFaceArea = wallLengthM * wallHeight;
+      const faceArea = Math.max(0, grossFaceArea - openingsArea);
       structuralArea += faceArea;
-      lowerGuideLengthM += Core.wallLengthMeters(wall);
+      lowerGuideLengthM += wallLengthM;
       [wall.faceAAssemblyId, wall.faceBAssemblyId].forEach((assemblyId) => {
         const assembly = STEEL_FRAME_FACE_ASSEMBLIES.find((item) => item.id === assemblyId);
-        assembly?.layers.forEach((layer) => add(layer.id, layer.label, quantityWithWaste(faceArea, layer), layer.unit === 'unit' ? 'un' : layer.unit === 'm2' ? 'm²' : layer.unit));
+        // Presença de substrato (OSB/Compensado) na mesma composição — a
+        // membrana precisa envolver a base dele pra não entrar umidade.
+        const hasSubstrate = !!assembly?.layers.some((item) => item.role === 'structural_sheathing');
+        assembly?.layers.forEach((layer) => {
+          if (layer.role === 'water_barrier') {
+            // Membrana hidrófuga NUNCA desconta aberturas de esquadrias —
+            // é sempre comprada e instalada pela face total da parede,
+            // cortada depois pra receber porta/janela. Com substrato
+            // (OSB/Compensado), soma 0,6 m de largura extra ao longo de
+            // todo o comprimento da parede pra envolver a base do painel.
+            const wrapAllowanceM2 = hasSubstrate ? wallLengthM * 0.6 : 0;
+            add(layer.id, layer.label, quantityWithWaste(grossFaceArea + wrapAllowanceM2, layer), 'm²');
+            return;
+          }
+          add(layer.id, layer.label, quantityWithWaste(faceArea, layer), layer.unit === 'unit' ? 'un' : layer.unit === 'm2' ? 'm²' : layer.unit);
+        });
       });
       const insulationId = wall.cavityAssembly?.insulationSystemId;
       if (insulationId && insulationId !== 'none') {

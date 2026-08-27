@@ -89,7 +89,7 @@ test('drywall inclui massa e fita telada para tratamento de juntas', () => {
 });
 
 test('quantitativo inclui manta asfáltica e pingadeira de base sob todo o perímetro das paredes, com 10% de perda', () => {
-  assert.match(materialsSource, /lowerGuideLengthM \+= Core\.wallLengthMeters\(wall\)/);
+  assert.match(materialsSource, /lowerGuideLengthM \+= wallLengthM/);
   assert.match(materialsSource, /Manta asfáltica sob a guia inferior \(\+ 10% de perda\)/);
   assert.match(materialsSource, /lowerGuideLengthM \* 1\.1/);
   assert.match(materialsSource, /'placlux\.pingadeira-pvc-2-5m', 'Pingadeira de base \(perímetro das paredes, \+ 10% de perda\)', \(lowerGuideLengthM \* 1\.1\) \/ 2\.5/);
@@ -101,6 +101,28 @@ test('placa cimentícia com e sem OSB levam a mesma Membrana Hidrófuga — ping
   assert.ok(direct.layers.some((layer) => layer.id === 'placlux.membrana-hidrofuga-52-5m2'), 'sistema sem OSB também precisa da membrana hidrófuga');
   assert.ok(withOsb.layers.some((layer) => layer.id === 'placlux.membrana-hidrofuga-52-5m2'));
   assert.ok(!direct.layers.some((layer) => layer.id === 'placlux.pingadeira-pvc-2-5m'), 'pingadeira cobre o perímetro inteiro da construção, calculada à parte — não é camada de uma composição específica');
+});
+
+test('composição "com substrato" cobre tanto OSB quanto Compensado, com parafusos próprios de fixação do painel', () => {
+  const withSubstrate = STEEL_FRAME_FACE_ASSEMBLIES.find((item) => item.id === 'cement-board-osb');
+  assert.match(withSubstrate.label, /OSB ou Compensado/);
+  const panel = withSubstrate.layers.find((layer) => layer.id === 'cement-board-substrate');
+  assert.ok(panel, 'painel do substrato ausente');
+  assert.equal(panel.role, 'structural_sheathing');
+  const screws = withSubstrate.layers.find((layer) => layer.id === 'cement-board-substrate-screws');
+  assert.ok(screws, 'parafusos de fixação do substrato ausentes');
+  assert.equal(screws.consumptionPerM2, 18);
+});
+
+test('membrana hidrófuga nunca desconta aberturas (sempre face total) e ganha 0,6 m de folga por metro de parede quando há substrato', () => {
+  const start = materialsSource.indexOf("floor.walls.forEach((wall) => {", materialsSource.indexOf('function steelFrameQuantities'));
+  const end = materialsSource.indexOf('const insulationId', start);
+  const body = materialsSource.slice(start, end);
+  assert.match(body, /const grossFaceArea = wallLengthM \* wallHeight;/);
+  assert.match(body, /if \(layer\.role === 'water_barrier'\) \{/);
+  assert.match(body, /const wrapAllowanceM2 = hasSubstrate \? wallLengthM \* 0\.6 : 0;/);
+  assert.match(body, /quantityWithWaste\(grossFaceArea \+ wrapAllowanceM2, layer\)/);
+  assert.match(body, /hasSubstrate = !!assembly\?\.layers\.some\(\(item\) => item\.role === 'structural_sheathing'\)/);
 });
 
 // ADR-006 §9 — quantitativo comercial (placas/rolos/sacos), não só

@@ -61,13 +61,13 @@ export const STEEL_FRAME_FACE_ASSEMBLIES: readonly WallFaceAssemblyDefinition[] 
     ...profortJointTreatment,
     fixers('placlux.parafuso-pb-032', 'Parafusos Rusper PB 032', 20),
   ] },
-  { id: 'cement-board-osb', label: 'OSB + placa cimentícia', use: 'external', layers: [
+  { id: 'cement-board-osb', label: 'Placa cimentícia com substrato (OSB ou Compensado)', use: 'external', layers: [
     area('placlux.profort-next-10mm', 'ProFort Next 10 mm', 'external_board'),
     area('placlux.membrana-hidrofuga-52-5m2', 'Membrana Hidrófuga ProFort', 'water_barrier'),
-    area('osb', 'Painel OSB estrutural', 'structural_sheathing'),
+    area('cement-board-substrate', 'Painel estrutural do substrato (OSB ou Compensado)', 'structural_sheathing'),
     ...profortJointTreatment,
     fixers('placlux.parafuso-pa-032', 'Parafusos Rusper PA 032', 20),
-    fixers('osb-screws', 'Parafusos para OSB', 18),
+    fixers('cement-board-substrate-screws', 'Parafusos de fixação do substrato (OSB/Compensado)', 18),
   ] },
   { id: 'glasroc-x-direct', label: 'Glasroc X', use: 'both', layers: [
     area('glasroc-finish', 'Acabamento Glasroc X', 'finish', 5),
