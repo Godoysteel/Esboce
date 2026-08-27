@@ -1642,6 +1642,31 @@ test('Scene3DRenderer: caixa de telhado-vs-telhado compara a SUPERFÍCIE REAL po
   assert.match(roofsBlock, /baseY: b\.baseY, peakAboveBase: b\.peakAboveBase, tanPitch: b\.tanPitch, ridgeCoord: b\.ridgeCoord, halfSpan: b\.halfSpan, axisIsZ: b\.axisIsZ, isHip: b\.isHip/);
 });
 
+// Bug real (Product Owner, com print): dois quatroAguas do mesmo grupo
+// composto (compoundGroupId, eixos de cumeeira diferentes — o par de
+// "asas" perpendiculares de uma Cumeeira em níveis/Extensão lateral)
+// caía no trimRects/clipMeshOutsideRects — mecanismo de corte de MALHA
+// de verdade, não por pixel. roofCutRegions só sabe montar o plano
+// inclinado certo (a água-furtada real) pro tipo duasAguas; pra
+// qualquer outro tipo ele devolve o retângulo cru da pegada, SEM plano
+// — e sem plano, clipMeshOutsideRects apaga tudo (água E tabeira)
+// dentro do retângulo inteiro do vizinho, num corte reto NA VERTICAL,
+// ignorando a inclinação real. "Corta exatamente onde os beirais se
+// encostam e apaga tudo" — a tabeira sobrevivendo só CONTORNANDO o
+// buraco (exatamente na borda do retângulo cru) era a pista de que o
+// corte era de malha, não de pixel. Restringe trimRects ao par
+// duasAguas×duasAguas (onde roofCutRegions já funciona certo) —
+// qualquer outra combinação (quatroAguas incluso) fica só com o
+// sombreamento por pixel (otherRoofClipBoxes), já comprovado a nunca
+// esconder os dois ao mesmo tempo.
+test('Scene3DRenderer: trimRects (corte de malha real, não por pixel) só se aplica a pares duasAguas×duasAguas — quatroAguas nunca cai nesse corte reto na vertical', () => {
+  const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
+  assert.notEqual(roofsStart, -1);
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 14000);
+  assert.match(roofsBlock, /var trimRects = roof\.type !== 'duasAguas' \? \[\] : floorData\.roofs\.filter\(function \(other\) \{/);
+  assert.match(roofsBlock, /other\.ridgeAxis === roof\.ridgeAxis \|\| other\.type !== 'duasAguas'\) return false;/);
+});
+
 // Segunda tentativa de resolver o encontro em L não bastou: mesmo com
 // isHip, duas pegadas em "degrau" (uma mais curta que a outra na aresta
 // compartilhada, formando um canto reentrante) ainda abriam fresta —

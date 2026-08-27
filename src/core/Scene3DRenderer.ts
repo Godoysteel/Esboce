@@ -5513,8 +5513,23 @@ export function hashColorHex(key: string): number {
             materials.forEach(function (material: any) { applyRoomBoxClipping(material, clipBoxesForThisRoof, diagonalValleyCuts); });
           });
           var ownFootprint = ownFootprintForValley;
-          var trimRects = floorData.roofs.filter(function (other) {
-            if (!roof.compoundGroupId || other.compoundGroupId !== roof.compoundGroupId || other.id === roof.id || other.ridgeAxis === roof.ridgeAxis) return false;
+          // roofCutRegions só sabe calcular o plano inclinado de verdade
+          // (a água-furtada real) pro tipo duasAguas — pra qualquer outro
+          // tipo (quatroAguas incluso) ele cai num retângulo cru, SEM
+          // plano nenhum, e clipMeshOutsideRects então faz um corte reto
+          // NA VERTICAL, apagando água e tabeira juntas dentro do
+          // retângulo inteiro do vizinho, sem seguir a inclinação (Product
+          // Owner, com print: "corta exatamente onde as tabeiras se
+          // encostam e apaga tudo" — dois quatroAguas do mesmo
+          // compoundGroupId, eixos de cumeeira diferentes). Restringe esse
+          // corte de MALHA de verdade só ao par duasAguas×duasAguas (onde
+          // ele já funciona certo) — qualquer outra combinação já é
+          // resolvida em segurança pelo sombreamento por pixel
+          // (otherRoofClipBoxes/applyRoomBoxClipping, isHip inclusive),
+          // matematicamente comprovado a nunca esconder os dois ao mesmo
+          // tempo.
+          var trimRects = roof.type !== 'duasAguas' ? [] : floorData.roofs.filter(function (other) {
+            if (!roof.compoundGroupId || other.compoundGroupId !== roof.compoundGroupId || other.id === roof.id || other.ridgeAxis === roof.ridgeAxis || other.type !== 'duasAguas') return false;
             var otherFootprint = roofWorldFootprint(other, scale, offsetX, offsetY);
             return rectsOverlapArea(ownFootprint, otherFootprint) > 1e-6;
           }).reduce(function (regions: any[], other) {
