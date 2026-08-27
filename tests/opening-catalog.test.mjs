@@ -22,24 +22,25 @@ test('insertOpening aceita productOverride e usa o tamanho/productId do produto 
   assert.match(source, /op\.height = productOverride\.heightM; op\.productId = productOverride\.productId/);
 });
 
-test('todo produto door/window do catálogo tem frameMaterial e dimensões nominais', () => {
+test('todo produto door/window tem material, dimensões e uma representação 3D', () => {
   const doorsAndWindows = [...Catalog.getProductsByCategory('door'), ...Catalog.getProductsByCategory('window')];
   assert.ok(doorsAndWindows.length >= 17);
   doorsAndWindows.forEach((p) => {
     assert.ok(p.frameMaterial, `${p.id} sem frameMaterial`);
     assert.ok(p.assets.nominalWidthM && p.assets.nominalWidthM > 0, `${p.id} sem nominalWidthM válido`);
     assert.ok(p.assets.nominalHeightM && p.assets.nominalHeightM > 0, `${p.id} sem nominalHeightM válido`);
-    assert.ok(p.assets.modelUrl, `${p.id} sem modelUrl`);
+    assert.ok(p.assets.modelUrl || p.assets.proceduralOpeningStyle, `${p.id} sem modelo GLB nem procedural`);
   });
 });
 
-test('filtro por frameMaterial "vidro" traz as 17 esquadrias enviadas; "madeira" vem vazio (ainda sem modelo)', () => {
+test('filtro por frameMaterial traz 17 esquadrias de vidro e 6 de madeira', () => {
   const vidro = [...Catalog.getProductsByCategory('door'), ...Catalog.getProductsByCategory('window')]
     .filter((p) => p.frameMaterial === 'vidro');
   assert.equal(vidro.length, 17);
   const madeira = [...Catalog.getProductsByCategory('door'), ...Catalog.getProductsByCategory('window')]
     .filter((p) => p.frameMaterial === 'madeira');
-  assert.equal(madeira.length, 0);
+  assert.equal(madeira.length, 6);
+  assert.equal(new Set(madeira.map((p) => p.assets.proceduralOpeningStyle)).size, 6);
 });
 
 test('seletor de esquadria (ViewportController) guarda o produto escolhido antes de posicionar, com aba "Padrão"', () => {
@@ -49,9 +50,9 @@ test('seletor de esquadria (ViewportController) guarda o produto escolhido antes
   assert.match(source, /Padrão \(editável depois\)/);
 });
 
-test('todas as 17 esquadrias já têm thumbnail — última imagem (Basculante) chegou nesta sessão', () => {
+test('todas as 23 esquadrias têm thumbnail', () => {
   const doorsAndWindows = [...Catalog.getProductsByCategory('door'), ...Catalog.getProductsByCategory('window')];
-  assert.equal(doorsAndWindows.length, 17);
+  assert.equal(doorsAndWindows.length, 23);
   doorsAndWindows.forEach((p) => {
     assert.ok(p.assets.thumbnailUrl, `${p.id} ainda sem thumbnailUrl`);
   });

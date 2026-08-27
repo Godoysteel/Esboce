@@ -567,6 +567,9 @@ export interface ProductAssets {
   // pronto — usado por produtos da categoria 'furniture'. Nunca um caminho
   // absoluto fixo: o carregador sempre prefixa com import.meta.env.BASE_URL.
   modelUrl?: string;
+  // Variante procedural de esquadria. Permite representar portas e
+  // janelas paramétricas sem depender de um GLB para cada dimensão.
+  proceduralOpeningStyle?: 'wood-door-grooved' | 'wood-door-pivot' | 'wood-door-plain' | 'wood-window-awning' | 'wood-window-sliding-grid' | 'wood-window-louvered';
   // Tamanho real medido do modelo (door/window) — usado pra criar a
   // Opening já do tamanho certo na hora do clique, sem precisar esperar
   // o glTF carregar de forma assíncrona (o carregamento em si continua

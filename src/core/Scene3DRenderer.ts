@@ -2110,13 +2110,99 @@ export function hashColorHex(key: string): number {
   // enquanto o modelo ainda não carregou (mesmo comportamento de
   // móvel — reaparece sozinho quando o loader termina, ver
   // onFurnitureAssetLoaded) ou se o produto não tiver modelUrl.
+  function buildProceduralWoodOpening(op: any, style: string) {
+    var group = new THREE.Group();
+    var wood = new THREE.MeshStandardMaterial({ color: 0x9D5B2B, roughness: 0.72, metalness: 0.02 });
+    var woodLight = new THREE.MeshStandardMaterial({ color: 0xB87338, roughness: 0.68, metalness: 0.02 });
+    var woodDark = new THREE.MeshStandardMaterial({ color: 0x6F391B, roughness: 0.78, metalness: 0.01 });
+    var metal = new THREE.MeshStandardMaterial({ color: 0xB8BDC0, roughness: 0.25, metalness: 0.85 });
+    var glass = buildGlazingGlassMaterial({ ...DEFAULT_GLAZING_GLASS_MATERIAL, opacity: 0.32, roughness: 0.24, reflectionIntensity: 0.9 });
+    var depth = Math.min(Core.WALL_THICK * 0.72, 0.085);
+    var frame = Math.min(op.width, op.height) * 0.075;
+    frame = Math.max(0.045, Math.min(frame, 0.10));
+    function box(sx: number, sy: number, sz: number, x: number, y: number, z: number, material: any) {
+      var mesh = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), material);
+      mesh.position.set(x, y, z);
+      group.add(mesh);
+      return mesh;
+    }
+    function frameBars(material: any) {
+      box(op.width, frame, depth, 0, frame / 2, 0, material);
+      box(op.width, frame, depth, 0, op.height - frame / 2, 0, material);
+      box(frame, op.height - frame * 2, depth, -op.width / 2 + frame / 2, op.height / 2, 0, material);
+      box(frame, op.height - frame * 2, depth, op.width / 2 - frame / 2, op.height / 2, 0, material);
+    }
+    function handle(x: number, y: number, longPull: boolean) {
+      box(longPull ? 0.025 : 0.10, longPull ? op.height * 0.43 : 0.025, 0.025, x, y, depth / 2 + 0.025, metal);
+    }
+    if (/^wood-door/.test(style)) {
+      frameBars(woodDark);
+      var leafW = Math.max(0.05, op.width - frame * 2.25);
+      var leafH = Math.max(0.10, op.height - frame * 1.65);
+      box(leafW, leafH, depth * 0.62, 0, frame + leafH / 2, 0, style === 'wood-door-pivot' ? woodLight : wood);
+      if (style === 'wood-door-pivot') {
+        var panelH = leafH / 9;
+        for (var p = 1; p < 9; p++) box(leafW * 0.78, 0.012, depth * 0.68, -leafW * 0.06, frame + panelH * p, depth * 0.05, woodDark);
+        handle(leafW * 0.34, op.height * 0.52, true);
+      } else if (style === 'wood-door-grooved') {
+        for (var g = 1; g <= 4; g++) box(leafW * 0.55, 0.012, depth * 0.72, leafW * 0.20, op.height * (0.20 + g * 0.15), depth * 0.05, metal);
+        for (var c = 0; c < 7; c++) {
+          var cy = op.height * (0.15 + c * 0.11);
+          var cx = -leafW * 0.18 + Math.sin((c / 6) * Math.PI) * leafW * 0.15;
+          var groove = box(0.014, op.height * 0.13, depth * 0.72, cx, cy, depth * 0.05, metal);
+          groove.rotation.z = -0.18 + c * 0.055;
+        }
+        handle(-leafW * 0.34, op.height * 0.47, false);
+      } else {
+        handle(-leafW * 0.34, op.height * 0.47, false);
+      }
+    } else {
+      frameBars(woodDark);
+      var innerW = op.width - frame * 2.2;
+      var innerH = op.height - frame * 2.2;
+      if (style === 'wood-window-louvered') {
+        box(frame * 0.65, innerH, depth, 0, op.height / 2, 0, woodDark);
+        var leafHalf = (innerW - frame * 0.65) / 2;
+        var slats = Math.max(10, Math.round(innerH / 0.055));
+        for (var s = 0; s < slats; s++) {
+          var sy = frame * 1.1 + (s + 0.5) * innerH / slats;
+          box(leafHalf * 0.91, Math.max(0.012, innerH / slats * 0.38), depth * 0.72, -leafHalf / 2 - frame * 0.17, sy, 0.005, woodLight);
+          box(leafHalf * 0.91, Math.max(0.012, innerH / slats * 0.38), depth * 0.72, leafHalf / 2 + frame * 0.17, sy, 0.005, woodLight);
+        }
+      } else {
+        box(innerW, innerH, depth * 0.28, 0, op.height / 2, 0, glass);
+        if (style === 'wood-window-awning') {
+          box(frame * 0.65, innerH, depth * 0.62, 0, op.height / 2, 0.005, wood);
+          box(innerW, frame * 0.65, depth * 0.62, 0, op.height / 2, 0.005, wood);
+          handle(0, frame * 1.18, false);
+        } else {
+          box(frame * 0.72, innerH, depth * 0.68, 0, op.height / 2, 0.008, woodDark);
+          for (var xSide = -1; xSide <= 1; xSide += 2) {
+            var cxSide = xSide * innerW / 4;
+            box(frame * 0.42, innerH, depth * 0.60, cxSide, op.height / 2, 0.012, wood);
+            box(innerW / 2, frame * 0.42, depth * 0.60, cxSide, op.height / 3, 0.012, wood);
+            box(innerW / 2, frame * 0.42, depth * 0.60, cxSide, op.height * 2 / 3, 0.012, wood);
+          }
+        }
+      }
+    }
+    return group;
+  }
+
   function buildOpeningModelPiece(op: any, product: any, w: any, scale: any, offsetX: any, offsetY: any, yOffset: any) {
+    var proceduralStyle = product && product.assets && product.assets.proceduralOpeningStyle;
     var modelUrl = product && product.assets && product.assets.modelUrl;
-    if (!modelUrl) return null;
-    var resolvedUrl = (import.meta as any).env.BASE_URL + modelUrl;
-    var template = getFurnitureModel(resolvedUrl);
-    if (!template) return null;
-    var instance = template.group.clone(true);
+    if (!proceduralStyle && !modelUrl) return null;
+    var instance: any;
+    var template: any = null;
+    if (proceduralStyle) {
+      instance = buildProceduralWoodOpening(op, proceduralStyle);
+    } else {
+      var resolvedUrl = (import.meta as any).env.BASE_URL + modelUrl;
+      template = getFurnitureModel(resolvedUrl);
+      if (!template) return null;
+      instance = template.group.clone(true);
+    }
     // Os arquivos glTF da família de esquadria nomeiam um material
     // "Translucent_Glass_Gray" (ou similar, com "vidro"/"glass" no
     // nome), mas SEM nenhum dado real de transparência gravado (sem
@@ -2134,15 +2220,17 @@ export function hashColorHex(key: string): number {
     // reflexo espelhado nas esquadrias especificamente, sem mexer no
     // vidro da fachada (Envidraçamento), que continua usando o padrão.
     var glassMaterial: any = null;
-    instance.traverse(function (child: any) {
+    if (!proceduralStyle) instance.traverse(function (child: any) {
       if (child.isMesh && child.material && /glass|vidro/i.test(child.material.name || '')) {
         if (!glassMaterial) glassMaterial = buildGlazingGlassMaterial({ ...DEFAULT_GLAZING_GLASS_MATERIAL, opacity: 0.35, roughness: 0.22, reflectionIntensity: 1.0 });
         child.material = glassMaterial;
       }
     });
-    var scaleX = template.footprintW > 1e-6 ? op.width / template.footprintW : 1;
-    var scaleY = template.heightM > 1e-6 ? op.height / template.heightM : 1;
-    instance.scale.set(scaleX, scaleY, 1);
+    if (!proceduralStyle) {
+      var scaleX = template.footprintW > 1e-6 ? op.width / template.footprintW : 1;
+      var scaleY = template.heightM > 1e-6 ? op.height / template.heightM : 1;
+      instance.scale.set(scaleX, scaleY, 1);
+    }
     // Depois da normalização de pivô (getFurnitureModel) + escala acima,
     // o modelo ocupa exatamente X:[-op.width/2, op.width/2], Y:[0,
     // op.height], Z centrado em 0 — mas a PROFUNDIDADE (Z) do caixilho

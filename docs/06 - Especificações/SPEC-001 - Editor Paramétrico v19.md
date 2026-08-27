@@ -80,3 +80,11 @@ Comprimentos, áreas e estimativas de materiais são derivados do modelo confirm
 - Cálculo estrutural executivo.
 - Fusão booleana persistida de malhas como fonte da verdade.
 - Paginação completa de revestimentos e catálogo comercial definitivo.
+
+## 11. Esquadrias paramétricas de madeira
+
+- A aba **Madeira** do seletor de Aberturas oferece três portas e três janelas: porta frisada, porta pivotante, porta lisa, janela maxim-ar, janela de correr quadriculada e janela veneziana.
+- Cada item usa a fotografia de referência fornecida pelo Product Owner como miniatura do catálogo.
+- A representação 3D é procedural e acompanha largura e altura do vão. Ela preserva os elementos visuais identificadores de cada referência — frisos, painéis, puxadores, travessas, vidro ou palhetas — sem depender de um arquivo GLB por dimensão.
+- As dimensões explicitadas nos nomes de arquivo de origem foram preservadas. Nos casos sem medida declarada, foram adotadas dimensões iniciais usuais apenas para modelagem: porta frisada 0,80 x 2,10 m, maxim-ar 0,60 x 0,60 m, janela de correr 1,50 x 1,20 m e veneziana 1,20 x 1,20 m. O usuário pode ajustar o vão posteriormente.
+- Os itens não afirmam fabricante, SKU comercial ou preço das imagens de referência; custo zero no catálogo interno significa **sob consulta**.
