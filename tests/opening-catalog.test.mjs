@@ -94,6 +94,20 @@ test('linha PVC Tomelin oferece as cinco tipologias oficiais com foto e modelo p
   assert.match(renderer, /pvc-window-tilt-turn/);
 });
 
+test('persiana integrada fica faceada externamente e encontra o perfil horizontal sem fresta', () => {
+  const renderer = readFileSync(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
+  assert.match(renderer, /var glassH = innerH - shutterH;/);
+  assert.match(renderer, /var shutterZ = depth \/ 2 - shutterDepth \/ 2;/);
+  assert.match(renderer, /var slatZ = depth \/ 2 - slatDepth \/ 2;/);
+});
+
+test('detalhes das portas de madeira são gerados nas faces externa e interna', () => {
+  const renderer = readFileSync(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
+  assert.match(renderer, /-depth \/ 2 - 0\.025, metal/);
+  assert.match(renderer, /-depth \* 0\.05, woodDark/);
+  assert.match(renderer, /var grooveBack = box/);
+});
+
 test('vidro dos modelos de esquadria usa o mesmo material de vidro do envidraçamento, mas com transparência real (não o padrão 100% opaco da fachada) e reflexo reduzido (DEC-99)', () => {
   const source = readFileSync(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
   assert.match(source, /glass\|vidro/i);

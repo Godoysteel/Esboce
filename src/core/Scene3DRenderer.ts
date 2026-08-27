@@ -2133,7 +2133,12 @@ export function hashColorHex(key: string): number {
       box(frame, op.height - frame * 2, depth, op.width / 2 - frame / 2, op.height / 2, 0, material);
     }
     function handle(x: number, y: number, longPull: boolean) {
-      box(longPull ? 0.025 : 0.10, longPull ? op.height * 0.43 : 0.025, 0.025, x, y, depth / 2 + 0.025, metal);
+      var handleW = longPull ? 0.025 : 0.10;
+      var handleH = longPull ? op.height * 0.43 : 0.025;
+      box(handleW, handleH, 0.025, x, y, depth / 2 + 0.025, metal);
+      // Portas precisam da mesma leitura nas duas faces: ferragem e
+      // desenho não podem desaparecer quando vistas pelo interior.
+      if (/^wood-door/.test(style)) box(handleW, handleH, 0.025, x, y, -depth / 2 - 0.025, metal);
     }
     if (/^wood-door/.test(style)) {
       frameBars(woodDark);
@@ -2142,15 +2147,23 @@ export function hashColorHex(key: string): number {
       box(leafW, leafH, depth * 0.62, 0, frame + leafH / 2, 0, style === 'wood-door-pivot' ? woodLight : wood);
       if (style === 'wood-door-pivot') {
         var panelH = leafH / 9;
-        for (var p = 1; p < 9; p++) box(leafW * 0.78, 0.012, depth * 0.68, -leafW * 0.06, frame + panelH * p, depth * 0.05, woodDark);
+        for (var p = 1; p < 9; p++) {
+          box(leafW * 0.78, 0.012, depth * 0.68, -leafW * 0.06, frame + panelH * p, depth * 0.05, woodDark);
+          box(leafW * 0.78, 0.012, depth * 0.68, -leafW * 0.06, frame + panelH * p, -depth * 0.05, woodDark);
+        }
         handle(leafW * 0.34, op.height * 0.52, true);
       } else if (style === 'wood-door-grooved') {
-        for (var g = 1; g <= 4; g++) box(leafW * 0.55, 0.012, depth * 0.72, leafW * 0.20, op.height * (0.20 + g * 0.15), depth * 0.05, metal);
+        for (var g = 1; g <= 4; g++) {
+          box(leafW * 0.55, 0.012, depth * 0.72, leafW * 0.20, op.height * (0.20 + g * 0.15), depth * 0.05, metal);
+          box(leafW * 0.55, 0.012, depth * 0.72, leafW * 0.20, op.height * (0.20 + g * 0.15), -depth * 0.05, metal);
+        }
         for (var c = 0; c < 7; c++) {
           var cy = op.height * (0.15 + c * 0.11);
           var cx = -leafW * 0.18 + Math.sin((c / 6) * Math.PI) * leafW * 0.15;
           var groove = box(0.014, op.height * 0.13, depth * 0.72, cx, cy, depth * 0.05, metal);
           groove.rotation.z = -0.18 + c * 0.055;
+          var grooveBack = box(0.014, op.height * 0.13, depth * 0.72, cx, cy, -depth * 0.05, metal);
+          grooveBack.rotation.z = -0.18 + c * 0.055;
         }
         handle(-leafW * 0.34, op.height * 0.47, false);
       } else {
@@ -2226,13 +2239,20 @@ export function hashColorHex(key: string): number {
     var centerY = op.height / 2;
     if (style === 'pvc-window-integrated') {
       var shutterH = innerH * 0.42;
-      var glassH = innerH - shutterH - frame * 0.40;
+      // Persiana encontra diretamente o perfil horizontal superior das
+      // folhas: sem o antigo intervalo de 40% da largura do perfil.
+      var glassH = innerH - shutterH;
       var glassY = frame + glassH / 2;
       glazedLeaf(-innerW / 4, glassY, innerW / 2, glassH, 0.004);
       glazedLeaf(innerW / 4, glassY, innerW / 2, glassH, 0.008);
-      box(innerW, shutterH, depth * 0.48, 0, op.height - frame - shutterH / 2, 0.008, pvc);
+      // A face externa da persiana coincide com a face externa do marco.
+      var shutterDepth = depth * 0.48;
+      var shutterZ = depth / 2 - shutterDepth / 2;
+      box(innerW, shutterH, shutterDepth, 0, op.height - frame - shutterH / 2, shutterZ, pvc);
       var slatCount = Math.max(7, Math.round(shutterH / 0.055));
-      for (var s = 1; s < slatCount; s++) box(innerW * 0.96, 0.009, depth * 0.54, 0, op.height - frame - shutterH + s * shutterH / slatCount, 0.016, seal);
+      var slatDepth = depth * 0.12;
+      var slatZ = depth / 2 - slatDepth / 2;
+      for (var s = 1; s < slatCount; s++) box(innerW * 0.96, 0.009, slatDepth, 0, op.height - frame - shutterH + s * shutterH / slatCount, slatZ, seal);
       box(op.width, frame * 1.35, depth * 1.06, 0, op.height - frame * 0.68, 0, pvc);
     } else if (style === 'pvc-window-sliding') {
       glazedLeaf(-innerW / 4, centerY, innerW / 2, innerH, -0.008);
