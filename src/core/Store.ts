@@ -262,6 +262,32 @@ export const commands = {
     emit({ type: 'SteelFrameWallSpecificationSet', wallId });
   },
 
+  // Divisória interna em drywall (Wall.partitionSystem) — independente do
+  // Project.constructionSystem, reaproveita os MESMOS campos de face/núcleo
+  // do Steel Frame (faceAAssemblyId/faceBAssemblyId/cavityAssembly) restritos
+  // ao subconjunto use:'internal' no ponto de chamada (ViewportController).
+  // values undefined = remover a divisória e voltar ao padrão do projeto.
+  setWallPartitionSystem(
+    wallId: string,
+    values: { partitionSystem: 'drywall'; faceAAssemblyId: string | undefined; faceBAssemblyId: string | undefined; cavityAssembly: Wall['cavityAssembly'] | undefined } | undefined,
+  ): void {
+    const wall = project.floors.flatMap((floor) => floor.walls).find((item) => item.id === wallId);
+    if (!wall) return;
+    pushUndoSnapshot();
+    if (values) {
+      wall.partitionSystem = values.partitionSystem;
+      if (values.faceAAssemblyId) wall.faceAAssemblyId = values.faceAAssemblyId; else delete wall.faceAAssemblyId;
+      if (values.faceBAssemblyId) wall.faceBAssemblyId = values.faceBAssemblyId; else delete wall.faceBAssemblyId;
+      if (values.cavityAssembly) wall.cavityAssembly = values.cavityAssembly; else delete wall.cavityAssembly;
+    } else {
+      delete wall.partitionSystem;
+      delete wall.faceAAssemblyId;
+      delete wall.faceBAssemblyId;
+      delete wall.cavityAssembly;
+    }
+    emit({ type: 'WallPartitionSystemSet', wallId });
+  },
+
   setSteelFrameRoofSpecification(
     roofId: string,
     values: Partial<{ [K in 'gableFaceAAssemblyId' | 'gableFaceBAssemblyId' | 'soffitAssemblyId' | 'fasciaAssemblyId' | 'parapetOuterAssemblyId' | 'parapetInnerAssemblyId' | 'steppedWallFaceAAssemblyId' | 'steppedWallFaceBAssemblyId']: string | undefined }>,

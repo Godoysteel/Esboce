@@ -19,7 +19,7 @@ import type { FoundationQuantity } from './QuantityGeometry.js';
 import type { Point, Wall, Roof, Column, Laje, Project, CommercialSelection } from './types.js';
 import { constructionSystemDefinition, hasCeramicMasonryEstimate } from './ConstructionSystem.js';
 import * as SteelFrameConfigurator from './SteelFrameConfigurator.js';
-import { STEEL_FRAME_FACE_ASSEMBLIES, quantityWithWaste, steelFrameSpecificationIssues } from './SteelFrameAssemblies.js';
+import { STEEL_FRAME_FACE_ASSEMBLIES, quantityWithWaste, steelFrameSpecificationIssues, drywallPartitionSpecificationIssues } from './SteelFrameAssemblies.js';
 import { getPlacluxProduct } from './PlacluxCatalog.js';
 import { floorWallHeight } from './Attic.js';
 import { listCatalogOffers, listCatalogProducts, listManufacturers } from './SupabaseClient.js';
@@ -477,6 +477,12 @@ export function compute(): ComputeResult {
     // pra o cômodo/piso não quebrar junto.
     floor.walls.forEach(function (w) {
       if (w.demolished) return;
+      // Divisória em drywall (Wall.partitionSystem, ver drywallPartitionQuantities
+      // mais abaixo) fica de fora daqui inteira: não é alvenaria (wallAreaNet
+      // alimenta bloco/argamassa/chapisco/reboco), não usa a viga de cinta da
+      // casa (wallLength alimenta beamVolume) e o acabamento de placa+junta já
+      // é completo (sem linha de pintura por cima — decisão do Product Owner).
+      if (w.partitionSystem === 'drywall') return;
       const lenM = Core.wallLengthMeters(w);
       totals.wallLength += lenM;
       const atticRoof = (floor.roofs || []).find((roof) => roof.atticMode === 'generated' && (roof.atticWallIds || []).includes(w.id));
@@ -529,8 +535,14 @@ export function compute(): ComputeResult {
         }
         else totals.windowsGenericAreaM2 += openingAreaM2;
       }
-      totals.vergaCount++;
-      totals.vergaSpanM += op.width + 2 * VERGA_BEARING_M;
+      // Verga é reforço de ALVENARIA acima do vão — uma divisória em
+      // drywall não leva verga de concreto (o vão já é reforçado pelo
+      // próprio montante/guia do drywall, contado em
+      // drywallPartitionQuantities), então não conta aqui.
+      if (!hostWall || hostWall.partitionSystem !== 'drywall') {
+        totals.vergaCount++;
+        totals.vergaSpanM += op.width + 2 * VERGA_BEARING_M;
+      }
     });
 
     // Cômodos fechados: área de piso + comprimento de rodapé, e piso
@@ -781,8 +793,10 @@ export function compute(): ComputeResult {
     // COLUMN_MAX_SPAN_M) — um em cada encontro de parede detectado, mais
     // um a cada vão reto que passe de 3m sem encontro nenhum. Parede
     // quebrada não entra (não vai ser construída, não precisa de
-    // pilarete embutido nela).
-    const activeWalls = floor.walls.filter(function (w) { return !w.demolished; });
+    // pilarete embutido nela); divisória em drywall também não — não é
+    // alvenaria, não leva pilarete de concreto embutido em nenhum vão
+    // nem encontro que só envolva ela.
+    const activeWalls = floor.walls.filter(function (w) { return !w.demolished && w.partitionSystem !== 'drywall'; });
     const junctions = countWallJunctions(activeWalls);
     let extraSpanColumns = 0;
     activeWalls.forEach(function (w) {
@@ -792,6 +806,28 @@ export function compute(): ComputeResult {
     const estimatedCountForFloor = junctions + extraSpanColumns;
     totals.estimatedColumnCount += estimatedCountForFloor;
     estimatedPilareteVolume += estimatedCountForFloor * COLUMN_SECTION_M * COLUMN_SECTION_M * currentWallHeight;
+  });
+
+  // Muros de terreno (Terreno.muros) são geometria real — renderizam em
+  // 3D e têm acabamento próprio — mas ficavam de fora do orçamento
+  // porque só percorríamos project.floors. Entram em wallAreaNet/paint
+  // (mesma alvenaria e pintura de uma parede comum), mas DE PROPÓSITO
+  // não em totals.wallLength: esse total alimenta a viga de cinta da
+  // CASA (beamVolume/beamLength, linha 816/822) e o resumo "Paredes
+  // (comprimento)" — um muro de terreno não usa a cinta de amarração da
+  // casa, contá-lo ali infla aço/concreto que não existe pra ele.
+  (project.terreno?.muros || []).forEach(function (muro) {
+    if (muro.demolished) return;
+    const lenM = Core.wallLengthMeters(muro);
+    const height = muro.heightM ?? Core.TERRENO_MURO_HEIGHT_M;
+    const faceArea = lenM * height;
+    totals.wallAreaNet += faceArea;
+    const finishA = muro.finishA || DEFAULT_PAINT_PRODUCT_ID;
+    const finishB = muro.finishB || DEFAULT_PAINT_PRODUCT_ID;
+    addTo(paint, finishA, faceArea);
+    addTo(paint, finishB, faceArea);
+    addCommercialQuantity(paintCommercial, finishA, faceArea, selectedOffer(project, 'terreno:muro:' + muro.id + ':A', finishA));
+    addCommercialQuantity(paintCommercial, finishB, faceArea, selectedOffer(project, 'terreno:muro:' + muro.id + ':B', finishB));
   });
 
   // Alvenaria — derivada da área líquida de parede, aplicando os índices
@@ -1034,7 +1070,10 @@ function steelFrameQuantities(project: Project): SteelFrameQuantityLine[] {
   project.floors.forEach((floor) => {
     const wallHeight = floorWallHeight(floor, Scene3DRenderer.WALL_HEIGHT_GETTER());
     floor.walls.forEach((wall) => {
-      if (wall.demolished) return;
+      // Parede que optou por drywall (Wall.partitionSystem) sai daqui e
+      // vai por drywallPartitionQuantities() — evita contar a mesma
+      // parede duas vezes num projeto Steel Frame.
+      if (wall.demolished || wall.partitionSystem === 'drywall') return;
       const wallLengthM = Core.wallLengthMeters(wall);
       const openingsArea = floor.openings.filter((opening) => opening.wallId === wall.id)
         .reduce((sum, opening) => sum + opening.width * opening.height, 0);
@@ -1101,6 +1140,70 @@ function steelFrameQuantities(project: Project): SteelFrameQuantityLine[] {
   });
 }
 
+// Peso de referência dos perfis leves (guia+montante) de uma divisória
+// de drywall — bem mais leve que STEEL_FRAME_STRUCTURE_KG_PER_M2 (30
+// kg/m²) logo acima, que dimensiona a estrutura EXTERNA/portante do
+// Steel Frame. Parâmetro preliminar de orçamento (ADR-006 §7/§17 — a
+// origem e o caráter estimativo ficam visíveis na própria linha do
+// quantitativo, mesmo padrão já usado ali em cima); reaproveita o preço
+// genérico de aço já usado em pilarete/viga/laje/verga
+// (materialPrice('steelPerKg')) em vez de inventar um preço novo.
+const DRYWALL_PARTITION_STRUCTURE_KG_PER_M2 = 4;
+
+// Quantitativo de divisórias internas em drywall (Wall.partitionSystem
+// === 'drywall') — reaproveita a MESMA agregação por face de
+// steelFrameQuantities() logo acima (STEEL_FRAME_FACE_ASSEMBLIES,
+// cavityAssembly), mas SEM o gate de constructionSystem ===
+// 'light_steel_frame': qualquer projeto (alvenaria, bloco estrutural ou
+// Steel Frame) pode ter divisórias específicas em drywall. compute()
+// exclui a parede marcada da alvenaria (e, se o projeto for Steel
+// Frame, do loop estrutural principal) — sem dupla contagem.
+function drywallPartitionQuantities(project: Project): SteelFrameQuantityLine[] {
+  const totals = new Map<string, SteelFrameQuantityLine>();
+  const add = (id: string, label: string, quantity: number, unit: SteelFrameQuantityLine['unit']) => {
+    const key = id + ':' + unit;
+    const current = totals.get(key);
+    if (current) current.quantity += quantity;
+    else totals.set(key, { id, label, quantity, unit });
+  };
+  let structuralArea = 0;
+  project.floors.forEach((floor) => {
+    const wallHeight = floorWallHeight(floor, Scene3DRenderer.WALL_HEIGHT_GETTER());
+    floor.walls.forEach((wall) => {
+      if (wall.demolished || wall.partitionSystem !== 'drywall') return;
+      const wallLengthM = Core.wallLengthMeters(wall);
+      const openingsArea = floor.openings.filter((opening) => opening.wallId === wall.id)
+        .reduce((sum, opening) => sum + opening.width * opening.height, 0);
+      const faceArea = Math.max(0, wallLengthM * wallHeight - openingsArea);
+      structuralArea += faceArea;
+      [wall.faceAAssemblyId, wall.faceBAssemblyId].forEach((assemblyId) => {
+        // Restrito a use:'internal' — uma parede de drywall nunca deveria
+        // apontar pra uma composição externa (EIFS/Glasroc/etc.), mas a
+        // checagem aqui evita que dado antigo/corrompido misture as duas.
+        const assembly = STEEL_FRAME_FACE_ASSEMBLIES.find((item) => item.id === assemblyId && item.use === 'internal');
+        assembly?.layers.forEach((layer) => {
+          add(layer.id, layer.label, quantityWithWaste(faceArea, layer), layer.unit === 'unit' ? 'un' : layer.unit === 'm2' ? 'm²' : layer.unit);
+        });
+      });
+      const insulationId = wall.cavityAssembly?.insulationSystemId;
+      if (insulationId && insulationId !== 'none') {
+        const product = getPlacluxProduct(insulationId);
+        add(insulationId, product?.name || 'Isolamento térmico e acústico', Math.round(faceArea * 1.1 * 100) / 100, 'm²');
+      }
+    });
+  });
+  if (structuralArea > 0) {
+    add('drywall-partition-structure', 'Guias e montantes leves (parâmetro preliminar ' + DRYWALL_PARTITION_STRUCTURE_KG_PER_M2 + ' kg/m² + 5% de perda)', Math.round(structuralArea * DRYWALL_PARTITION_STRUCTURE_KG_PER_M2 * 1.05 * 100) / 100, 'kg');
+  }
+  return Array.from(totals.values()).map((line) => {
+    const technicalQuantity = line.quantity;
+    const commercial = steelFrameCommercialUnit(line.id, line.unit, technicalQuantity);
+    if (commercial) return { id: line.id, label: line.label, quantity: commercial.quantity, unit: commercial.unit, whole: true, technicalQuantity };
+    if (line.unit === 'un') return { ...line, quantity: Math.ceil(line.quantity), unit: 'unidades', whole: true, technicalQuantity };
+    return { ...line, quantity: Math.round(line.quantity * 100) / 100, technicalQuantity };
+  });
+}
+
 function groupSection(title: string, map: Record<string, number>): string {
   const keys = Object.keys(map);
   if (!keys.length) return '';
@@ -1136,6 +1239,17 @@ export function render(): void {
         sfLines.forEach((line) => { html += '<div class="materials-line"><span>' + line.label + '</span><span>' + line.quantity.toFixed(line.whole ? 0 : 2).replace('.', ',') + ' ' + line.unit + '</span></div>'; });
       }
     }
+  }
+  // Divisórias em drywall (Wall.partitionSystem) aparecem SEMPRE que
+  // existir ao menos uma parede marcada, independente do sistema do
+  // projeto (alvenaria, bloco estrutural ou Steel Frame) — diferente do
+  // bloco Steel Frame acima, que só aparece pro projeto inteiro em LSF.
+  const drywallLines = drywallPartitionQuantities(Store.getProject());
+  if (drywallLines.length) {
+    const drywallIssues = drywallPartitionSpecificationIssues(Store.getProject());
+    if (drywallIssues.length) html += '<div class="materials-empty">Faltam ' + drywallIssues.length + ' escolhas de revestimento para concluir as divisórias em drywall.</div>';
+    html += '<div class="object-panel-section-label">Divisórias em drywall</div>';
+    drywallLines.forEach((line) => { html += '<div class="materials-line"><span>' + line.label + '</span><span>' + line.quantity.toFixed(line.whole ? 0 : 2).replace('.', ',') + ' ' + line.unit + '</span></div>'; });
   }
   html += '<div class="object-panel-section-label">Quantitativos gerais</div>';
   html += '<div class="materials-line"><span>Paredes</span><span>' + fmtM(q.totals.wallLength) + '</span></div>';
@@ -1375,6 +1489,7 @@ const STEEL_FRAME_PRICE_KEY_BY_LAYER_ID: Partial<Record<string, MaterialPriceKey
   'glasroc-therm-eps': 'glasrocEpsPerM2',
   'osb': 'substrateBoardPerM2',
   'cement-board-substrate': 'substrateBoardPerM2',
+  'drywall-partition-structure': 'steelPerKg',
 };
 
 function hydraulicPipePriceKey(productLine: HydraulicProductLine, diameterMm: number): string {
@@ -1792,6 +1907,16 @@ export function buildRows(): (string | number)[][] {
     push(cat, item, qtyNum, unit, cost, materialCommercialSelection(key));
   }
 
+  // Mesmo aviso que já aparece na tela (render(), acima) quando o
+  // sistema não tem quantitativo de alvenaria específico — a exportação
+  // genérica de PDF/CSV simplesmente pulava essas linhas (nos ifs de
+  // hasCeramicMasonryEstimate abaixo) sem nenhum aviso equivalente, então
+  // um projeto em bloco estrutural exportado ficava com blocos/graute/
+  // armaduras faltando sem explicação nenhuma no documento.
+  if (!hasCeramicMasonryEstimate(q.constructionSystem) && q.constructionSystem !== 'light_steel_frame') {
+    push('Aviso', 'Quantitativo de blocos estruturais, graute e armaduras', 'não disponível nesta versão', '', null);
+  }
+
   push('Geral', 'Paredes (comprimento)', q.totals.wallLength, 'm', null);
   push('Geral', 'Piso (área)', q.totals.floorArea, 'm²', null);
   pushMaterial('Geral', 'Rodapé (comprimento)', q.totals.baseboard, 'm', q.totals.baseboard > 0 ? q.totals.baseboard * materialPrice('baseboardPerM') : null, 'baseboardPerM');
@@ -1803,6 +1928,14 @@ export function buildRows(): (string | number)[][] {
       else push('Steel Frame', line.label, line.quantity, line.unit, null);
     });
   }
+  // Divisórias em drywall (Wall.partitionSystem) — SEM o gate acima:
+  // aparece em qualquer sistema de projeto, sempre que existir ao menos
+  // uma parede marcada.
+  drywallPartitionQuantities(Store.getProject()).forEach((line) => {
+    const priceKey = STEEL_FRAME_PRICE_KEY_BY_LAYER_ID[line.id];
+    if (priceKey) pushMaterial('Drywall (divisórias)', line.label, line.quantity, line.unit, (line.technicalQuantity ?? line.quantity) * materialPrice(priceKey), priceKey);
+    else push('Drywall (divisórias)', line.label, line.quantity, line.unit, null);
+  });
   // Porta/janela de VIDRO (produto real de catálogo escolhido) — item
   // por PRODUTO, quantidade em m² real da abertura (convenção de
   // mercado pra esquadria de vidro/alumínio, pedido do Product Owner),

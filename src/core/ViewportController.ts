@@ -216,6 +216,7 @@ import {
     arco: 'Clique sobre uma parede pra abrir um vão ali — sacada, garagem, conceito aberto. Selecione um arco colocado pra arrastar os lados ou o topo.',
     varanda: 'Clique no chão pra colocar uma varanda. Selecione uma já colocada, clique direito nela pra girar qual lado é a frente ou excluir.',
     demolish: 'Clique numa parede pra quebrar ela — some da vista e do orçamento, mas o cômodo continua fechado (o piso não desaparece).',
+    drywallPartition: 'Clique numa parede INTERNA (cômodo dos dois lados) pra marcar como divisória em drywall — clique de novo na mesma parede pra remover.',
     paintBucket: 'Material carregado do catálogo. Clique diretamente na face que deseja revestir.',
     terreno: 'Clique num lado destacado do retângulo pra adicionar ou remover o muro daquele lado.',
     wholeConstruction: 'Clique em qualquer ponto e arraste pra mover a construção inteira (todos os pavimentos) dentro do terreno.'
@@ -2888,6 +2889,33 @@ import {
     if (currentTool === 'demolish' && mesh && mesh.userData.wallId) {
       Store.commands.demolishWall(mesh.userData.wallId);
       hintEl.textContent = 'Parede quebrada — some da vista e do orçamento, mas o cômodo continua fechado. Clique em outra pra continuar, ou escolha outra ferramenta.';
+      return;
+    }
+
+    // Ferramenta Drywall ativa + clicou numa parede: alterna a parede
+    // entre drywall (padrão Standard-ST nas duas faces) e o sistema
+    // construtivo padrão do projeto — mesmo princípio de clique único e
+    // instantâneo do balde de tinta/quebrar parede acima, sem diálogo
+    // modal. Só aceita parede INTERNA (cômodo fechado dos dois lados,
+    // Core.wallIsInteriorPartition) — uma parede externa da casa nunca
+    // devia virar divisória de drywall.
+    if (currentTool === 'drywallPartition' && mesh && mesh.userData.wallId) {
+      var drywallWall = Store.findWall(mesh.userData.wallId);
+      if (!drywallWall) return;
+      if (drywallWall.partitionSystem === 'drywall') {
+        Store.commands.setWallPartitionSystem(drywallWall.id, undefined);
+        hintEl.textContent = 'Drywall removido — parede volta ao sistema construtivo padrão do projeto.';
+        return;
+      }
+      var drywallRooms = Core.detectRooms(Store.currentWalls());
+      if (!Core.wallIsInteriorPartition(drywallWall, drywallRooms)) {
+        hintEl.textContent = 'Só é possível aplicar drywall em paredes internas — com cômodo fechado dos dois lados.';
+        return;
+      }
+      Store.commands.setWallPartitionSystem(drywallWall.id, {
+        partitionSystem: 'drywall', faceAAssemblyId: 'drywall-st', faceBAssemblyId: 'drywall-st', cavityAssembly: undefined,
+      });
+      hintEl.textContent = 'Divisória em drywall (Standard-ST) aplicada. Clique de novo na mesma parede pra remover, ou em outra pra continuar.';
       return;
     }
 

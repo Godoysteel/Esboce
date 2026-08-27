@@ -325,6 +325,52 @@ test('clampParapetHeight usa os mesmos 3 valores do 3D via getter, não duplica 
   assert.match(body, /Scene3DRenderer\.PARAPET_HEIGHT_DEFAULT_GETTER\(\)/);
 });
 
+// Auditoria pedida pelo usuário ("confirmar que o sistema está
+// calculando toda a geometria existente"): Terreno.muros é geometria
+// real (renderiza em 3D, Scene3DRenderer.buildTerrenoMuroBoxMesh, tem
+// finishA/finishB próprios) mas nunca entrava em compute() — só
+// project.floors era percorrido. muros NÃO passam pelo teste de
+// cobertura genérico acima porque moram em Project.terreno, não em
+// Floor, então precisam de cobertura própria.
+test('compute() soma Terreno.muros em wallAreaNet e paint (área × Wall.heightM do próprio muro), com fallback de tinta padrão', () => {
+  const start = materialsSource.indexOf('(project.terreno?.muros || []).forEach(function (muro) {');
+  assert.ok(start !== -1, 'loop de muros de terreno não encontrado em compute()');
+  const end = materialsSource.indexOf('\n  });', start);
+  const body = materialsSource.slice(start, end);
+  assert.match(body, /if \(muro\.demolished\) return;/);
+  assert.match(body, /const height = muro\.heightM \?\? Core\.TERRENO_MURO_HEIGHT_M;/);
+  assert.match(body, /const faceArea = lenM \* height;/);
+  assert.match(body, /totals\.wallAreaNet \+= faceArea;/);
+  assert.match(body, /const finishA = muro\.finishA \|\| DEFAULT_PAINT_PRODUCT_ID;/);
+  assert.match(body, /const finishB = muro\.finishB \|\| DEFAULT_PAINT_PRODUCT_ID;/);
+  assert.match(body, /addTo\(paint, finishA, faceArea\);/);
+  assert.match(body, /addTo\(paint, finishB, faceArea\);/);
+});
+
+// Decisão deliberada, não esquecimento: muro de terreno NÃO soma em
+// totals.wallLength, porque esse total alimenta a viga de cinta/
+// amarração da CASA (beamVolume/beamLength) — um muro de perímetro não
+// usa a cinta de amarração da casa, contá-lo ali infla aço/concreto
+// que não existe pra ele.
+test('muro de terreno fica de fora de totals.wallLength (não infla a viga de cinta da casa)', () => {
+  const start = materialsSource.indexOf('(project.terreno?.muros || []).forEach(function (muro) {');
+  const end = materialsSource.indexOf('\n  });', start);
+  const body = materialsSource.slice(start, end);
+  assert.doesNotMatch(body, /totals\.wallLength/);
+});
+
+// Aviso de blocos estruturais indisponíveis já existia na tela (render())
+// mas não na exportação genérica de PDF/CSV (buildRows()) — projeto em
+// bloco estrutural exportado ficava sem blocos/graute/armaduras e SEM
+// nenhuma explicação no documento.
+test('buildRows() inclui o mesmo aviso de "blocos estruturais indisponível" que já existe na tela, quando o sistema não é alvenaria cerâmica nem Steel Frame', () => {
+  const start = materialsSource.indexOf('export function buildRows(');
+  const end = materialsSource.indexOf("push('Geral', 'Paredes (comprimento)'", start);
+  const body = materialsSource.slice(start, end);
+  assert.match(body, /if \(!hasCeramicMasonryEstimate\(q\.constructionSystem\) && q\.constructionSystem !== 'light_steel_frame'\) \{/);
+  assert.match(body, /push\('Aviso', 'Quantitativo de blocos estruturais, graute e armaduras', 'não disponível nesta versão', '', null\);/);
+});
+
 test('laje acompanha o retângulo do telhado platibanda quando ele avança pra fora das paredes — soma só a diferença, sem contar duas vezes', () => {
   const start = materialsSource.indexOf("if (roof.type !== 'platibanda') return;");
   assert.ok(start !== -1, 'bloco de laje-vs-platibanda não encontrado');

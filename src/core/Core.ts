@@ -1337,6 +1337,23 @@ export function findRoomsAdjacentToOpening(wall: Wall, opening: Opening, rooms: 
   return { roomA, roomB };
 }
 
+// Classifica uma parede como divisória INTERNA (cômodo fechado dos dois
+// lados) vs parede externa/de perímetro — mesmo princípio de sondagem
+// perpendicular de findRoomsAdjacentToOpening acima, mas no MEIO da
+// parede inteira, não numa abertura específica. Usada pra restringir a
+// ferramenta de drywall a paredes onde faz sentido como divisória —
+// nunca uma parede externa da casa.
+export function wallIsInteriorPartition(wall: Wall, rooms: Room[]): boolean {
+  const wdx = wall.x2 - wall.x1, wdy = wall.y2 - wall.y1;
+  const wlen = Math.hypot(wdx, wdy) || 1e-6;
+  const wnx = -wdy / wlen, wny = wdx / wlen;
+  const midX = (wall.x1 + wall.x2) / 2, midY = (wall.y1 + wall.y2) / 2;
+  const probeDist = (WALL_THICK * GRID) / 2 + 0.3 * GRID;
+  const roomA = rooms.filter((r) => pointInPolygon(midX + wnx * probeDist, midY + wny * probeDist, r.points))[0] || null;
+  const roomB = rooms.filter((r) => pointInPolygon(midX - wnx * probeDist, midY - wny * probeDist, r.points))[0] || null;
+  return !!(roomA && roomB);
+}
+
 // Limites de um cômodo em unidades de MODELO, já com a meia-espessura da
 // parede somada — os pontos de detectRooms são cruzamentos do EIXO das
 // paredes, não da face externa.
@@ -2246,7 +2263,7 @@ export const Core = {
   snap, nextId, snapCoordinateToWalls, translatePoint, mirrorX, mirrorRotationDeg,
   createOpeningEntity, wallLengthMeters, polygonAreaModelUnits, wallOffsetAtPoint, findValidOpeningOffset,
   resolveOpeningEdgeResize, resolveOpeningHeightResize,
-  findRoomsAdjacentToOpening,
+  findRoomsAdjacentToOpening, wallIsInteriorPartition,
   roofRidgeHeightMeters, roofPitchForRidgeHeight, roofsCanFuse, fusedRoofBounds, roofGenerationRects,
   rectPoints, lajeBounds,
   rectsNearby, roofFootprintValleyCorner, roofValleySide, roofValleyOwnSign, pointInPolygon, roomModelBounds, findRoomWallIds, findIsolatedRoomWallIds, wallResizeTopology, resolveWallResizeOffset, computeWallFootprints,

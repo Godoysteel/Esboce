@@ -185,7 +185,10 @@ export function steelFrameSpecificationIssues(project: Project): SteelFrameSpeci
   const issues: SteelFrameSpecificationIssue[] = [];
   project.floors.forEach((floor) => {
     floor.walls.forEach((wall: Wall) => {
-      if (wall.demolished) return;
+      // Divisória em drywall (Wall.partitionSystem) tem validação própria
+      // (drywallPartitionSpecificationIssues, abaixo) — não é a estrutura
+      // Steel Frame do projeto, não deveria aparecer como pendência do LSF.
+      if (wall.demolished || wall.partitionSystem === 'drywall') return;
       if (!wall.faceAAssemblyId) issues.push({ kind: 'wall-face', entityId: wall.id, side: 'a' });
       if (!wall.faceBAssemblyId) issues.push({ kind: 'wall-face', entityId: wall.id, side: 'b' });
       if (!wall.cavityAssembly) issues.push({ kind: 'wall-cavity', entityId: wall.id });
@@ -207,5 +210,29 @@ export function steelFrameSpecificationIssues(project: Project): SteelFrameSpeci
   });
   if (!project.steelFrameSoffitAssemblyId) issues.push({ kind: 'soffit', entityId: '__project__' });
   if (!project.steelFrameFasciaAssemblyId) issues.push({ kind: 'fascia', entityId: '__project__' });
+  return issues;
+}
+
+export interface DrywallPartitionSpecificationIssue {
+  kind: 'wall-face';
+  entityId: string;
+  side: 'a' | 'b';
+}
+
+/**
+ * Lista paredes marcadas como divisória em drywall (Wall.partitionSystem)
+ * sem face A/B definida — roda em QUALQUER sistema de projeto (alvenaria,
+ * bloco estrutural ou Steel Frame), diferente de steelFrameSpecificationIssues
+ * acima, que só se aplica quando o projeto INTEIRO é Light Steel Frame.
+ */
+export function drywallPartitionSpecificationIssues(project: Project): DrywallPartitionSpecificationIssue[] {
+  const issues: DrywallPartitionSpecificationIssue[] = [];
+  project.floors.forEach((floor) => {
+    floor.walls.forEach((wall: Wall) => {
+      if (wall.demolished || wall.partitionSystem !== 'drywall') return;
+      if (!wall.faceAAssemblyId) issues.push({ kind: 'wall-face', entityId: wall.id, side: 'a' });
+      if (!wall.faceBAssemblyId) issues.push({ kind: 'wall-face', entityId: wall.id, side: 'b' });
+    });
+  });
   return issues;
 }

@@ -20,6 +20,14 @@ export interface Wall {
   faceBAssemblyId?: string;
   /** Núcleo compartilhado pelas duas faces; não deve ser contado duas vezes. */
   cavityAssembly?: WallCavityAssembly;
+  // Divisória interna em drywall — independente do Project.constructionSystem
+  // (alvenaria/bloco estrutural/Steel Frame): qualquer parede INTERNA (cômodo
+  // dos dois lados, ver Core.wallIsInteriorPartition) pode ser marcada em
+  // drywall isoladamente. Quando presente, reaproveita faceAAssemblyId/
+  // faceBAssemblyId/cavityAssembly (acima) restritos ao subconjunto
+  // use:'internal' de STEEL_FRAME_FACE_ASSEMBLIES para a composição técnica,
+  // e MaterialsPanel exclui a parede da alvenaria/Steel Frame estrutural.
+  partitionSystem?: 'drywall';
   // Altura própria, em metros — só usada por muros de terreno
   // (Terreno.muros). Paredes da casa (Floor.walls) ignoram este campo e
   // continuam com a altura fixa Core.WALL_HEIGHT.

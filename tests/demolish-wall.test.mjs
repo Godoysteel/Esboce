@@ -118,7 +118,7 @@ test('MaterialsPanel não conta parede demolida em nenhum quantitativo (comprime
   assert.match(materialsSource, /floor\.walls\.forEach\(function \(w\) \{\s*\n\s*if \(w\.demolished\) return;/);
   assert.match(materialsSource, /const hostWall = floor\.walls\.filter\(function \(w\) \{ return w\.id === op\.wallId; \}\)\[0\];\s*\n\s*if \(hostWall && hostWall\.demolished\) return;/);
   assert.match(materialsSource, /if \(!wall \|\| wall\.demolished\) return;/);
-  assert.match(materialsSource, /const activeWalls = floor\.walls\.filter\(function \(w\) \{ return !w\.demolished; \}\);/);
+  assert.match(materialsSource, /const activeWalls = floor\.walls\.filter\(function \(w\) \{ return !w\.demolished && w\.partitionSystem !== 'drywall'; \}\);/);
   assert.match(materialsSource, /floor\.walls\.forEach\(function \(w, i\) \{\s*\n\s*if \(w\.demolished\) return;/);
 });
 
