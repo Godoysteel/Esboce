@@ -1714,3 +1714,20 @@ Status: Implementado, testado (suíte completa + teste novo confirmando a marca�
 **Bug corrigido durante a verificação:** a primeira versão do substrato de `eifs` usava role `external_board` (copiado sem ajuste do papel de "placa de acabamento" que o ProFort tem em `cement-board-direct`) — como `MaterialsPanel.hasSubstrate` só verifica `role === 'structural_sheathing'`, a membrana não estava recebendo a folga de 0,6m/m (saía 4 rolos, não 5). Corrigido pra `structural_sheathing`, com teste novo garantindo a role certa.
 
 ---
+
+# DEC-159 — Primeiros preços reais de Steel Frame (Espaço Smart)
+
+**Data:** 27/08/2026
+**Status:** Implementado (código); migration pendente de aplicação no banco
+
+**Contexto:** até aqui, TODO item do quantitativo de Steel Frame saía sem preço (`cost: null` incondicional em `buildRows()`, ver [[project_steelframe_budget_state]]) — nenhum SKU Vórtice cadastrado pra fechamentos/estrutura. O Product Owner pesquisou preços reais na Espaço Smart (maior rede de construção a seco do Brasil) pra 4 itens específicos: Pacote com 100 Arruelas pra Sistema EIFS (R$47,92 → R$0,4792/un), Pingadeira PVC 2,50m (R$101,88/peça), Placa de Gesso Glasroc X 12,5mm 1200x2400 (R$219,90/placa, 2,88m² ≈ R$76,35/m² — confirma que Glasroc X já é uma linha British Gypsum/Placo/Gyproc, Saint-Gobain) e Placa OSB Home Plus MDI 11,1mm 1200x2400 (R$200,00/placa ≈ R$69,44/m²).
+
+**Decisão:**
+1. Migration `20260827140000_seed_steel_frame_vortice_references.sql` cadastra os 4 produtos como Vórtice Materiais (`products` + `product_offers`, `kind: 'market_reference'`), mesmo padrão de todas as migrations Vórtice anteriores (cimento, forro, hidráulica, referências gerais).
+2. `MaterialsPanel.ts` ganhou 4 `MaterialPriceKey` novas (`eifsWasherPerUnit`, `pingadeiraPerUnit`, `glasrocXBoardPerM2`, `substrateBoardPerM2`) com entrada em `VORTICE_MATERIAL_SKUS` (resolve pelo Supabase quando a migration rodar) e em `REFERENCE_PRICES` (fallback de emergência com o MESMO valor pesquisado, pra funcionar mesmo antes da migration ser aplicada).
+3. Novo `STEEL_FRAME_PRICE_KEY_BY_LAYER_ID`: liga o id da camada (`STEEL_FRAME_FACE_ASSEMBLIES`) à `MaterialPriceKey`. `'osb'` e `'cement-board-substrate'` (mesmo produto físico — painel OSB/Compensado — usado em composições diferentes) apontam pra `substrateBoardPerM2`. `buildRows()` consulta esse mapa por linha do quantitativo Steel Frame: item mapeado vira `pushMaterial` (preço + custo); item sem entrada continua `push` com custo `null`, exatamente como antes — nenhum número inventado pro que não foi pesquisado ainda.
+4. Testado ao vivo via `buildRows()` (import dinâmico do módulo no console do navegador, já que `MaterialsPanel` não é exposto globalmente): parede de 60m em `eifs-wood-substrate` — painel do substrato 178,2 m² × R$69,44 = R$12.374,21; parafuso com arandela 1021 un × R$0,48 = R$489,26; pingadeira 27 un × R$101,88 = R$2.750,76. Os demais itens (basecoat, fita, tela, cantoneira, membrana, drywall, estrutura, manta) continuam "—", confirmando que só os 4 itens pesquisados ganharam preço.
+
+**Pendência:** a migration ainda não foi aplicada no banco de produção (nenhum acesso de escrita ao Supabase disponível nesta sessão) — até lá, os 4 itens resolvem pelo fallback `REFERENCE_PRICES` (mesmo valor da pesquisa), então o comportamento observado já é o mesmo de quando a migration rodar; só a fonte/rastreabilidade (nível 1 fornecedor vs nível 2 fallback) muda.
+
+---

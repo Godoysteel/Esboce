@@ -1277,7 +1277,7 @@ interface RealPriceMatch {
   kind: CommercialSelection['kind'];
   estimated?: boolean;
 }
-type MaterialPriceKey = 'cementPerKg' | 'limePerKg' | 'sandPerM3' | 'concretePerM3' | 'steelPerKg' | 'brickPerUnit' | 'woodPerM3' | 'windowPerM2' | 'nailPerKg' | 'forroPlacaSTPerM2' | 'forroPlacaRUPerM2' | 'forroPlacaRFPerM2' | 'forroPlacaCimenticiaPerM2' | 'forroF530PerM' | 'forroTabicaPerM' | 'forroPenduralPerUnit' | 'baseboardPerM' | 'woodDoorPerUnit' | 'sillPerM' | 'glazingPanelPerM2' | 'balconyRailingPerM' | 'varandaPerM2' | 'volumeBoxGenericPerM2' | 'stairPerUnit' | 'hydraulicDestinationBoxPerUnit';
+type MaterialPriceKey = 'cementPerKg' | 'limePerKg' | 'sandPerM3' | 'concretePerM3' | 'steelPerKg' | 'brickPerUnit' | 'woodPerM3' | 'windowPerM2' | 'nailPerKg' | 'forroPlacaSTPerM2' | 'forroPlacaRUPerM2' | 'forroPlacaRFPerM2' | 'forroPlacaCimenticiaPerM2' | 'forroF530PerM' | 'forroTabicaPerM' | 'forroPenduralPerUnit' | 'baseboardPerM' | 'woodDoorPerUnit' | 'sillPerM' | 'glazingPanelPerM2' | 'balconyRailingPerM' | 'varandaPerM2' | 'volumeBoxGenericPerM2' | 'stairPerUnit' | 'hydraulicDestinationBoxPerUnit' | 'eifsWasherPerUnit' | 'pingadeiraPerUnit' | 'glasrocXBoardPerM2' | 'substrateBoardPerM2';
 let realPrices: { [K in MaterialPriceKey]?: RealPriceMatch } = {};
 let realHydraulicPrices: Record<string, RealPriceMatch> = {};
 let realPricesFetchStarted = false;
@@ -1314,6 +1314,25 @@ const VORTICE_MATERIAL_SKUS: Record<MaterialPriceKey, { sku: string; unitDivisor
   volumeBoxGenericPerM2: { sku: 'vortice-volumetria-m2', unitDivisor: 1 },
   stairPerUnit: { sku: 'vortice-escada-un', unitDivisor: 1 },
   hydraulicDestinationBoxPerUnit: { sku: 'vortice-caixa-hidraulica-un', unitDivisor: 1 },
+  eifsWasherPerUnit: { sku: 'vortice-eifs-arandela-pct100', unitDivisor: 100 },
+  pingadeiraPerUnit: { sku: 'vortice-pingadeira-pvc-2-5m', unitDivisor: 1 },
+  glasrocXBoardPerM2: { sku: 'vortice-glasroc-x-12-5mm', unitDivisor: 2.88 },
+  substrateBoardPerM2: { sku: 'vortice-osb-11-1mm', unitDivisor: 2.88 },
+};
+
+// Primeiros itens de Steel Frame com preço real (Espaço Smart, ago/2026
+// — ver migration correspondente) — liga o id da camada
+// (STEEL_FRAME_FACE_ASSEMBLIES) à MaterialPriceKey certa. 'osb' e
+// 'cement-board-substrate' são o MESMO produto físico (painel OSB/
+// Compensado) usado em composições diferentes, por isso apontam pra
+// chave única. Camada sem entrada aqui continua sem preço (cost: null),
+// igual antes — nenhum número inventado.
+const STEEL_FRAME_PRICE_KEY_BY_LAYER_ID: Partial<Record<string, MaterialPriceKey>> = {
+  'eifs-eps-fixers-arandela': 'eifsWasherPerUnit',
+  'placlux.pingadeira-pvc-2-5m': 'pingadeiraPerUnit',
+  'glasroc-x': 'glasrocXBoardPerM2',
+  'osb': 'substrateBoardPerM2',
+  'cement-board-substrate': 'substrateBoardPerM2',
 };
 
 function hydraulicPipePriceKey(productLine: HydraulicProductLine, diameterMm: number): string {
@@ -1458,6 +1477,10 @@ const REFERENCE_PRICES = {
   volumeBoxGenericPerM2: 260.00,
   stairPerUnit: 3500.00,
   hydraulicDestinationBoxPerUnit: 115.00,
+  eifsWasherPerUnit: 0.4792,
+  pingadeiraPerUnit: 101.88,
+  glasrocXBoardPerM2: 76.35,
+  substrateBoardPerM2: 69.44,
 };
 
 // Preços médios ESTIMADOS de mercado (Brasil, referência 2025-2026)
@@ -1724,7 +1747,9 @@ export function buildRows(): (string | number)[][] {
   push('Geral', 'Telhado (área real da água)', q.totals.roofArea, 'm²', null);
   if (q.constructionSystem === 'light_steel_frame') {
     steelFrameQuantities(Store.getProject()).forEach((line) => {
-      push('Steel Frame', line.label, line.quantity, line.unit, null);
+      const priceKey = STEEL_FRAME_PRICE_KEY_BY_LAYER_ID[line.id];
+      if (priceKey) pushMaterial('Steel Frame', line.label, line.quantity, line.unit, line.quantity * materialPrice(priceKey), priceKey);
+      else push('Steel Frame', line.label, line.quantity, line.unit, null);
     });
   }
   // Porta/janela de VIDRO (produto real de catálogo escolhido) — item

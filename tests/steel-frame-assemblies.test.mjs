@@ -133,6 +133,47 @@ test('EIFS tem duas variantes de substrato — a fixação do EPS/XPS muda confo
   }
 });
 
+// Primeiros itens de Steel Frame com preço real, pesquisado pelo
+// Product Owner na Espaço Smart em 27/08/2026 (ver migration
+// 20260827140000_seed_steel_frame_vortice_references.sql) — o restante
+// do quantitativo continua sem preço (cost: null), nenhum número
+// inventado pros itens que ainda não têm essa pesquisa.
+test('itens de Steel Frame com preço pesquisado (Espaço Smart) calculam custo em buildRows(); os demais continuam sem preço', () => {
+  assert.match(materialsSource, /eifsWasherPerUnit: \{ sku: 'vortice-eifs-arandela-pct100', unitDivisor: 100 \}/);
+  assert.match(materialsSource, /pingadeiraPerUnit: \{ sku: 'vortice-pingadeira-pvc-2-5m', unitDivisor: 1 \}/);
+  assert.match(materialsSource, /glasrocXBoardPerM2: \{ sku: 'vortice-glasroc-x-12-5mm', unitDivisor: 2\.88 \}/);
+  assert.match(materialsSource, /substrateBoardPerM2: \{ sku: 'vortice-osb-11-1mm', unitDivisor: 2\.88 \}/);
+
+  const start = materialsSource.indexOf('const STEEL_FRAME_PRICE_KEY_BY_LAYER_ID');
+  const end = materialsSource.indexOf('};', start);
+  const body = materialsSource.slice(start, end);
+  assert.match(body, /'eifs-eps-fixers-arandela': 'eifsWasherPerUnit'/);
+  assert.match(body, /'placlux\.pingadeira-pvc-2-5m': 'pingadeiraPerUnit'/);
+  assert.match(body, /'glasroc-x': 'glasrocXBoardPerM2'/);
+  // 'osb' e 'cement-board-substrate' são o MESMO produto físico (painel do
+  // substrato) em composições diferentes — apontam pra chave única.
+  assert.match(body, /'osb': 'substrateBoardPerM2'/);
+  assert.match(body, /'cement-board-substrate': 'substrateBoardPerM2'/);
+
+  const buildRowsStart = materialsSource.indexOf("steelFrameQuantities(Store.getProject()).forEach((line) => {", materialsSource.indexOf('export function buildRows'));
+  const buildRowsEnd = materialsSource.indexOf('});', buildRowsStart);
+  const buildRowsBody = materialsSource.slice(buildRowsStart, buildRowsEnd);
+  assert.match(buildRowsBody, /const priceKey = STEEL_FRAME_PRICE_KEY_BY_LAYER_ID\[line\.id\];/);
+  assert.match(buildRowsBody, /if \(priceKey\) pushMaterial\('Steel Frame', line\.label, line\.quantity, line\.unit, line\.quantity \* materialPrice\(priceKey\), priceKey\);/);
+  assert.match(buildRowsBody, /else push\('Steel Frame', line\.label, line\.quantity, line\.unit, null\);/);
+});
+
+test('migration Vórtice do Steel Frame cadastra os 4 produtos pesquisados na Espaço Smart, com produto E oferta market_reference', () => {
+  const migration = readFileSync(new URL('../supabase/migrations/20260827140000_seed_steel_frame_vortice_references.sql', import.meta.url), 'utf8');
+  for (const sku of ['vortice-eifs-arandela-pct100', 'vortice-pingadeira-pvc-2-5m', 'vortice-glasroc-x-12-5mm', 'vortice-osb-11-1mm']) {
+    assert.ok(migration.includes(sku), `SKU ausente na migration: ${sku}`);
+  }
+  assert.match(migration, /insert into public\.products/);
+  assert.match(migration, /insert into public\.product_offers/);
+  assert.match(migration, /'market_reference'/);
+  assert.match(migration, /Espaço Smart/);
+});
+
 test('composição "com substrato" cobre tanto OSB quanto Compensado, com parafusos próprios de fixação do painel', () => {
   const withSubstrate = STEEL_FRAME_FACE_ASSEMBLIES.find((item) => item.id === 'cement-board-osb');
   assert.match(withSubstrate.label, /OSB ou Compensado/);
