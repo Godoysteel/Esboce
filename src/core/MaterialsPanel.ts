@@ -963,7 +963,10 @@ function productLine(productId: string, areaM2: number): string {
 }
 
 interface SteelFrameQuantityLine { id: string; label: string; quantity: number; unit: 'm²' | 'kg' | 'un'; }
-const STEEL_FRAME_STRUCTURE_KG_PER_M2 = 12;
+// Parâmetro preliminar de orçamento definido pelo Product Owner em
+// 27/08/2026. Não representa dimensionamento estrutural; a origem e o
+// caráter estimativo permanecem visíveis na linha do quantitativo.
+const STEEL_FRAME_STRUCTURE_KG_PER_M2 = 30;
 
 function steelFrameQuantities(project: Project): SteelFrameQuantityLine[] {
   if (project.constructionSystem !== 'light_steel_frame') return [];
@@ -1009,7 +1012,7 @@ function steelFrameQuantities(project: Project): SteelFrameQuantityLine[] {
     });
   });
   if (structuralArea > 0) {
-    add('steel-frame-structure', 'Estrutura e fixadores estruturais (média 12 kg/m² + 5% de perda)', Math.round(structuralArea * STEEL_FRAME_STRUCTURE_KG_PER_M2 * 1.05 * 100) / 100, 'kg');
+    add('steel-frame-structure', 'Estrutura e fixadores estruturais (parâmetro preliminar 30 kg/m² + 5% de perda)', Math.round(structuralArea * STEEL_FRAME_STRUCTURE_KG_PER_M2 * 1.05 * 100) / 100, 'kg');
   }
   return Array.from(totals.values()).map((line) => ({ ...line, quantity: line.unit === 'un' ? Math.ceil(line.quantity) : Math.round(line.quantity * 100) / 100 }));
 }

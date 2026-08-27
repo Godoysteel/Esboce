@@ -1632,3 +1632,13 @@ Decisão: implementada a regra pedida ao pé da letra — cada espigão de CANTO
 Alternativas descartadas:
     • Continuar tentando mais uma variação de comparação pixel a pixel pra essa peça — descartada por pedido explícito do Product Owner, que preferiu a regra mais simples e direta de "está dentro da pegada do vizinho → some".
 Status: Implementado, testado (suíte completa + teste novo confirmando a marcação `hipCornerXZ` nos dois branches de `ridgeAxis` e o filtro `hipCornerInsideOtherRoof`, com prova numérica de que só o canto realmente dentro da pegada vizinha é descartado) — Product Owner testou ao vivo e reportou que o espigão marcado CONTINUA aparecendo ("não sumiu"): esta correção, apesar de implementada e coberta por teste, NÃO resolveu o sintoma reportado. Causa ainda não diagnosticada — hipóteses a investigar na próxima sessão, começando por extrair os números exatos (console) das duas pegadas envolvidas (técnica já usada com sucesso nas correções anteriores desta mesma sequência): (a) a peça marcada pode não ser um espigão de CANTO, e sim a cumeeira central (`R1`-`R2`, sem essa marcação); (b) o canto do beiral dessa peça pode cair exatamente NA BORDA da pegada do outro telhado (não estritamente dentro, falhando o teste de tolerância); (c) o par pode estar sendo classificado como `valleyPartnerIds` (bissetriz do vale) e por isso excluído do filtro novo por engano. EM ABERTO.
+# DEC-153 — Parâmetro preliminar de 30 kg/m² para estrutura Light Steel Frame
+
+**Data:** 27/08/2026
+**Status:** Implementado
+
+**Contexto:** o Product Owner revisou o PDF do orçamento de Steel Frame e definiu que a premissa preliminar de peso da estrutura pode ser 30 kg/m², substituindo os 12 kg/m² anteriores.
+
+**Decisão:** o quantitativo de estrutura e fixadores estruturais passa a calcular `área estrutural × 30 kg/m² × 1,05`. Os 5% permanecem identificados como perda. A linha do orçamento usa a expressão “parâmetro preliminar” para não apresentar o índice como dimensionamento estrutural, em conformidade com a ADR-006. A origem desta premissa é esta decisão do Product Owner; uma evolução posterior deverá permitir parâmetros comerciais configuráveis e rastreáveis por fornecedor ou projetista.
+
+---

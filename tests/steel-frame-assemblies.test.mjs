@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import { createProject, createWallEntity } from '../src/core/Core.ts';
@@ -8,6 +9,8 @@ import {
   quantityWithWaste,
   steelFrameSpecificationIssues,
 } from '../src/core/SteelFrameAssemblies.ts';
+
+const materialsSource = readFileSync(new URL('../src/core/MaterialsPanel.ts', import.meta.url), 'utf8');
 
 test('catálogo inicial cobre fechamentos externos, drywall, beiral e tabeira de madeira', () => {
   const ids = STEEL_FRAME_FACE_ASSEMBLIES.map((item) => item.id);
@@ -51,6 +54,12 @@ test('fixadores de revestimento são unidades e arredondam para cima após a per
   const screws = assembly.layers.find((layer) => layer.fastener);
   assert.equal(screws.unit, 'unit');
   assert.equal(quantityWithWaste(10.01, screws), 211);
+});
+
+test('estrutura engenheirada usa parâmetro preliminar de 30 kg/m² e mantém 5% de perda explícitos', () => {
+  assert.match(materialsSource, /const STEEL_FRAME_STRUCTURE_KG_PER_M2 = 30;/);
+  assert.match(materialsSource, /parâmetro preliminar 30 kg\/m² \+ 5% de perda/);
+  assert.match(materialsSource, /structuralArea \* STEEL_FRAME_STRUCTURE_KG_PER_M2 \* 1\.05/);
 });
 
 test('quantitativo de steel frame aponta faces e isolamento ainda não especificados', () => {
