@@ -68,21 +68,21 @@ test('sem ímã de parede nenhum: nearestWallForVolumeBoxAttach/attachVolumeBoxT
 
 // Cubo moldável (Product Owner: "tipo Blender", moldável puxando canto/
 // aresta/face, topologia SEMPRE fixa — 8 cantos, 12 arestas, 6 faces,
-// nunca vira forma em L nem ganha vértice novo) substitui as antigas 6
-// alças de largura/profundidade/altura/elevação por 18: empurrar a face
-// "direita" já É o resize de largura de antes quando não há torção
-// nenhuma, manter as duas ao mesmo tempo seria redundante.
-test('Scene3DRenderer tem um único builder pro volume (sempre livre) e as 18 alças de canto/aresta/face', () => {
+// nunca vira forma em L nem ganha vértice novo). Duas tentativas com
+// esferas pequenas flutuando perto da superfície (nudge 6cm, depois
+// 18cm sem a camada de aresta) não resolveram — Product Owner reportou
+// as duas vezes que as alças continuavam se misturando. Terceira
+// tentativa, pedida explicitamente pelo Product Owner: em vez de
+// marcador separado, a PRÓPRIA face (plano cobrindo a área real dela)
+// e a PRÓPRIA aresta (cilindro ao longo do comprimento real dela)
+// viram a área clicável — sem ponto pra "acertar". Canto continua
+// esfera pequena (não tem área própria).
+test('Scene3DRenderer: canto é esfera pequena, aresta é cilindro ao longo da aresta real, face é um plano cobrindo a face real — não mais pontos flutuando perto da superfície', () => {
   assert.match(rendererSource, /function buildVolumeBoxHitMesh/);
   assert.doesNotMatch(rendererSource, /function buildVolumeBoxPreviewMesh/);
   assert.doesNotMatch(rendererSource, /function buildVolumeBoxAttachedMesh/);
   assert.match(rendererSource, /floorData\.volumeBoxes/);
-  // As antigas 6 alças por eixo não existem mais — substituídas por
-  // canto+face. Alça de ARESTA saiu de cena (Product Owner testou ao
-  // vivo: 18 alças ficavam "juntas"/confusas perto de cada canto — a
-  // camada de aresta, sempre encostada em 2 cantos que já têm alça
-  // própria, era o grosso da confusão) — Store.updateVolumeBoxEdgeLive
-  // continua existindo, só não tem mais handle 3D visível/clicável.
+  // As antigas 6 alças por eixo (largura/profundidade/altura/elevação) não existem mais.
   assert.doesNotMatch(rendererSource, /'volumeBoxWidthLeft'/);
   assert.doesNotMatch(rendererSource, /'volumeBoxDepthFront'/);
   assert.doesNotMatch(rendererSource, /'volumeBoxHeightTop'/);
@@ -92,14 +92,19 @@ test('Scene3DRenderer tem um único builder pro volume (sempre livre) e as 18 al
   const body = rendererSource.slice(start, end);
   assert.match(body, /Core\.volumeBoxCornerLocalPositions\(vbSel\)/);
   assert.match(body, /Core\.volumeBoxFaces\(vbSel\)/);
-  assert.doesNotMatch(body, /Core\.VOLUME_BOX_EDGES\.forEach/);
-  assert.doesNotMatch(body, /'volumeBoxEdge:' \+ i/);
+  assert.match(body, /Core\.VOLUME_BOX_EDGES\.forEach/);
   assert.match(body, /'volumeBoxCorner:' \+ i/);
+  assert.match(body, /'volumeBoxEdge:' \+ i/);
   assert.match(body, /'volumeBoxFace:' \+ i/);
-  // As alças nascem deslocadas pra fora da superfície (nudge), não em
-  // cima dela — é a correção que resolveu o z-fighting/mistura visual.
-  assert.match(body, /VB_HANDLE_NUDGE_M = 0\.18/);
-  assert.match(body, /depthTest: true/);
+  // Canto: esfera pequena.
+  assert.match(body, /new THREE\.SphereGeometry\(0\.08, 12, 12\)/);
+  // Aresta: cilindro entre os 2 cantos reais (não uma esfera no meio).
+  assert.match(body, /new THREE\.CylinderGeometry\(0\.035, 0\.035, edgeLen, 8\)/);
+  assert.match(body, /edgeHandle\.quaternion\.setFromUnitVectors/);
+  // Face: plano com os 4 cantos reais da face (não uma esfera no centro).
+  assert.match(body, /faceGeo\.setIndex\(\[0, 1, 2, 0, 2, 3\]\)/);
+  assert.match(body, /face\.cornerIndices\.map/);
+  assert.doesNotMatch(body, /SphereGeometry\(0\.14/, 'não deveria sobrar a esfera de face da tentativa anterior');
 });
 
 test('Scene3DRenderer.buildVolumeBoxMesh é exportada — ViewportController reconstrói a prévia de arraste chamando ela direto com cornerOffsets de trabalho', () => {

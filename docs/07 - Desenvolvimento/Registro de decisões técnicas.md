@@ -1810,24 +1810,33 @@ Status: RESOLVIDO na DEC-160 (sessão 39, ver final deste documento) — a hipó
 
 ---
 
-# DEC-164 — Alças de canto/aresta/face confusas/sobrepostas — camada de aresta removida, nudge maior (EM ABERTO — aguardando confirmação)
+# DEC-164 — Alças de canto/aresta/face confusas/sobrepostas (EM ABERTO — aguardando confirmação)
 
 **Data:** 27/08/2026
-**Status:** Segunda tentativa implementada, aguardando confirmação do Product Owner no site
+**Status:** Terceira tentativa implementada, aguardando confirmação do Product Owner no site
 
 **Contexto:** depois da DEC-163 publicada, Product Owner testou ao vivo e reportou: "as alças estão confusas, se misturam e não consigo saber qual parte estou movendo" — as 18 alças (8 canto + 12 aresta + 6 face) nasciam exatamente EM CIMA da superfície do box e sempre renderizavam por cima de tudo (`depthTest: false`, técnica copiada de objetos finos/vazados como guarda-corpo — nunca pensada pra um sólido cheio), causando z-fighting visual entre os três tipos.
 
 **Primeira tentativa (insuficiente):** nudge de 6cm pra fora da superfície (radial no canto/aresta, normal real na face) + `depthTest: true` (deixa o próprio box sólido esconder a alça do lado de trás, ~9-11 visíveis de 18 em vez de 18 sempre). Product Owner testou de novo e reportou que NÃO resolveu: "não deu certo, as alças estão juntas".
 
-**Segunda tentativa (atual, ainda não confirmada):**
+**Segunda tentativa (também insuficiente):**
 1. Nudge subiu de 6cm pra 18cm.
-2. A camada de ARESTA (12 alças) saiu de cena — toda aresta encosta em 2 cantos que já têm alça própria, então era a maior fonte de aglomeração (até 3 alças de tipos diferentes nascendo perto de cada canto: o canto em si + até 3 arestas + até 3 faces que se encontram ali). `Store.commands.updateVolumeBoxEdgeLive` continua existindo (não removido) — só não tem mais handle 3D visível/clicável; fácil trazer de volta se corner+face não bastarem.
-3. Ficam 14 alças (8 canto, branco, raio 0,09m + 6 face, laranja, raio 0,14m), mais espaçadas.
+2. A camada de ARESTA (12 alças) saiu de cena — toda aresta encosta em 2 cantos que já têm alça própria, então era a maior fonte de aglomeração (até 3 alças de tipos diferentes nascendo perto de cada canto). `Store.commands.updateVolumeBoxEdgeLive` foi mantido no Store, só sem handle 3D visível/clicável.
+3. Ficaram 14 alças (8 canto + 6 face), mais espaçadas — mas todas continuavam sendo PONTOS (esferas) flutuando perto da superfície.
+
+Product Owner deu a pista da correção certa: "acho que nesse caso as faces do cubo e arestas terão que ser a opção de clicar porque essas alças não está funcionando" — o problema não era distância nem quantidade, era o TIPO de alça: um ponto flutuante nunca vai ser óbvio de acertar/diferenciar perto de um canto onde várias coisas se encontram.
+
+**Terceira tentativa (atual, ainda não confirmada) — clicar a própria geometria, não um marcador separado:**
+1. **Face**: em vez de esfera no centro, um PLANO cobrindo os 4 cantos reais da face (cada canto deslocado 1,5cm na normal de verdade da face, só o suficiente pra não brigar com a malha sólida por baixo) — clicável em qualquer ponto da área da face, opacidade baixa (0,22) só pra sinalizar a região interativa sem esconder o acabamento real.
+2. **Aresta**: TROUXE DE VOLTA como um CILINDRO fino (raio 3,5cm) ligando os 2 cantos reais da aresta (cada ponta deslocada na própria direção radial) — clicável ao longo de todo o comprimento da aresta, não um ponto no meio.
+3. **Canto**: continua esfera pequena (8cm de raio, deslocamento radial de 5cm) — um vértice não tem área própria pra virar superfície clicável.
+4. Como face e aresta agora ocupam a ÁREA REAL de cada elemento (não um ponto perto dele), as três alças passam a ocupar regiões DISTINTAS e SEM SOBREPOSIÇÃO da superfície do cubo — o click alvo de cada uma é a própria coisa que ela representa, não um símbolo ao lado.
+5. `pickHandle` (ViewportController) não precisou mudar nada — já testa qualquer mesh com `userData.handle`, independente da forma; só a geometria/posição de cada handle mudou em `Scene3DRenderer`.
 
 **Alternativas descartadas:**
-- Manter as 18 e só aumentar ainda mais o nudge — descartada por ora: aumentar o afastamento não resolve a aglomeração ANGULAR em torno de um mesmo canto (canto+3 arestas+3 faces continuam próximos entre si nessa região, só mais longe da superfície).
+- Manter as 18 esferas e só aumentar ainda mais o nudge — descartada nas tentativas 1 e 2, confirmado pelo Product Owner que não resolvia.
 - Adicionar um seletor de modo (canto/aresta/face) por botão ou aba — descartada: contraria o pedido explícito do Product Owner de interação "sem botões, sem abas".
 
-**Pendência:** não verificado visualmente (sem WebGL disponível nesta sessão) — EM ABERTO até o Product Owner confirmar no site se ficou utilizável, ou reportar que ainda precisa de mais ajuste (ex.: trazer aresta de volta como uma 3ª camada só visível sob hover, ou aumentar ainda mais a diferença de tamanho/cor entre canto e face).
+**Testado:** suíte completa com teste novo confirmando a forma de cada handle (esfera pro canto, `CylinderGeometry` orientado pela aresta real via quaternion, plano com os 4 cantos reais da face). Não verificado visualmente (sem WebGL disponível nesta sessão) — EM ABERTO até o Product Owner confirmar no site.
 
 ---

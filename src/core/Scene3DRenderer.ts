@@ -5010,52 +5010,64 @@ export function hashColorHex(key: string): number {
           z: vbCenterWorldZ + (vbAxisY * local.x + vbDepthAxisY * local.z) * scale,
         };
       }
-      // Empurra cada alça pra FORA da superfície (na direção radial a
-      // partir do centro, ou na própria normal no caso da face) antes
-      // de converter pra mundo — sem isso as alças nasciam exatamente
-      // EM CIMA da malha sólida, causando z-fighting visual e fazendo
-      // os tipos "se misturarem" (Product Owner: "não consigo saber
-      // qual parte estou movendo"). depthTest:true (ao contrário das
-      // outras alças do arquivo, pensadas pra objetos finos/vazados)
-      // deixa o próprio box sólido esconder a alça que estiver do lado
-      // de trás. Nudge de 6cm não bastou (Product Owner testou e ainda
-      // ficaram juntas) — subiu pra 18cm, e a camada de ARESTA (a mais
-      // redundante — toda aresta encosta em 2 cantos que já têm alça
-      // própria) saiu de cena por ora: 12 alças de aresta espremidas
-      // entre 8 cantos + 6 faces, todas nascendo perto de cada canto,
-      // eram o grosso da confusão. `updateVolumeBoxEdgeLive` continua
-      // existindo no Store (não removido, só sem alça visível/clicável
-      // aqui) — fácil trazer de volta se corner+face não bastarem.
-      var VB_HANDLE_NUDGE_M = 0.18;
-      function vbNudgeOutward(local: any, dir: any) {
-        var len = Math.hypot(dir.x, dir.y, dir.z) || 1;
-        return {
-          x: local.x + (dir.x / len) * VB_HANDLE_NUDGE_M,
-          y: local.y + (dir.y / len) * VB_HANDLE_NUDGE_M,
-          z: local.z + (dir.z / len) * VB_HANDLE_NUDGE_M,
-        };
-      }
+      // Duas tentativas anteriores (nudge 6cm, depois 18cm, com/sem a
+      // camada de aresta) usaram esferas pequenas flutuando perto da
+      // superfície pras 3 alças — Product Owner testou as duas e
+      // reportou que continuavam se misturando. Mudança de abordagem:
+      // em vez de marcadores separados flutuando PERTO da face/aresta,
+      // a PRÓPRIA face (um plano cobrindo a área real dela) e a
+      // PRÓPRIA aresta (um cilindro ao longo do comprimento real dela)
+      // viram a área clicável — sem ponto pra "acertar", clica em
+      // qualquer parte da face/aresta que já está vendo. Canto continua
+      // esfera pequena (não tem área própria pra virar superfície).
       var vbCorners = Core.volumeBoxCornerLocalPositions(vbSel);
       var vbFaces = Core.volumeBoxFaces(vbSel);
+      var VB_CORNER_NUDGE_M = 0.05;
+      var VB_SURFACE_NUDGE_M = 0.015; // só o bastante pra não brigar (z-fighting) com a malha sólida por baixo
       vbCorners.forEach(function (corner: any, i: number) {
-        var world = vbLocalToWorld(vbNudgeOutward(corner, corner));
-        var handle = new THREE.Mesh(new THREE.SphereGeometry(0.09, 12, 12), new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: true }));
+        var len = Math.hypot(corner.x, corner.y, corner.z) || 1;
+        var nudged = { x: corner.x + (corner.x / len) * VB_CORNER_NUDGE_M, y: corner.y + (corner.y / len) * VB_CORNER_NUDGE_M, z: corner.z + (corner.z / len) * VB_CORNER_NUDGE_M };
+        var world = vbLocalToWorld(nudged);
+        var handle = new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 12), new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: true }));
         handle.position.set(world.x, world.y, world.z);
         handle.userData.handle = 'volumeBoxCorner:' + i;
         handle.renderOrder = 999; scene.add(handle); registry.handleMeshes.push(handle);
       });
+      // Aresta: cilindro ligando os 2 cantos de verdade (cada ponta
+      // deslocada na própria direção radial, mesma técnica do canto).
+      Core.VOLUME_BOX_EDGES.forEach(function (edge: any, i: number) {
+        var a = vbCorners[edge[0]]!, b = vbCorners[edge[1]]!;
+        var lenA = Math.hypot(a.x, a.y, a.z) || 1, lenB = Math.hypot(b.x, b.y, b.z) || 1;
+        var aWorld = vbLocalToWorld({ x: a.x + (a.x / lenA) * VB_SURFACE_NUDGE_M, y: a.y + (a.y / lenA) * VB_SURFACE_NUDGE_M, z: a.z + (a.z / lenA) * VB_SURFACE_NUDGE_M });
+        var bWorld = vbLocalToWorld({ x: b.x + (b.x / lenB) * VB_SURFACE_NUDGE_M, y: b.y + (b.y / lenB) * VB_SURFACE_NUDGE_M, z: b.z + (b.z / lenB) * VB_SURFACE_NUDGE_M });
+        var dir = new THREE.Vector3(bWorld.x - aWorld.x, bWorld.y - aWorld.y, bWorld.z - aWorld.z);
+        var edgeLen = dir.length();
+        if (edgeLen < 1e-6) return;
+        dir.normalize();
+        var edgeGeo = new THREE.CylinderGeometry(0.035, 0.035, edgeLen, 8);
+        var edgeHandle = new THREE.Mesh(edgeGeo, new THREE.MeshBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.6, depthTest: true }));
+        edgeHandle.position.set((aWorld.x + bWorld.x) / 2, (aWorld.y + bWorld.y) / 2, (aWorld.z + bWorld.z) / 2);
+        edgeHandle.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+        edgeHandle.userData.handle = 'volumeBoxEdge:' + i;
+        edgeHandle.renderOrder = 999; scene.add(edgeHandle); registry.handleMeshes.push(edgeHandle);
+      });
+      // Face: plano cobrindo os 4 cantos reais da face (cada canto
+      // deslocado na normal de verdade da face — a mesma direção do
+      // push-pull), não só um ponto no centro.
       vbFaces.forEach(function (face: any, i: number) {
-        var sum = { x: 0, y: 0, z: 0 };
-        face.cornerIndices.forEach(function (ci: number) { var c = vbCorners[ci]!; sum.x += c.x; sum.y += c.y; sum.z += c.z; });
-        var center = { x: sum.x / 4, y: sum.y / 4, z: sum.z / 4 };
-        // Face usa a NORMAL de verdade (não o vetor radial do centro) —
-        // é a direção exata do push-pull, então a alça já nasce
-        // apontando pro sentido certo do arraste.
-        var world = vbLocalToWorld(vbNudgeOutward(center, face.normal));
-        var handle = new THREE.Mesh(new THREE.SphereGeometry(0.14, 12, 12), new THREE.MeshBasicMaterial({ color: SELECTED_ACCENT, depthTest: true }));
-        handle.position.set(world.x, world.y, world.z);
-        handle.userData.handle = 'volumeBoxFace:' + i;
-        handle.renderOrder = 999; scene.add(handle); registry.handleMeshes.push(handle);
+        var quad = face.cornerIndices.map(function (ci: number) {
+          var c = vbCorners[ci]!;
+          return vbLocalToWorld({ x: c.x + face.normal.x * VB_SURFACE_NUDGE_M, y: c.y + face.normal.y * VB_SURFACE_NUDGE_M, z: c.z + face.normal.z * VB_SURFACE_NUDGE_M });
+        });
+        var faceGeo = new THREE.BufferGeometry();
+        var facePositions: number[] = [];
+        quad.forEach(function (p: any) { facePositions.push(p.x, p.y, p.z); });
+        faceGeo.setAttribute('position', new THREE.Float32BufferAttribute(facePositions, 3));
+        faceGeo.setIndex([0, 1, 2, 0, 2, 3]);
+        faceGeo.computeVertexNormals();
+        var faceHandle = new THREE.Mesh(faceGeo, new THREE.MeshBasicMaterial({ color: SELECTED_ACCENT, transparent: true, opacity: 0.22, depthTest: true, side: THREE.DoubleSide }));
+        faceHandle.userData.handle = 'volumeBoxFace:' + i;
+        faceHandle.renderOrder = 999; scene.add(faceHandle); registry.handleMeshes.push(faceHandle);
       });
     }
 
