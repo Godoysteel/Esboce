@@ -108,3 +108,49 @@ test('roofValleySide: fora do quadrante do canto reentrante (só falta um dos do
   // um lado de verdade, não neutro.
   assert.notEqual(Core.roofValleySide(corner, 300.3, 170), 0);
 });
+
+// Caso real reportado pelo Product Owner (números exatos, via console em
+// produção) onde a bissetriz NÃO se aplica: as duas pegadas se
+// SOBREPÕEM de verdade numa área grande (não é um degrau simples
+// tocando numa aresta) — roofFootprintValleyCorner corretamente
+// devolve null aqui. A comparação de quem esconde quem, nesse caso,
+// precisa ser PONTO A PONTO (ver Scene3DRenderer): nem "pico mais alto"
+// nem "mais área" bastam — dentro dessa mesma sobreposição, roof_17 é
+// localmente MAIS alto perto da própria borda do que roof_18 (que tem
+// mais que o DOBRO de área) é perto DA PRÓPRIA borda — comparar os dois
+// inteiros por um número só (pico ou área) apagava os dois ao mesmo
+// tempo em pontos diferentes da mesma sobreposição.
+test('duas pegadas que se sobrepõem de verdade (caso real, não um degrau) não formam canto reentrante — a comparação correta é ponto a ponto, nunca os dois escondidos ao mesmo tempo', () => {
+  const roof17 = { minX: -40, maxX: 105, minZ: -3, maxZ: 30 };
+  const roof18 = { minX: 35, maxX: 105, minZ: -105, maxZ: 30 };
+  assert.equal(Core.roofFootprintValleyCorner(roof17, roof18), null);
+
+  const GRID = Core.GRID;
+  const tanPitch = Math.tan(28 * Math.PI / 180);
+  function hipHeight(rect, x, z) {
+    const distX = Math.min(x - rect.minX, rect.maxX - x);
+    const distZ = Math.min(z - rect.minZ, rect.maxZ - z);
+    return tanPitch * Math.min(distX, distZ) / GRID;
+  }
+  const ox1 = Math.max(roof17.minX, roof18.minX), ox2 = Math.min(roof17.maxX, roof18.maxX);
+  const oz1 = Math.max(roof17.minZ, roof18.minZ), oz2 = Math.min(roof17.maxZ, roof18.maxZ);
+  assert.ok(ox2 - ox1 > 0 && oz2 - oz1 > 0, 'as pegadas precisam realmente se sobrepor pra este teste fazer sentido');
+  let sawRoof17Higher = false, sawRoof18Higher = false;
+  for (let x = ox1; x <= ox2; x += 2) {
+    for (let z = oz1; z <= oz2; z += 2) {
+      const h17 = hipHeight(roof17, x, z);
+      const h18 = hipHeight(roof18, x, z);
+      const visible17 = !(h17 < h18);
+      const visible18 = !(h18 < h17);
+      // Nunca os dois escondidos ao mesmo tempo — a "fresta" real que o
+      // Product Owner reportou.
+      assert.ok(visible17 || visible18, `ambos escondidos em (${x},${z}): h17=${h17}, h18=${h18}`);
+      if (h17 > h18) sawRoof17Higher = true;
+      if (h18 > h17) sawRoof18Higher = true;
+    }
+  }
+  // Confirma que a sobreposição É de fato ambígua (os dois se alternam
+  // em quem está mais alto) — senão este teste não estaria provando
+  // nada sobre o motivo pelo qual "pico único"/"área única" falhavam.
+  assert.ok(sawRoof17Higher && sawRoof18Higher, 'esperava que os dois telhados se alternassem em quem está mais alto dentro da sobreposição');
+});

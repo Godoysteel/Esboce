@@ -1566,7 +1566,7 @@ test('Scene3DRenderer: cada telhado calcula a caixa dos cômodos ESTRITAMENTE ma
   const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 11500);
   assert.match(roofsBlock, /var roomHeightBoxes = allFloorRoomClipBoxes\[floorIdx\] \|\| \[\];/);
   assert.match(roofsBlock, /var roomClipBoxes = roomHeightBoxes\.concat\(higherFloorRoomHeightBoxes\)\.filter\(function \(b: any\) \{ return b\.baseY > pieceBaseY \+ 1e-4; \}\);/);
-  assert.match(roofsBlock, /var clipBoxesForThisRoof = roomClipBoxes\.concat\(biggerRoofClipBoxes\);/);
+  assert.match(roofsBlock, /var clipBoxesForThisRoof = roomClipBoxes\.concat\(otherRoofClipBoxes\);/);
   assert.match(roofsBlock, /applyRoomBoxClipping\(material, clipBoxesForThisRoof, diagonalValleyCuts\)/);
 });
 
@@ -1614,28 +1614,30 @@ test('Scene3DRenderer.roofSlopeSurfaceParams: mesma matemática de vão/beiral j
   assert.match(fnBlock, /ridgeCoord: \(minZw \+ maxZw\) \/ 2, halfSpan: halfSpanT, peakAboveBase: halfSpanT \* tanPitch/);
 });
 
-// Comparar por PICO (altura de cumeeira) usava uma fórmula de rampa de
-// UMA direção só — errada perto da quina de um telhado hipado
-// (quatro-águas) e ambígua quando os dois picos são parecidos: dois
-// 4-águas encontrando em L se apagavam por completo, cada um tentando
-// esconder o outro ao mesmo tempo (Product Owner, com prints). Decidir
-// por ÁREA DA PLANTA em vez de altura resolve a ambiguidade sem depender
-// de pico nenhum — só um lado do par pode ser "estritamente maior",
-// nunca os dois — e a caixa vencedora carrega a SUPERFÍCIE REAL
-// (isHip para quatro-águas, rampa de uma direção pros demais), não uma
-// altura plana, pra formar um rincão de verdade em vez de apagar a
-// pegada inteira.
-test('Scene3DRenderer: caixa de telhado-vs-telhado compara ÁREA DA PLANTA (nunca pico), carrega a superfície real (isHip pra quatro-águas) — só um lado do par esconde o outro, nunca os dois ao mesmo tempo', () => {
+// Terceira tentativa nesse encontro: nem PICO nem ÁREA DA PLANTA
+// decidem um vencedor único pro par inteiro — provado com números
+// exatos reproduzidos do relato do Product Owner (dois 4-águas em L
+// genuinamente sobrepostos, não só encostados): dentro da própria área
+// de sobreposição, um telhado pode ficar mais alto perto da PRÓPRIA
+// borda do que o outro fica no meio do PRÓPRIO pico, mesmo tendo mais
+// pegada no total — "maior no total" não é "mais alto em todo lugar".
+// A comparação virou PONTO A PONTO: cada telhado carrega a própria
+// SUPERFÍCIE real (isHip pra quatro-águas) como candidata pro vizinho,
+// sem nenhum pré-filtro de "quem pode competir" — dois números reais
+// comparados nunca dão "os dois são maiores", então nunca esconde os
+// dois ao mesmo tempo no mesmo ponto, mesmo sem decidir vencedor
+// nenhum de antemão.
+test('Scene3DRenderer: caixa de telhado-vs-telhado compara a SUPERFÍCIE REAL ponto a ponto (nem pico nem área decidem um vencedor pro par inteiro) — isHip pra quatro-águas, sem pré-filtro', () => {
   const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
   assert.notEqual(roofsStart, -1);
   const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 11500);
   assert.match(roofsBlock, /var roofPeakBoxes = floorData\.roofs\.map\(function \(r: any\) \{/);
   assert.match(roofsBlock, /var rSlope = roofSlopeSurfaceParams\(r, scale, offsetX, offsetY\);/);
   assert.match(roofsBlock, /isHip: r\.type === 'quatroAguas' \? 1 : 0,/);
-  assert.match(roofsBlock, /area: Math\.abs\(r\.x2 - r\.x1\) \* Math\.abs\(r\.y2 - r\.y1\),/);
-  assert.match(roofsBlock, /var ownArea = Math\.abs\(roof\.x2 - roof\.x1\) \* Math\.abs\(roof\.y2 - roof\.y1\);/);
-  assert.match(roofsBlock, /var biggerRoofClipBoxes = roofPeakBoxes\.filter\(function \(b: any\) \{/);
-  assert.match(roofsBlock, /b\.id === roof\.id \|\| b\.area <= ownArea \+ 1e-4/);
+  assert.doesNotMatch(roofsBlock, /\bpeakY\b/, 'não deveria mais existir comparação por pico');
+  assert.doesNotMatch(roofsBlock, /\barea:/, 'não deveria mais existir comparação por área da planta');
+  assert.match(roofsBlock, /var otherRoofClipBoxes = roofPeakBoxes\.filter\(function \(b: any\) \{/);
+  assert.match(roofsBlock, /if \(b\.id === roof\.id \|\| valleyPartnerIds\[b\.id\]\) return false;/);
   assert.match(roofsBlock, /return !steppedRidgePair/);
   assert.match(roofsBlock, /baseY: b\.baseY, peakAboveBase: b\.peakAboveBase, tanPitch: b\.tanPitch, ridgeCoord: b\.ridgeCoord, halfSpan: b\.halfSpan, axisIsZ: b\.axisIsZ, isHip: b\.isHip/);
 });
@@ -1666,10 +1668,10 @@ test('Scene3DRenderer: pegadas em L (canto reentrante) resolvem o encontro pela 
   assert.match(roofsBlock, /var corner = Core\.roofFootprintValleyCorner\(ownWallRectForValley, nominalWallRect\(other\)\);/);
   assert.match(roofsBlock, /var ownSign = Core\.roofValleyOwnSign\(corner, ownWallRectForValley\);/);
   assert.match(roofsBlock, /hideSign: -ownSign/);
-  // Par de vale já resolvido pela bissetriz não entra também na disputa
-  // de área — evita as duas peças se cortando por dois mecanismos ao
-  // mesmo tempo.
-  assert.match(roofsBlock, /b\.id === roof\.id \|\| b\.area <= ownArea \+ 1e-4 \|\| valleyPartnerIds\[b\.id\]/);
+  // Par de vale já resolvido pela bissetriz não entra também na
+  // comparação de superfície ponto a ponto — evita as duas peças se
+  // cortando por dois mecanismos ao mesmo tempo.
+  assert.match(roofsBlock, /if \(b\.id === roof\.id \|\| valleyPartnerIds\[b\.id\]\) return false;/);
   assert.match(roofsBlock, /applyRoomBoxClipping\(material, clipBoxesForThisRoof, diagonalValleyCuts\)/);
 });
 

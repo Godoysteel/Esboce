@@ -5385,23 +5385,21 @@ export function hashColorHex(key: string): number {
         // telhados se encostam — ver roofSlopeSurfaceParams). Quando um
         // telhado fica embaixo de OUTRO (não de um cômodo), o de cumeeira
         // mais alta vence, o mais baixo some por baixo da RAMPA dele.
-        // Comparação de quem entra na lista de quem é sempre PICO×PICO
-        // (nunca pico×base) — garante que só um lado do par esconde o
-        // outro; comparar com a base deixaria os dois tentando esconder um
-        // ao outro ao mesmo tempo sempre que as bases se sobrepõem, abrindo
-        // um buraco onde nenhum dos dois desenha nada.
-        // Encontro telhado-vs-telhado: o de PEGADA MAIOR prevalece — o
-        // menor perde só a parte que atravessa a SUPERFÍCIE DE VERDADE do
-        // maior (não a pegada inteira: esconder tudo dentro da pegada,
-        // em qualquer altura, abria fresta onde o menor aparecia embaixo
-        // do beiral do maior sem que a malha do maior estivesse ali pra
-        // cobrir — Product Owner: "só a parte que atravessa a face do
-        // outro, senão fica uma fresta"). Decidir quem vence por ÁREA DA
-        // PLANTA em vez de altura de cumeeira: comparar altura usava a
-        // fórmula de rampa de UMA direção só, ambígua/instável quando os
-        // dois picos são parecidos — dois 4-águas nessa situação se
-        // apagavam por completo, um tentando esconder o outro ao mesmo
-        // tempo. Área não empata por acaso do jeito que altura empata.
+        // Encontro telhado-vs-telhado: SEM vencedor único pro par (nem
+        // pico, nem pegada) — as duas tentativas anteriores mostraram
+        // dois telhados que se ALTERNAM em quem está mais alto dentro da
+        // própria área de sobreposição (um hip mais largo mas com o
+        // ponto de comparação perto da PRÓPRIA borda pode ficar mais
+        // baixo ali do que um hip menor no meio do próprio pico — mais
+        // pegada no total não garante estar mais alto EM TODO LUGAR).
+        // Cada telhado carrega a própria SUPERFÍCIE real (isHip
+        // inclusive) como candidata pro vizinho, e o shader decide PIXEL
+        // A PIXEL quem está mais alto ali — comparar dois números reais
+        // nunca dá "os dois são simultaneamente maiores", então essa
+        // comparação simétrica nunca esconde os dois ao mesmo tempo no
+        // mesmo ponto, sem precisar de nenhum pré-filtro global de quem
+        // "pode competir" (Product Owner, com números exatos
+        // reproduzidos e confirmados por script antes desta correção).
         var roofPeakBoxes = floorData.roofs.map(function (r: any) {
           var rOwnHeight = (r.steppedWallVolume || r.steppedLowerRoofId)
             ? Math.max(r.baseHeightM || currentWallHeight, currentWallHeight + 0.15)
@@ -5414,7 +5412,6 @@ export function hashColorHex(key: string): number {
             baseY: yOffset + rOwnHeight, peakAboveBase: rSlope.peakAboveBase, tanPitch: rSlope.tanPitch,
             ridgeCoord: rSlope.ridgeCoord, halfSpan: rSlope.halfSpan, axisIsZ: rSlope.axisIsZ,
             isHip: r.type === 'quatroAguas' ? 1 : 0,
-            area: Math.abs(r.x2 - r.x1) * Math.abs(r.y2 - r.y1),
           };
         });
         floorData.roofs.forEach(function (roof) {
@@ -5476,14 +5473,25 @@ export function hashColorHex(key: string): number {
             var ownSign = Core.roofValleyOwnSign(corner, ownWallRectForValley);
             diagonalValleyCuts.push({ cornerX: corner.cornerX, cornerZ: corner.cornerZ, dirX: corner.dirX, dirZ: corner.dirZ, hideSign: -ownSign });
           });
-          // E só telhados de pegada ESTRITAMENTE maior que a PRÓPRIA
-          // pegada deste (nunca a própria, nunca um parceiro de vale já
-          // resolvido acima) — ver comentário acima de roofPeakBoxes.
-          var ownArea = Math.abs(roof.x2 - roof.x1) * Math.abs(roof.y2 - roof.y1);
-          var biggerRoofClipBoxes = roofPeakBoxes.filter(function (b: any) {
-            if (b.id === roof.id || b.area <= ownArea + 1e-4 || valleyPartnerIds[b.id]) return false;
-            var biggerRoof = floorData.roofs.find(function (candidate) { return candidate.id === b.id; });
-            if (biggerRoof && biggerRoof.steppedWallVolume && biggerRoof.ridgeAxis === roof.ridgeAxis) return false;
+          // Telhado-vs-telhado: NÃO decide um vencedor único pro par
+          // inteiro (nem por pico, nem por área — as duas já se
+          // mostraram erradas: dois telhados podem se alternar em quem
+          // está mais alto DENTRO da própria área de sobreposição — um
+          // hip mais largo mas mais "vazado" perto da própria borda pode
+          // ficar mais baixo ali do que um hip menor bem no meio do
+          // próprio pico, mesmo tendo mais área no total. Product Owner,
+          // com números exatos reproduzidos e confirmados por script).
+          // Registra CADA outro telhado como candidato com a própria
+          // SUPERFÍCIE real (isHip inclusive) e deixa o shader decidir
+          // PIXEL A PIXEL quem está mais alto ali — nunca os dois se
+          // escondem ao mesmo tempo no mesmo ponto (são só dois números
+          // comparados; um não pode ser simultaneamente maior E menor
+          // que o outro), então essa comparação simétrica é segura sem
+          // pré-filtro nenhum de "quem pode competir".
+          var otherRoofClipBoxes = roofPeakBoxes.filter(function (b: any) {
+            if (b.id === roof.id || valleyPartnerIds[b.id]) return false;
+            var otherRoof = floorData.roofs.find(function (candidate) { return candidate.id === b.id; });
+            if (otherRoof && otherRoof.steppedWallVolume && otherRoof.ridgeAxis === roof.ridgeAxis) return false;
             // Cumeeira em níveis: os dois trechos consecutivos pertencem
             // ao mesmo conjunto, mantêm o mesmo eixo e um deles controla
             // a parede elevada (atticMode). Nesse encontro o beiral do
@@ -5491,15 +5499,15 @@ export function hashColorHex(key: string): number {
             // clipping genérico apagava a água inclinada e deixava só um
             // pedaço da tabeira, abrindo uma fresta visível.
             var steppedRidgePair = !!(
-              biggerRoof && roof.compoundGroupId &&
-              biggerRoof.compoundGroupId === roof.compoundGroupId &&
-              biggerRoof.ridgeAxis === roof.ridgeAxis &&
-              (roof.steppedLowerRoofId || biggerRoof.steppedLowerRoofId || roof.atticMode || biggerRoof.atticMode)
+              otherRoof && roof.compoundGroupId &&
+              otherRoof.compoundGroupId === roof.compoundGroupId &&
+              otherRoof.ridgeAxis === roof.ridgeAxis &&
+              (roof.steppedLowerRoofId || otherRoof.steppedLowerRoofId || roof.atticMode || otherRoof.atticMode)
             );
             return !steppedRidgePair;
           })
             .map(function (b: any) { return { minX: b.minX, maxX: b.maxX, minZ: b.minZ, maxZ: b.maxZ, baseY: b.baseY, peakAboveBase: b.peakAboveBase, tanPitch: b.tanPitch, ridgeCoord: b.ridgeCoord, halfSpan: b.halfSpan, axisIsZ: b.axisIsZ, isHip: b.isHip }; });
-          var clipBoxesForThisRoof = roomClipBoxes.concat(biggerRoofClipBoxes);
+          var clipBoxesForThisRoof = roomClipBoxes.concat(otherRoofClipBoxes);
           if (clipBoxesForThisRoof.length || diagonalValleyCuts.length) pieces.forEach(function (piece) {
             var materials = Array.isArray(piece.material) ? piece.material : [piece.material];
             materials.forEach(function (material: any) { applyRoomBoxClipping(material, clipBoxesForThisRoof, diagonalValleyCuts); });
