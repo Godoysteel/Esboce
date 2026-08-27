@@ -14,8 +14,8 @@ const materialsSource = readFileSync(new URL('../src/core/MaterialsPanel.ts', im
 
 test('catálogo inicial cobre fechamentos externos, drywall, beiral e tabeira de madeira', () => {
   const ids = STEEL_FRAME_FACE_ASSEMBLIES.map((item) => item.id);
-  assert.deepEqual(ids.slice(0, 6), [
-    'eifs', 'cement-board-direct', 'cement-board-osb', 'glasroc-x-direct',
+  assert.deepEqual(ids.slice(0, 7), [
+    'eifs', 'eifs-wood-substrate', 'cement-board-direct', 'cement-board-osb', 'glasroc-x-direct',
     'glasroc-x-therm', 'vinyl-siding-osb',
   ]);
   assert.ok(ids.includes('drywall-st'));
@@ -101,6 +101,36 @@ test('placa cimentícia com e sem OSB levam a mesma Membrana Hidrófuga — ping
   assert.ok(direct.layers.some((layer) => layer.id === 'placlux.membrana-hidrofuga-52-5m2'), 'sistema sem OSB também precisa da membrana hidrófuga');
   assert.ok(withOsb.layers.some((layer) => layer.id === 'placlux.membrana-hidrofuga-52-5m2'));
   assert.ok(!direct.layers.some((layer) => layer.id === 'placlux.pingadeira-pvc-2-5m'), 'pingadeira cobre o perímetro inteiro da construção, calculada à parte — não é camada de uma composição específica');
+});
+
+test('EIFS tem duas variantes de substrato — a fixação do EPS/XPS muda conforme o material do substrato', () => {
+  const onCementBoard = STEEL_FRAME_FACE_ASSEMBLIES.find((item) => item.id === 'eifs');
+  const onWood = STEEL_FRAME_FACE_ASSEMBLIES.find((item) => item.id === 'eifs-wood-substrate');
+  assert.match(onCementBoard.label, /substrato cimentício/);
+  assert.match(onWood.label, /substrato de madeira/);
+
+  // Substrato cimentício: EPS colado com basecoat (2 passadas do MESMO
+  // produto — colagem + reforço da malha — somadas numa linha só de
+  // sacos), sem parafuso com arandela.
+  const cementBoardSubstrate = onCementBoard.layers.find((layer) => layer.id === 'placlux.profort-next-10mm');
+  assert.ok(cementBoardSubstrate, 'falta a placa cimentícia do substrato');
+  assert.equal(cementBoardSubstrate.role, 'structural_sheathing', 'a placa do substrato precisa ter role structural_sheathing pra acionar a folga de 0,6m/m da membrana (MaterialsPanel.hasSubstrate)');
+  assert.equal(onCementBoard.layers.filter((layer) => layer.id === 'placlux.base-coat-20kg').length, 2, 'colagem do EPS/XPS + reforço da malha devem ser 2 passadas do mesmo produto');
+  assert.ok(!onCementBoard.layers.some((layer) => layer.id === 'eifs-eps-fixers-arandela'), 'substrato cimentício não deveria usar parafuso com arandela');
+
+  // Substrato de madeira: EPS parafusado com arandela, só 1 passada de basecoat (reforço da malha, sem colagem).
+  assert.ok(onWood.layers.some((layer) => layer.id === 'cement-board-substrate'), 'falta o painel do substrato de madeira');
+  assert.ok(onWood.layers.some((layer) => layer.id === 'eifs-eps-fixers-arandela'), 'falta o parafuso com arandela pro substrato de madeira');
+  assert.equal(onWood.layers.filter((layer) => layer.id === 'placlux.base-coat-20kg').length, 1, 'substrato de madeira não deveria colar o EPS com basecoat — só a passada de reforço da malha');
+
+  // Compartilhado pelas duas variantes: EPS/XPS, tela, cantoneira, membrana, acabamento.
+  for (const assembly of [onCementBoard, onWood]) {
+    assert.ok(assembly.layers.some((layer) => layer.id === 'eifs-eps'), 'falta a placa isolante EPS/XPS');
+    assert.ok(assembly.layers.some((layer) => layer.id === 'placlux.tela-fiberglass-1x50m'));
+    assert.ok(assembly.layers.some((layer) => layer.id === 'placlux.cantoneira-pvc-2-5m'));
+    assert.ok(assembly.layers.some((layer) => layer.id === 'placlux.membrana-hidrofuga-52-5m2'));
+    assert.ok(assembly.layers.some((layer) => layer.id === 'eifs-finish'));
+  }
 });
 
 test('composição "com substrato" cobre tanto OSB quanto Compensado, com parafusos próprios de fixação do painel', () => {

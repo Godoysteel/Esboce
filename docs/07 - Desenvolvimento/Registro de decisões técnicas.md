@@ -1697,3 +1697,20 @@ Status: Implementado, testado (suíte completa + teste novo confirmando a marca�
 3. Testado ao vivo: parede de 60m com `cement-board-osb` e uma porta de 0,9×2,1m (1,89 m² de abertura) — a placa cimentícia e o painel do substrato descontam a abertura normalmente (176,12 m² líquidos), mas a Membrana Hidrófuga soma 5 rolos (contra 4 rolos que uma parede igual em `cement-board-direct`, sem substrato e sem abertura, precisa) — a diferença confirma as duas correções funcionando juntas: área bruta (sem desconto) + folga de 0,6m/m de substrato.
 
 ---
+
+# DEC-158 — EIFS em duas variantes de substrato (cimentício e madeira)
+
+**Data:** 27/08/2026
+**Status:** Implementado
+
+**Contexto:** o EIFS só existia no Esboce como composição placeholder (finish/basecoat/malha/EPS/fixadores genéricos, sem nenhum produto real). O Product Owner especificou a composição real: EPS ou XPS 50x1000x1000mm com densidade ≥ 18 kg/m³; fixação do isolante que depende do substrato por baixo — parafuso com arandela quando o substrato é madeira (OSB ou Compensado), basecoat (colagem) quando o substrato é cimentício; basecoat de reforço, tela de fibra 1000mm, cantoneira telada, pingadeira e membrana hidrófuga.
+
+**Decisão:**
+1. `eifs` (id preservado, sem quebrar projetos salvos que já escolheram EIFS) passa a significar "EIFS sobre substrato cimentício": placa ProFort Next 10mm como substrato (role `structural_sheathing`, mesmo papel usado em `cement-board-osb` — necessário pra acionar a folga de 0,6m/m da membrana, ver DEC-157) + parafuso PB de fixação do substrato + EPS/XPS + Basecoat ProFort (2 passadas do MESMO produto/id — colagem do EPS/XPS no substrato E reforço da malha — somadas numa única linha de sacos no quantitativo, já que é a mesma compra) + `profortJointTreatment` (fita, tela, cantoneira) + membrana + acabamento.
+2. Novo id `eifs-wood-substrate` ("EIFS sobre substrato de madeira"): reaproveita os mesmos ids de painel/parafuso do substrato já criados em `cement-board-osb` (`cement-board-substrate`/`cement-board-substrate-screws`) — mesmo produto físico, quantitativo agrega entre sistemas — + EPS/XPS + parafuso com arandela (`eifs-eps-fixers-arandela`, 6 un/m², mesmo parâmetro que já existia como `eifs-fixers`) + `profortJointTreatment` (só 1 passada de basecoat, sem a de colagem) + membrana + acabamento.
+3. Pingadeira NÃO entra como camada de nenhuma das duas — já é contabilizada uma vez pelo perímetro total das paredes (DEC-156).
+4. Testado ao vivo: parede de 60m com `eifs` (substrato cimentício) — 62 placas de substrato, 57 sacos de Basecoat (colagem + reforço combinados), Membrana Hidrófuga em 5 rolos (confirma que a folga de 0,6m/m do substrato foi acionada corretamente).
+
+**Bug corrigido durante a verificação:** a primeira versão do substrato de `eifs` usava role `external_board` (copiado sem ajuste do papel de "placa de acabamento" que o ProFort tem em `cement-board-direct`) — como `MaterialsPanel.hasSubstrate` só verifica `role === 'structural_sheathing'`, a membrana não estava recebendo a folga de 0,6m/m (saía 4 rolos, não 5). Corrigido pra `structural_sheathing`, com teste novo garantindo a role certa.
+
+---

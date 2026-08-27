@@ -48,12 +48,32 @@ const drywallJointTreatment: readonly AssemblyLayerDefinition[] = [
  * não dimensionamento; devem poder ser substituídos pela ficha do fabricante.
  */
 export const STEEL_FRAME_FACE_ASSEMBLIES: readonly WallFaceAssemblyDefinition[] = [
-  { id: 'eifs', label: 'EIFS', use: 'external', layers: [
+  // EIFS sempre assenta sobre um substrato — a fixação do EPS/XPS muda
+  // conforme o material desse substrato: colado com basecoat quando é
+  // cimentício, parafusado (com arandela) quando é de madeira (OSB ou
+  // Compensado). As duas variantes compartilham EPS/XPS, tela, cantoneira,
+  // membrana e acabamento — só o substrato e a fixação do isolante mudam.
+  { id: 'eifs', label: 'EIFS sobre substrato cimentício', use: 'external', layers: [
+    area('placlux.profort-next-10mm', 'ProFort Next 10 mm (substrato)', 'structural_sheathing'),
+    fixers('placlux.parafuso-pb-032', 'Parafusos Rusper PB 032 (fixação do substrato)', 20),
+    area('eifs-eps', 'Placa isolante EPS/XPS 50x1000x1000mm (densidade ≥ 18 kg/m³)', 'external_insulation'),
+    // Mesmo id e label do basecoat de reforço (profortJointTreatment,
+    // abaixo) DE PROPÓSITO — é o mesmo produto ProFort, comprado uma vez
+    // só; o quantitativo soma as duas passadas (colagem do EPS/XPS +
+    // reforço da malha) numa única linha de sacos, sem duplicar produto.
+    measured('placlux.base-coat-20kg', 'Massa Base Coat ProFort System', 'basecoat', 'kg', 20 / 6, 5),
+    ...profortJointTreatment,
+    area('placlux.membrana-hidrofuga-52-5m2', 'Membrana Hidrófuga ProFort', 'water_barrier'),
     area('eifs-finish', 'Acabamento EIFS', 'finish', 5),
-    area('eifs-basecoat', 'Basecoat EIFS', 'basecoat', 5),
-    area('eifs-mesh', 'Malha de fibra de vidro', 'mesh'),
-    area('eifs-eps', 'Placa isolante EPS', 'external_insulation'),
-    fixers('eifs-fixers', 'Fixadores para EIFS', 6),
+  ] },
+  { id: 'eifs-wood-substrate', label: 'EIFS sobre substrato de madeira (OSB ou Compensado)', use: 'external', layers: [
+    area('cement-board-substrate', 'Painel estrutural do substrato (OSB ou Compensado)', 'structural_sheathing'),
+    fixers('cement-board-substrate-screws', 'Parafusos de fixação do substrato (OSB/Compensado)', 18),
+    area('eifs-eps', 'Placa isolante EPS/XPS 50x1000x1000mm (densidade ≥ 18 kg/m³)', 'external_insulation'),
+    fixers('eifs-eps-fixers-arandela', 'Parafusos com arandela para fixação do EPS/XPS no substrato de madeira', 6),
+    ...profortJointTreatment,
+    area('placlux.membrana-hidrofuga-52-5m2', 'Membrana Hidrófuga ProFort', 'water_barrier'),
+    area('eifs-finish', 'Acabamento EIFS', 'finish', 5),
   ] },
   { id: 'cement-board-direct', label: 'Placa cimentícia sem OSB', use: 'external', layers: [
     area('placlux.profort-next-12-5mm', 'ProFort Next 12,5 mm', 'external_board'),
@@ -134,7 +154,7 @@ export const STEEL_FRAME_STRUCTURE_WASTE_PERCENT = 5;
 /** Cor de conferência visual de cada sistema no assistente. */
 export function steelFrameAssemblyColorHex(assemblyId?: string): number {
   const colors: Record<string, number> = {
-    'eifs': 0x2563EB, 'cement-board-direct': 0x0891B2,
+    'eifs': 0x2563EB, 'eifs-wood-substrate': 0xEAB308, 'cement-board-direct': 0x0891B2,
     'cement-board-osb': 0xD97706, 'glasroc-x-direct': 0x7C3AED,
     'glasroc-x-therm': 0xDB2777, 'vinyl-siding-osb': 0x0F766E,
     'drywall-st': 0x3FAE67, 'drywall-ru': 0x0EA5E9,
