@@ -5010,18 +5010,23 @@ export function hashColorHex(key: string): number {
           z: vbCenterWorldZ + (vbAxisY * local.x + vbDepthAxisY * local.z) * scale,
         };
       }
-      // Empurra cada alça um pouco pra FORA da superfície (na direção
-      // radial a partir do centro, ou na própria normal no caso da
-      // face) antes de converter pra mundo — sem isso as alças nasciam
-      // exatamente EM CIMA da malha sólida, causando z-fighting visual
-      // e fazendo os 3 tipos "se misturarem" (Product Owner: "não
-      // consigo saber qual parte estou movendo"). depthTest:true (ao
-      // contrário das outras alças do arquivo, pensadas pra objetos
-      // finos/vazados) deixa o próprio box sólido esconder a alça que
-      // estiver do lado de trás — só ficam visíveis/clicáveis as do
-      // lado voltado pra câmera, reduzindo de 18 pra ~9-11 ao mesmo
-      // tempo na tela, igual qualquer editor 3D de caixa sólida.
-      var VB_HANDLE_NUDGE_M = 0.06;
+      // Empurra cada alça pra FORA da superfície (na direção radial a
+      // partir do centro, ou na própria normal no caso da face) antes
+      // de converter pra mundo — sem isso as alças nasciam exatamente
+      // EM CIMA da malha sólida, causando z-fighting visual e fazendo
+      // os tipos "se misturarem" (Product Owner: "não consigo saber
+      // qual parte estou movendo"). depthTest:true (ao contrário das
+      // outras alças do arquivo, pensadas pra objetos finos/vazados)
+      // deixa o próprio box sólido esconder a alça que estiver do lado
+      // de trás. Nudge de 6cm não bastou (Product Owner testou e ainda
+      // ficaram juntas) — subiu pra 18cm, e a camada de ARESTA (a mais
+      // redundante — toda aresta encosta em 2 cantos que já têm alça
+      // própria) saiu de cena por ora: 12 alças de aresta espremidas
+      // entre 8 cantos + 6 faces, todas nascendo perto de cada canto,
+      // eram o grosso da confusão. `updateVolumeBoxEdgeLive` continua
+      // existindo no Store (não removido, só sem alça visível/clicável
+      // aqui) — fácil trazer de volta se corner+face não bastarem.
+      var VB_HANDLE_NUDGE_M = 0.18;
       function vbNudgeOutward(local: any, dir: any) {
         var len = Math.hypot(dir.x, dir.y, dir.z) || 1;
         return {
@@ -5034,18 +5039,9 @@ export function hashColorHex(key: string): number {
       var vbFaces = Core.volumeBoxFaces(vbSel);
       vbCorners.forEach(function (corner: any, i: number) {
         var world = vbLocalToWorld(vbNudgeOutward(corner, corner));
-        var handle = new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 12), new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: true }));
+        var handle = new THREE.Mesh(new THREE.SphereGeometry(0.09, 12, 12), new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: true }));
         handle.position.set(world.x, world.y, world.z);
         handle.userData.handle = 'volumeBoxCorner:' + i;
-        handle.renderOrder = 999; scene.add(handle); registry.handleMeshes.push(handle);
-      });
-      Core.VOLUME_BOX_EDGES.forEach(function (edge: any, i: number) {
-        var a = vbCorners[edge[0]]!, b = vbCorners[edge[1]]!;
-        var mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, z: (a.z + b.z) / 2 };
-        var world = vbLocalToWorld(vbNudgeOutward(mid, mid));
-        var handle = new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 12), new THREE.MeshBasicMaterial({ color: 0xffd166, depthTest: true }));
-        handle.position.set(world.x, world.y, world.z);
-        handle.userData.handle = 'volumeBoxEdge:' + i;
         handle.renderOrder = 999; scene.add(handle); registry.handleMeshes.push(handle);
       });
       vbFaces.forEach(function (face: any, i: number) {
@@ -5056,7 +5052,7 @@ export function hashColorHex(key: string): number {
         // é a direção exata do push-pull, então a alça já nasce
         // apontando pro sentido certo do arraste.
         var world = vbLocalToWorld(vbNudgeOutward(center, face.normal));
-        var handle = new THREE.Mesh(new THREE.SphereGeometry(0.13, 12, 12), new THREE.MeshBasicMaterial({ color: SELECTED_ACCENT, depthTest: true }));
+        var handle = new THREE.Mesh(new THREE.SphereGeometry(0.14, 12, 12), new THREE.MeshBasicMaterial({ color: SELECTED_ACCENT, depthTest: true }));
         handle.position.set(world.x, world.y, world.z);
         handle.userData.handle = 'volumeBoxFace:' + i;
         handle.renderOrder = 999; scene.add(handle); registry.handleMeshes.push(handle);

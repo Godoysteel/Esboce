@@ -1631,7 +1631,8 @@ Contexto: depois da DEC-151, Product Owner marcou num novo print o único espig�
 Decisão: implementada a regra pedida ao pé da letra — cada espigão de CANTO do hip (`buildRoofQuatroAguas`, os 4 cantos, não a cumeeira central) passou a marcar o próprio canto do beiral em `userData.hipCornerXZ`; no laço telhado-vs-telhado, qualquer espigão de canto cujo ponto cai ESTRITAMENTE dentro da pegada (com beiral) de outro telhado que realmente se sobrepõe (excluídos os pares já resolvidos pela bissetriz do vale em L, `valleyPartnerIds` — ali as pegadas só se TOCAM, nenhum canto cairia dentro do outro de qualquer forma) é simplesmente OMITIDO da cena — nunca chega a ser desenhado. Só sobra o espigão cujo canto fica de fato fora de qualquer pegada vizinha (a quina externa).
 Alternativas descartadas:
     • Continuar tentando mais uma variação de comparação pixel a pixel pra essa peça — descartada por pedido explícito do Product Owner, que preferiu a regra mais simples e direta de "está dentro da pegada do vizinho → some".
-Status: Implementado, testado (suíte completa + teste novo confirmando a marcação `hipCornerXZ` nos dois branches de `ridgeAxis` e o filtro `hipCornerInsideOtherRoof`, com prova numérica de que só o canto realmente dentro da pegada vizinha é descartado) — Product Owner testou ao vivo e reportou que o espigão marcado CONTINUA aparecendo ("não sumiu"): esta correção, apesar de implementada e coberta por teste, NÃO resolveu o sintoma reportado. Causa ainda não diagnosticada — hipóteses a investigar na próxima sessão, começando por extrair os números exatos (console) das duas pegadas envolvidas (técnica já usada com sucesso nas correções anteriores desta mesma sequência): (a) a peça marcada pode não ser um espigão de CANTO, e sim a cumeeira central (`R1`-`R2`, sem essa marcação); (b) o canto do beiral dessa peça pode cair exatamente NA BORDA da pegada do outro telhado (não estritamente dentro, falhando o teste de tolerância); (c) o par pode estar sendo classificado como `valleyPartnerIds` (bissetriz do vale) e por isso excluído do filtro novo por engano. EM ABERTO.
+Status: RESOLVIDO na DEC-160 (sessão 39, ver final deste documento) — a hipótese (a) listada acima era a correta: a peça que sobrava era a cumeeira central/contínua, sem `hipCornerXZ`.
+
 # DEC-153 — Parâmetro preliminar de 30 kg/m² para estrutura Light Steel Frame
 
 **Data:** 27/08/2026
@@ -1729,5 +1730,104 @@ Status: Implementado, testado (suíte completa + teste novo confirmando a marca�
 4. Testado ao vivo via `buildRows()` (import dinâmico do módulo no console do navegador, já que `MaterialsPanel` não é exposto globalmente): parede de 60m em `eifs-wood-substrate` — painel do substrato 178,2 m² × R$69,44 = R$12.374,21; parafuso com arandela 1021 un × R$0,48 = R$489,26; pingadeira 27 un × R$101,88 = R$2.750,76. Os demais itens (basecoat, fita, tela, cantoneira, membrana, drywall, estrutura, manta) continuam "—", confirmando que só os 4 itens pesquisados ganharam preço.
 
 **Pendência:** a migration ainda não foi aplicada no banco de produção (nenhum acesso de escrita ao Supabase disponível nesta sessão) — até lá, os 4 itens resolvem pelo fallback `REFERENCE_PRICES` (mesmo valor da pesquisa), então o comportamento observado já é o mesmo de quando a migration rodar; só a fonte/rastreabilidade (nível 1 fornecedor vs nível 2 fallback) muda.
+
+---
+
+# DEC-160 — Cumeeira central/contínua (sem hipCornerXZ) some quando as duas pontas caem dentro da pegada do telhado vizinho — resolve DEC-152
+
+**Data:** 27/08/2026
+**Status:** Implementado, testado — não verificado visualmente (sem WebGL disponível nesta sessão)
+
+**Contexto:** retomando a investigação deixada EM ABERTO na DEC-152, instrumentei a cena real do app (userData de cada peça renderizada, não só leitura de código) montando ao vivo o L relatado pelo Product Owner — duas casas retangulares (10×6 e 6×8) com telhados quatro-águas automáticos — e extraí as pegadas e pontas reais das cumeeiras dos dois telhados.
+
+**Causa raiz:** confirmada a hipótese (a) já levantada na própria DEC-152 — a cumeeira CENTRAL/CONTÍNUA (o trecho `R1`-`R2` de um quatro-águas, ou a cumeeira inteira de um duas-águas) nunca ganha `userData.hipCornerXZ` — essa tag só existe nos 4 caps de canto do hip — então o filtro de omissão da DEC-152 é um no-op pra ela. Os números reais extraídos confirmaram: a cumeeira central de CADA telhado cai INTEIRA (as duas pontas) dentro da pegada do telhado vizinho — exatamente o caso que o mecanismo do DEC-152 nunca chegou a tocar.
+
+**Decisão:**
+1. Nova tag `userData.ridgeCapEndsXZ = { a, b }` (as duas pontas da cumeeira, em vez de um canto só) aplicada em `buildRoofDuasAguas` e nos ramos de cumeeira central de `buildRoofQuatroAguas`.
+2. No laço telhado-vs-telhado, uma cláusula ADICIONAL (não substitui a da DEC-152): omite a cumeeira só quando as DUAS pontas caem dentro da pegada do vizinho (reaproveitando `hipCornerInsideOtherRoof` pras duas pontas) — usar a regra "uma ponta dentro basta" cortaria cumeeira de verdade que continua além da junção (caso comum de uma cumeeira longa que só encosta parcialmente no vizinho).
+3. Caso parcial (confirmado numericamente pra duas-águas×duas-águas: uma ponta cai dentro, a outra fica de fato fora) fica documentado como limitação CONHECIDA, não resolvida nesta rodada — continua só no sombreamento por pixel (mesma limitação já registrada na DEC-151).
+
+**Alternativas descartadas:**
+- Aparar (trim) geometricamente a cumeeira no ponto de interseção com a pegada do vizinho, em vez de só omitir por inteiro — seria a correção completa pro caso de sobreposição parcial, mas exige recalcular a malha no momento da construção, não só filtrar depois — adiada por ora.
+
+**Testado:** suíte completa + teste comportamental novo usando os NÚMEROS REAIS extraídos ao vivo (não regex sobre texto-fonte) — identificado que o teste fraco (regex) é a provável razão de as 3 tentativas anteriores (DEC-150/151/152) terem "passado no teste" sem resolver o sintoma reportado.
+
+**Pendência:** não verificado visualmente no navegador nesta sessão (o preview local ficou sem contexto WebGL — `Sandboxed = yes, GL_VENDOR = Disabled` — limitação de ambiente) — aguardando confirmação do Product Owner no site publicado.
+
+---
+
+# DEC-161 — Muros de terreno entram no orçamento; aviso de bloco estrutural chega à exportação PDF/CSV
+
+**Data:** 27/08/2026
+**Status:** Implementado, testado, confirmado ao vivo
+
+**Contexto:** pedido do Product Owner de auditar o orçamento ("confirmar que o sistema está calculando toda a geometria existente"). Auditoria encontrou um gap silencioso real: `Terreno.muros` (muros de perímetro do lote) é geometria de verdade — renderiza em 3D, tem `finishA/finishB` próprios — mas `MaterialsPanel.compute()` só percorre `project.floors`, nunca `project.terreno`, então um muro confirmado nunca gerava nenhuma linha de pintura/alvenaria.
+
+**Decisão:**
+1. `compute()` passa a somar `project.terreno.muros` em `totals.wallAreaNet` e `paint` (mesmo fallback de tinta padrão que qualquer parede sem acabamento escolhido já usa) — mas DE PROPÓSITO não em `totals.wallLength`, porque esse total alimenta a viga de cinta/amarração da CASA (`beamVolume`/`beamLength`) e o resumo "Paredes (comprimento)": um muro de perímetro não usa a cinta de amarração da casa, contá-lo ali infla aço/concreto que não existe pra ele. Pelo mesmo motivo, muro também sai do loop de pilaretes embutidos (`activeWalls`) e da contagem de verga (reforço de alvenaria acima de abertura — um muro não tem verga de concreto).
+2. `buildRows()` (exportação genérica de PDF/CSV) ganhou o mesmo aviso que já existia só na tela quando o sistema não tem alvenaria cerâmica nem é Steel Frame ("quantitativo de blocos estruturais... não disponível nesta versão") — antes a exportação simplesmente pulava essas linhas sem nenhuma explicação no documento.
+
+**Testado ao vivo:** terreno 20×20m com 1 muro confirmado (`minX`) — antes de qualquer acabamento explícito, `MaterialsPanel.compute()` foi de `wallAreaNet: 0` pra `36 m²`, `paint` de 0 pra `72 m²` (duas faces) e `masonry.blocks` de 0 pra `990 un.` — confirmado também no painel real da interface (Lista de materiais), sem nenhuma mudança em "Paredes: 0,00 m" (a exclusão de `wallLength` funcionou como pretendido).
+
+---
+
+# DEC-162 — Drywall como sistema de divisória interna, independente do sistema construtivo do projeto
+
+**Data:** 27/08/2026
+**Status:** Implementado, testado, confirmado ao vivo
+
+**Contexto:** pedido do Product Owner: um sistema de orçamento para divisórias de drywall, tratado como opção POR PAREDE (não como o sistema construtivo do projeto inteiro, que hoje só admite alvenaria cerâmica/bloco estrutural/Steel Frame).
+
+**Decisão:**
+1. Novo campo opcional `Wall.partitionSystem?: 'drywall'`, independente de `Project.constructionSystem` — qualquer projeto pode ter paredes internas específicas em drywall.
+2. Restrito a paredes INTERNAS: novo helper puro `Core.wallIsInteriorPartition(wall, rooms)` (adaptado de `Core.findRoomsAdjacentToOpening`) — só é interna se houver cômodo fechado dos dois lados.
+3. Reaproveita os campos já existentes de Light Steel Frame (`faceAAssemblyId`/`faceBAssemblyId`/`cavityAssembly`) restritos ao subconjunto `use: 'internal'` de `STEEL_FRAME_FACE_ASSEMBLIES` (chapas `drywall-st`/`ru`/`rf`, já cadastradas do trabalho de catálogo Placo Glasroc).
+4. Nova função `drywallPartitionQuantities()` — mesma estrutura de `steelFrameQuantities()`, mas SEM o gate de `constructionSystem === 'light_steel_frame'` — inclui placa, tratamento de junta, parafusos e uma linha nova de estrutura em perfis leves (`DRYWALL_PARTITION_STRUCTURE_KG_PER_M2 = 4`, parâmetro preliminar rotulado como tal na própria linha, ADR-006 §7/§17 — reaproveita o preço de aço já usado em pilarete/viga/laje, não inventa preço novo).
+5. Parede marcada como drywall é excluída da alvenaria (`wallAreaNet`), da verga e — se o projeto for Steel Frame — do loop estrutural principal (evita dupla contagem). Decisão do Product Owner: sem linha de pintura adicional (placa + junta já é o acabamento completo).
+6. Ferramenta nova no viewport (`drywallPartition`, categoria Paredes) — clique numa parede alterna drywall Standard-ST on/off; rejeita parede externa com aviso na tela. `Store.commands.setWallPartitionSystem` espelha o padrão de `setSteelFrameWallSpecification`.
+
+**Testado ao vivo:** projeto `ceramic_masonry` com uma parede interna marcada — `wallLength` caiu de 1,75 pra 1,50 (exclusão da alvenaria), `masonryBlocks` de 130 pra 112, e `buildRows()` passou a listar "Chapa de drywall ST", "Massa para tratamento de juntas", "Fita telada", "Parafusos para drywall" e "Guias e montantes leves (parâmetro preliminar 4 kg/m² + 5% de perda) — 2,84 kg — R$ 22,72" (reaproveitando `steelPerKg`).
+
+---
+
+# DEC-163 — Bloco de Volumetria moldável por canto/aresta/face (topologia fixa 8-12-6)
+
+**Data:** 27/08/2026
+**Status:** Implementado, testado — não verificado visualmente (sem WebGL disponível nesta sessão)
+
+**Contexto:** pedido do Product Owner por um "cubo mágico"/"tipo Blender": um volume moldável puxando canto, aresta e face, pra fazer volumetria de fachada, marquise, calçada, parede de forma livre e estrutura de ACM. Decisão explícita, depois de discussão: TOPOLOGIA FIXA (sempre 8 cantos, 12 arestas, 6 faces — nunca vira forma em L nem ganha vértice novo), evoluindo o "Bloco de Volumetria" (VolumeBox) já existente em vez de criar ferramenta nova. Sistema de materiais (madeira/metalão/tijolo/concreto/ACM/Steel Frame) fica pra uma etapa seguinte (Fase B) — esta decisão cobre só a geometria (Fase A).
+
+**Decisão:**
+1. Novo campo opcional `VolumeBox.cornerOffsets` (8 entradas, deslocamento local em metros por canto) — ausente = box perfeitamente reto, comportamento idêntico ao de antes, risco zero pra projeto salvo.
+2. Novos helpers puros em `Core.ts`: `volumeBoxCornerLocalPositions` (posição real dos 8 cantos), `volumeBoxFaces` (as 6 faces com área e normal, via triangulação em leque), `volumeBoxSurfaceAreaM2`, e `volumeBoxVolumeM3` (volume pelo teorema da divergência — funciona pra malha reta OU torta).
+3. Três novos comandos no Store substituem os 4 antigos de largura/profundidade/altura/elevação: `updateVolumeBoxCornerLive` (move 1 canto), `updateVolumeBoxEdgeLive` (move os 2 cantos da aresta juntos), `updateVolumeBoxFaceLive` (push-pull na própria normal da face — empurrar a face "direita" já É o resize de largura de antes quando não há torção nenhuma). Os três dão snapshot de undo no commit (os 4 comandos antigos não davam — moldar um canto é mudança estrutural maior que um resize uniforme).
+4. `Scene3DRenderer.buildVolumeBoxMesh` trocou de `THREE.BoxGeometry` pra uma `BufferGeometry` construída a partir dos 8 cantos reais (4 vértices próprios por face, pra manter sombreamento plano).
+5. `MaterialsPanel.ts`: `surfaceAreaM2` do quantitativo de Volumetria passa a vir de `Core.volumeBoxSurfaceAreaM2` (área real por face) em vez da fórmula fixa de caixa reta — bate exatamente com a fórmula antiga quando `cornerOffsets` está ausente.
+
+**Testado:** suíte completa com testes NUMÉRICOS reais (não só regex) contra os helpers novos — caso reto bate com a fórmula de caixa retangular; push de face inteira reproduz exatamente um paralelepípedo de outra proporção; colapso de uma aresta contra a oposta vira uma cunha cujo volume bate com a fórmula analítica `w×h×d/2` (prova de que o teorema da divergência está implementado certo pra topologia realmente não-retangular, não só pro caso degenerado reto). Confirmado ao vivo via console (`Store.commands.updateVolumeBoxFaceLive`): push de +1m numa face de um cubo 1×1×0,3 foi de 0,3 pra 0,6 m³ e de 3,2 pra 5,8 m² — exatos.
+
+**Pendência:** não verificado visualmente (arrastar de verdade na tela) — sem WebGL disponível no navegador de preview desta sessão. Ver DEC-164 pra um problema de UX já reportado pelo Product Owner nesta mesma feature.
+
+---
+
+# DEC-164 — Alças de canto/aresta/face confusas/sobrepostas — camada de aresta removida, nudge maior (EM ABERTO — aguardando confirmação)
+
+**Data:** 27/08/2026
+**Status:** Segunda tentativa implementada, aguardando confirmação do Product Owner no site
+
+**Contexto:** depois da DEC-163 publicada, Product Owner testou ao vivo e reportou: "as alças estão confusas, se misturam e não consigo saber qual parte estou movendo" — as 18 alças (8 canto + 12 aresta + 6 face) nasciam exatamente EM CIMA da superfície do box e sempre renderizavam por cima de tudo (`depthTest: false`, técnica copiada de objetos finos/vazados como guarda-corpo — nunca pensada pra um sólido cheio), causando z-fighting visual entre os três tipos.
+
+**Primeira tentativa (insuficiente):** nudge de 6cm pra fora da superfície (radial no canto/aresta, normal real na face) + `depthTest: true` (deixa o próprio box sólido esconder a alça do lado de trás, ~9-11 visíveis de 18 em vez de 18 sempre). Product Owner testou de novo e reportou que NÃO resolveu: "não deu certo, as alças estão juntas".
+
+**Segunda tentativa (atual, ainda não confirmada):**
+1. Nudge subiu de 6cm pra 18cm.
+2. A camada de ARESTA (12 alças) saiu de cena — toda aresta encosta em 2 cantos que já têm alça própria, então era a maior fonte de aglomeração (até 3 alças de tipos diferentes nascendo perto de cada canto: o canto em si + até 3 arestas + até 3 faces que se encontram ali). `Store.commands.updateVolumeBoxEdgeLive` continua existindo (não removido) — só não tem mais handle 3D visível/clicável; fácil trazer de volta se corner+face não bastarem.
+3. Ficam 14 alças (8 canto, branco, raio 0,09m + 6 face, laranja, raio 0,14m), mais espaçadas.
+
+**Alternativas descartadas:**
+- Manter as 18 e só aumentar ainda mais o nudge — descartada por ora: aumentar o afastamento não resolve a aglomeração ANGULAR em torno de um mesmo canto (canto+3 arestas+3 faces continuam próximos entre si nessa região, só mais longe da superfície).
+- Adicionar um seletor de modo (canto/aresta/face) por botão ou aba — descartada: contraria o pedido explícito do Product Owner de interação "sem botões, sem abas".
+
+**Pendência:** não verificado visualmente (sem WebGL disponível nesta sessão) — EM ABERTO até o Product Owner confirmar no site se ficou utilizável, ou reportar que ainda precisa de mais ajuste (ex.: trazer aresta de volta como uma 3ª camada só visível sob hover, ou aumentar ainda mais a diferença de tamanho/cor entre canto e face).
 
 ---

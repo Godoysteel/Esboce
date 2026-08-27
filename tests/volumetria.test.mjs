@@ -77,7 +77,12 @@ test('Scene3DRenderer tem um único builder pro volume (sempre livre) e as 18 al
   assert.doesNotMatch(rendererSource, /function buildVolumeBoxPreviewMesh/);
   assert.doesNotMatch(rendererSource, /function buildVolumeBoxAttachedMesh/);
   assert.match(rendererSource, /floorData\.volumeBoxes/);
-  // As antigas 6 alças por eixo não existem mais — substituídas pelas 18.
+  // As antigas 6 alças por eixo não existem mais — substituídas por
+  // canto+face. Alça de ARESTA saiu de cena (Product Owner testou ao
+  // vivo: 18 alças ficavam "juntas"/confusas perto de cada canto — a
+  // camada de aresta, sempre encostada em 2 cantos que já têm alça
+  // própria, era o grosso da confusão) — Store.updateVolumeBoxEdgeLive
+  // continua existindo, só não tem mais handle 3D visível/clicável.
   assert.doesNotMatch(rendererSource, /'volumeBoxWidthLeft'/);
   assert.doesNotMatch(rendererSource, /'volumeBoxDepthFront'/);
   assert.doesNotMatch(rendererSource, /'volumeBoxHeightTop'/);
@@ -87,10 +92,14 @@ test('Scene3DRenderer tem um único builder pro volume (sempre livre) e as 18 al
   const body = rendererSource.slice(start, end);
   assert.match(body, /Core\.volumeBoxCornerLocalPositions\(vbSel\)/);
   assert.match(body, /Core\.volumeBoxFaces\(vbSel\)/);
-  assert.match(body, /Core\.VOLUME_BOX_EDGES\.forEach/);
+  assert.doesNotMatch(body, /Core\.VOLUME_BOX_EDGES\.forEach/);
+  assert.doesNotMatch(body, /'volumeBoxEdge:' \+ i/);
   assert.match(body, /'volumeBoxCorner:' \+ i/);
-  assert.match(body, /'volumeBoxEdge:' \+ i/);
   assert.match(body, /'volumeBoxFace:' \+ i/);
+  // As alças nascem deslocadas pra fora da superfície (nudge), não em
+  // cima dela — é a correção que resolveu o z-fighting/mistura visual.
+  assert.match(body, /VB_HANDLE_NUDGE_M = 0\.18/);
+  assert.match(body, /depthTest: true/);
 });
 
 test('Scene3DRenderer.buildVolumeBoxMesh é exportada — ViewportController reconstrói a prévia de arraste chamando ela direto com cornerOffsets de trabalho', () => {

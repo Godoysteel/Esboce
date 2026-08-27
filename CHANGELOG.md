@@ -18,6 +18,10 @@
 - Primeiros itens de Steel Frame com preço real: painel do substrato OSB/Compensado, parafuso com arandela do EPS/XPS, placa Glasroc X e pingadeira de base — preços pesquisados na Espaço Smart. O restante do quantitativo Steel Frame continua sem preço, sem nenhum número inventado.
 - O quantitativo de Steel Frame agora converte placas, rolos e sacos para a quantidade comercial (ex.: "62 placas (1200 x 2400 x 12,5 mm)", "29 sc(20kg)", "5 rolos (50m)") sempre que o catálogo PlacLux já publica o rendimento do produto, em vez de mostrar só m²/m/kg técnico.
 - Novo PDF isolado do quantitativo de Steel Frame (menu "Quantitativo" → "Steel Frame"), em formato de tabela com bordas (Produto/Quantidade/Preço/Valor total) — mesmo padrão visual de calculadoras de fabricante (ex.: Trevo Drywall).
+- Corrigido (retomando DEC-150/151/152): telhado em L ainda tinha um espigão sobreposto que não devia — era a cumeeira central/contínua, que nunca tinha recebido a marcação usada pra omitir espigões de canto. Ver DEC-160.
+- Auditoria de orçamento: muros de terreno confirmados agora entram na alvenaria/pintura (antes ficavam de fora do quantitativo, mesmo sendo geometria real e renderizada) — sem entrar na viga de cinta da casa, que não se aplica a eles. A exportação em PDF/CSV também ganhou o aviso de "blocos estruturais indisponível" que já existia só na tela. Ver DEC-161.
+- Novo sistema de drywall como divisória interna: qualquer parede com cômodo dos dois lados pode virar divisória em drywall, independente do sistema construtivo do projeto (alvenaria, bloco estrutural ou Steel Frame) — nova ferramenta na categoria Paredes. O quantitativo aparece numa seção própria, sempre que existir alguma parede marcada. Ver DEC-162.
+- Bloco de Volumetria agora pode ser moldado puxando canto ou face (topologia sempre fixa — 8 cantos, 6 faces), em vez de só redimensionar reto por largura/profundidade/altura. Ainda ajustando a usabilidade das alças (relatos de que ficavam confusas/sobrepostas) — ver DEC-163 e DEC-164.
 
 ## Em desenvolvimento — catálogo comercial unificado
 
