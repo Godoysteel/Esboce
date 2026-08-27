@@ -1515,12 +1515,13 @@ test('Scene3DRenderer: prévia (ghost) do telhado usa drawPreview.roofBaseHeight
 test('Scene3DRenderer.applyRoomBoxClipping: injeta discard por pixel via onBeforeCompile, seguindo a INCLINAÇÃO real da água (não uma altura plana no pico) — sem clippingPlanes nativo (precisa de UNIÃO de várias caixas, não só uma interseção)', () => {
   const fnStart = scene3DRendererSource.indexOf('function applyRoomBoxClipping(');
   assert.notEqual(fnStart, -1, 'applyRoomBoxClipping não encontrada');
-  const fnBlock = scene3DRendererSource.slice(fnStart, fnStart + 6200);
+  const fnBlock = scene3DRendererSource.slice(fnStart, fnStart + 8500);
   assert.match(fnBlock, /material\.onBeforeCompile = function \(shader: any\) \{/);
   assert.match(fnBlock, /vRoomClipWorldPos = \( modelMatrix \* vec4\( transformed, 1\.0 \) \)\.xyz;/);
   assert.match(fnBlock, /float coord = uRoomClipAxisIsZ\[ i \] > 0\.5 \? vRoomClipWorldPos\.z : vRoomClipWorldPos\.x;/);
   assert.match(fnBlock, /surfaceY = uRoomClipBaseY\[ i \] \+ uRoomClipPeak\[ i \] - uRoomClipTanPitch\[ i \] \* abs\( coord - uRoomClipRidgeCoord\[ i \] \);/);
-  assert.match(fnBlock, /if \( vRoomClipWorldPos\.y < surfaceY \) discard;/);
+  assert.match(fnBlock, /float testY = uRoomClipUseOwn\[ i \] > 0\.5 \? ownSurfaceY : vRoomClipWorldPos\.y;/);
+  assert.match(fnBlock, /if \( testY < surfaceY - uRoomClipTieBias\[ i \] \) discard;/);
   assert.match(fnBlock, /material\.needsUpdate = true;/);
 });
 
@@ -1531,8 +1532,8 @@ test('Scene3DRenderer.applyRoomBoxClipping: injeta discard por pixel via onBefor
 // aplica o teste de lado, sem recalcular sinal nenhum.
 test('Scene3DRenderer.applyRoomBoxClipping: segundo laço pro corte diagonal do vale em L — lado da bissetriz, gated pelos dois eixos de fuga (senão corta longe do canto reentrante à toa)', () => {
   const fnStart = scene3DRendererSource.indexOf('function applyRoomBoxClipping(');
-  const fnBlock = scene3DRendererSource.slice(fnStart, fnStart + 6200);
-  assert.match(fnBlock, /function applyRoomBoxClipping\(material: any, boxes: RoomClipBox\[\], valleyCuts\?: ValleyCut\[\]\)/);
+  const fnBlock = scene3DRendererSource.slice(fnStart, fnStart + 8500);
+  assert.match(fnBlock, /function applyRoomBoxClipping\(material: any, boxes: RoomClipBox\[\], valleyCuts\?: ValleyCut\[\], ownSurface\?: RoomClipBox\)/);
   assert.match(fnBlock, /uniform int uValleyCutCount;\\nuniform vec2 uValleyCorner\[/);
   assert.match(fnBlock, /float pastX = \( vRoomClipWorldPos\.x - uValleyCorner\[ j \]\.x \) \* uValleyDir\[ j \]\.x;/);
   assert.match(fnBlock, /float pastZ = \( vRoomClipWorldPos\.z - uValleyCorner\[ j \]\.y \) \* uValleyDir\[ j \]\.y;/);
@@ -1550,24 +1551,24 @@ test('Scene3DRenderer.applyRoomBoxClipping: segundo laço pro corte diagonal do 
 // nas quinas.
 test('Scene3DRenderer.applyRoomBoxClipping: telhado quatro-águas (isHip) usa campo de altura por distância às 4 bordas, não a rampa de uma direção só', () => {
   const fnStart = scene3DRendererSource.indexOf('function applyRoomBoxClipping(');
-  const fnBlock = scene3DRendererSource.slice(fnStart, fnStart + 6200);
+  const fnBlock = scene3DRendererSource.slice(fnStart, fnStart + 8500);
   assert.match(fnBlock, /uniform float uRoomClipIsHip\[/);
   assert.match(fnBlock, /if \( uRoomClipIsHip\[ i \] > 0\.5 \) \{/);
   assert.match(fnBlock, /float distX = min\( vRoomClipWorldPos\.x - uRoomClipMin\[ i \]\.x, uRoomClipMax\[ i \]\.x - vRoomClipWorldPos\.x \);/);
   assert.match(fnBlock, /float distZ = min\( vRoomClipWorldPos\.z - uRoomClipMin\[ i \]\.y, uRoomClipMax\[ i \]\.y - vRoomClipWorldPos\.z \);/);
   assert.match(fnBlock, /surfaceY = uRoomClipBaseY\[ i \] \+ uRoomClipTanPitch\[ i \] \* min\( distX, distZ \);/);
   assert.match(scene3DRendererSource, /isHip: r\.type === 'quatroAguas' \? 1 : 0,/);
-  assert.match(scene3DRendererSource, /isHip: b\.isHip \}; \}\);/);
+  assert.match(scene3DRendererSource, /isHip: b\.isHip, useOwnSurface: 1, tieBias: roof\.id < b\.id \? ROOF_VS_ROOF_TIE_EPS : -ROOF_VS_ROOF_TIE_EPS \}; \}\);/);
 });
 
 test('Scene3DRenderer: cada telhado calcula a caixa dos cômodos ESTRITAMENTE mais altos que ele (nunca a própria) e aplica applyRoomBoxClipping em toda peça', () => {
   const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
   assert.notEqual(roofsStart, -1);
-  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 11500);
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 15000);
   assert.match(roofsBlock, /var roomHeightBoxes = allFloorRoomClipBoxes\[floorIdx\] \|\| \[\];/);
   assert.match(roofsBlock, /var roomClipBoxes = roomHeightBoxes\.concat\(higherFloorRoomHeightBoxes\)\.filter\(function \(b: any\) \{ return b\.baseY > pieceBaseY \+ 1e-4; \}\);/);
   assert.match(roofsBlock, /var clipBoxesForThisRoof = roomClipBoxes\.concat\(otherRoofClipBoxes\);/);
-  assert.match(roofsBlock, /applyRoomBoxClipping\(material, clipBoxesForThisRoof, diagonalValleyCuts\)/);
+  assert.match(roofsBlock, /applyRoomBoxClipping\(material, clipBoxesForThisRoof, diagonalValleyCuts, ownSurfaceBox\)/);
 });
 
 // Empilhamento de cômodos (raiseRoom/SPEC-005): um cômodo elevado pro
@@ -1590,7 +1591,7 @@ test('telhado de um pavimento também soma as caixas de cômodo de pavimentos SU
   assert.ok(loopIdx > preloopStart, 'allFloorRoomClipBoxes precisa ser calculado antes do project.floors.forEach principal');
 
   const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
-  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 11500);
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 15000);
   assert.match(roofsBlock, /for \(var higherFloorIdx = floorIdx \+ 1; higherFloorIdx < allFloorRoomClipBoxes\.length; higherFloorIdx\+\+\) \{/);
   assert.match(roofsBlock, /higherFloorRoomHeightBoxes = higherFloorRoomHeightBoxes\.concat\(allFloorRoomClipBoxes\[higherFloorIdx\] \|\| \[\]\);/);
 });
@@ -1630,7 +1631,7 @@ test('Scene3DRenderer.roofSlopeSurfaceParams: mesma matemática de vão/beiral j
 test('Scene3DRenderer: caixa de telhado-vs-telhado compara a SUPERFÍCIE REAL ponto a ponto (nem pico nem área decidem um vencedor pro par inteiro) — isHip pra quatro-águas, sem pré-filtro', () => {
   const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
   assert.notEqual(roofsStart, -1);
-  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 11500);
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 15000);
   assert.match(roofsBlock, /var roofPeakBoxes = floorData\.roofs\.map\(function \(r: any\) \{/);
   assert.match(roofsBlock, /var rSlope = roofSlopeSurfaceParams\(r, scale, offsetX, offsetY\);/);
   assert.match(roofsBlock, /isHip: r\.type === 'quatroAguas' \? 1 : 0,/);
@@ -1640,6 +1641,44 @@ test('Scene3DRenderer: caixa de telhado-vs-telhado compara a SUPERFÍCIE REAL po
   assert.match(roofsBlock, /if \(b\.id === roof\.id \|\| valleyPartnerIds\[b\.id\]\) return false;/);
   assert.match(roofsBlock, /return !steppedRidgePair/);
   assert.match(roofsBlock, /baseY: b\.baseY, peakAboveBase: b\.peakAboveBase, tanPitch: b\.tanPitch, ridgeCoord: b\.ridgeCoord, halfSpan: b\.halfSpan, axisIsZ: b\.axisIsZ, isHip: b\.isHip/);
+});
+
+// Dois bugs reais reportados pelo Product Owner DEPOIS do fix acima (com
+// print marcando os espigões): (1) o espigão (peça decorativa do hip,
+// com pequeno offset de altura pra "arquear" acima da água) sobrevivia
+// onde devia sumir, porque a comparação usava o Y literal RENDERIZADO de
+// cada peça (que pode ter offset — tabeira, espigão, forro) em vez da
+// fórmula da água de verdade daquele telhado; e (2) na área de
+// sobreposição genuína, um empate exato de altura entre as duas
+// superfícies deixava as DUAS visíveis ao mesmo tempo (z-fighting), já
+// que "nunca os dois escondidos" (comparação ponto a ponto) permite
+// "os dois visíveis" num empate. useOwnSurface troca o teste pra
+// comparar a SUPERFÍCIE CANÔNICA do próprio telhado (não a peça); e
+// tieBias aplica um viés minúsculo (5mm) e ESTÁVEL (por ordenação de
+// id) só nesse empate — provado abaixo por álgebra pura que, pra
+// qualquer diferença real entre as duas superfícies exceto exatamente
+// -tieBias (medida zero), exatamente UM lado fica visível — nunca os
+// dois escondidos, nunca os dois visíveis.
+test('tieBias (ROOF_VS_ROOF_TIE_EPS): desempate determinístico elimina o z-fighting do empate exato sem nunca reabrir "os dois escondidos" nem "os dois visíveis"', () => {
+  const EPS = 0.005;
+  // Reproduz a regra do call site: roof.id < b.id ? +EPS : -EPS, aplicada
+  // de cada lado em relação ao outro.
+  function discardA(hA, hB) { return hA < hB - EPS; } // A tem id menor -> tieBias +EPS na entrada que aponta pra B
+  function discardB(hA, hB) { return hB < hA + EPS; } // B tem id maior -> tieBias -EPS na entrada que aponta pra A
+
+  const margins = [-0.02, -EPS - 1e-6, -EPS + 1e-6, -0.001, 0, 0.001, EPS - 1e-6, EPS + 1e-6, 0.02];
+  for (const d of margins) { // d = hA - hB
+    const hA = 10, hB = 10 - d;
+    const visibleA = !discardA(hA, hB);
+    const visibleB = !discardB(hA, hB);
+    assert.ok(visibleA || visibleB, `nunca pode esconder os dois ao mesmo tempo (d=${d})`);
+    assert.ok(!(visibleA && visibleB), `empate teórico só na medida zero d=-EPS, não em d=${d} — não deveria haver os dois visíveis aqui`);
+  }
+  // No empate exato (d=0, a comparação "crua" seria ambígua), o
+  // desempate precisa escolher SEMPRE o mesmo lado (o de id menor) —
+  // consistente entre frames, sem flicker.
+  assert.equal(discardA(10, 10), false, 'A (id menor) sobrevive no empate exato');
+  assert.equal(discardB(10, 10), true, 'B (id maior) é escondido no empate exato');
 });
 
 // Bug real (Product Owner, com print): dois quatroAguas do mesmo grupo
@@ -1682,7 +1721,7 @@ test('Scene3DRenderer: trimRects (corte de malha real, não por pixel) só se ap
 // é os dois dividirem a linha do meio).
 test('Scene3DRenderer: pegadas em L (canto reentrante) resolvem o encontro pela bissetriz do vale, não pela disputa de área — cada uma escondendo só o que atravessa pro lado da outra', () => {
   const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
-  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 11500);
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 15000);
   // Detecção usa o retângulo NOMINAL (sem ROOF_OVERHANG) — roofWorldFootprint
   // já infla a pegada pelo beiral, então duas pegadas encostadas na
   // parede de verdade chegam SOBREPOSTAS (não só tocando) e a detecção
@@ -1697,7 +1736,7 @@ test('Scene3DRenderer: pegadas em L (canto reentrante) resolvem o encontro pela 
   // comparação de superfície ponto a ponto — evita as duas peças se
   // cortando por dois mecanismos ao mesmo tempo.
   assert.match(roofsBlock, /if \(b\.id === roof\.id \|\| valleyPartnerIds\[b\.id\]\) return false;/);
-  assert.match(roofsBlock, /applyRoomBoxClipping\(material, clipBoxesForThisRoof, diagonalValleyCuts\)/);
+  assert.match(roofsBlock, /applyRoomBoxClipping\(material, clipBoxesForThisRoof, diagonalValleyCuts, ownSurfaceBox\)/);
 });
 
 test('Scene3DRenderer.roofSlopeSurfaceParams: platibanda vira platô plano (tanPitch=0) em base+parapetHeight, não em base+0 — parapetHeight some no cálculo do pico sem essa distinção', () => {

@@ -138,6 +138,12 @@ export function hashColorHex(key: string): number {
   var CALCADA_WIDTH = 0.6, CALCADA_THICKNESS = 0.05;
   var MARQUISE_DEPTH = 0.5, MARQUISE_THICKNESS = 0.06;
   var ROOF_PITCH_DEG = 28, ROOF_OVERHANG = 0.4, RAKE_OVERHANG = 0.2, ROOF_THICKNESS = 0.12;
+  // Desempate telhado-vs-telhado (ver useOwnSurface/tieBias em
+  // RoomClipBox) — bem menor que qualquer detalhe real de acabamento
+  // (o espigão sobe só ~0,12m acima da água), então nunca muda quem
+  // "deveria" ganhar de verdade, só decide os empates exatos que
+  // causavam z-fighting bem na linha da água-furtada.
+  var ROOF_VS_ROOF_TIE_EPS = 0.005;
   var ROOF_COLOR = 0xB5573A, GABLE_COLOR = 0xFFFFFF;
   // Forro em nível do beiral — painel horizontal fechando por baixo só a
   // água de verdade (ROOF_OVERHANG), nunca a ponta em diagonal do oitão
@@ -1127,10 +1133,36 @@ export function hashColorHex(key: string): number {
     // bordas do retângulo (min/max já carregados) — o mesmo cálculo
     // geométrico que já define onde fica a cumeeira em buildRoofQuatroAguas.
     isHip: number;
+    // Telhado-vs-telhado (não cômodo): testar a altura BRUTA do
+    // fragmento contra a superfície do vizinho escondia água, tabeira e
+    // espigão do jeito certo enquanto todos ficam exatamente na própria
+    // rampa — mas o espigão (buildRidgeCapMesh) sobe um pouco acima da
+    // água pra parecer uma peça de acabamento por cima da junção, e essa
+    // subida bastava pra ele sobreviver bem onde a água do MESMO
+    // telhado já tinha perdido pro vizinho e sumido corretamente
+    // (Product Owner, com print: espigão continuava visível onde a água
+    // ao redor já tinha sumido). useOwnSurface troca o lado "eu" da
+    // comparação: em vez da posição de mundo real do fragmento, usa a
+    // superfície CANÔNICA do PRÓPRIO telhado (a mesma fórmula/isHip de
+    // cima, com os parâmetros de uOwn*) naquele X/Z — água, tabeira e
+    // espigão do mesmo telhado passam a ganhar ou perder juntos, sem
+    // depender do quanto cada peça sobe ou desce da água de verdade.
+    useOwnSurface?: number;
+    // Pequeno desempate (metros) só pro par telhado-vs-telhado: dois
+    // números reais iguais (o cruzamento exato da água-furtada) fazem os
+    // dois lados "vencerem" ao mesmo tempo por segurança (nunca os dois
+    // escondidos) — mas isso também deixa os dois DESENHANDO ao mesmo
+    // tempo bem naquela linha, virando z-fighting (Product Owner, com
+    // print). Somado ao limiar de um lado do par e subtraído do outro
+    // (sinal decidido por uma ordem estável, comparando os dois IDs),
+    // exatamente um dos dois sempre ganha o empate — troca uma faixa
+    // milimétrica de "vencedor tecnicamente errado" (imperceptível) por
+    // nunca mais os dois desenharem ao mesmo tempo ali.
+    tieBias?: number;
   };
   var VALLEY_CUT_LIMIT = 4;
   type ValleyCut = { cornerX: number; cornerZ: number; dirX: number; dirZ: number; hideSign: number };
-  function applyRoomBoxClipping(material: any, boxes: RoomClipBox[], valleyCuts?: ValleyCut[]) {
+  function applyRoomBoxClipping(material: any, boxes: RoomClipBox[], valleyCuts?: ValleyCut[], ownSurface?: RoomClipBox) {
     var cuts = valleyCuts || [];
     if (!material || (!boxes.length && !cuts.length)) return;
     var cappedCuts = cuts.slice(0, VALLEY_CUT_LIMIT);
@@ -1147,7 +1179,8 @@ export function hashColorHex(key: string): number {
     // loop já para em uRoomClipCount de qualquer forma, essa é só uma
     // segunda camada de segurança.
     var padded = capped.slice();
-    while (padded.length < ROOM_CLIP_BOX_LIMIT) padded.push({ minX: 0, maxX: 0, minZ: 0, maxZ: 0, baseY: -1e6, peakAboveBase: 0, tanPitch: 0, ridgeCoord: 0, halfSpan: 0, axisIsZ: 0, isHip: 0 });
+    while (padded.length < ROOM_CLIP_BOX_LIMIT) padded.push({ minX: 0, maxX: 0, minZ: 0, maxZ: 0, baseY: -1e6, peakAboveBase: 0, tanPitch: 0, ridgeCoord: 0, halfSpan: 0, axisIsZ: 0, isHip: 0, useOwnSurface: 0, tieBias: 0 });
+    var own = ownSurface || null;
     material.onBeforeCompile = function (shader: any) {
       shader.uniforms.uRoomClipCount = { value: capped.length };
       shader.uniforms.uRoomClipMin = { value: padded.map(function (b) { return new THREE.Vector2(b.minX, b.minZ); }) };
@@ -1159,6 +1192,17 @@ export function hashColorHex(key: string): number {
       shader.uniforms.uRoomClipHalfSpan = { value: padded.map(function (b) { return b.halfSpan; }) };
       shader.uniforms.uRoomClipAxisIsZ = { value: padded.map(function (b) { return b.axisIsZ; }) };
       shader.uniforms.uRoomClipIsHip = { value: padded.map(function (b) { return b.isHip; }) };
+      shader.uniforms.uRoomClipUseOwn = { value: padded.map(function (b) { return b.useOwnSurface || 0; }) };
+      shader.uniforms.uRoomClipTieBias = { value: padded.map(function (b) { return b.tieBias || 0; }) };
+      shader.uniforms.uHasOwnSurface = { value: own ? 1 : 0 };
+      shader.uniforms.uOwnMin = { value: new THREE.Vector2(own ? own.minX : 0, own ? own.minZ : 0) };
+      shader.uniforms.uOwnMax = { value: new THREE.Vector2(own ? own.maxX : 0, own ? own.maxZ : 0) };
+      shader.uniforms.uOwnBaseY = { value: own ? own.baseY : 0 };
+      shader.uniforms.uOwnPeak = { value: own ? own.peakAboveBase : 0 };
+      shader.uniforms.uOwnTanPitch = { value: own ? own.tanPitch : 0 };
+      shader.uniforms.uOwnRidgeCoord = { value: own ? own.ridgeCoord : 0 };
+      shader.uniforms.uOwnAxisIsZ = { value: own ? own.axisIsZ : 0 };
+      shader.uniforms.uOwnIsHip = { value: own ? own.isHip : 0 };
       shader.uniforms.uValleyCutCount = { value: cappedCuts.length };
       shader.uniforms.uValleyCorner = { value: paddedCuts.map(function (c) { return new THREE.Vector2(c.cornerX, c.cornerZ); }) };
       shader.uniforms.uValleyDir = { value: paddedCuts.map(function (c) { return new THREE.Vector2(c.dirX, c.dirZ); }) };
@@ -1173,11 +1217,11 @@ export function hashColorHex(key: string): number {
       shader.fragmentShader = shader.fragmentShader
         .replace(
           '#include <common>',
-          '#include <common>\nvarying vec3 vRoomClipWorldPos;\nuniform int uRoomClipCount;\nuniform vec2 uRoomClipMin[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform vec2 uRoomClipMax[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipBaseY[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipPeak[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipTanPitch[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipRidgeCoord[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipHalfSpan[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipAxisIsZ[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipIsHip[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform int uValleyCutCount;\nuniform vec2 uValleyCorner[' + VALLEY_CUT_LIMIT + '];\nuniform vec2 uValleyDir[' + VALLEY_CUT_LIMIT + '];\nuniform float uValleyHideSign[' + VALLEY_CUT_LIMIT + '];'
+          '#include <common>\nvarying vec3 vRoomClipWorldPos;\nuniform int uRoomClipCount;\nuniform vec2 uRoomClipMin[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform vec2 uRoomClipMax[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipBaseY[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipPeak[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipTanPitch[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipRidgeCoord[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipHalfSpan[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipAxisIsZ[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipIsHip[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipUseOwn[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform float uRoomClipTieBias[' + ROOM_CLIP_BOX_LIMIT + '];\nuniform int uHasOwnSurface;\nuniform vec2 uOwnMin;\nuniform vec2 uOwnMax;\nuniform float uOwnBaseY;\nuniform float uOwnPeak;\nuniform float uOwnTanPitch;\nuniform float uOwnRidgeCoord;\nuniform float uOwnAxisIsZ;\nuniform float uOwnIsHip;\nuniform int uValleyCutCount;\nuniform vec2 uValleyCorner[' + VALLEY_CUT_LIMIT + '];\nuniform vec2 uValleyDir[' + VALLEY_CUT_LIMIT + '];\nuniform float uValleyHideSign[' + VALLEY_CUT_LIMIT + '];'
         )
         .replace(
           '#include <clipping_planes_fragment>',
-          '#include <clipping_planes_fragment>\n  for ( int i = 0; i < ' + ROOM_CLIP_BOX_LIMIT + '; i ++ ) {\n    if ( i >= uRoomClipCount ) break;\n    if ( vRoomClipWorldPos.x > uRoomClipMin[ i ].x && vRoomClipWorldPos.x < uRoomClipMax[ i ].x && vRoomClipWorldPos.z > uRoomClipMin[ i ].y && vRoomClipWorldPos.z < uRoomClipMax[ i ].y ) {\n      float surfaceY;\n      if ( uRoomClipIsHip[ i ] > 0.5 ) {\n        float distX = min( vRoomClipWorldPos.x - uRoomClipMin[ i ].x, uRoomClipMax[ i ].x - vRoomClipWorldPos.x );\n        float distZ = min( vRoomClipWorldPos.z - uRoomClipMin[ i ].y, uRoomClipMax[ i ].y - vRoomClipWorldPos.z );\n        surfaceY = uRoomClipBaseY[ i ] + uRoomClipTanPitch[ i ] * min( distX, distZ );\n      } else {\n        float coord = uRoomClipAxisIsZ[ i ] > 0.5 ? vRoomClipWorldPos.z : vRoomClipWorldPos.x;\n        surfaceY = uRoomClipBaseY[ i ] + uRoomClipPeak[ i ] - uRoomClipTanPitch[ i ] * abs( coord - uRoomClipRidgeCoord[ i ] );\n      }\n      if ( vRoomClipWorldPos.y < surfaceY ) discard;\n    }\n  }\n  for ( int j = 0; j < ' + VALLEY_CUT_LIMIT + '; j ++ ) {\n    if ( j >= uValleyCutCount ) break;\n    float pastX = ( vRoomClipWorldPos.x - uValleyCorner[ j ].x ) * uValleyDir[ j ].x;\n    float pastZ = ( vRoomClipWorldPos.z - uValleyCorner[ j ].y ) * uValleyDir[ j ].y;\n    if ( pastX >= 0.0 && pastZ >= 0.0 ) {\n      float cross = ( vRoomClipWorldPos.x - uValleyCorner[ j ].x ) * uValleyDir[ j ].y - ( vRoomClipWorldPos.z - uValleyCorner[ j ].y ) * uValleyDir[ j ].x;\n      if ( sign( cross ) == uValleyHideSign[ j ] ) discard;\n    }\n  }'
+          '#include <clipping_planes_fragment>\n  float ownSurfaceY = vRoomClipWorldPos.y;\n  if ( uHasOwnSurface > 0 ) {\n    if ( uOwnIsHip > 0.5 ) {\n      float odX = min( vRoomClipWorldPos.x - uOwnMin.x, uOwnMax.x - vRoomClipWorldPos.x );\n      float odZ = min( vRoomClipWorldPos.z - uOwnMin.y, uOwnMax.y - vRoomClipWorldPos.z );\n      ownSurfaceY = uOwnBaseY + uOwnTanPitch * min( odX, odZ );\n    } else {\n      float ownCoord = uOwnAxisIsZ > 0.5 ? vRoomClipWorldPos.z : vRoomClipWorldPos.x;\n      ownSurfaceY = uOwnBaseY + uOwnPeak - uOwnTanPitch * abs( ownCoord - uOwnRidgeCoord );\n    }\n  }\n  for ( int i = 0; i < ' + ROOM_CLIP_BOX_LIMIT + '; i ++ ) {\n    if ( i >= uRoomClipCount ) break;\n    if ( vRoomClipWorldPos.x > uRoomClipMin[ i ].x && vRoomClipWorldPos.x < uRoomClipMax[ i ].x && vRoomClipWorldPos.z > uRoomClipMin[ i ].y && vRoomClipWorldPos.z < uRoomClipMax[ i ].y ) {\n      float surfaceY;\n      if ( uRoomClipIsHip[ i ] > 0.5 ) {\n        float distX = min( vRoomClipWorldPos.x - uRoomClipMin[ i ].x, uRoomClipMax[ i ].x - vRoomClipWorldPos.x );\n        float distZ = min( vRoomClipWorldPos.z - uRoomClipMin[ i ].y, uRoomClipMax[ i ].y - vRoomClipWorldPos.z );\n        surfaceY = uRoomClipBaseY[ i ] + uRoomClipTanPitch[ i ] * min( distX, distZ );\n      } else {\n        float coord = uRoomClipAxisIsZ[ i ] > 0.5 ? vRoomClipWorldPos.z : vRoomClipWorldPos.x;\n        surfaceY = uRoomClipBaseY[ i ] + uRoomClipPeak[ i ] - uRoomClipTanPitch[ i ] * abs( coord - uRoomClipRidgeCoord[ i ] );\n      }\n      float testY = uRoomClipUseOwn[ i ] > 0.5 ? ownSurfaceY : vRoomClipWorldPos.y;\n      if ( testY < surfaceY - uRoomClipTieBias[ i ] ) discard;\n    }\n  }\n  for ( int j = 0; j < ' + VALLEY_CUT_LIMIT + '; j ++ ) {\n    if ( j >= uValleyCutCount ) break;\n    float pastX = ( vRoomClipWorldPos.x - uValleyCorner[ j ].x ) * uValleyDir[ j ].x;\n    float pastZ = ( vRoomClipWorldPos.z - uValleyCorner[ j ].y ) * uValleyDir[ j ].y;\n    if ( pastX >= 0.0 && pastZ >= 0.0 ) {\n      float cross = ( vRoomClipWorldPos.x - uValleyCorner[ j ].x ) * uValleyDir[ j ].y - ( vRoomClipWorldPos.z - uValleyCorner[ j ].y ) * uValleyDir[ j ].x;\n      if ( sign( cross ) == uValleyHideSign[ j ] ) discard;\n    }\n  }'
         );
     };
     material.needsUpdate = true;
@@ -5506,11 +5550,22 @@ export function hashColorHex(key: string): number {
             );
             return !steppedRidgePair;
           })
-            .map(function (b: any) { return { minX: b.minX, maxX: b.maxX, minZ: b.minZ, maxZ: b.maxZ, baseY: b.baseY, peakAboveBase: b.peakAboveBase, tanPitch: b.tanPitch, ridgeCoord: b.ridgeCoord, halfSpan: b.halfSpan, axisIsZ: b.axisIsZ, isHip: b.isHip }; });
+            // useOwnSurface: telhado-vs-telhado compara a SUPERFÍCIE
+            // CANÔNICA deste telhado (não a posição bruta de cada
+            // fragmento) contra o vizinho — água, tabeira e espigão do
+            // mesmo telhado ganham ou perdem juntos, independente de
+            // quanto uma peça de acabamento sobe/desce da água de
+            // verdade (ver comentário no tipo RoomClipBox). tieBias: um
+            // desempate minúsculo e ESTÁVEL (ordem lexicográfica dos
+            // IDs) — exatamente um dos dois lados de qualquer par vence
+            // um empate exato, matando o z-fighting bem na linha da
+            // água-furtada sem arriscar reabrir um "os dois escondidos".
+            .map(function (b: any) { return { minX: b.minX, maxX: b.maxX, minZ: b.minZ, maxZ: b.maxZ, baseY: b.baseY, peakAboveBase: b.peakAboveBase, tanPitch: b.tanPitch, ridgeCoord: b.ridgeCoord, halfSpan: b.halfSpan, axisIsZ: b.axisIsZ, isHip: b.isHip, useOwnSurface: 1, tieBias: roof.id < b.id ? ROOF_VS_ROOF_TIE_EPS : -ROOF_VS_ROOF_TIE_EPS }; });
           var clipBoxesForThisRoof = roomClipBoxes.concat(otherRoofClipBoxes);
+          var ownSurfaceBox = roofPeakBoxes.find(function (b: any) { return b.id === roof.id; });
           if (clipBoxesForThisRoof.length || diagonalValleyCuts.length) pieces.forEach(function (piece) {
             var materials = Array.isArray(piece.material) ? piece.material : [piece.material];
-            materials.forEach(function (material: any) { applyRoomBoxClipping(material, clipBoxesForThisRoof, diagonalValleyCuts); });
+            materials.forEach(function (material: any) { applyRoomBoxClipping(material, clipBoxesForThisRoof, diagonalValleyCuts, ownSurfaceBox); });
           });
           var ownFootprint = ownFootprintForValley;
           // roofCutRegions só sabe calcular o plano inclinado de verdade
