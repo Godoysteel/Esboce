@@ -1920,3 +1920,25 @@ Reproduzindo a composição exata dele (`import()` dinâmico de `Scene3DRenderer
 **Nota sobre o processo:** as duas correções desta entrada só existem porque o Product Owner usou a ferramenta "Apagar" (DEC-166) pra apontar exatamente onde o problema estava — sem isso (e sem o floor completo extraído do console dele), essas duas causas específicas jamais seriam encontradas só por inspeção de código ou por reproduções hipotéticas.
 
 ---
+
+# DEC-168 — Telhado duas-águas: forro inclinado (reverte o forro em nível) + beiral do oitão igualado ao da lateral
+
+**Data:** 28/08/2026
+**Status:** Implementado, testado (659 testes) e verificado ao vivo (geometria real, sem WebGL) — pendente confirmação visual do Product Owner no site publicado.
+
+**Contexto:** depois de estabilizar o telhado quatro-águas (DEC-152 até DEC-167), o Product Owner passou a testar o duas-águas e pediu duas mudanças de design (não bugs):
+
+1. **Reverte o forro EM NÍVEL do beiral (decisão anterior, ver comentário original em `buildEaveSoffitPanel`) por um forro que ACOMPANHA a inclinação da água**, e fecha também o beirão do oitão (RAKE_OVERHANG) — que ficava aberto (a própria água inclinada aparecendo por baixo). Pedido textual: "retire o forro em nível do telhado duas aguas e coloque o forro acompanhando a inclinação do telhado, forro no beirão do oitão e nas laterais".
+2. **Iguala o beiral do oitão (RAKE_OVERHANG) ao beiral da lateral (ROOF_OVERHANG)** — antes 0,2m e 0,4m respectivamente, agora os dois 0,4m. Pedido textual: "quero que o beiral do espigão tenha a mesma distancia da parede que o beiral da lateral".
+
+**Decisão 1 — forro inclinado:** em `buildRoofDuasAguas` (`Scene3DRenderer.ts`), removidas as chamadas a `buildEaveSoffitPanel` (painel plano em nível, `THREE.BoxGeometry`) e substituídas por `buildQuadMesh` com os 4 cantos calculados na MESMA inclinação da água (`eaveTipUnderY` na ponta do beiral, subindo pra `wallFaceUnderY`/`ridgeUnderY` na parede/cumeeira, sempre `− SOFFIT_THICKNESS` da face inferior real do telhado, pra não brigar por z-fighting com a face que `extrudeSlopeDown` já desenha ali). No beiral (água): 2 painéis (um por lado), planos porque a altura só varia num eixo. No beirão do oitão (antes aberto): 4 painéis (2 por lado da cumeeira, porque o perfil de duas águas não é plano num quad só — sobe do beiral até a cumeeira e desce de novo do outro lado). `buildEaveSoffitPanel` continua existindo e sendo usada por `buildRoofQuatroAguas`/`buildRoofUmaAgua` — a mudança foi só pro duas-águas, conforme pedido.
+
+**Decisão 2 — beiral igual:** `RAKE_OVERHANG` alterado de `0.2` pra `0.4` (linha das constantes, junto de `ROOF_OVERHANG`). Como `MaterialsPanel.ts` já lê esse valor via `Scene3DRenderer.RAKE_OVERHANG_GETTER()` pro quantitativo de telha, o orçamento se ajusta sozinho, sem precisar tocar em mais nenhum lugar.
+
+**Verificado ao vivo (sem WebGL, mesma técnica de `import()` dinâmico):** telhado duas-águas 6×4m real (`Store.commands.createRoom` + `generateRoofsForCurrentFloor` + `setRoofPieceType('duasAguas')`) — os 6 painéis de forro do lado usado (2 beiral + 4 oitão) batem exatamente com os valores calculados à mão: ponta do beiral em Y=2,5341, parede em Y=2,7468 (mais alto que a ponta — nunca em nível), cumeeira em Y=2,8451 (o pico, mais alto ainda). Nenhum painel em `BoxGeometry` (o antigo forro plano) sobrou no duas-águas.
+
+**Testado:** suíte completa (659 testes) + reescrito o teste que fixava o forro em nível antigo (`tests/roof-eave-soffit-and-molding.test.mjs`) pra verificar a nova geometria inclinada com números reais.
+
+**Pendência:** verificação visual (pixels de verdade) no site publicado — a geometria bate matematicamente, mas o "acompanhar a inclinação" só fica 100% confirmado quando o Product Owner ver o resultado renderizado.
+
+---

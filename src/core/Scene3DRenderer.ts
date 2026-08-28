@@ -137,7 +137,7 @@ export function hashColorHex(key: string): number {
   var FOUNDATION_FLOOR_GAP = 0.005;
   var CALCADA_WIDTH = 0.6, CALCADA_THICKNESS = 0.05;
   var MARQUISE_DEPTH = 0.5, MARQUISE_THICKNESS = 0.06;
-  var ROOF_PITCH_DEG = 28, ROOF_OVERHANG = 0.4, RAKE_OVERHANG = 0.2, ROOF_THICKNESS = 0.12;
+  var ROOF_PITCH_DEG = 28, ROOF_OVERHANG = 0.4, RAKE_OVERHANG = 0.4, ROOF_THICKNESS = 0.12;
   // Desempate telhado-vs-telhado (ver useOwnSurface/tieBias em
   // RoomClipBox) — bem menor que qualquer detalhe real de acabamento
   // (o espigão sobe só ~0,12m acima da água), então nunca muda quem
@@ -2426,8 +2426,51 @@ export function hashColorHex(key: string): number {
       var ridgeCapX = buildRidgeCapMesh({ x: eMinX, y: ridgeY, z: ridgeZ }, { x: eMaxX, y: ridgeY, z: ridgeZ }, roofColor, pitchRad);
       if (ridgeCapX) { ridgeCapX.userData.ridgeCapEndsXZ = { a: { x: eMinX, z: ridgeZ }, b: { x: eMaxX, z: ridgeZ } }; ridgeCapX.userData.ridgePieceId = 'ridge'; }
       meshes.push(ridgeCapX);
-      meshes.push(buildEaveSoffitPanel((eMinX + eMaxX) / 2, topBounds.minZ - ROOF_OVERHANG / 2, eMaxX - eMinX, ROOF_OVERHANG, topY - verticalDrop, soffitColor));
-      meshes.push(buildEaveSoffitPanel((eMinX + eMaxX) / 2, topBounds.maxZ + ROOF_OVERHANG / 2, eMaxX - eMinX, ROOF_OVERHANG, topY - verticalDrop, soffitColor));
+      // Forro acompanhando a inclinação (Product Owner pediu pra trocar o
+      // forro EM NÍVEL de antes por um que segue a água) — mesmo plano da
+      // face inferior da água já visível ali (extrudeSlopeDown desenha as
+      // duas faces), só um pouco mais abaixo (SOFFIT_THICKNESS) pra não
+      // brigar (z-fighting) com ela. No beiral (água), sobe do beiral até
+      // a parede seguindo a MESMA inclinação da própria água. No beirão do
+      // oitão (RAKE_OVERHANG) — antes ficava aberto, só a água aparecendo
+      // por baixo — fecha com o mesmo forro, seguindo o perfil de duas
+      // águas do próprio telhado (sobe do beiral até a cumeeira), na
+      // faixa estreita entre a parede do oitão e a ponta do beiral;
+      // dividido em 2 quads por lado (um de cada lado da cumeeira) porque
+      // o perfil não é plano num quad só.
+      var eaveTipUnderY = topY - verticalDrop - SOFFIT_THICKNESS;
+      var wallFaceUnderY = topY + gableBaseRise - verticalDrop - SOFFIT_THICKNESS;
+      var ridgeUnderY = ridgeY - verticalDrop - SOFFIT_THICKNESS;
+      meshes.push(buildQuadMesh(
+        { x: eMinX, y: eaveTipUnderY, z: eMinZ }, { x: eMaxX, y: eaveTipUnderY, z: eMinZ },
+        { x: eMaxX, y: wallFaceUnderY, z: topBounds.minZ }, { x: eMinX, y: wallFaceUnderY, z: topBounds.minZ },
+        soffitColor
+      ));
+      meshes.push(buildQuadMesh(
+        { x: eMaxX, y: eaveTipUnderY, z: eMaxZ }, { x: eMinX, y: eaveTipUnderY, z: eMaxZ },
+        { x: eMinX, y: wallFaceUnderY, z: topBounds.maxZ }, { x: eMaxX, y: wallFaceUnderY, z: topBounds.maxZ },
+        soffitColor
+      ));
+      meshes.push(buildQuadMesh(
+        { x: eMinX, y: eaveTipUnderY, z: eMinZ }, { x: topBounds.minX, y: eaveTipUnderY, z: eMinZ },
+        { x: topBounds.minX, y: ridgeUnderY, z: ridgeZ }, { x: eMinX, y: ridgeUnderY, z: ridgeZ },
+        soffitColor
+      ));
+      meshes.push(buildQuadMesh(
+        { x: topBounds.minX, y: eaveTipUnderY, z: eMaxZ }, { x: eMinX, y: eaveTipUnderY, z: eMaxZ },
+        { x: eMinX, y: ridgeUnderY, z: ridgeZ }, { x: topBounds.minX, y: ridgeUnderY, z: ridgeZ },
+        soffitColor
+      ));
+      meshes.push(buildQuadMesh(
+        { x: topBounds.maxX, y: eaveTipUnderY, z: eMinZ }, { x: eMaxX, y: eaveTipUnderY, z: eMinZ },
+        { x: eMaxX, y: ridgeUnderY, z: ridgeZ }, { x: topBounds.maxX, y: ridgeUnderY, z: ridgeZ },
+        soffitColor
+      ));
+      meshes.push(buildQuadMesh(
+        { x: eMaxX, y: eaveTipUnderY, z: eMaxZ }, { x: topBounds.maxX, y: eaveTipUnderY, z: eMaxZ },
+        { x: topBounds.maxX, y: ridgeUnderY, z: ridgeZ }, { x: eMaxX, y: ridgeUnderY, z: ridgeZ },
+        soffitColor
+      ));
     } else {
       var eMinX2 = topBounds.minX - ROOF_OVERHANG, eMaxX2 = topBounds.maxX + ROOF_OVERHANG;
       var eMinZ2 = topBounds.minZ - RAKE_OVERHANG, eMaxZ2 = topBounds.maxZ + RAKE_OVERHANG;
@@ -2460,8 +2503,41 @@ export function hashColorHex(key: string): number {
       var ridgeCapZ = buildRidgeCapMesh({ x: ridgeX, y: ridgeY2, z: eMinZ2 }, { x: ridgeX, y: ridgeY2, z: eMaxZ2 }, roofColor, pitchRad);
       if (ridgeCapZ) { ridgeCapZ.userData.ridgeCapEndsXZ = { a: { x: ridgeX, z: eMinZ2 }, b: { x: ridgeX, z: eMaxZ2 } }; ridgeCapZ.userData.ridgePieceId = 'ridge'; }
       meshes.push(ridgeCapZ);
-      meshes.push(buildEaveSoffitPanel(topBounds.minX - ROOF_OVERHANG / 2, (eMinZ2 + eMaxZ2) / 2, ROOF_OVERHANG, eMaxZ2 - eMinZ2, topY - verticalDrop, soffitColor));
-      meshes.push(buildEaveSoffitPanel(topBounds.maxX + ROOF_OVERHANG / 2, (eMinZ2 + eMaxZ2) / 2, ROOF_OVERHANG, eMaxZ2 - eMinZ2, topY - verticalDrop, soffitColor));
+      // Mesmo forro inclinado do branch acima (ridgeAxis 'x'), só com
+      // X/Z trocados — ver comentário lá.
+      var eaveTipUnderY2 = topY - verticalDrop - SOFFIT_THICKNESS;
+      var wallFaceUnderY2 = topY + gableBaseRise - verticalDrop - SOFFIT_THICKNESS;
+      var ridgeUnderY2 = ridgeY2 - verticalDrop - SOFFIT_THICKNESS;
+      meshes.push(buildQuadMesh(
+        { x: eMinX2, y: eaveTipUnderY2, z: eMinZ2 }, { x: eMinX2, y: eaveTipUnderY2, z: eMaxZ2 },
+        { x: topBounds.minX, y: wallFaceUnderY2, z: eMaxZ2 }, { x: topBounds.minX, y: wallFaceUnderY2, z: eMinZ2 },
+        soffitColor
+      ));
+      meshes.push(buildQuadMesh(
+        { x: eMaxX2, y: eaveTipUnderY2, z: eMaxZ2 }, { x: eMaxX2, y: eaveTipUnderY2, z: eMinZ2 },
+        { x: topBounds.maxX, y: wallFaceUnderY2, z: eMinZ2 }, { x: topBounds.maxX, y: wallFaceUnderY2, z: eMaxZ2 },
+        soffitColor
+      ));
+      meshes.push(buildQuadMesh(
+        { x: eMinX2, y: eaveTipUnderY2, z: eMinZ2 }, { x: eMinX2, y: eaveTipUnderY2, z: topBounds.minZ },
+        { x: ridgeX, y: ridgeUnderY2, z: topBounds.minZ }, { x: ridgeX, y: ridgeUnderY2, z: eMinZ2 },
+        soffitColor
+      ));
+      meshes.push(buildQuadMesh(
+        { x: ridgeX, y: ridgeUnderY2, z: eMinZ2 }, { x: ridgeX, y: ridgeUnderY2, z: topBounds.minZ },
+        { x: eMaxX2, y: eaveTipUnderY2, z: topBounds.minZ }, { x: eMaxX2, y: eaveTipUnderY2, z: eMinZ2 },
+        soffitColor
+      ));
+      meshes.push(buildQuadMesh(
+        { x: eMinX2, y: eaveTipUnderY2, z: topBounds.maxZ }, { x: eMinX2, y: eaveTipUnderY2, z: eMaxZ2 },
+        { x: ridgeX, y: ridgeUnderY2, z: eMaxZ2 }, { x: ridgeX, y: ridgeUnderY2, z: topBounds.maxZ },
+        soffitColor
+      ));
+      meshes.push(buildQuadMesh(
+        { x: ridgeX, y: ridgeUnderY2, z: topBounds.maxZ }, { x: ridgeX, y: ridgeUnderY2, z: eMaxZ2 },
+        { x: eMaxX2, y: eaveTipUnderY2, z: eMaxZ2 }, { x: eMaxX2, y: eaveTipUnderY2, z: topBounds.maxZ },
+        soffitColor
+      ));
     }
     return meshes;
   }

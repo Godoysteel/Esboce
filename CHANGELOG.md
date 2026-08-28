@@ -8,6 +8,7 @@
 - Corrigido (achado com os dados reais do usuário): quando dois telhados em L compartilham exatamente o mesmo canto de beiral (a quina do L), os dois espigões de canto sobreviviam ali, duplicados — agora só o telhado de id menor mantém a peça. Ver DEC-166.
 - Corrigido: espigão de canto que cai bem em cima da ARESTA reta do telhado vizinho (não do canto dele) também sobrava — agora é omitido sempre, sem exceção. Ver DEC-167.
 - Corrigido (causa real da cumeeira que sumia desde a correção da DEC-165): a cumeeira central só deve ser cortada quando o telhado vizinho é realmente mais alto ali — quando os dois picos são iguais (composição em L comum), a malha fica inteira e o recorte por pixel já existente decide sozinho quem aparece em cada ponto da área compartilhada. Ver DEC-167.
+- Telhado duas-águas: o forro do beiral deixa de ser em nível (plano) e passa a acompanhar a inclinação da própria água; o beirão do oitão, que ficava aberto, agora também fecha com o mesmo forro. O beiral do oitão passa a ter a mesma distância da parede que o beiral da lateral (0,4m para os dois). Ver DEC-168.
 
 ## Alterado — 27/08/2026
 
