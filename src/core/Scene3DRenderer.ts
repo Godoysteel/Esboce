@@ -6163,7 +6163,16 @@ export function hashColorHex(key: string): number {
               m.material = Array.isArray(m.material) ? m.material.map(function (material: any) { var marked = material.clone(); marked.color.setHex(roofSystemColor); return marked; }) : m.material.clone();
               if (!Array.isArray(m.material)) m.material.color.setHex(roofSystemColor);
             }
-            clipMeshOutsideRects(m, ridgeCapPartialRects.length ? trimRects.concat(ridgeCapPartialRects) : trimRects);
+            // trimRects/ridgeCapPartialRects cortam a MALHA reta contra um
+            // retângulo — matematicamente certo pra água/tabeira (peças
+            // planas na inclinação do telhado), mas sem sentido pra parede
+            // do oitão (buildGableMesh, pentágono vertical): o corte reto
+            // arrancava um pedaço da própria forma da parede, sobrando uma
+            // "face apagada" bem no canto onde dois duas-águas se
+            // encontram em L (Product Owner, reprodução real com os dados
+            // do console — oitão de 9 vértices virava 6, mais estreito).
+            // A parede do oitão nunca deve passar por esse corte.
+            if (!m.userData.gableSide) clipMeshOutsideRects(m, ridgeCapPartialRects.length ? trimRects.concat(ridgeCapPartialRects) : trimRects);
             tagCategory(m, m.userData.gableSide ? wallCategory : 'telhado');
             m.userData.roofId = roof.id; m.userData.floorIndex = floorIdx;
             scene.add(m);

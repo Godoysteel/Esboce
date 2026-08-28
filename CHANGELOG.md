@@ -9,6 +9,7 @@
 - Corrigido: espigão de canto que cai bem em cima da ARESTA reta do telhado vizinho (não do canto dele) também sobrava — agora é omitido sempre, sem exceção. Ver DEC-167.
 - Corrigido (causa real da cumeeira que sumia desde a correção da DEC-165): a cumeeira central só deve ser cortada quando o telhado vizinho é realmente mais alto ali — quando os dois picos são iguais (composição em L comum), a malha fica inteira e o recorte por pixel já existente decide sozinho quem aparece em cada ponto da área compartilhada. Ver DEC-167.
 - Telhado duas-águas: o forro do beiral deixa de ser em nível (plano) e passa a acompanhar a inclinação da própria água; o beirão do oitão, que ficava aberto, agora também fecha com o mesmo forro. O beiral do oitão passa a ter a mesma distância da parede que o beiral da lateral (0,4m para os dois). Ver DEC-168.
+- Corrigido: no encontro em L de dois telhados duas-águas, a parede do oitão perdia um pedaço da própria forma ("face apagada") — o corte de malha usado pra cortar a água nesse tipo de encontro estava sendo aplicado também na parede, que é vertical e não deveria passar por esse corte. O encontro em L "limpo" (sem sobra do oitão por cima do beiral baixo do vizinho) ainda depende de mais trabalho — ver DEC-169.
 
 ## Alterado — 27/08/2026
 

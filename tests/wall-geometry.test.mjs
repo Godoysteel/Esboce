@@ -1960,6 +1960,20 @@ test('Scene3DRenderer: trimRects (corte de malha real, não por pixel) só se ap
   assert.match(roofsBlock, /other\.ridgeAxis === roof\.ridgeAxis \|\| other\.type !== 'duasAguas'\) return false;/);
 });
 
+// Bug real (Product Owner, reprodução com números reais do console):
+// mesmo restrito a duasAguas×duasAguas, o trimRects acima cortava TODA
+// peça do telhado indiscriminadamente — inclusive a parede do oitão
+// (buildGableMesh, um pentágono vertical). Cortar reto uma peça PLANA na
+// inclinação da água (água/tabeira) faz sentido; cortar reto uma parede
+// vertical simplesmente arranca um pedaço da forma dela, sem seguir
+// contorno nenhum ("face apagada" relatada: pentágono de 9 vértices
+// virava 6, mais estreito que o lado oposto não afetado).
+test('Scene3DRenderer: parede do oitão (gableSide) nunca passa pelo corte de malha reto (trimRects) — só água/tabeira são peças planas o suficiente pra esse corte fazer sentido', () => {
+  const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 32000);
+  assert.match(roofsBlock, /if \(!m\.userData\.gableSide\) clipMeshOutsideRects\(m, ridgeCapPartialRects\.length \? trimRects\.concat\(ridgeCapPartialRects\) : trimRects\);/);
+});
+
 // Segunda tentativa de resolver o encontro em L não bastou: mesmo com
 // isHip, duas pegadas em "degrau" (uma mais curta que a outra na aresta
 // compartilhada, formando um canto reentrante) ainda abriam fresta —

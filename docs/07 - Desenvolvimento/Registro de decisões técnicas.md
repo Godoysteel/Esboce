@@ -1942,3 +1942,22 @@ Reproduzindo a composição exata dele (`import()` dinâmico de `Scene3DRenderer
 **Pendência:** verificação visual (pixels de verdade) no site publicado — a geometria bate matematicamente, mas o "acompanhar a inclinação" só fica 100% confirmado quando o Product Owner ver o resultado renderizado.
 
 ---
+
+# DEC-169 — Oitão perdia parte da própria parede (face apagada) no encontro em L de dois duas-águas; encontro em L completo ainda EM ABERTO
+
+**Data:** 28/08/2026
+**Status:** Face apagada RESOLVIDA e verificada com números reais. O encontro em L "limpo" (sem oitão saliente por cima do beiral baixo do vizinho) continua EM ABERTO — é um problema maior, decisão de arquitetura pendente com o Product Owner (ver Pendência).
+
+**Contexto:** Product Owner reproduziu, com o telhado duas-águas já corrigido na DEC-168, o mesmo encontro em L já testado no quatro-águas (dois telhados, mesmo `compoundGroupId`, `ridgeAxis` perpendiculares). Relatou: "esse encontro gerou problemas nos dois oitões do encontro e os beirais estão passando reto nos oitões, porém estão com faces apagadas". Pergunta em aberto dele: esse encontro deve ficar diferente do quatro-águas, ou deveria se comportar igual (um vale limpo)? Resposta: deveria ser um vale limpo, igual o quatro-águas — "passar reto" e ter face sumindo não é comportamento arquitetonicamente aceitável em nenhum estilo, é bug.
+
+**Reprodução real (dados extraídos do console, mesma técnica de sempre):** `roof_23` (duasAguas, ridgeAxis x) + `roof_24` (duasAguas, ridgeAxis y), mesmo `compoundGroupId`, mesmas coordenadas já usadas nos testes de quatro-águas (só o `type` mudou). Rebuild isolado (sem WebGL) mostrou: os dois oitões que ficam de frente pro encontro (`roof_23` lado "b" em x=6,06 e `roof_24` lado "b" em z=2,06) tinham 6 vértices em vez dos 9 do pentágono completo, e o retângulo envolvente mais ESTREITO que o do lado oposto (não afetado) — a parede perdeu um pedaço de verdade.
+
+**Causa (bug claro, corrigido):** `trimRects`/`clipMeshOutsideRects` — o corte de malha reto que já existia especificamente pro par duasAguas×duasAguas (ver comentário histórico "Restringe trimRects ao par duasAguas×duasAguas") — era aplicado a TODAS as peças do telhado (`pieces.forEach`), sem excluir a parede do oitão (`buildGableMesh`, um pentágono vertical). Esse corte foi desenhado pra cortar reto uma peça PLANA na inclinação da água (tabeira/água), e cortar reto uma parede vertical simplesmente arranca um pedaço da forma dela sem seguir contorno nenhum — daí a "face apagada". Corrigido: `if (!m.userData.gableSide) clipMeshOutsideRects(...)` — a parede do oitão nunca mais passa por esse corte.
+
+**Verificado ao vivo:** reproduzindo o mesmo cenário, os 4 oitões (2 por telhado) agora têm 9 vértices cada, com retângulo envolvente simétrico (batendo com o lado oposto não afetado) — a parede voltou inteira.
+
+**Pendência — o "vale limpo" continua incompleto (EM ABERTO, não tentar mais uma correção às cegas):** não cortar mais a parede resolve a face apagada, mas não resolve sozinho o "beiral passando reto" — analisando os números, o oitão de `roof_23` (que fica ENTEIRO agora, y de 2,7 até 3,83, a altura toda até a cumeeira) cai numa faixa X onde a água do `roof_24` vizinho está BEM BAIXA (perto do próprio beiral dele, não da cumeeira) — ou seja, mesmo com a parede inteira e correta NA PRÓPRIA FORMA, ela ainda fica mais alta que o telhado vizinho ali, sobrando visível por cima da água baixa dele (o "passar reto" citado). Um vale limpo de verdade entre dois telhados duas-águas perpendiculares exigiria ou (a) aparar a parede do oitão seguindo a INCLINAÇÃO da água vizinha (um corte em rampa na parede vertical, não reto), ou (b) o próprio `roof_24` ganhar uma cumeeira mais alta/mudança de volume ali — decisão de modelagem de telhado que precisa de definição do Product Owner antes de implementar, não é só um ajuste de código.
+
+**Testado:** suíte completa (659 testes), sem teste automatizado novo pra esta correção específica (mudança de 1 linha, coberta indiretamente pelos testes de `gableSide` já existentes que checam a integridade do pentágono).
+
+---
