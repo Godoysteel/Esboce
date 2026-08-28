@@ -20,6 +20,7 @@
 - Corrigido: o indicador de Sistema Construtivo na barra superior mudava de largura (80 a 129px, conforme "Tijolos"/"Steel Frame"/"Bloco estrutural") assim que o projeto carregava, reorganizando a quebra de linha da barra e empurrando os painéis flutuantes — causa real medida de parte do CLS (layout shift) reportado pelo Cloudflare Web Analytics. Agora reserva o espaço do texto mais longo desde o primeiro render. Ver DEC-172.
 - Corrigido: na quina EXTERNA do L (longe do vão), o beiral de um telhado duas-águas avançava bem além de onde a parede do oitão do vizinho termina, ficando "flutuando" no ar na frente dela — agora é cortado exatamente no plano da parede alheia. Ver DEC-170.
 - Corrigido: as ferramentas Porta, Janela e Arco agora desarmam sozinhas depois de inserir uma abertura, voltando pro modo seleção — evita criar uma abertura sem querer ao esquecer a ferramenta ainda ativa e tentar arrastar uma parede ou cômodo em seguida. Ver DEC-171.
+- Corrigido (efeito colateral da correção da soleira acima): ao apagar uma parede interna, a soleira que fecha o vão podia brigar de altura com o piso dos dois cômodos (z-fighting), ficando mais visível justamente depois da soleira passar a usar a cor real do piso. A soleira agora fica 3mm abaixo do nível do piso, funcionando como uma rede de segurança — some por baixo onde o piso já fecha sozinho e continua visível onde não fecha. Ver DEC-173.
 
 ## Alterado — 27/08/2026
 

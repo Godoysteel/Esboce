@@ -2048,4 +2048,12 @@ O problema era que o corte de MALHA (`trimRects`, restante da DEC-165) rodava **
 
 **Testado:** suíte completa (675 testes) + `tests/demolish-wall.test.mjs` atualizado pra checar a nova assinatura com `finishProductD`.
 
+**Atualização mesma data — a correção acima revelou um z-fighting real (Product Owner: "parece que está gerando z-fighting"):** com a cor da soleira agora diferente do piso padrão, ficou visível que, quando a parede é DEMOLIDA, o piso de cada cômodo já se estica sozinho até o eixo da parede (o laço principal do piso usa `wallFootprints`, que exclui parede demolida — sem entrada ali, o cálculo do inset cai num fallback que devolve o ponto CRU do contorno, sem inset nenhum). Os dois pisos passam a se encontrar exatamente no eixo, SEM vão nenhum — e a soleira, cobrindo essa MESMA faixa por cima, ficava na mesma altura exata (Y) que os dois pisos, uma configuração clássica de z-fighting (mais visível agora porque as cores diferem entre os dois lados). Verificado com números reais: soleira e pisos ocupavam ambos exatamente `y: [0, 0,03]` na faixa sobreposta.
+
+**Correção:** a soleira agora fica 3mm mais baixa que o piso de verdade (`yOffset + thickness - 0.003`) — uma rede de segurança: onde o piso de cada cômodo já fecha sozinho (parede demolida, caso comum), o piso (mais alto) cobre a soleira por baixo sem disputa de profundidade; onde o piso NÃO fecha sozinho (arco/porta comum, parede ainda presente em `wallFootprints`, piso ainda para na face dela), a soleira continua clara e visivelmente presente, só um pouco mais baixa (um degrau de 3mm, imperceptível e até realista pra uma soleira de verdade).
+
+**Verificado ao vivo:** reproduzindo o mesmo cenário (dois cômodos 4×4m, parede demolida entre eles), a soleira agora ocupa `y: [-0,003, 0,027]` enquanto os pisos ocupam `y: [0, 0,03]` — nenhuma sobreposição de altura na faixa onde as duas peças coexistem.
+
+**Testado:** suíte completa (675 testes, sem regressão).
+
 ---

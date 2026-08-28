@@ -4226,7 +4226,20 @@ export function hashColorHex(key: string): number {
     var product = finishProduct || Catalog.getProduct(DEFAULT_FLOOR_FINISH_ID);
     var colorHex = product ? parseInt(product.assets.colorHex.slice(1), 16) : 0xCFE8CF;
     var texture = product ? buildCeramicTexture(product.assets.colorHex, 1, 0) : null;
-    return makeSlabMesh(shape, thickness, yOffset + thickness, colorHex, 1, true, texture);
+    // 3mm abaixo do nível do piso de verdade (não exatamente no mesmo
+    // Y) — de propósito. Essa peça é uma REDE DE SEGURANÇA: quando a
+    // parede é quebrada, o piso de cada cômodo já se estica sozinho até
+    // o eixo dela (fallback do inset, ver o laço principal do piso — a
+    // parede some de wallFootprints e o cálculo cai pro ponto cru do
+    // contorno), então os dois pisos se encontram exatamente na mesma
+    // faixa que esta peça cobre — as duas ficando na MESMA altura
+    // causava z-fighting visível (Product Owner, reprodução real: piso
+    // preto de um lado, padrão do outro, brigando na mesma cota). Um
+    // pouco mais baixa, ela some por baixo do piso onde ele já fechou
+    // sozinho, e só aparece de verdade nos casos em que ele não fecha
+    // (arco/porta comum, onde o piso ainda para na face da parede).
+    var thresholdEpsilonY = 0.003;
+    return makeSlabMesh(shape, thickness, yOffset + thickness - thresholdEpsilonY, colorHex, 1, true, texture);
   }
 
   // Soleira externa — peça de VERDADE (não o piso esticando por cima da
