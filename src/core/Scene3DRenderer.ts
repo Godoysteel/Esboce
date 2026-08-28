@@ -5938,6 +5938,27 @@ export function hashColorHex(key: string): number {
           function hipCornerInsideOtherRoof(pt: any) {
             return overlappingFootprintsForHipCorners.some(function (r) { return pointInsideRect(pt, r); });
           }
+          // Dois telhados que só se TOCAM numa quina reentrante em L
+          // (valleyPartnerIds, resolvida pela bissetriz do vale) nunca têm
+          // canto de um caindo ESTRITAMENTE DENTRO da pegada do outro — mas
+          // os dois PODEM ter um espigão de canto bem EM CIMA do mesmo
+          // ponto exato (a própria quina compartilhada), já que nenhum dos
+          // dois é "interno" ali segundo a regra acima. A bissetriz recorta
+          // a ÁGUA por pixel, mas o CAP do espigão é uma peça arqueada
+          // erguida acima da água que nem sempre fica coberta pelo mesmo
+          // corte, sobrando um espigão duplicado bem na quina do L
+          // (reprodução real com os números exatos do Product Owner — duas
+          // coberturas quatro-águas em L com espigão duplicado em
+          // (6.4, 2.4)). Desempate determinístico: só o telhado de id
+          // lexicograficamente menor mantém o canto ali — mesmo princípio
+          // do tieBias já usado em otherRoofClipBoxes.
+          function hipCornerCoincidesWithLowerIdRoof(pt: any) {
+            return roofPeakBoxes.some(function (b: any) {
+              if (b.id === roof.id || b.id >= roof.id) return false;
+              return (Math.abs(pt.x - b.minX) < 1e-4 || Math.abs(pt.x - b.maxX) < 1e-4)
+                && (Math.abs(pt.z - b.minZ) < 1e-4 || Math.abs(pt.z - b.maxZ) < 1e-4);
+            });
+          }
           // Cumeeira central/contínua (duas-águas inteira, ou o trecho
           // central R1-R2 de um quatro-águas) nunca ganhava a tag de
           // canto (hipCornerXZ é só pros 4 caps de hip), então o filtro
@@ -6003,6 +6024,7 @@ export function hashColorHex(key: string): number {
             // sem esperar uma nova rodada de ajuste de regra geral.
             if (m.userData.ridgePieceId && roof.hiddenRidgePieceIds && roof.hiddenRidgePieceIds.indexOf(m.userData.ridgePieceId) !== -1) return;
             if (m.userData.hipCornerXZ && hipCornerInsideOtherRoof(m.userData.hipCornerXZ)) return;
+            if (m.userData.hipCornerXZ && hipCornerCoincidesWithLowerIdRoof(m.userData.hipCornerXZ)) return;
             var ridgeCapPartialRects: any[] = [];
             if (m.userData.ridgeCapEndsXZ) {
               if (ridgeCapFullyInsideOtherRoof(m.userData.ridgeCapEndsXZ)) return;

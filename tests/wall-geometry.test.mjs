@@ -1828,6 +1828,44 @@ test('Scene3DRenderer: cumeeira com sobreposição PARCIAL (uma ponta dentro, ou
   void roofSmallFootprint;
 });
 
+// DEC-166: regressão do "steppedRidgePair" (Product Owner reportou que a
+// correção não trouxe a cumeeira de volta) levou a extrair os dados reais
+// do projeto dele via console (Store.getProject()...roofs) — dois
+// quatroAguas do mesmo compoundGroupId, SEM steppedLowerRoofId/atticMode
+// (então a exclusão do DEC-166 nunca disparava ali, confirmando que era
+// hipótese errada). Reprodução ao vivo (import direto de Scene3DRenderer
+// + three.js, sem WebGL) com os números exatos dele revelou outro bug:
+// os dois telhados formam uma quina reentrante em L (valleyPartnerIds) —
+// nenhum canto de espigão cai ESTRITAMENTE dentro da pegada do outro
+// (então hipCornerInsideOtherRoof nunca os pega), mas os dois têm um
+// canto de espigão bem EM CIMA do MESMO ponto exato (a própria quina
+// compartilhada, aqui x=6.4/z=2.4) — sobrava um espigão duplicado ali.
+test('Scene3DRenderer: espigão duplicado quando dois telhados em L compartilham EXATAMENTE o mesmo canto de beiral — só o telhado de id menor mantém a peça (reprodução real, dados extraídos do projeto do Product Owner)', () => {
+  const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 25000);
+  assert.match(roofsBlock, /function hipCornerCoincidesWithLowerIdRoof\(pt: any\) \{\s*return roofPeakBoxes\.some\(function \(b: any\) \{\s*if \(b\.id === roof\.id \|\| b\.id >= roof\.id\) return false;\s*return \(Math\.abs\(pt\.x - b\.minX\) < 1e-4 \|\| Math\.abs\(pt\.x - b\.maxX\) < 1e-4\)\s*&& \(Math\.abs\(pt\.z - b\.minZ\) < 1e-4 \|\| Math\.abs\(pt\.z - b\.maxZ\) < 1e-4\);\s*\}\);\s*\}/);
+  assert.match(roofsBlock, /if \(m\.userData\.hipCornerXZ && hipCornerCoincidesWithLowerIdRoof\(m\.userData\.hipCornerXZ\)\) return;/);
+
+  // Dados reais copiados do console do Product Owner (Store.getProject()
+  // .floors[...].roofs): roof_23 (x1:-40,y1:-40,x2:120,y2:40,
+  // ridgeAxis:'x') + roof_24 (x1:40,y1:-120,x2:120,y2:40,ridgeAxis:'y'),
+  // mesmo compoundGroupId. Verificado ao vivo (rebuild real) que as
+  // pegadas com beiral resultantes têm os cantos abaixo, e o canto C de
+  // AMBOS cai exatamente em (6.4, 2.4).
+  const roofBig = { minX: -2.4, maxX: 6.4, minZ: -2.4, maxZ: 2.4 }; // roof_23
+  const roofSmall = { minX: 1.6, maxX: 6.4, minZ: -6.4, maxZ: 2.4 }; // roof_24
+  function cornersOf(r) {
+    return [{ x: r.minX, z: r.minZ }, { x: r.maxX, z: r.minZ }, { x: r.minX, z: r.maxZ }, { x: r.maxX, z: r.maxZ }];
+  }
+  function coincides(pt, r) {
+    return (Math.abs(pt.x - r.minX) < 1e-4 || Math.abs(pt.x - r.maxX) < 1e-4)
+      && (Math.abs(pt.z - r.minZ) < 1e-4 || Math.abs(pt.z - r.maxZ) < 1e-4);
+  }
+  const sharedCorners = cornersOf(roofBig).filter(function (c) { return coincides(c, roofSmall); });
+  assert.equal(sharedCorners.length, 1, 'as duas pegadas compartilham exatamente 1 canto — a quina do L');
+  assert.equal(sharedCorners[0].x, 6.4); assert.equal(sharedCorners[0].z, 2.4);
+});
+
 // Bug real (Product Owner, com print): dois quatroAguas do mesmo grupo
 // composto (compoundGroupId, eixos de cumeeira diferentes — o par de
 // "asas" perpendiculares de uma Cumeeira em níveis/Extensão lateral)
