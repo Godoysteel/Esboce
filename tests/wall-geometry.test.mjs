@@ -1960,6 +1960,26 @@ test('Scene3DRenderer: trimRects (corte de malha real, não por pixel) só se ap
   assert.match(roofsBlock, /other\.ridgeAxis === roof\.ridgeAxis \|\| other\.type !== 'duasAguas'\) return false;/);
 });
 
+// Bug real (Product Owner, reprodução com números reais do console): o
+// trimRects acima rodava TAMBÉM em pares duasAguas×duasAguas que já são
+// cobertos pelo sombreamento por pixel (otherRoofClipBoxes, DEC-125/126)
+// — ou seja, pares que NÃO são valleyPartnerIds (sobreposição de
+// verdade, não só uma quina reentrante tocando). Dois mecanismos com
+// critérios levemente diferentes cortando a MESMA peça ao mesmo tempo:
+// verificado ao vivo que o sombreamento por pixel sozinho já forma uma
+// diagonal de vale coerente (números reais: em z=-2,3 esconde a partir
+// de x=1,8, em z=-0,1 só a partir de x=4,0), mas o corte de malha
+// adicional fragmentava a tabeira (tira fina vertical) de um jeito que
+// não batia com esse corte liso — daí "tabeira passando reto" com
+// fresta reportado. `roof_23`/`roof_24` real: mesmo compoundGroupId,
+// ridgeAxis perpendiculares, footprints se sobrepondo de verdade (não
+// valleyPartnerIds).
+test('Scene3DRenderer: trimRects só entra em cena pra pares que SÃO valleyPartnerIds — pares já cobertos pelo sombreamento por pixel (otherRoofClipBoxes) não precisam do corte de malha redundante', () => {
+  const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 32000);
+  assert.match(roofsBlock, /var trimRects = roof\.type !== 'duasAguas' \? \[\] : floorData\.roofs\.filter\(function \(other\) \{\s*if \(!roof\.compoundGroupId \|\| other\.compoundGroupId !== roof\.compoundGroupId \|\| other\.id === roof\.id \|\| other\.ridgeAxis === roof\.ridgeAxis \|\| other\.type !== 'duasAguas'\) return false;\s*if \(!valleyPartnerIds\[other\.id\]\) return false;/);
+});
+
 // Bug real (Product Owner, reprodução com números reais do console):
 // mesmo restrito a duasAguas×duasAguas, o trimRects acima cortava TODA
 // peça do telhado indiscriminadamente — inclusive a parede do oitão

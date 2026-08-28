@@ -6126,8 +6126,25 @@ export function hashColorHex(key: string): number {
           // (otherRoofClipBoxes/applyRoomBoxClipping, isHip inclusive),
           // matematicamente comprovado a nunca esconder os dois ao mesmo
           // tempo.
+          // Bug real (Product Owner, reprodução real): pra um par
+          // duasAguas×duasAguas que NÃO é valleyPartnerIds (não toca só
+          // numa quina reentrante, sobrepõe de verdade), o sombreamento
+          // por pixel (otherRoofClipBoxes) já entra em ação sozinho —
+          // matematicamente comprovado a formar um vale diagonal correto
+          // (mesma fórmula canônica de cada telhado, testada e funcionando
+          // pra dois duas-águas com pico igual formando L). Aplicar o
+          // corte de MALHA de verdade (abaixo) NESSE MESMO par, além do
+          // sombreamento, sobrepõe dois mecanismos com critérios levemente
+          // diferentes (a tabeira, uma tira fina vertical, corta de um
+          // jeito fragmentado que não bate com o corte da água) — daí a
+          // tabeira "passando reto"/com fresta reportada. Corte de malha
+          // agora só entra pros pares que SÃO valleyPartnerIds (excluídos
+          // do sombreamento por pixel, como o par "Extensão lateral" que
+          // motivou esse corte originalmente) — onde não tem outro
+          // mecanismo cuidando disso.
           var trimRects = roof.type !== 'duasAguas' ? [] : floorData.roofs.filter(function (other) {
             if (!roof.compoundGroupId || other.compoundGroupId !== roof.compoundGroupId || other.id === roof.id || other.ridgeAxis === roof.ridgeAxis || other.type !== 'duasAguas') return false;
+            if (!valleyPartnerIds[other.id]) return false;
             var otherFootprint = roofWorldFootprint(other, scale, offsetX, offsetY);
             return rectsOverlapArea(ownFootprint, otherFootprint) > 1e-6;
           }).reduce(function (regions: any[], other) {

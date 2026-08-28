@@ -1960,4 +1960,18 @@ Reproduzindo a composição exata dele (`import()` dinâmico de `Scene3DRenderer
 
 **Testado:** suíte completa (659 testes), sem teste automatizado novo pra esta correção específica (mudança de 1 linha, coberta indiretamente pelos testes de `gableSide` já existentes que checam a integridade do pentágono).
 
+**Atualização mesma data — resolvido, o "beiral/tabeira passando reto" era um conflito entre dois mecanismos de corte, não uma inclinação faltando na parede:** Product Owner confirmou que excluir a parede do oitão do corte de malha (acima) já deixou o OITÃO com boa aparência — a hipótese de "cortar a parede em rampa" (decisão de modelagem mais complexa, cogitada como pendência) não era necessária. O problema real era só a TABEIRA continuando a passar reto, com uma fresta.
+
+Investigando com a mesma técnica de sempre: o par `roof_23`/`roof_24` NÃO é `valleyPartnerIds` (não é uma quina reentrante simples, é uma sobreposição de verdade) — o que significa que o sombreamento por pixel telhado-vs-telhado (`otherRoofClipBoxes`, DEC-125/126, testado e funcionando desde então) JÁ estava ativo e comparando os dois telhados corretamente. Verificado matematicamente (simulação com os uniforms REAIS capturados do `material.onBeforeCompile`, não estimados): esse sombreamento por pixel sozinho já forma uma linha de vale diagonal coerente — em z=-2,3 (perto do beiral) esconde a partir de x=1,8; em z=-0,1 (quase na cumeeira) só esconde a partir de x=4,0. Uma diagonal de verdade, sem fragmentação.
+
+O problema era que o corte de MALHA (`trimRects`, restante da DEC-165) rodava **ao mesmo tempo** nesse mesmo par, com um critério ligeiramente diferente (a tabeira é uma tira fina vertical, e o corte reto contra o retângulo+plano do vizinho fragmentava a malha dela de um jeito que não batia com o corte liso do sombreamento por pixel na água) — dois mecanismos, dois resultados, brigando no mesmo lugar.
+
+**Correção:** `trimRects` agora só considera um `other` roof se ele for `valleyPartnerIds[other.id]` (ou seja, só entra em cena quando o sombreamento por pixel está DESLIGADO pra aquele par — o caso original que motivou esse corte, tipo "Extensão lateral", onde os dois telhados só se tocam numa quina reentrante). Pra pares como o do Product Owner (sobreposição de verdade, sombreamento por pixel já ativo), o corte de malha nem entra mais — o sombreamento cuida sozinho, sem conflito.
+
+**Verificado ao vivo:** reconstruindo o mesmo L, a malha de água/tabeira de `roof_23` voltou a ser IDÊNTICA à versão "sozinha" (sem o vizinho) — 12/24/12/24/6×6 vértices, batendo exatamente com o baseline sem corte de malha nenhum. E o sombreamento por pixel, sozinho, já produz a diagonal correta (números acima).
+
+**Testado:** suíte completa (660 testes) — nenhum teste existente de `trimRects`/`Extensão lateral` quebrou com a nova restrição a `valleyPartnerIds`.
+
+**Pendência:** confirmação visual final do Product Owner no site publicado (a matemática bate, mas só ele vê os pixels de verdade).
+
 ---
