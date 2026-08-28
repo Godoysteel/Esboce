@@ -2013,3 +2013,22 @@ O problema era que o corte de MALHA (`trimRects`, restante da DEC-165) rodava **
 **Pendência:** verificação visual no site publicado (ambiente desta sessão não tem WebGL) — a lógica foi verificada por leitura de código (`selectOpening`/`deselect` não dependem uma da outra nem de `currentTool`, sem conflito de ordem).
 
 ---
+
+# DEC-172 — CLS (layout shift) causado pelo indicador de Sistema Construtivo mudando de largura
+
+**Data:** 28/08/2026
+**Status:** Implementado e verificado com medições reais no site publicado.
+
+**Contexto:** Product Owner ativou o Cloudflare Web Analytics (rollout do Codex) e notou uma fatia vermelha considerável no indicador de CLS (Cumulative Layout Shift). Investigação pedida por ele.
+
+**Causa (medida ao vivo, não suposta):** a barra superior (`.top-overlay`) usa `flex-wrap: wrap`, e o indicador `#constructionSystemIndicator` (mostra o sistema construtivo do projeto atual — "Tijolos"/"Steel Frame"/"Bloco estrutural") nasce no HTML com o texto fixo "Tijolos" e é atualizado via JS assim que o projeto real carrega. Medido direto no `esboce.com.br`: a largura do indicador varia de 80px ("Tijolos") a 104px ("Steel Frame") a 129px ("Bloco estrutural") — até 49px de diferença. Isso é o suficiente pra mudar quantos itens cabem numa linha do `flex-wrap`, mudando a ALTURA inteira da barra. Como vários painéis flutuantes (ferramentas, gizmo de orientação, etc.) usam a variável CSS `--top-overlay-h` — medida via `ResizeObserver` e só corrigida DEPOIS que a barra estabiliza — a mudança de altura da barra acontece visivelmente logo no carregamento, empurrando todos esses painéis: medido ao vivo indo de 64px pra 73px de altura da barra, um salto real e visível.
+
+**Correção:** `min-width: 132px` em `.construction-system-indicator` (`index.html`) — reserva espaço pro texto mais longo ("Bloco estrutural", 129px reais + margem) desde o primeiro render, então trocar o texto depois (de "Tijolos" pra qualquer outro sistema) não muda mais a largura do elemento, e a barra nunca precisa quebrar linha de forma diferente.
+
+**Verificado ao vivo (medição real, não suposição):** testado trocando o texto do indicador entre os 3 valores possíveis, tanto no site publicado (sem a correção, largura variava 80–129px) quanto no ambiente local com a correção aplicada (largura fixa em 132px nos 3 casos, altura da barra constante em 73px, sem overflow de texto — "Bloco estrutural" mede 130px de conteúdo dentro dos 132px reservados).
+
+**Testado:** suíte completa (675 testes, sem regressão).
+
+**Pendência:** confirmar no Cloudflare Web Analytics, depois de alguns dias de tráfego real, que a fatia vermelha do CLS diminuiu — essa correção resolve a causa medida, mas só o painel real vai confirmar o efeito agregado.
+
+---
