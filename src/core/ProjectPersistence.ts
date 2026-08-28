@@ -1,5 +1,5 @@
 import type {
-  Column, Floor, Furniture, GlazingPanel, BalconyRailing, VolumeBox, Stair, PlanUnderlay, HydraulicNode, HydraulicSegment, Laje, Opening, Project, ProjectLayers, Roof, Terreno, Varanda, Wall, ForroBoardType, CommercialSelection,
+  Column, Floor, Furniture, GlazingPanel, FacadeSign, BalconyRailing, VolumeBox, Stair, PlanUnderlay, HydraulicNode, HydraulicSegment, Laje, Opening, Project, ProjectLayers, Roof, Terreno, Varanda, Wall, ForroBoardType, CommercialSelection,
 } from './types.js';
 
 // v6: adiciona `project.terreno` (opcional) — tamanho do lote e muros de
@@ -57,7 +57,9 @@ import type {
 // v19: beiral e tabeira do Steel Frame passam a ser escolhas globais do
 // projeto. Ao abrir documento antigo, reaproveita a primeira escolha por
 // telhado encontrada para não obrigar o usuário a configurar tudo de novo.
-export const CURRENT_PROJECT_SCHEMA_VERSION = 19;
+// v20: adiciona `Floor.facadeSigns`, letreiros em letras-caixa vinculados
+// a paredes. Projetos anteriores abrem com a lista vazia.
+export const CURRENT_PROJECT_SCHEMA_VERSION = 20;
 
 export interface StoredProjectDocument {
   schemaVersion: number;
@@ -368,6 +370,24 @@ function parseGlazingPanel(value: unknown, path: string): GlazingPanel {
   return panel;
 }
 
+function parseFacadeSign(value: unknown, path: string): FacadeSign {
+  const v = record(value, path);
+  const color = (key: 'faceColorHex' | 'lightColorHex', fallback: string) => {
+    const result = string(v[key], `${path}.${key}`, fallback);
+    if (!/^#[0-9a-f]{6}$/i.test(result)) fail(`${path}.${key}`, 'cor deve estar no formato #RRGGBB');
+    return result;
+  };
+  return {
+    id: string(v.id, `${path}.id`), wallId: string(v.wallId, `${path}.wallId`),
+    text: string(v.text, `${path}.text`, 'SUA MARCA').slice(0, 32),
+    offsetM: number(v.offsetM, `${path}.offsetM`, 0), elevationM: number(v.elevationM, `${path}.elevationM`, 2.05),
+    widthM: number(v.widthM, `${path}.widthM`, 3), heightM: number(v.heightM, `${path}.heightM`, 0.7),
+    faceColorHex: color('faceColorHex', '#F4F1E8'), lightColorHex: color('lightColorHex', '#FFD27A'),
+    lighting: enumValue(v.lighting, ['front', 'halo', 'internal'], `${path}.lighting`, 'halo'),
+    normalSign: number(v.normalSign, `${path}.normalSign`, 1) < 0 ? -1 : 1,
+  };
+}
+
 function parseBalconyRailing(value: unknown, path: string): BalconyRailing {
   const v = record(value, path);
   const railing: BalconyRailing = {
@@ -556,6 +576,7 @@ function parseFloor(value: unknown, path: string): Floor {
     lajes: array(v.lajes, `${path}.lajes`, true).map((item, i) => parseLaje(item, `${path}.lajes[${i}]`)),
     furniture: array(v.furniture, `${path}.furniture`, true).map((item, i) => parseFurniture(item, `${path}.furniture[${i}]`)),
     glazingPanels: array(v.glazingPanels, `${path}.glazingPanels`, true).map((item, i) => parseGlazingPanel(item, `${path}.glazingPanels[${i}]`)),
+    facadeSigns: array(v.facadeSigns, `${path}.facadeSigns`, true).map((item, i) => parseFacadeSign(item, `${path}.facadeSigns[${i}]`)),
     balconyRailings: array(v.balconyRailings, `${path}.balconyRailings`, true).map((item, i) => parseBalconyRailing(item, `${path}.balconyRailings[${i}]`)),
     volumeBoxes: array(v.volumeBoxes, `${path}.volumeBoxes`, true).map((item, i) => parseVolumeBox(item, `${path}.volumeBoxes[${i}]`)),
     stairs: array(v.stairs, `${path}.stairs`, true).map((item, i) => parseStair(item, `${path}.stairs[${i}]`)),
@@ -580,7 +601,10 @@ function parseFloor(value: unknown, path: string): Floor {
   floor.glazingPanels.forEach((panel, index) => {
     if (panel.wallId && !wallIds.has(panel.wallId)) fail(`${path}.glazingPanels[${index}].wallId`, 'parede hospedeira não existe');
   });
-  const ids = [...floor.walls, ...floor.columns, ...floor.roofs, ...floor.openings, ...floor.varandas, ...floor.lajes, ...floor.furniture, ...floor.glazingPanels, ...floor.balconyRailings, ...floor.volumeBoxes].map((item) => item.id);
+  (floor.facadeSigns || []).forEach((sign, index) => {
+    if (!wallIds.has(sign.wallId)) fail(`${path}.facadeSigns[${index}].wallId`, 'parede hospedeira não existe');
+  });
+  const ids = [...floor.walls, ...floor.columns, ...floor.roofs, ...floor.openings, ...floor.varandas, ...floor.lajes, ...floor.furniture, ...floor.glazingPanels, ...(floor.facadeSigns || []), ...floor.balconyRailings, ...floor.volumeBoxes].map((item) => item.id);
   if (new Set(ids).size !== ids.length) fail(path, 'há identificadores de entidades duplicados');
   return floor;
 }

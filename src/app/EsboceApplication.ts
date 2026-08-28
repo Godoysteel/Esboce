@@ -413,6 +413,10 @@ export class EsboceApplication {
     const facadeStartOverlay = this.requireElement("facadeStartOverlay");
     const facadeWorkspace = this.requireElement("facadeWorkspace");
     const facadeWorkspaceSubtitle = this.requireElement("facadeWorkspaceSubtitle");
+    const facadeSignForm = this.requireElement("facadeSignForm");
+    let activeFacadeWallId: string | null = null;
+    let editingFacadeSignId: string | null = null;
+    let facadeNightMode = false;
     // Importar Planta Baixa — botão dispara o <input type="file"> oculto;
     // aceita imagem direto ou PDF (primeira página, rasterizada via
     // pdfjs-dist em PlanImport.ts). Nasce centrada na caixa delimitadora
@@ -505,6 +509,7 @@ export class EsboceApplication {
       viewFacadeBtn.classList.remove('active');
       facadeWorkspace.classList.remove('visible');
       facadeWorkspace.setAttribute('aria-hidden', 'true');
+      facadeSignForm.classList.remove('visible');
       if (mode === '2d') this.viewport2D?.show();
       else this.viewport2D?.hide();
       this.requireElement("navGizmoCanvas").style.visibility = mode === '3d' ? 'visible' : 'hidden';
@@ -528,6 +533,7 @@ export class EsboceApplication {
       setFacadeOverlayVisible(false);
       showCategory(undefined);
       const focusedWallId = ViewportController.focusFacade(wallId);
+      activeFacadeWallId = focusedWallId;
       this.requireElement('viewportHint').textContent = focusedWallId
         ? 'Vista de fachada ativa — a pele de vidro já edita o mesmo modelo 3D. Novos elementos serão adicionados por etapas.'
         : 'Crie uma parede para iniciar a composição da fachada.';
@@ -556,6 +562,63 @@ export class EsboceApplication {
     this.requireElement('facadeGlazingBtn').addEventListener('click', () => {
       showCategory('aberturas');
       this.requireElement('addGlazingPanelBtn').click();
+    });
+    const signText = this.requireElement('facadeSignText') as HTMLInputElement;
+    const signWidth = this.requireElement('facadeSignWidth') as HTMLInputElement;
+    const signHeight = this.requireElement('facadeSignHeight') as HTMLInputElement;
+    const signElevation = this.requireElement('facadeSignElevation') as HTMLInputElement;
+    const signLighting = this.requireElement('facadeSignLighting') as HTMLSelectElement;
+    const signFaceColor = this.requireElement('facadeSignFaceColor') as HTMLInputElement;
+    const signLightColor = this.requireElement('facadeSignLightColor') as HTMLInputElement;
+    const signDeleteBtn = this.requireElement('facadeSignDeleteBtn') as HTMLButtonElement;
+    const signSaveBtn = this.requireElement('facadeSignSaveBtn');
+    const setSignFormVisible = (visible: boolean) => {
+      facadeSignForm.classList.toggle('visible', visible);
+      facadeSignForm.setAttribute('aria-hidden', String(!visible));
+    };
+    this.requireElement('facadeSignBtn').addEventListener('click', () => {
+      const existing = activeFacadeWallId
+        ? Store.currentFacadeSigns().filter((sign) => sign.wallId === activeFacadeWallId).at(-1)
+        : undefined;
+      editingFacadeSignId = existing?.id || null;
+      signText.value = existing?.text || 'SUA MARCA';
+      signWidth.value = String(existing?.widthM || 3);
+      signHeight.value = String(existing?.heightM || 0.7);
+      signElevation.value = String(existing?.elevationM || 2.05);
+      signLighting.value = existing?.lighting || 'halo';
+      signFaceColor.value = existing?.faceColorHex || '#f4f1e8';
+      signLightColor.value = existing?.lightColorHex || '#ffd27a';
+      signDeleteBtn.hidden = !existing;
+      signSaveBtn.textContent = existing ? 'Atualizar letreiro' : 'Adicionar letreiro';
+      setSignFormVisible(true);
+    });
+    this.requireElement('facadeSignCancelBtn').addEventListener('click', () => setSignFormVisible(false));
+    signSaveBtn.addEventListener('click', () => {
+      if (!activeFacadeWallId) return;
+      const values = {
+        text: signText.value,
+        widthM: Number(signWidth.value) || 3,
+        heightM: Number(signHeight.value) || 0.7,
+        elevationM: Number(signElevation.value) || 2.05,
+        lighting: signLighting.value as 'front' | 'halo' | 'internal',
+        faceColorHex: signFaceColor.value,
+        lightColorHex: signLightColor.value,
+      };
+      if (editingFacadeSignId) Store.commands.updateFacadeSign(editingFacadeSignId, values);
+      else editingFacadeSignId = Store.commands.createFacadeSign(activeFacadeWallId, values)?.id || null;
+      signDeleteBtn.hidden = !editingFacadeSignId;
+      signSaveBtn.textContent = 'Atualizar letreiro';
+      this.requireElement('viewportHint').textContent = 'Letreiro aplicado à fachada — alterne para a noite para conferir a iluminação.';
+    });
+    signDeleteBtn.addEventListener('click', () => {
+      if (editingFacadeSignId) Store.commands.deleteFacadeSign(editingFacadeSignId);
+      editingFacadeSignId = null; setSignFormVisible(false);
+    });
+    this.requireElement('facadeDayNightBtn').addEventListener('click', (event) => {
+      facadeNightMode = !facadeNightMode;
+      ViewportController.setFacadeNightMode(facadeNightMode);
+      (event.currentTarget as HTMLButtonElement).textContent = facadeNightMode ? 'Ver de dia' : 'Ver à noite';
+      this.requireElement('viewportHint').textContent = facadeNightMode ? 'Prévia noturna ativa — iluminação do letreiro intensificada.' : 'Prévia diurna ativa.';
     });
     const refreshHydraulicsButton = () => {
       const project = Store.getProject();

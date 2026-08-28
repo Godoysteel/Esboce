@@ -63,6 +63,8 @@ export interface ViewState {
 // do escopo global do index.html original (ficava fora do IIFE do
 // Scene3DRenderer lá, mas só era usado por ele).
 export let DEBUG_COLOR_MODE = false;
+let facadeNightMode = false;
+export function setFacadeNightMode(enabled: boolean): void { facadeNightMode = enabled; }
 export function hashColorHex(key: string): number {
   const str = String(key);
   let hash = 0;
@@ -3345,6 +3347,34 @@ export function hashColorHex(key: string): number {
     return hitMesh;
   }
 
+  function buildFacadeSignMesh(sign: any, wall: any, scale: number, offsetX: number, offsetY: number, yOffset: number) {
+    var canvas = document.createElement('canvas'); canvas.width = 1024; canvas.height = 256;
+    var ctx = canvas.getContext('2d')!;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '900 150px Arial, sans-serif';
+    var glow = facadeNightMode ? 42 : 18;
+    ctx.shadowColor = sign.lightColorHex; ctx.shadowBlur = sign.lighting === 'front' ? glow * 0.55 : glow;
+    ctx.fillStyle = sign.lighting === 'internal' ? sign.lightColorHex : sign.faceColorHex;
+    ctx.fillText(sign.text, canvas.width / 2, canvas.height / 2);
+    var texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
+    var material = new THREE.MeshStandardMaterial({
+      map: texture, transparent: true, alphaTest: 0.02, side: THREE.DoubleSide,
+      roughness: 0.28, metalness: 0.18,
+      emissive: new THREE.Color(sign.lightColorHex), emissiveMap: texture,
+      emissiveIntensity: facadeNightMode ? 3.2 : (sign.lighting === 'front' ? 0.55 : 1.05),
+    });
+    var plane = new THREE.Mesh(new THREE.PlaneGeometry(sign.widthM, sign.heightM), material);
+    var backing = new THREE.Mesh(new THREE.PlaneGeometry(sign.widthM * 0.985, sign.heightM * 0.9), new THREE.MeshStandardMaterial({ color: 0x171719, roughness: 0.5 }));
+    backing.position.z = -0.035; plane.position.z = 0.025;
+    var group = new THREE.Group(); group.add(backing); group.add(plane);
+    var dx = wall.x2 - wall.x1, dy = wall.y2 - wall.y1, len = Math.hypot(dx, dy) || 1e-6;
+    var ux = dx / len, uy = dy / len, offsetModel = sign.offsetM * Core.GRID;
+    group.position.set((wall.x1 + ux * offsetModel - offsetX) * scale, yOffset + sign.elevationM, (wall.y1 + uy * offsetModel - offsetY) * scale);
+    group.rotation.y = -Math.atan2(uy, ux) + (sign.normalSign === -1 ? Math.PI : 0);
+    group.translateZ(Core.WALL_THICK / 2 + 0.045);
+    return group;
+  }
+
   // Sacada de vidro (guarda-corpo procedural, categoria Aberturas) —
   // mesmo espírito de buildGlazingPanelGroup/PreviewMesh acima, mas
   // formato "П" (travessa superior + montantes, sem moldura inferior —
@@ -5373,6 +5403,14 @@ export function hashColorHex(key: string): number {
         registry.furnitureMeshes.push(mesh);
       });
 
+      (floorData.facadeSigns || []).forEach(function (sign) {
+        var hostWall = (floorData.walls || []).find(function (wall) { return wall.id === sign.wallId; });
+        if (!hostWall || hostWall.demolished) return;
+        var signMesh = buildFacadeSignMesh(sign, hostWall, scale, offsetX, offsetY, yOffset);
+        tagCategory(signMesh, 'aberturas');
+        scene.add(signMesh); registry.furnitureMeshes.push(signMesh);
+      });
+
       // Sacada de vidro (guarda-corpo procedural) — mesmo registro em
       // furnitureMeshes (Group com filhos, precisa de disposeObject3DTree
       // recursivo, ver comentário do painel de Envidraçamento acima).
@@ -6715,6 +6753,7 @@ export const Scene3DRenderer = {
   createWallResizePreviewMeshes,
   buildVolumeBoxMesh,
   setOnFurnitureAssetLoaded,
+  setFacadeNightMode,
   getFurnitureMeshes,
   getOpeningModelMeshes,
   getFurnitureFootprint,

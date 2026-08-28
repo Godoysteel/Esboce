@@ -10,7 +10,7 @@
 import type {
   Point, Wall, Column, ColumnShape, Roof, RoofType, RidgeAxis,
   Varanda, VarandaFrontSide, Laje, Opening, OpeningKind, Floor, Project,
-  Room, WallFootprint, WallOBB, MTV, Interval, Furniture, GlazingPanel, BalconyRailing, VolumeBox, Stair, StairModel, PlanUnderlay,
+  Room, WallFootprint, WallOBB, MTV, Interval, Furniture, GlazingPanel, FacadeSign, BalconyRailing, VolumeBox, Stair, StairModel, PlanUnderlay,
   Terreno, TerrenoMuroSide
 } from './types.js';
 
@@ -274,6 +274,23 @@ export function createGlazingPanelEntity(
     heightM: heightM != null ? heightM : GLAZING_DEFAULT_HEIGHT_M,
     moduleTargetM: moduleTargetM != null ? moduleTargetM : GLAZING_DEFAULT_MODULE_TARGET_M,
     x, y, rotationDeg: rotationDeg || 0,
+  };
+}
+
+export function createFacadeSignEntity(wall: Wall, text = 'SUA MARCA', id?: string): FacadeSign {
+  const wallLengthM = wallLengthMeters(wall);
+  return {
+    id: id || nextId('facade-sign'),
+    wallId: wall.id,
+    text: text.trim().slice(0, 32) || 'SUA MARCA',
+    offsetM: wallLengthM / 2,
+    elevationM: 2.05,
+    widthM: Math.min(4, Math.max(1.2, wallLengthM * 0.55)),
+    heightM: 0.7,
+    faceColorHex: '#F4F1E8',
+    lightColorHex: '#FFD27A',
+    lighting: 'halo',
+    normalSign: 1,
   };
 }
 
@@ -696,7 +713,7 @@ export function lajeBounds(laje: Laje): { minX: number; maxX: number; minY: numb
 }
 
 export function createFloorEntity(name: string, kind: Floor['kind'] = 'standard'): Floor {
-  return { id: nextId('floor'), name, kind, walls: [], columns: [], roofs: [], openings: [], varandas: [], lajes: [], furniture: [], glazingPanels: [], balconyRailings: [], volumeBoxes: [], stairs: [], roomFinishes: {}, roomFinishSettings: {} };
+  return { id: nextId('floor'), name, kind, walls: [], columns: [], roofs: [], openings: [], varandas: [], lajes: [], furniture: [], glazingPanels: [], facadeSigns: [], balconyRailings: [], volumeBoxes: [], stairs: [], roomFinishes: {}, roomFinishSettings: {} };
 }
 
 // x,y: posição do "pé" do móvel no plano do pavimento. rotationDeg: passos
@@ -2382,7 +2399,7 @@ export const Core = {
   findWallTJunctionSplits,
   createWallEntity, createColumnEntity, createRoofEntity, wallIntersectsRoofFootprint, roofHeightAtModelPoint, atticOpeningMaxTopMeters, openingFitsAtticRoof, atticWallExtensionAreaMeters, createVarandaEntity, varandaContourSegments, snapVarandaSegmentToExteriorWalls, extendVarandaAlongExteriorWalls, createLajeEntity, createFloorEntity,
   createFurnitureEntity,
-  createGlazingPanelEntity, GLAZING_DEFAULT_WIDTH_M, GLAZING_DEFAULT_HEIGHT_M, GLAZING_DEFAULT_MODULE_TARGET_M,
+  createGlazingPanelEntity, createFacadeSignEntity, GLAZING_DEFAULT_WIDTH_M, GLAZING_DEFAULT_HEIGHT_M, GLAZING_DEFAULT_MODULE_TARGET_M,
   createBalconyRailingEntity, BALCONY_DEFAULT_WIDTH_M, BALCONY_DEFAULT_HEIGHT_M, BALCONY_DEFAULT_MODULE_TARGET_M,
   BALCONY_MIN_HEIGHT_M, BALCONY_MAX_HEIGHT_M, BALCONY_MAX_SILL_HEIGHT_M,
   computeBalconyRailingJoints, RAILING_JOIN_TOL_MODEL,

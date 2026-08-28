@@ -52,3 +52,9 @@ O realismo será construído sobre geometria paramétrica, espessuras reais, mat
 - O caminho “fachada vazia” adiciona geometria ao pavimento atual sem apagar a construção existente.
 - Novas famílias serão entregues incrementalmente e só aparecerão como ativas quando tiverem domínio, renderização, persistência e testes mínimos.
 - A futura exportação deverá deixar claro que a imagem é uma simulação visual e não substitui projeto técnico ou aprovação profissional.
+
+## Segunda entrega — letreiro em letras-caixa
+
+O primeiro elemento próprio do Estúdio é o letreiro iluminado vinculado a uma parede. A entidade `FacadeSign` é persistida no pavimento e contém texto, dimensões, elevação, posição, acabamento da face, cor da luz e uma das três soluções visuais: iluminação frontal, interna ou efeito halo.
+
+A edição acontece na barra contextual do Estúdio e atualiza o mesmo objeto. A prévia noturna aumenta a emissão luminosa para facilitar a avaliação, sem alterar os dados construtivos nem criar uma cópia do projeto.

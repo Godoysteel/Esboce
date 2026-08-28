@@ -9,7 +9,7 @@ import { buildColdWaterKitchenPrototype, buildColdWaterNetworkFromFixtures, buil
 import type {
   Project, Floor, Wall, Column, Roof, Opening, OpeningKind, Varanda, Laje, Furniture, ColumnShape, RoofType,
   RidgeAxis, VarandaFrontSide, FoundationType, StoreEvent, StoreListener, ForroBoardType,
-  WallSnapshot, LinkedWallUpdate, GlazingPanel, GlazingGlassMaterial, BalconyRailing, VolumeBox, Stair, StairModel, PlanUnderlay, Terreno, TerrenoMuroSide, CommercialSelection,
+  WallSnapshot, LinkedWallUpdate, GlazingPanel, GlazingGlassMaterial, FacadeSign, BalconyRailing, VolumeBox, Stair, StairModel, PlanUnderlay, Terreno, TerrenoMuroSide, CommercialSelection,
   HydraulicNetworkType, HydraulicNode, HydraulicSegment,
 } from './types.js';
 
@@ -131,10 +131,18 @@ export function glazingPanelsOfFloor(floor: Floor): GlazingPanel[] {
   if (!floor.glazingPanels) floor.glazingPanels = [];
   return floor.glazingPanels;
 }
+export function currentFacadeSigns(): FacadeSign[] {
+  const f = currentFloor();
+  if (!f.facadeSigns) f.facadeSigns = [];
+  return f.facadeSigns;
+}
 export function findWall(id: string): Wall | null {
   const walls = currentWalls();
   for (let i = 0; i < walls.length; i++) if (walls[i]!.id === id) return walls[i]!;
   return null;
+}
+export function findFacadeSign(id: string): FacadeSign | null {
+  return currentFacadeSigns().find((sign) => sign.id === id) || null;
 }
 export function findColumn(id: string): Column | null {
   const columns = currentColumns();
@@ -274,6 +282,37 @@ function applyBody(w: Wall, x1: number, y1: number, x2: number, y2: number): voi
 }
 
 export const commands = {
+  createFacadeSign(wallId: string, values: Partial<Omit<FacadeSign, 'id' | 'wallId'>> = {}): FacadeSign | null {
+    const wall = findWall(wallId); if (!wall) return null;
+    pushUndoSnapshot();
+    const sign = Object.assign(Core.createFacadeSignEntity(wall), values);
+    sign.text = sign.text.trim().slice(0, 32) || 'SUA MARCA';
+    sign.widthM = Math.max(0.8, Math.min(Core.wallLengthMeters(wall), sign.widthM));
+    sign.heightM = Math.max(0.25, Math.min(2, sign.heightM));
+    sign.elevationM = Math.max(sign.heightM / 2, Math.min(8, sign.elevationM));
+    currentFacadeSigns().push(sign);
+    emit({ type: 'FacadeSignCreated', facadeSignId: sign.id, wallId });
+    return sign;
+  },
+
+  updateFacadeSign(facadeSignId: string, values: Partial<Omit<FacadeSign, 'id' | 'wallId'>>): void {
+    const sign = findFacadeSign(facadeSignId); if (!sign) return;
+    const wall = findWall(sign.wallId); if (!wall) return;
+    pushUndoSnapshot();
+    Object.assign(sign, values);
+    sign.text = sign.text.trim().slice(0, 32) || 'SUA MARCA';
+    sign.widthM = Math.max(0.8, Math.min(Core.wallLengthMeters(wall), sign.widthM));
+    sign.heightM = Math.max(0.25, Math.min(2, sign.heightM));
+    emit({ type: 'FacadeSignUpdated', facadeSignId });
+  },
+
+  deleteFacadeSign(facadeSignId: string): void {
+    const signs = currentFacadeSigns();
+    const index = signs.findIndex((sign) => sign.id === facadeSignId); if (index < 0) return;
+    pushUndoSnapshot();
+    signs.splice(index, 1);
+    emit({ type: 'FacadeSignDeleted', facadeSignId });
+  },
   setSteelFrameGlobalRoofFinishes(values: { soffitAssemblyId?: string; fasciaAssemblyId?: string }): void {
     pushUndoSnapshot();
     if (values.soffitAssemblyId) project.steelFrameSoffitAssemblyId = values.soffitAssemblyId;
@@ -2534,6 +2573,7 @@ export const Store = {
   currentVarandas,
   currentLajes,
   currentGlazingPanels,
+  currentFacadeSigns,
   currentBalconyRailings,
   currentVolumeBoxes,
   currentStairs,
@@ -2546,6 +2586,7 @@ export const Store = {
   findVaranda,
   findLaje,
   findGlazingPanel,
+  findFacadeSign,
   findBalconyRailing,
   findVolumeBox,
   findStair,

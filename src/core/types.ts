@@ -277,6 +277,23 @@ export interface BalconyRailing {
   glassMaterial?: GlazingGlassMaterial;
 }
 
+export type FacadeSignLighting = 'front' | 'halo' | 'internal';
+
+/** Letreiro em letras-caixa vinculado à face de uma parede. */
+export interface FacadeSign {
+  id: string;
+  wallId: string;
+  text: string;
+  offsetM: number;
+  elevationM: number;
+  widthM: number;
+  heightM: number;
+  faceColorHex: string;
+  lightColorHex: string;
+  lighting: FacadeSignLighting;
+  normalSign: -1 | 1;
+}
+
 // Bloco de Volumetria (massa procedural — sacada, marquise, qualquer
 // volume solto) — box sólido, SEMPRE livre nas 3 dimensões (posição,
 // altura/elevação, profundidade), sem ímã de parede nenhum: Product
@@ -384,6 +401,7 @@ export interface Floor {
   lajes: Laje[];
   furniture: Furniture[];
   glazingPanels: GlazingPanel[];
+  facadeSigns?: FacadeSign[];
   balconyRailings: BalconyRailing[];
   volumeBoxes: VolumeBox[];
   stairs: Stair[];

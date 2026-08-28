@@ -33,7 +33,7 @@ test('modo Fachadas enquadra uma parede real e reaproveita Pele de vidro', () =>
 });
 
 test('ferramentas futuras não fingem estar prontas', () => {
-  for (const label of ['Letreiro iluminado', 'Marquise', 'Brises', 'Ripados e vazados', 'Dia / noite']) {
+  for (const label of ['Marquise', 'Brises', 'Ripados e vazados']) {
     assert.match(index, new RegExp(`<button class="facade-tool" disabled[^>]*>${label.replace('/', '\\/')}</button>`));
   }
 });

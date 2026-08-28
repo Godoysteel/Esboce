@@ -44,7 +44,8 @@ Baseline verificada em 10/08/2026:
 - entrada dedicada com vista frontal sobre o mesmo modelo do projeto;
 - início pela construção atual ou por um plano de fachada vazio de 10 m;
 - pele de vidro já disponível no fluxo inicial;
-- letreiros iluminados, marquises, brises, ripados, vazados, vitrines e apresentação dia/noite planejados para entregas incrementais conforme ADR-010.
+- letreiro iluminado em letras-caixa com configuração e prévia dia/noite entregue;
+- marquises, brises, ripados, vazados e vitrines planejados para entregas incrementais conforme ADR-010.
 
 ### Operação
 

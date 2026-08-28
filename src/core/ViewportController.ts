@@ -763,6 +763,11 @@ import {
     return chosen.id;
   }
 
+  export function setFacadeNightMode(enabled: boolean): void {
+    Scene3DRenderer.setFacadeNightMode(enabled);
+    render();
+  }
+
   var onZoomChangedCb: ((percent: number) => void) | null = null;
 
   function updateCam() {
@@ -5798,6 +5803,7 @@ export const ViewportController = {
   toggleWallDiagnostics,
   resetCamera,
   focusFacade,
+  setFacadeNightMode,
   toggleTouchCameraMode,
   getZoomPercent, zoomIn, zoomOut, setOnZoomChanged,
   toggleLayersMenuAtElement,

@@ -862,6 +862,12 @@
   }
   .facade-tool:hover { border-color:#534AB7; color:#534AB7; }
   .facade-tool:disabled { opacity:.48; cursor:not-allowed; }
+  .facade-sign-form { display:none; margin-top:10px; padding:12px; border:1px solid #D3D1C7; border-radius:10px; background:#fff; }
+  .facade-sign-form.visible { display:grid; grid-template-columns:2fr repeat(3,1fr); gap:8px; }
+  .facade-sign-form label { display:grid; gap:4px; font-size:10px; font-weight:700; color:#55524C; }
+  .facade-sign-form input,.facade-sign-form select { min-width:0; border:1px solid #C8C5BB; border-radius:7px; padding:7px; font:inherit; }
+  .facade-sign-form-actions { grid-column:1/-1; display:flex; gap:7px; justify-content:flex-end; }
+  .facade-sign-primary { background:#534AB7; border-color:#534AB7!important; color:#fff!important; }
   .facade-exit { border:0; background:transparent; color:#6B6861; cursor:pointer; font-size:18px; }
 
   @media (max-width: 700px) {
@@ -885,6 +891,7 @@
     .facade-paths { grid-template-columns:1fr; }
     .facade-path { min-height:130px; }
     .facade-workspace { left:84px; right:58px; width:auto; transform:none; }
+    .facade-sign-form.visible { grid-template-columns:1fr 1fr; }
 
     .ts-btn { padding: 7px 3px 5px; font-size: 9.5px; }
     .ts-icon { width: 26px; height: 26px; }
@@ -1491,11 +1498,21 @@
     </div>
     <div class="facade-workspace-actions" aria-label="Elementos de fachada">
       <button class="facade-tool" id="facadeGlazingBtn">Pele de vidro</button>
-      <button class="facade-tool" disabled title="Próxima etapa">Letreiro iluminado</button>
+      <button class="facade-tool" id="facadeSignBtn">Letreiro iluminado</button>
       <button class="facade-tool" disabled title="Próxima etapa">Marquise</button>
       <button class="facade-tool" disabled title="Próxima etapa">Brises</button>
       <button class="facade-tool" disabled title="Próxima etapa">Ripados e vazados</button>
-      <button class="facade-tool" disabled title="Próxima etapa">Dia / noite</button>
+      <button class="facade-tool" id="facadeDayNightBtn">Ver à noite</button>
+    </div>
+    <div class="facade-sign-form" id="facadeSignForm" aria-hidden="true">
+      <label>Texto<input id="facadeSignText" maxlength="32" value="SUA MARCA"></label>
+      <label>Largura (m)<input id="facadeSignWidth" type="number" min="0.8" max="12" step="0.1" value="3"></label>
+      <label>Altura (m)<input id="facadeSignHeight" type="number" min="0.25" max="2" step="0.05" value="0.7"></label>
+      <label>Elevação (m)<input id="facadeSignElevation" type="number" min="0.3" max="8" step="0.05" value="2.05"></label>
+      <label>Tipo de luz<select id="facadeSignLighting"><option value="halo">Halo (contraluz)</option><option value="front">Frontal</option><option value="internal">Interna</option></select></label>
+      <label>Cor da letra<input id="facadeSignFaceColor" type="color" value="#f4f1e8"></label>
+      <label>Cor da luz<input id="facadeSignLightColor" type="color" value="#ffd27a"></label>
+      <div class="facade-sign-form-actions"><button class="facade-tool" id="facadeSignDeleteBtn" hidden>Excluir</button><button class="facade-tool" id="facadeSignCancelBtn">Cancelar</button><button class="facade-tool facade-sign-primary" id="facadeSignSaveBtn">Adicionar letreiro</button></div>
     </div>
   </section>
 
