@@ -1979,7 +1979,7 @@ O problema era que o corte de MALHA (`trimRects`, restante da DEC-165) rodava **
 # DEC-170 — Beiral/tabeira flutuando na frente do oitão do vizinho (quina externa do L)
 
 **Data:** 28/08/2026
-**Status:** Implementado, verificado com números reais (sem WebGL) nos dois sentidos do par.
+**Status:** RESOLVIDO — implementado, verificado com números reais (sem WebGL) nos dois sentidos do par, e confirmado visualmente pelo Product Owner no site publicado ("ficou bom").
 
 **Contexto:** depois da DEC-169, Product Owner apontou (com a ferramenta de diagnóstico genérica de clique, criada nesta mesma sessão) que na quina EXTERNA do L (onde os dois telhados terminam juntos, longe do vão/reentrância) o beiral/tabeira de um telhado ficava visível "na frente" da parede do oitão do outro: "essa parte que está de frente ao oitão deve ser apagada".
 
@@ -1993,6 +1993,6 @@ O problema era que o corte de MALHA (`trimRects`, restante da DEC-165) rodava **
 
 **Testado:** suíte completa (661 testes).
 
-**Pendência:** confirmação visual do Product Owner no site publicado.
+**Pendência:** nenhuma — confirmado.
 
 ---
