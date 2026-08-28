@@ -1863,3 +1863,29 @@ Product Owner deu a pista da correção certa: "acho que nesse caso as faces do 
 **Pendência:** não verificado visualmente em navegador de verdade (renderização de pixels) — aguardando confirmação do Product Owner no site publicado, desta vez com números reais por trás da correção, não um ajuste às cegas.
 
 ---
+
+# DEC-166 — Regressão da DEC-165 (cumeeira em nível apagada por engano) + ferramenta "Apagar" manual de peça de telhado
+
+**Data:** 28/08/2026
+**Status:** Implementado e testado (suíte completa); a exclusão de par em nível é uma hipótese não confirmada contra o cenário real do Product Owner — a ferramenta manual existe justamente para não depender dessa confirmação.
+
+**Contexto:** Product Owner testou a correção da DEC-165 no site publicado e reportou, com print anotado, uma REGRESSÃO: uma cumeeira legítima ("cumeeira que apagou", marcada em verde) sumiu, enquanto o espigão original reportado (seta vermelha) continuava sobrando sem correção nenhuma — ou seja, a DEC-165 piorou um caso e não resolveu o caso original relatado. O cenário real do Product Owner não foi reproduzido nesta sessão (composição mais complexa que o L simples usado na DEC-165, provavelmente envolvendo telhado em níveis/ático — `compoundGroupId`/`steppedLowerRoofId`/`atticMode`).
+
+**Decisão 1 (hipótese, não confirmada):** telhados do mesmo `compoundGroupId`, mesmo `ridgeAxis`, ligados por `steppedLowerRoofId`/`atticMode` (cumeeira em níveis) já eram excluídos da disputa `otherRoofClipBoxes` por um motivo análogo (o trecho baixo sobrepõe de propósito o oitão do trecho alto). A mesma exclusão estava FALTANDO em `overlappingFootprintsForHipCorners` (a lista usada pela DEC-152/160/165 pra decidir espigão/cumeeira sobrepostos) — sem ela, o vizinho do mesmo conjunto entra como "outro telhado que sobrepõe de verdade" e o filtro de canto/cumeeira acaba escondendo uma peça que na verdade é o próprio encontro legítimo entre os dois níveis. Adicionado o mesmo `steppedRidgePair` de exclusão em `overlappingFootprintsForHipCorners`. **Esta correção é um best-guess da causa mais provável, não uma reprodução do cenário exato do Product Owner** — diferente da DEC-165, que foi verificada com números reais antes de ser dada como resolvida.
+
+**Decisão 2 (o pedido real do Product Owner, e o que efetivamente resolve o problema imediato):** em vez de esperar mais uma rodada de ajuste de regra geral às cegas, o Product Owner pediu uma ferramenta pra apagar manualmente a peça de espigão/cumeeira que sobra errada, direto na tela — e assim também ter, no texto da dica, o dado exato (telhado + peça + coordenada) que falta pra eu generalizar a regra certa depois, sem depender de reproduzir o cenário dele às cegas.
+
+Implementado:
+- `Roof.hiddenRidgePieceIds?: string[]` (`types.ts`) — lista de ids de peça escondidos manualmente.
+- Cada peça de cumeeira/espigão ganha um id estável em `userData.ridgePieceId`: `'A'/'B'/'C'/'D'` pros 4 cantos do hip (`buildRoofQuatroAguas`), `'center'` pra cumeeira central do quatro-águas, `'ridge'` pra cumeeira inteira do duas-águas.
+- `Store.commands.toggleRoofRidgePieceHidden(roofId, pieceId)` — alterna a peça entre escondida/visível (não apaga geometria nenhuma de verdade, só filtra na renderização; `pushUndoSnapshot` no commit).
+- Laço de composição em `Scene3DRenderer.ts` pula qualquer peça cujo `ridgePieceId` esteja em `roof.hiddenRidgePieceIds`.
+- Ferramenta "Apagar" (`ViewportController.ts`, mesmo `currentTool === 'demolish'` já usado pra quebrar parede) estendida: clicar numa peça de telhado com `ridgePieceId` chama o toggle e mostra na dica o telhado, a peça e a coordenada real (`hipCornerXZ`/`ridgeCapEndsXZ`) — clicar de novo na mesma peça desfaz.
+
+**Verificado ao vivo (sem WebGL, mesma técnica de `import()` dinâmico de `three.js`+`Scene3DRenderer.ts` das DEC-160/165):** montada uma composição em L real (`Store.commands.createRoom` 20×12 + 12×16, `generateRoofsForCurrentFloor`, forçados pra `quatroAguas`) — 8 peças de espigão/cumeeira sobrevivem à omissão automática, todas tagueadas em `userData.ridgePieceId` e como filhos DIRETOS da cena (compatível com `pickMesh`, que não é recursivo). Chamando `Store.commands.toggleRoofRidgePieceHidden('roof_10', 'C')` e reconstruindo a cena, a peça 'C' desaparece (84→83 objetos) e as outras 7 continuam idênticas; chamando de novo, ela volta (`hiddenRidgePieceIds` esvazia). Mecanismo ponta a ponta confirmado com números reais — o que NÃO foi possível verificar neste ambiente é o clique de mouse de verdade na tela 3D (a criação do `WebGLRenderer` falha aqui — "Could not create a WebGL context... Sandboxed"), mas o clique reusa exatamente o mesmo `pickMesh`/fluxo já usado (e funcionando) pela demolição de parede.
+
+**Testado:** suíte completa (656 testes, todos passando) + `tests/wall-geometry.test.mjs` atualizado com a assinatura exata do `steppedRidgePair` em `overlappingFootprintsForHipCorners`.
+
+**Pendência:** (1) confirmar com o Product Owner, no site publicado, que a cumeeira apagada por engano voltou — a Decisão 1 é hipótese até essa confirmação; (2) se a Decisão 1 não resolver o caso dele, a Decisão 2 (ferramenta manual) já dá a ele um jeito prático de resolver na hora, e a próxima peça que ele apagar manualmente e relatar aqui vira o próximo caso real a generalizar em regra automática — mesmo espírito de "criar variações de telhados e aplicar a mesma técnica" sugerido por ele.
+
+---

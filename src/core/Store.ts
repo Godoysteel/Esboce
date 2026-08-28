@@ -1685,6 +1685,26 @@ export const commands = {
     emit({ type: 'RoofParapetHeightChanged', roofId, live: true });
   },
 
+  // Ferramenta "Apagar" estendida a espigão/cumeeira (ver ViewportController):
+  // as regras automáticas de omitir peça sobreposta (DEC-152/160/165) não
+  // cobrem todo caso real de composição em L — em vez de esperar mais uma
+  // rodada de ajuste de regra geral, o usuário apaga a peça específica que
+  // sobrou errada direto na tela. pieceId é estável entre renderizações
+  // ('A'/'B'/'C'/'D' = canto do hip, 'center' = cumeeira central do
+  // quatro-águas, 'ridge' = cumeeira inteira do duas-águas/uma-água) — ver
+  // Scene3DRenderer userData.ridgePieceId. Comando único de alternar
+  // (esconde se estava visível, mostra de volta se já estava escondida) —
+  // não apaga geometria nenhuma de verdade, só filtra na renderização.
+  toggleRoofRidgePieceHidden(roofId: string, pieceId: string): void {
+    const r = findRoof(roofId); if (!r) return;
+    pushUndoSnapshot();
+    const list = r.hiddenRidgePieceIds || [];
+    const idx = list.indexOf(pieceId);
+    if (idx >= 0) list.splice(idx, 1); else list.push(pieceId);
+    r.hiddenRidgePieceIds = list;
+    emit({ type: 'RoofRidgePieceHiddenToggled', roofId, pieceId, hidden: idx < 0 });
+  },
+
   // Alças das bordas: arrastar uma borda estica/encolhe só aquele lado.
   updateRoofBoundsLive(roofId: string, x1: number, y1: number, x2: number, y2: number): void {
     const r = findRoof(roofId); if (!r) return;

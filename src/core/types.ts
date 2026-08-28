@@ -94,6 +94,15 @@ export interface Roof {
   baseHeightM?: number;
   /** Paredes controladas por este ático após a confirmação. */
   atticWallIds?: string[];
+  /** Peças de cumeeira/espigão escondidas manualmente pela ferramenta
+   * "Apagar" (id estável, ver Scene3DRenderer userData.ridgePieceId —
+   * 'A'/'B'/'C'/'D' pros 4 cantos do hip, 'center' pra cumeeira central
+   * do quatro-águas, 'ridge' pra cumeeira inteira do duas-águas/uma-água).
+   * Existe porque as regras automáticas de omitir espigão sobreposto
+   * (DEC-152/160/165) não cobrem todo caso real — o usuário apaga a
+   * peça específica que sobrou errada na tela dele, sem esperar uma
+   * nova tentativa de regra geral. */
+  hiddenRidgePieceIds?: string[];
 }
 
 export type VarandaFrontSide = 'minZ' | 'maxZ' | 'minX' | 'maxX';

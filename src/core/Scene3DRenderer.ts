@@ -2424,7 +2424,7 @@ export function hashColorHex(key: string): number {
         { x: gMaxX, y: gableBaseUnderY, z: gMaxZ }
       ], gableColors.b), 'b');
       var ridgeCapX = buildRidgeCapMesh({ x: eMinX, y: ridgeY, z: ridgeZ }, { x: eMaxX, y: ridgeY, z: ridgeZ }, roofColor, pitchRad);
-      if (ridgeCapX) ridgeCapX.userData.ridgeCapEndsXZ = { a: { x: eMinX, z: ridgeZ }, b: { x: eMaxX, z: ridgeZ } };
+      if (ridgeCapX) { ridgeCapX.userData.ridgeCapEndsXZ = { a: { x: eMinX, z: ridgeZ }, b: { x: eMaxX, z: ridgeZ } }; ridgeCapX.userData.ridgePieceId = 'ridge'; }
       meshes.push(ridgeCapX);
       meshes.push(buildEaveSoffitPanel((eMinX + eMaxX) / 2, topBounds.minZ - ROOF_OVERHANG / 2, eMaxX - eMinX, ROOF_OVERHANG, topY - verticalDrop, soffitColor));
       meshes.push(buildEaveSoffitPanel((eMinX + eMaxX) / 2, topBounds.maxZ + ROOF_OVERHANG / 2, eMaxX - eMinX, ROOF_OVERHANG, topY - verticalDrop, soffitColor));
@@ -2458,7 +2458,7 @@ export function hashColorHex(key: string): number {
         { x: gMaxX2, y: gableBaseUnderY2, z: gMaxZ2 }
       ], gableColors.b), 'b');
       var ridgeCapZ = buildRidgeCapMesh({ x: ridgeX, y: ridgeY2, z: eMinZ2 }, { x: ridgeX, y: ridgeY2, z: eMaxZ2 }, roofColor, pitchRad);
-      if (ridgeCapZ) ridgeCapZ.userData.ridgeCapEndsXZ = { a: { x: ridgeX, z: eMinZ2 }, b: { x: ridgeX, z: eMaxZ2 } };
+      if (ridgeCapZ) { ridgeCapZ.userData.ridgeCapEndsXZ = { a: { x: ridgeX, z: eMinZ2 }, b: { x: ridgeX, z: eMaxZ2 } }; ridgeCapZ.userData.ridgePieceId = 'ridge'; }
       meshes.push(ridgeCapZ);
       meshes.push(buildEaveSoffitPanel(topBounds.minX - ROOF_OVERHANG / 2, (eMinZ2 + eMaxZ2) / 2, ROOF_OVERHANG, eMaxZ2 - eMinZ2, topY - verticalDrop, soffitColor));
       meshes.push(buildEaveSoffitPanel(topBounds.maxX + ROOF_OVERHANG / 2, (eMinZ2 + eMaxZ2) / 2, ROOF_OVERHANG, eMaxZ2 - eMinZ2, topY - verticalDrop, soffitColor));
@@ -2499,12 +2499,12 @@ export function hashColorHex(key: string): number {
       // fecha por cima o encontro das águas, mesma textura da telha.
       if (r2x - r1x > 1e-3) {
         var centralCapX = buildRidgeCapMesh(R1, R2, roofColor, pitchRad);
-        if (centralCapX) { centralCapX.userData.ridgeCapEndsXZ = { a: { x: R1.x, z: R1.z }, b: { x: R2.x, z: R2.z } }; meshes.push(centralCapX); }
+        if (centralCapX) { centralCapX.userData.ridgeCapEndsXZ = { a: { x: R1.x, z: R1.z }, b: { x: R2.x, z: R2.z } }; centralCapX.userData.ridgePieceId = 'center'; meshes.push(centralCapX); }
       }
-      [[A, R1], [D, R1], [B, R2], [C, R2]].forEach(function (pair) {
+      [[A, R1, 'A'], [D, R1, 'D'], [B, R2, 'B'], [C, R2, 'C']].forEach(function (pair: any) {
         var cornerStart = extendBeyond(pair[0], pair[1], HIP_CORNER_OVERSHOOT);
         var cap = buildRidgeCapMesh(cornerStart, pair[1], roofColor, pitchRad);
-        if (cap) { cap.userData.hipCornerXZ = { x: pair[0]!.x, z: pair[0]!.z }; meshes.push(cap); }
+        if (cap) { cap.userData.hipCornerXZ = { x: pair[0]!.x, z: pair[0]!.z }; cap.userData.ridgePieceId = pair[2]; meshes.push(cap); }
       });
     } else {
       var ridgeX = (topBounds.minX + topBounds.maxX) / 2;
@@ -2519,12 +2519,12 @@ export function hashColorHex(key: string): number {
       meshes.push.apply(meshes, extrudeSlopeDown([D, C, R2b], verticalDrop, roofColor, tabeiraColor));
       if (r2z - r1z > 1e-3) {
         var centralCapZ = buildRidgeCapMesh(R1b, R2b, roofColor, pitchRad);
-        if (centralCapZ) { centralCapZ.userData.ridgeCapEndsXZ = { a: { x: R1b.x, z: R1b.z }, b: { x: R2b.x, z: R2b.z } }; meshes.push(centralCapZ); }
+        if (centralCapZ) { centralCapZ.userData.ridgeCapEndsXZ = { a: { x: R1b.x, z: R1b.z }, b: { x: R2b.x, z: R2b.z } }; centralCapZ.userData.ridgePieceId = 'center'; meshes.push(centralCapZ); }
       }
-      [[A, R1b], [B, R1b], [D, R2b], [C, R2b]].forEach(function (pair) {
+      [[A, R1b, 'A'], [B, R1b, 'B'], [D, R2b, 'D'], [C, R2b, 'C']].forEach(function (pair: any) {
         var cornerStart = extendBeyond(pair[0], pair[1], HIP_CORNER_OVERSHOOT);
         var cap = buildRidgeCapMesh(cornerStart, pair[1], roofColor, pitchRad);
-        if (cap) { cap.userData.hipCornerXZ = { x: pair[0]!.x, z: pair[0]!.z }; meshes.push(cap); }
+        if (cap) { cap.userData.hipCornerXZ = { x: pair[0]!.x, z: pair[0]!.z }; cap.userData.ridgePieceId = pair[2]; meshes.push(cap); }
       });
     }
     return meshes;
@@ -5915,6 +5915,20 @@ export function hashColorHex(key: string): number {
           // sumir).
           var overlappingFootprintsForHipCorners = floorData.roofs.filter(function (other) {
             if (other.id === roof.id || valleyPartnerIds[other.id]) return false;
+            // Cumeeira em níveis (mesmo compoundGroupId, mesmo ridgeAxis,
+            // ligados por steppedLowerRoofId/atticMode): a pegada do trecho
+            // baixo SOBREPÕE de propósito o oitão do trecho alto — mesma
+            // exclusão já usada em otherRoofClipBoxes acima, por isso, senão
+            // a cumeeira que liga os dois níveis é tratada como sobreposição
+            // "de verdade" e cortada por engano (Product Owner, print
+            // marcando "cumeeira que apagou" — regressão real encontrada
+            // ao vivo depois da DEC-165).
+            var steppedRidgePair = !!(
+              roof.compoundGroupId && other.compoundGroupId === roof.compoundGroupId &&
+              other.ridgeAxis === roof.ridgeAxis &&
+              (roof.steppedLowerRoofId || other.steppedLowerRoofId || roof.atticMode || other.atticMode)
+            );
+            if (steppedRidgePair) return false;
             var otherFootprint = roofWorldFootprint(other, scale, offsetX, offsetY);
             return rectsOverlapArea(ownFootprint, otherFootprint) > 1e-6;
           }).map(function (other) { return roofWorldFootprint(other, scale, offsetX, offsetY); });
@@ -5982,6 +5996,12 @@ export function hashColorHex(key: string): number {
           }, []);
           pieces.forEach(function (m) {
             if (roof.atticMode === 'generated' && m.userData.gableSide) return;
+            // Ferramenta "Apagar" manual (ver ViewportController) — as
+            // regras automáticas de omitir espigão sobreposto (DEC-152/
+            // 160/165) não cobrem todo caso real; o usuário apaga a peça
+            // específica que sobrou errada na tela dele, direto na peça,
+            // sem esperar uma nova rodada de ajuste de regra geral.
+            if (m.userData.ridgePieceId && roof.hiddenRidgePieceIds && roof.hiddenRidgePieceIds.indexOf(m.userData.ridgePieceId) !== -1) return;
             if (m.userData.hipCornerXZ && hipCornerInsideOtherRoof(m.userData.hipCornerXZ)) return;
             var ridgeCapPartialRects: any[] = [];
             if (m.userData.ridgeCapEndsXZ) {

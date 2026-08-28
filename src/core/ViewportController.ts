@@ -2935,6 +2935,27 @@ import {
       return;
     }
 
+    // Mesma ferramenta "Apagar", agora numa peça de cumeeira/espigão de
+    // telhado (mesh.userData.ridgePieceId) — as regras automáticas de
+    // omitir peça sobreposta (DEC-152/160/165) não cobrem todo caso real
+    // de composição em L; em vez de esperar mais uma rodada de ajuste de
+    // regra geral, o usuário apaga a peça específica que sobrou errada
+    // direto na tela. Clicar de novo na MESMA peça restaura (comando é
+    // um toggle). O texto da dica é deliberadamente completo (telhado,
+    // peça, coordenada) pra poder ser copiado e colado de volta na
+    // conversa — é o dado exato que falta pra generalizar a regra certa.
+    if (currentTool === 'demolish' && mesh && mesh.userData.ridgePieceId && mesh.userData.roofId) {
+      var ridgePieceRoof = Store.findRoof(mesh.userData.roofId);
+      Store.commands.toggleRoofRidgePieceHidden(mesh.userData.roofId, mesh.userData.ridgePieceId);
+      var nowHidden = !!(ridgePieceRoof && ridgePieceRoof.hiddenRidgePieceIds && ridgePieceRoof.hiddenRidgePieceIds.indexOf(mesh.userData.ridgePieceId) !== -1);
+      var ridgePieceCoord = mesh.userData.hipCornerXZ || mesh.userData.ridgeCapEndsXZ || null;
+      hintEl.textContent = (nowHidden ? 'Peça de telhado ocultada' : 'Peça de telhado restaurada')
+        + ' — telhado ' + mesh.userData.roofId + ', peça "' + mesh.userData.ridgePieceId + '"'
+        + (ridgePieceCoord ? ', coordenada ' + JSON.stringify(ridgePieceCoord) : '')
+        + '. Clique de novo na mesma peça pra desfazer.';
+      return;
+    }
+
     // Ferramenta Drywall ativa + clicou numa parede: alterna a parede
     // entre drywall (padrão Standard-ST nas duas faces) e o sistema
     // construtivo padrão do projeto — mesmo princípio de clique único e
