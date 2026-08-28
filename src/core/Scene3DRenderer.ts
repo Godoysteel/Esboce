@@ -5959,6 +5959,28 @@ export function hashColorHex(key: string): number {
                 && (Math.abs(pt.z - b.minZ) < 1e-4 || Math.abs(pt.z - b.maxZ) < 1e-4);
             });
           }
+          // Variação real do mesmo problema (Product Owner, reproduzido de
+          // novo com números exatos extraídos do console): quando as duas
+          // pegadas ficam ALINHADAS numa borda (mesmo minX ou maxX/minZ ou
+          // maxZ), um canto de um telhado pode cair bem EM CIMA da borda
+          // RETA do outro — não no canto dele (isso já é coberto acima),
+          // no MEIO da aresta. Diferente da quina compartilhada, aqui não
+          // existe uma peça "duplicada" do outro lado pra decidir por id —
+          // é só uma peça sozinha que não devia existir ali, porque aquele
+          // ponto não é uma quina externa de verdade da forma combinada em
+          // L (a borda verdadeira do L continua reta ali, seguindo o
+          // contorno do OUTRO telhado). Por isso não tem desempate por id
+          // — esconde sempre, sem exceção.
+          function hipCornerOnOtherRoofStraightEdge(pt: any) {
+            return roofPeakBoxes.some(function (b: any) {
+              if (b.id === roof.id) return false;
+              var onXEdge = (Math.abs(pt.x - b.minX) < 1e-4 || Math.abs(pt.x - b.maxX) < 1e-4)
+                && pt.z > b.minZ + 1e-6 && pt.z < b.maxZ - 1e-6;
+              var onZEdge = (Math.abs(pt.z - b.minZ) < 1e-4 || Math.abs(pt.z - b.maxZ) < 1e-4)
+                && pt.x > b.minX + 1e-6 && pt.x < b.maxX - 1e-6;
+              return onXEdge || onZEdge;
+            });
+          }
           // Cumeeira central/contínua (duas-águas inteira, ou o trecho
           // central R1-R2 de um quatro-águas) nunca ganhava a tag de
           // canto (hipCornerXZ é só pros 4 caps de hip), então o filtro
@@ -5988,9 +6010,29 @@ export function hashColorHex(key: string): number {
           // sofre o problema original do DEC-150, que era cortar reto na
           // vertical uma ÁGUA INCLINADA — a cumeeira não é inclinada na
           // direção do corte).
+          // Bug real (Product Owner, reprodução com números exatos do
+          // console): num par de telhados do MESMO conjunto composto com
+          // pico EXATAMENTE igual (ex.: dois quatro-águas com o mesmo
+          // half-span/inclinação formando um L), o corte acima aparava a
+          // cumeeira do telhado que NÃO tinha motivo pra perder ali — a
+          // regra só olhava "uma ponta cai dentro do outro" sem comparar
+          // quem é realmente mais alto naquele ponto. Quando os dois picos
+          // empatam (ou o próprio telhado é o mais alto), a comparação
+          // pixel a pixel já existente (otherRoofClipBoxes/tieBias, testada
+          // e funcionando) resolve sozinha quem sobrevive ali — não precisa
+          // (e não deve) cortar a malha de verdade. Só apara quando o
+          // vizinho for CLARAMENTE mais alto (o caso original da DEC-165:
+          // telhado grande de verdade mais alto que o pequeno que invade a
+          // pegada dele).
+          function otherRoofPeakY(r: any) {
+            var match = roofPeakBoxes.find(function (b: any) { return b.minX === r.minX && b.maxX === r.maxX && b.minZ === r.minZ && b.maxZ === r.maxZ; });
+            return match ? match.baseY + match.peakAboveBase : -Infinity;
+          }
           function ridgeCapPartialOverlapFootprints(ends: any) {
+            var ownPeakY = ownSurfaceBox ? ownSurfaceBox.baseY + ownSurfaceBox.peakAboveBase : -Infinity;
             return overlappingFootprintsForHipCorners.filter(function (r: any) {
-              return pointInsideRect(ends.a, r) !== pointInsideRect(ends.b, r);
+              if (pointInsideRect(ends.a, r) === pointInsideRect(ends.b, r)) return false;
+              return otherRoofPeakY(r) > ownPeakY + 1e-4;
             });
           }
           // roofCutRegions só sabe calcular o plano inclinado de verdade
@@ -6025,6 +6067,7 @@ export function hashColorHex(key: string): number {
             if (m.userData.ridgePieceId && roof.hiddenRidgePieceIds && roof.hiddenRidgePieceIds.indexOf(m.userData.ridgePieceId) !== -1) return;
             if (m.userData.hipCornerXZ && hipCornerInsideOtherRoof(m.userData.hipCornerXZ)) return;
             if (m.userData.hipCornerXZ && hipCornerCoincidesWithLowerIdRoof(m.userData.hipCornerXZ)) return;
+            if (m.userData.hipCornerXZ && hipCornerOnOtherRoofStraightEdge(m.userData.hipCornerXZ)) return;
             var ridgeCapPartialRects: any[] = [];
             if (m.userData.ridgeCapEndsXZ) {
               if (ridgeCapFullyInsideOtherRoof(m.userData.ridgeCapEndsXZ)) return;
