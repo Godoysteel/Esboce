@@ -2956,21 +2956,34 @@ import {
       return;
     }
 
-    // Mesma ferramenta "Apagar", agora numa peça de telhado QUALQUER
-    // (água, tabeira, oitão) sem ridgePieceId — só diagnóstico, não
-    // apaga/oculta nada (essas peças não têm um "id de peça" estável
-    // pra alternar, ao contrário do espigão/cumeeira acima). Existe
-    // porque descrever de longe qual peça está errada numa junção
-    // complexa (ex.: "a tabeira passando reto" num encontro em L de
-    // duas-águas) é impreciso — clicar direto na peça e ler a
-    // coordenada exata (convertida pra unidade do modelo, a mesma do
-    // console) tira a ambiguidade.
-    if (currentTool === 'demolish' && mesh && mesh.userData.roofId && !mesh.userData.wallId) {
+    // Mesma ferramenta "Apagar", agora como diagnóstico GENÉRICO pra
+    // qualquer peça clicável do projeto (parede, telhado — água/tabeira/
+    // oitão —, coluna, laje, móvel, o que tiver userData.category) sem
+    // um comando mais específico já ter tratado o clique acima (quebrar
+    // parede, alternar espigão/cumeeira). Só lê e mostra, nunca
+    // apaga/oculta nada. Existe porque descrever de longe qual peça
+    // está errada numa junção complexa (ex.: "a tabeira passando reto"
+    // num encontro em L de duas-águas) é impreciso — clicar direto na
+    // peça e ler a categoria/ids/coordenada exata (convertida pra
+    // unidade do modelo, a mesma do console) tira a ambiguidade.
+    //
+    // Importante: o raycast acerta a MALHA de verdade mesmo quando o
+    // fragmento ali está sendo escondido por sombreamento de pixel
+    // (discard no shader, ver applyRoomBoxClipping) — isso é invisível
+    // pro raycast, que só enxerga geometria. Clicar "na peça errada" às
+    // vezes na real acerta uma peça que já está corretamente invisível
+    // ali, e o que aparece na tela é outra peça por baixo — por isso o
+    // aviso no final da dica.
+    if (currentTool === 'demolish' && mesh) {
       var diagHit = pickMeshHit(e.clientX, e.clientY);
       var diagModelPt = diagHit ? worldToModel(diagHit.point.x, diagHit.point.z) : null;
-      var diagKind = mesh.userData.gableSide ? ('parede do oitão "' + mesh.userData.gableSide + '"') : 'água/tabeira';
-      hintEl.textContent = 'Peça de telhado (diagnóstico, não apaga) — telhado ' + mesh.userData.roofId + ', ' + diagKind
-        + (diagHit ? ', clique em x=' + diagModelPt!.x.toFixed(2) + ' y=' + diagModelPt!.y.toFixed(2) + ' (altura mundo=' + diagHit.point.y.toFixed(2) + 'm)' : '');
+      var diagIdFields = ['roofId', 'wallId', 'gableSide', 'ridgePieceId', 'columnId', 'lajeId', 'furnitureId', 'openingId', 'varandaId', 'glazingPanelId', 'balconyRailingId', 'volumeBoxId', 'stairId', 'hydraulicNodeId', 'floorIndex'];
+      var diagIds = diagIdFields.filter(function (k) { return mesh.userData[k] !== undefined; })
+        .map(function (k) { return k + '=' + mesh.userData[k]; }).join(', ');
+      hintEl.textContent = 'Diagnóstico (não apaga) — categoria "' + (mesh.userData.category || '?') + '"'
+        + (diagIds ? ', ' + diagIds : '')
+        + (diagHit ? ', clique em x=' + diagModelPt!.x.toFixed(2) + ' y=' + diagModelPt!.y.toFixed(2) + ' (altura mundo=' + diagHit.point.y.toFixed(2) + 'm)' : '')
+        + '. Obs.: o clique acerta a malha real mesmo se ela estiver escondida por sombreamento de pixel — pode não ser a peça que você vê na tela.';
       return;
     }
 
