@@ -1975,3 +1975,24 @@ O problema era que o corte de MALHA (`trimRects`, restante da DEC-165) rodava **
 **Pendência:** confirmação visual final do Product Owner no site publicado (a matemática bate, mas só ele vê os pixels de verdade).
 
 ---
+
+# DEC-170 — Beiral/tabeira flutuando na frente do oitão do vizinho (quina externa do L)
+
+**Data:** 28/08/2026
+**Status:** Implementado, verificado com números reais (sem WebGL) nos dois sentidos do par.
+
+**Contexto:** depois da DEC-169, Product Owner apontou (com a ferramenta de diagnóstico genérica de clique, criada nesta mesma sessão) que na quina EXTERNA do L (onde os dois telhados terminam juntos, longe do vão/reentrância) o beiral/tabeira de um telhado ficava visível "na frente" da parede do oitão do outro: "essa parte que está de frente ao oitão deve ser apagada".
+
+**Causa (achada só depois de duas tentativas):** a primeira hipótese (comparar `roofWorldFootprint` — a pegada COM beiral — de um telhado contra o beiral do outro) não fazia nada, porque desde a DEC-168 os dois beirais (`RAKE_OVERHANG`/`ROOF_OVERHANG`) foram igualados — as duas pegadas com beiral terminam exatamente no mesmo lugar. A causa real: a PAREDE do oitão (`buildRoofDuasAguas`, `gMinX`/`gMaxX`) fica em `topBounds ± GABLE_WALL_EXTEND` (meia espessura de parede, bem perto da parede real) — bem mais perto do que o beiral do TELHADO vizinho, que avança até `topBounds ± RAKE_OVERHANG` (0,4m, bem mais longe). RAKE_OVERHANG ≫ GABLE_WALL_EXTEND, então o beiral do vizinho sobra bem além de onde a parede do oitão termina, "flutuando" no ar na frente dela.
+
+**Correção:** nova lista `gableClipRects` (`Scene3DRenderer.ts`) — pra cada par duasAguas×duasAguas perpendicular do mesmo `compoundGroupId` (sem depender de `valleyPartnerIds`, é puramente posicional), calcula o retângulo "além do plano da parede do oitão do vizinho" (usando `nominalWallRect` + `GABLE_WALL_EXTEND`, não `roofWorldFootprint`) e aplica em `clipMeshOutsideRects` — um corte reto SEM `plane` (remove tudo por dentro do retângulo, mantém tudo por fora), correto aqui porque não é uma comparação de altura/inclinação, é só "nada existe além dessa parede".
+
+**Armadilha no processo de verificação:** o primeiro teste ao vivo (checando se um ponto específico ainda existia na malha, testando ponto-dentro-de-triângulo) dava falso positivo — o próprio algoritmo de corte (`clipMeshOutsideRects`) deixa para trás triângulos DEGENERADOS (área zero, os 3 vértices no mesmo ponto, sobra inofensiva do processo de split) nos limites do corte, e o teste ingênuo de "ponto dentro do triângulo" reportava esses degenerados como cobrindo QUALQUER ponto (sign() zerado nos três lados). Corrigido o script de verificação pra descartar triângulos de área ~0 antes de testar — só depois disso ficou claro que o corte já estava funcionando nos dois sentidos.
+
+**Verificado ao vivo:** com os dados reais (`roof_23`/`roof_24`), os pontos exatos que o Product Owner clicou (convertidos de coordenada de modelo pra metros) não têm mais malha nenhuma dos dois lados do par, enquanto pontos legítimos (fora da zona de exclusão, incluindo a quina distante de cada telhado) continuam intactos.
+
+**Testado:** suíte completa (661 testes).
+
+**Pendência:** confirmação visual do Product Owner no site publicado.
+
+---

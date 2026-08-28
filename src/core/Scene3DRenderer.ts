@@ -6150,6 +6150,49 @@ export function hashColorHex(key: string): number {
           }).reduce(function (regions: any[], other) {
             return regions.concat(roofCutRegions(other, scale, offsetX, offsetY, roofTopY));
           }, []);
+          // Bug real (Product Owner: "essa parte que está de frente ao
+          // oitão deve ser apagada"): quando dois duas-águas com
+          // ridgeAxis perpendicular se encontram, o beiral/tabeira de UM
+          // avança até `topBounds ± RAKE_OVERHANG` (o beiral de verdade),
+          // enquanto a PAREDE do oitão do OUTRO fica bem mais perto —
+          // `topBounds ± GABLE_WALL_EXTEND` (metade da espessura da
+          // parede, ver buildRoofDuasAguas). RAKE_OVERHANG (0.4m) é bem
+          // maior que GABLE_WALL_EXTEND (meia espessura de parede) — por
+          // isso o beiral do vizinho sobra visível bem além de onde a
+          // parede do oitão termina, "flutuando" no ar na frente dela.
+          // Usar roofWorldFootprint (a pegada COM beiral) aqui seria
+          // errado — as duas pegadas com beiral já terminam no mesmo
+          // lugar (por isso a tentativa anterior não fazia nada); o
+          // limite certo é o da PAREDE em si, não o do telhado. Diferente
+          // do trimRects acima (compara ALTURA de água contra água, só
+          // faz sentido pro par valleyPartnerIds), isto é puramente
+          // POSICIONAL — nada deveria existir além do plano da parede do
+          // oitão vizinho — então vale pra QUALQUER par duasAguas×duasAguas
+          // perpendicular do mesmo conjunto, sem depender de
+          // valleyPartnerIds. Retângulo SEM `plane` em clipMeshOutsideRects
+          // já faz exatamente um corte reto na posição (remove tudo por
+          // dentro, mantém tudo por fora) — certo aqui porque não estamos
+          // seguindo inclinação nenhuma, só dizendo "nada passa desse
+          // plano".
+          var gableClipRects = roof.type !== 'duasAguas' ? [] : floorData.roofs.filter(function (other) {
+            return !!(roof.compoundGroupId && other.compoundGroupId === roof.compoundGroupId && other.id !== roof.id && other.ridgeAxis !== roof.ridgeAxis && other.type === 'duasAguas');
+          }).reduce(function (regions: any[], other) {
+            var otherNominal = nominalWallRect(other);
+            if (other.ridgeAxis === 'x') {
+              var gMinX = otherNominal.minX - GABLE_WALL_EXTEND, gMaxX = otherNominal.maxX + GABLE_WALL_EXTEND;
+              var gSpanMinZ = otherNominal.minZ - GABLE_WALL_EXTEND, gSpanMaxZ = otherNominal.maxZ + GABLE_WALL_EXTEND;
+              return regions.concat([
+                { minX: -1e6, maxX: gMinX, minZ: gSpanMinZ, maxZ: gSpanMaxZ },
+                { minX: gMaxX, maxX: 1e6, minZ: gSpanMinZ, maxZ: gSpanMaxZ }
+              ]);
+            }
+            var gMinZ = otherNominal.minZ - GABLE_WALL_EXTEND, gMaxZ = otherNominal.maxZ + GABLE_WALL_EXTEND;
+            var gSpanMinX = otherNominal.minX - GABLE_WALL_EXTEND, gSpanMaxX = otherNominal.maxX + GABLE_WALL_EXTEND;
+            return regions.concat([
+              { minX: gSpanMinX, maxX: gSpanMaxX, minZ: -1e6, maxZ: gMinZ },
+              { minX: gSpanMinX, maxX: gSpanMaxX, minZ: gMaxZ, maxZ: 1e6 }
+            ]);
+          }, []);
           pieces.forEach(function (m) {
             if (roof.atticMode === 'generated' && m.userData.gableSide) return;
             // Ferramenta "Apagar" manual (ver ViewportController) — as
@@ -6189,7 +6232,7 @@ export function hashColorHex(key: string): number {
             // encontram em L (Product Owner, reprodução real com os dados
             // do console — oitão de 9 vértices virava 6, mais estreito).
             // A parede do oitão nunca deve passar por esse corte.
-            if (!m.userData.gableSide) clipMeshOutsideRects(m, ridgeCapPartialRects.length ? trimRects.concat(ridgeCapPartialRects) : trimRects);
+            if (!m.userData.gableSide) clipMeshOutsideRects(m, trimRects.concat(gableClipRects, ridgeCapPartialRects));
             tagCategory(m, m.userData.gableSide ? wallCategory : 'telhado');
             m.userData.roofId = roof.id; m.userData.floorIndex = floorIdx;
             scene.add(m);

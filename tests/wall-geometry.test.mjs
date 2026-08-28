@@ -1806,7 +1806,7 @@ test('Scene3DRenderer: cumeeira com sobreposição PARCIAL (uma ponta dentro, ou
   const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
   const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 32000);
   assert.match(roofsBlock, /function ridgeCapPartialOverlapFootprints\(ends: any\) \{\s*var ownPeakY = ownSurfaceBox \? ownSurfaceBox\.baseY \+ ownSurfaceBox\.peakAboveBase : -Infinity;\s*return overlappingFootprintsForHipCorners\.filter\(function \(r: any\) \{\s*if \(pointInsideRect\(ends\.a, r\) === pointInsideRect\(ends\.b, r\)\) return false;\s*return otherRoofPeakY\(r\) > ownPeakY \+ 1e-4;\s*\}\);\s*\}/);
-  assert.match(roofsBlock, /clipMeshOutsideRects\(m, ridgeCapPartialRects\.length \? trimRects\.concat\(ridgeCapPartialRects\) : trimRects\);/);
+  assert.match(roofsBlock, /clipMeshOutsideRects\(m, trimRects\.concat\(gableClipRects, ridgeCapPartialRects\)\);/);
 
   function pointInRect(pt, r) {
     return pt.x > r.minX + 1e-6 && pt.x < r.maxX - 1e-6 && pt.z > r.minZ + 1e-6 && pt.z < r.maxZ - 1e-6;
@@ -1991,7 +1991,35 @@ test('Scene3DRenderer: trimRects só entra em cena pra pares que SÃO valleyPart
 test('Scene3DRenderer: parede do oitão (gableSide) nunca passa pelo corte de malha reto (trimRects) — só água/tabeira são peças planas o suficiente pra esse corte fazer sentido', () => {
   const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
   const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 32000);
-  assert.match(roofsBlock, /if \(!m\.userData\.gableSide\) clipMeshOutsideRects\(m, ridgeCapPartialRects\.length \? trimRects\.concat\(ridgeCapPartialRects\) : trimRects\);/);
+  assert.match(roofsBlock, /if \(!m\.userData\.gableSide\) clipMeshOutsideRects\(m, trimRects\.concat\(gableClipRects, ridgeCapPartialRects\)\);/);
+});
+
+// Bug real (Product Owner, achado com a ferramenta de diagnóstico de
+// clique nesta mesma sessão — quina EXTERNA do L, longe do vão): o
+// beiral do TELHADO (RAKE_OVERHANG/ROOF_OVERHANG, 0,4m) avança bem mais
+// longe que a PAREDE do oitão do vizinho (GABLE_WALL_EXTEND, meia
+// espessura de parede) — o beiral sobra "flutuando" no ar na frente da
+// parede alheia. Corrigido comparando contra `nominalWallRect` +
+// `GABLE_WALL_EXTEND` (a posição real da PAREDE), não `roofWorldFootprint`
+// (a pegada do TELHADO, que desde a DEC-168 já bate com a do vizinho —
+// por isso a primeira tentativa não fazia nada).
+test('Scene3DRenderer: gableClipRects usa a posição real da PAREDE do oitão vizinho (nominalWallRect + GABLE_WALL_EXTEND), não a pegada do telhado — beiral não fica flutuando além da parede alheia', () => {
+  const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 32000);
+  assert.match(roofsBlock, /var gableClipRects = roof\.type !== 'duasAguas' \? \[\] : floorData\.roofs\.filter\(function \(other\) \{\s*return !!\(roof\.compoundGroupId && other\.compoundGroupId === roof\.compoundGroupId && other\.id !== roof\.id && other\.ridgeAxis !== roof\.ridgeAxis && other\.type === 'duasAguas'\);\s*\}\)\.reduce\(function \(regions: any\[\], other\) \{\s*var otherNominal = nominalWallRect\(other\);/);
+  assert.match(roofsBlock, /var gMinX = otherNominal\.minX - GABLE_WALL_EXTEND, gMaxX = otherNominal\.maxX \+ GABLE_WALL_EXTEND;/);
+  assert.match(roofsBlock, /var gMinZ = otherNominal\.minZ - GABLE_WALL_EXTEND, gMaxZ = otherNominal\.maxZ \+ GABLE_WALL_EXTEND;/);
+
+  // Prova numérica (dados reais do Product Owner): roof_23 (ridgeAxis x)
+  // e roof_24 (ridgeAxis y) — a parede do oitão de roof_23 fica em
+  // x=6,06 (topBounds.maxX=6 + GABLE_WALL_EXTEND=0,06), mas o beiral de
+  // roof_24 (mesmo RAKE_OVERHANG=0,4 desde a DEC-168) chega até x=6,4 —
+  // uma sobra de 0,34m flutuando na frente da parede.
+  const GABLE_WALL_EXTEND = 0.06; // Core.WALL_THICK/2, valor de referência
+  const RAKE_OVERHANG = 0.4;
+  const wallPlaneX = 6 + GABLE_WALL_EXTEND;
+  const roofEdgeX = 6 + RAKE_OVERHANG;
+  assert.ok(roofEdgeX > wallPlaneX, 'o beiral do telhado vizinho vai além do plano da parede do oitão — exatamente o que devia ser cortado');
 });
 
 // Segunda tentativa de resolver o encontro em L não bastou: mesmo com
