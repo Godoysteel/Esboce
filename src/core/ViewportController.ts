@@ -739,6 +739,30 @@ import {
     updateCam();
   }
 
+  // Estúdio de Fachadas: enquadra frontalmente a maior parede do
+  // pavimento (ou a parede informada). Continua usando a mesma câmera e
+  // o mesmo Project; é apenas uma projeção de trabalho do modelo 3D.
+  export function focusFacade(wallId?: string): string | null {
+    const walls = Store.currentWalls().filter((wall) => !wall.demolished);
+    if (!walls.length) return null;
+    const chosen = (wallId ? walls.find((wall) => wall.id === wallId) : undefined)
+      || walls.reduce((longest, wall) => Core.wallLengthMeters(wall) > Core.wallLengthMeters(longest) ? wall : longest);
+    const dx = chosen.x2 - chosen.x1;
+    const dz = chosen.y2 - chosen.y1;
+    const lengthGrid = Math.hypot(dx, dz);
+    if (lengthGrid < 1e-6) return null;
+    const ux = dx / lengthGrid;
+    const uz = dz / lengthGrid;
+    camAngle = Math.atan2(ux, -uz);
+    camElev = 0.08;
+    camDist = Math.max(8, Core.wallLengthMeters(chosen) * 1.25);
+    camTarget.x = (chosen.x1 + chosen.x2) / (2 * Core.GRID);
+    camTarget.y = 1.45;
+    camTarget.z = (chosen.y1 + chosen.y2) / (2 * Core.GRID);
+    updateCam();
+    return chosen.id;
+  }
+
   var onZoomChangedCb: ((percent: number) => void) | null = null;
 
   function updateCam() {
@@ -5773,6 +5797,7 @@ export const ViewportController = {
   setNextRoofAtticMode, setNextRoofType, activateRoofTool, cancelActiveTool, setSteelFrameSurfaceSelectionHandler, setSteelFrameRoofHidden, activateCatalogProduct, armHeightAdjust,
   toggleWallDiagnostics,
   resetCamera,
+  focusFacade,
   toggleTouchCameraMode,
   getZoomPercent, zoomIn, zoomOut, setOnZoomChanged,
   toggleLayersMenuAtElement,

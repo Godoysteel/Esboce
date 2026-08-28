@@ -819,6 +819,51 @@
   .tb-viewmode-btn:disabled { opacity: .4; cursor: not-allowed; }
   .tb-viewmode-btn:disabled:hover { background: #FFFFFF; }
 
+  /* Estúdio de Fachadas — entrada dedicada sem criar um segundo modelo.
+     O painel trabalha sobre o mesmo Project/Store usado por 2D e 3D. */
+  .facade-overlay {
+    position: fixed; inset: 0; z-index: 40; display: none;
+    align-items: center; justify-content: center; padding: 24px;
+    background: rgba(26,24,21,.58); backdrop-filter: blur(4px);
+  }
+  .facade-overlay.visible { display: flex; }
+  .facade-start {
+    width: min(760px, 100%); padding: 26px; border-radius: 18px;
+    background: #F8F6F0; box-shadow: 0 24px 70px rgba(20,18,16,.3);
+  }
+  .facade-start-header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
+  .facade-kicker { color:#C1673F; font-size:11px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; }
+  .facade-start h2 { margin:5px 0 6px; font-size:28px; color:#2C2C2A; }
+  .facade-start p { margin:0; color:#6B6861; line-height:1.5; }
+  .facade-start-close { border:0; background:transparent; font-size:24px; cursor:pointer; color:#77736B; }
+  .facade-paths { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:22px; }
+  .facade-path {
+    min-height:170px; padding:20px; border:1px solid #D8D4C9; border-radius:14px;
+    background:#FFF; text-align:left; cursor:pointer; color:#2C2C2A;
+  }
+  .facade-path:hover { border-color:#534AB7; box-shadow:0 8px 24px rgba(83,74,183,.12); }
+  .facade-path strong { display:block; margin:12px 0 7px; font-size:17px; }
+  .facade-path span { display:block; color:#77736B; font-size:13px; line-height:1.45; }
+  .facade-path-icon { font-size:28px; color:#534AB7; }
+  .facade-workspace {
+    position:fixed; left:50%; top:calc(var(--top-overlay-h) + 12px); z-index:12;
+    display:none; width:min(620px, calc(100vw - 220px)); padding:12px 14px;
+    transform:translateX(-50%); border:1px solid #D3D1C7; border-radius:14px;
+    background:rgba(255,255,255,.97); box-shadow:0 10px 28px rgba(33,31,27,.16);
+  }
+  .facade-workspace.visible { display:block; }
+  .facade-workspace-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .facade-workspace-title { font-size:13px; font-weight:800; }
+  .facade-workspace-subtitle { font-size:10px; color:#858179; }
+  .facade-workspace-actions { display:flex; gap:7px; margin-top:10px; overflow-x:auto; }
+  .facade-tool {
+    flex:0 0 auto; padding:8px 11px; border:1px solid #D3D1C7; border-radius:9px;
+    background:#FFF; color:#2C2C2A; font-size:11px; font-weight:700; cursor:pointer;
+  }
+  .facade-tool:hover { border-color:#534AB7; color:#534AB7; }
+  .facade-tool:disabled { opacity:.48; cursor:not-allowed; }
+  .facade-exit { border:0; background:transparent; color:#6B6861; cursor:pointer; font-size:18px; }
+
   @media (max-width: 700px) {
     :root { --top-overlay-h: 54px; }
     .top-overlay { flex-wrap: nowrap; gap: 6px; padding: 8px; }
@@ -834,6 +879,12 @@
     .tb-viewmode-panel #viewMode2DBtn,
     .tb-viewmode-panel #viewModeMedirBtn { display: none; }
     .tb-viewmode-btn { width: 42px; height: 38px; }
+    .facade-overlay { padding:12px; }
+    .facade-start { padding:20px; }
+    .facade-start h2 { font-size:23px; }
+    .facade-paths { grid-template-columns:1fr; }
+    .facade-path { min-height:130px; }
+    .facade-workspace { left:84px; right:58px; width:auto; transform:none; }
 
     .ts-btn { padding: 7px 3px 5px; font-size: 9.5px; }
     .ts-icon { width: 26px; height: 26px; }
@@ -1402,10 +1453,51 @@
   <div class="tb-viewmode-panel">
     <button class="tb-viewmode-btn active" id="viewMode3DBtn" title="Visualização 3D — modo atual">3D</button>
     <button class="tb-viewmode-btn" id="viewMode2DBtn" title="Abrir planta técnica em 2D">2D</button>
+    <button class="tb-viewmode-btn" id="viewModeFacadeBtn" title="Abrir o Estúdio de Fachadas">Fach.</button>
     <button class="tb-viewmode-btn" id="viewModeOrbitBtn" title="Recentralizar a câmera (o arraste com botão direito já orbita a qualquer momento)">Orbit</button>
     <button class="tb-viewmode-btn" id="hydraulicsBtn" title="Gerar ou ocultar o protótipo de instalações hidráulicas">Hid.</button>
     <button class="tb-viewmode-btn" id="viewModeMedirBtn" disabled title="Ferramenta de medir — ainda não disponível">Medir</button>
   </div>
+
+  <div class="facade-overlay" id="facadeStartOverlay" aria-hidden="true">
+    <section class="facade-start" role="dialog" aria-modal="true" aria-labelledby="facadeStartTitle">
+      <div class="facade-start-header">
+        <div>
+          <div class="facade-kicker">Novo espaço de criação</div>
+          <h2 id="facadeStartTitle">Estúdio de Fachadas</h2>
+          <p>Crie a frente de uma casa, loja ou empresa com uma vista dedicada e o mesmo modelo 3D do projeto.</p>
+        </div>
+        <button class="facade-start-close" id="facadeStartClose" aria-label="Fechar">×</button>
+      </div>
+      <div class="facade-paths">
+        <button class="facade-path" id="facadeUseProjectBtn">
+          <span class="facade-path-icon" aria-hidden="true">⌂</span>
+          <strong>Usar a construção atual</strong>
+          <span>Escolhe automaticamente uma parede principal e abre uma vista frontal para trabalhar sobre a casa já modelada.</span>
+        </button>
+        <button class="facade-path" id="facadeBlankBtn">
+          <span class="facade-path-icon" aria-hidden="true">＋</span>
+          <strong>Começar com fachada vazia</strong>
+          <span>Cria um plano inicial de 10 metros no projeto, pronto para receber vitrine, letreiro e composição arquitetônica.</span>
+        </button>
+      </div>
+    </section>
+  </div>
+
+  <section class="facade-workspace" id="facadeWorkspace" aria-hidden="true">
+    <div class="facade-workspace-head">
+      <div><div class="facade-workspace-title">Estúdio de Fachadas</div><div class="facade-workspace-subtitle" id="facadeWorkspaceSubtitle">Vista frontal vinculada ao projeto</div></div>
+      <button class="facade-exit" id="facadeExitBtn" title="Voltar ao modo 3D" aria-label="Sair do Estúdio de Fachadas">×</button>
+    </div>
+    <div class="facade-workspace-actions" aria-label="Elementos de fachada">
+      <button class="facade-tool" id="facadeGlazingBtn">Pele de vidro</button>
+      <button class="facade-tool" disabled title="Próxima etapa">Letreiro iluminado</button>
+      <button class="facade-tool" disabled title="Próxima etapa">Marquise</button>
+      <button class="facade-tool" disabled title="Próxima etapa">Brises</button>
+      <button class="facade-tool" disabled title="Próxima etapa">Ripados e vazados</button>
+      <button class="facade-tool" disabled title="Próxima etapa">Dia / noite</button>
+    </div>
+  </section>
 
   <div id="layersContextMenu" class="ctx-menu">
     <div class="ctx-menu-title">Camadas visíveis</div>

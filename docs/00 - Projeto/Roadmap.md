@@ -39,6 +39,13 @@ Baseline verificada em 10/08/2026:
 - exclusão de conta e dados associados;
 - documentos jurídicos públicos e aceite rastreável.
 
+### Estúdio de Fachadas
+
+- entrada dedicada com vista frontal sobre o mesmo modelo do projeto;
+- início pela construção atual ou por um plano de fachada vazio de 10 m;
+- pele de vidro já disponível no fluxo inicial;
+- letreiros iluminados, marquises, brises, ripados, vazados, vitrines e apresentação dia/noite planejados para entregas incrementais conforme ADR-010.
+
 ### Operação
 
 - GitHub Pages no domínio oficial;

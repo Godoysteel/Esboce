@@ -409,6 +409,10 @@ export class EsboceApplication {
     const orbitBtn = this.requireElement("viewModeOrbitBtn");
     const view3DBtn = this.requireElement("viewMode3DBtn");
     const view2DBtn = this.requireElement("viewMode2DBtn");
+    const viewFacadeBtn = this.requireElement("viewModeFacadeBtn");
+    const facadeStartOverlay = this.requireElement("facadeStartOverlay");
+    const facadeWorkspace = this.requireElement("facadeWorkspace");
+    const facadeWorkspaceSubtitle = this.requireElement("facadeWorkspaceSubtitle");
     // Importar Planta Baixa — botão dispara o <input type="file"> oculto;
     // aceita imagem direto ou PDF (primeira página, rasterizada via
     // pdfjs-dist em PlanImport.ts). Nasce centrada na caixa delimitadora
@@ -498,13 +502,61 @@ export class EsboceApplication {
       this.viewMode = mode;
       view3DBtn.classList.toggle('active', mode === '3d');
       view2DBtn.classList.toggle('active', mode === '2d');
+      viewFacadeBtn.classList.remove('active');
+      facadeWorkspace.classList.remove('visible');
+      facadeWorkspace.setAttribute('aria-hidden', 'true');
       if (mode === '2d') this.viewport2D?.show();
       else this.viewport2D?.hide();
       this.requireElement("navGizmoCanvas").style.visibility = mode === '3d' ? 'visible' : 'hidden';
       orbitBtn.style.display = mode === '3d' ? '' : 'none';
     };
+    const setFacadeOverlayVisible = (visible: boolean) => {
+      facadeStartOverlay.classList.toggle('visible', visible);
+      facadeStartOverlay.setAttribute('aria-hidden', String(!visible));
+    };
+    const enterFacadeStudio = (wallId: string | undefined, sourceLabel: string) => {
+      this.viewMode = '3d';
+      this.viewport2D?.hide();
+      view3DBtn.classList.remove('active');
+      view2DBtn.classList.remove('active');
+      viewFacadeBtn.classList.add('active');
+      this.requireElement("navGizmoCanvas").style.visibility = 'visible';
+      orbitBtn.style.display = '';
+      facadeWorkspace.classList.add('visible');
+      facadeWorkspace.setAttribute('aria-hidden', 'false');
+      facadeWorkspaceSubtitle.textContent = sourceLabel;
+      setFacadeOverlayVisible(false);
+      showCategory(undefined);
+      const focusedWallId = ViewportController.focusFacade(wallId);
+      this.requireElement('viewportHint').textContent = focusedWallId
+        ? 'Vista de fachada ativa — a pele de vidro já edita o mesmo modelo 3D. Novos elementos serão adicionados por etapas.'
+        : 'Crie uma parede para iniciar a composição da fachada.';
+    };
     view3DBtn.addEventListener('click', () => setViewMode('3d'));
     view2DBtn.addEventListener('click', () => setViewMode('2d'));
+    viewFacadeBtn.addEventListener('click', () => setFacadeOverlayVisible(true));
+    this.requireElement('facadeStartClose').addEventListener('click', () => setFacadeOverlayVisible(false));
+    facadeStartOverlay.addEventListener('click', (event) => {
+      if (event.target === facadeStartOverlay) setFacadeOverlayVisible(false);
+    });
+    this.requireElement('facadeUseProjectBtn').addEventListener('click', () => {
+      enterFacadeStudio(undefined, 'Construção atual · vista frontal vinculada ao projeto');
+    });
+    this.requireElement('facadeBlankBtn').addEventListener('click', () => {
+      const walls = Store.currentWalls();
+      let centerX = 0;
+      if (walls.length) {
+        const maxX = Math.max(...walls.flatMap((wall) => [wall.x1, wall.x2]));
+        centerX = maxX + 7 * Core.GRID;
+      }
+      const wall = Store.commands.createWall(centerX - 5 * Core.GRID, 0, centerX + 5 * Core.GRID, 0);
+      enterFacadeStudio(wall?.id, 'Fachada vazia · plano inicial de 10 metros');
+    });
+    this.requireElement('facadeExitBtn').addEventListener('click', () => setViewMode('3d'));
+    this.requireElement('facadeGlazingBtn').addEventListener('click', () => {
+      showCategory('aberturas');
+      this.requireElement('addGlazingPanelBtn').click();
+    });
     const refreshHydraulicsButton = () => {
       const project = Store.getProject();
       const hasNetwork = project.hydraulics.nodes.length > 0;
