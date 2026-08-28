@@ -1896,14 +1896,14 @@ Reproduzindo a composição exata dele (`import()` dinâmico de `Scene3DRenderer
 
 **Testado:** suíte completa (657 testes) + novo teste em `tests/wall-geometry.test.mjs` com os dados reais do projeto dele (pegadas `roofBig`/`roofSmall` calculadas a partir dos `x1/y1/x2/y2` copiados).
 
-**Pendência real agora:** a cumeeira ainda não confirmada de volta — pedir pro Product Owner testar de novo depois deste novo deploy (com um hard-refresh, `Ctrl+Shift+R`, pra descartar cache do navegador). Se ainda não voltar, o próximo suspeito é o recorte por pixel (bissetriz do vale / `applyRoomBoxClipping`), que exige verificação visual real (GPU) — não reproduzível neste ambiente.
+**Pendência real agora:** RESOLVIDO na DEC-167 (mesma sessão, logo abaixo) — a causa real não era pixel/GPU, era corte de MALHA de verdade (a própria DEC-165 cortando a cumeeira mesmo sem um vizinho genuinamente mais alto).
 
 ---
 
 # DEC-167 — Espigão sobre ARESTA (não canto) do vizinho, e cumeeira aparada por engano quando os dois picos empatam
 
 **Data:** 28/08/2026
-**Status:** Implementado, testado (659 testes) e verificado ao vivo com os dados reais completos do projeto do Product Owner (paredes + telhados, capturados do console dele).
+**Status:** RESOLVIDO — implementado, testado (659 testes), verificado ao vivo com os dados reais completos do projeto do Product Owner (paredes + telhados, capturados do console dele) e CONFIRMADO por ele no site publicado após hard-refresh ("agora deu tudo certo") — print mostrando o L completo com as duas cumeeiras corretas e nenhum espigão duplicado.
 
 **Contexto:** depois da DEC-166, o Product Owner testou de novo e reportou os dois problemas ainda presentes: "o espigão ainda aparece e a cumeeira continua sem aparecer". Em vez de tentar mais uma hipótese, pedi pra ele usar a ferramenta "Apagar" (DEC-166) na peça errada — a dica confirmou `telhado roof_26, peça "B", coordenada (6.4,-2.4)` — e depois pedi o floor COMPLETO do projeto (`Store.getProject().floors[...]`, com paredes) pra reproduzir com fidelidade total.
 
