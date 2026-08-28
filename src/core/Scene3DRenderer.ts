@@ -5918,10 +5918,11 @@ export function hashColorHex(key: string): number {
             var otherFootprint = roofWorldFootprint(other, scale, offsetX, offsetY);
             return rectsOverlapArea(ownFootprint, otherFootprint) > 1e-6;
           }).map(function (other) { return roofWorldFootprint(other, scale, offsetX, offsetY); });
+          function pointInsideRect(pt: any, r: any) {
+            return pt.x > r.minX + 1e-6 && pt.x < r.maxX - 1e-6 && pt.z > r.minZ + 1e-6 && pt.z < r.maxZ - 1e-6;
+          }
           function hipCornerInsideOtherRoof(pt: any) {
-            return overlappingFootprintsForHipCorners.some(function (r) {
-              return pt.x > r.minX + 1e-6 && pt.x < r.maxX - 1e-6 && pt.z > r.minZ + 1e-6 && pt.z < r.maxZ - 1e-6;
-            });
+            return overlappingFootprintsForHipCorners.some(function (r) { return pointInsideRect(pt, r); });
           }
           // Cumeeira central/contínua (duas-águas inteira, ou o trecho
           // central R1-R2 de um quatro-águas) nunca ganhava a tag de
@@ -5936,6 +5937,26 @@ export function hashColorHex(key: string): number {
           // por pixel, igual antes).
           function ridgeCapFullyInsideOtherRoof(ends: any) {
             return hipCornerInsideOtherRoof(ends.a) && hipCornerInsideOtherRoof(ends.b);
+          }
+          // Caso parcial deixado EM ABERTO na DEC-160 (cumeeira longa que só
+          // encosta parcialmente no vizinho — uma ponta dentro, a outra de
+          // fato fora): reproduzido ao vivo (console, sem WebGL) e
+          // confirmado real — um quatro-águas grande com um quatro-águas
+          // menor formando L pode deixar a cumeeira CENTRAL do maior com
+          // uma ponta dentro da pegada do menor e a outra fora, sobrando
+          // visível por cima. Em vez de omitir a peça inteira (cortaria
+          // cumeeira de verdade) ou preservar inteira (é o bug relatado),
+          // apara a malha na fronteira real da pegada do vizinho —
+          // reaproveitando clipMeshOutsideRects (mesmo primitivo do
+          // trimRects/DEC-150), seguro aqui porque a cumeeira é
+          // aproximadamente NIVELADA ao longo do próprio comprimento (não
+          // sofre o problema original do DEC-150, que era cortar reto na
+          // vertical uma ÁGUA INCLINADA — a cumeeira não é inclinada na
+          // direção do corte).
+          function ridgeCapPartialOverlapFootprints(ends: any) {
+            return overlappingFootprintsForHipCorners.filter(function (r: any) {
+              return pointInsideRect(ends.a, r) !== pointInsideRect(ends.b, r);
+            });
           }
           // roofCutRegions só sabe calcular o plano inclinado de verdade
           // (a água-furtada real) pro tipo duasAguas — pra qualquer outro
@@ -5962,7 +5983,11 @@ export function hashColorHex(key: string): number {
           pieces.forEach(function (m) {
             if (roof.atticMode === 'generated' && m.userData.gableSide) return;
             if (m.userData.hipCornerXZ && hipCornerInsideOtherRoof(m.userData.hipCornerXZ)) return;
-            if (m.userData.ridgeCapEndsXZ && ridgeCapFullyInsideOtherRoof(m.userData.ridgeCapEndsXZ)) return;
+            var ridgeCapPartialRects: any[] = [];
+            if (m.userData.ridgeCapEndsXZ) {
+              if (ridgeCapFullyInsideOtherRoof(m.userData.ridgeCapEndsXZ)) return;
+              ridgeCapPartialRects = ridgeCapPartialOverlapFootprints(m.userData.ridgeCapEndsXZ);
+            }
             var steelFrameRoofConfigured = project.constructionSystem === 'light_steel_frame' && (
               m.userData.gableSide
                 ? !!(m.userData.gableSide === 'a' ? roof.gableFaceAAssemblyId : roof.gableFaceBAssemblyId)
@@ -5977,7 +6002,7 @@ export function hashColorHex(key: string): number {
               m.material = Array.isArray(m.material) ? m.material.map(function (material: any) { var marked = material.clone(); marked.color.setHex(roofSystemColor); return marked; }) : m.material.clone();
               if (!Array.isArray(m.material)) m.material.color.setHex(roofSystemColor);
             }
-            clipMeshOutsideRects(m, trimRects);
+            clipMeshOutsideRects(m, ridgeCapPartialRects.length ? trimRects.concat(ridgeCapPartialRects) : trimRects);
             tagCategory(m, m.userData.gableSide ? wallCategory : 'telhado');
             m.userData.roofId = roof.id; m.userData.floorIndex = floorIdx;
             scene.add(m);

@@ -1761,9 +1761,9 @@ test('Scene3DRenderer: cumeeira central/contínua (sem hipCornerXZ) marca as dua
 
 test('Scene3DRenderer: cumeeira central some quando as DUAS pontas caem dentro da pegada do telhado vizinho — reprodução real do L em quatro-águas', () => {
   const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
-  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 18000);
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 21000);
   assert.match(roofsBlock, /function ridgeCapFullyInsideOtherRoof\(ends: any\) \{\s*return hipCornerInsideOtherRoof\(ends\.a\) && hipCornerInsideOtherRoof\(ends\.b\);\s*\}/);
-  assert.match(roofsBlock, /if \(m\.userData\.ridgeCapEndsXZ && ridgeCapFullyInsideOtherRoof\(m\.userData\.ridgeCapEndsXZ\)\) return;/);
+  assert.match(roofsBlock, /if \(m\.userData\.ridgeCapEndsXZ\) \{\s*if \(ridgeCapFullyInsideOtherRoof\(m\.userData\.ridgeCapEndsXZ\)\) return;\s*ridgeCapPartialRects = ridgeCapPartialOverlapFootprints\(m\.userData\.ridgeCapEndsXZ\);\s*\}/);
 
   function pointInRect(pt, r) {
     return pt.x > r.minX + 1e-6 && pt.x < r.maxX - 1e-6 && pt.z > r.minZ + 1e-6 && pt.z < r.maxZ - 1e-6;
@@ -1780,21 +1780,45 @@ test('Scene3DRenderer: cumeeira central some quando as DUAS pontas caem dentro d
   const centralCapB = { a: { x: 0.02, z: 0.38 }, b: { x: 0.23, z: 0.63 } }; // cumeeira central do telhado B
   assert.equal(ridgeCapFullyInside(centralCapA, [roofBFootprint]), true, 'cumeeira central de A cai inteira dentro da pegada de B — deve sumir');
   assert.equal(ridgeCapFullyInside(centralCapB, [roofAFootprint]), true, 'cumeeira central de B cai inteira dentro da pegada de A — deve sumir');
+});
 
-  // Caso conhecido, ainda NÃO coberto por este filtro (documentado, não
-  // corrigido nesta rodada): duas-águas × duas-águas no mesmo L — a
-  // cumeeira é a peça INTEIRA (não só o trecho central do hip), então só
-  // UMA ponta cai dentro do vizinho (a outra continua fora, cumeeira de
-  // verdade continuando além da junção) — omitir a peça inteira cortaria
-  // cumeeira de verdade. Fica só no sombreamento por pixel (mesma
-  // limitação já registrada no DEC-151).
-  const duasAguasFootprintA = { minX: -0.51, maxX: 0.76, minZ: -0.46, maxZ: 0.71 };
-  const duasAguasFootprintB = { minX: -0.46, maxX: 0.71, minZ: -0.51, maxZ: 1.01 };
-  const fullRidgeA = { a: { x: -0.26, z: 0.125 }, b: { x: 0.76, z: 0.125 } };
-  assert.equal(pointInRect(fullRidgeA.a, duasAguasFootprintB), true, 'ponta interna da cumeeira inteira cai dentro do vizinho');
-  assert.equal(pointInRect(fullRidgeA.b, duasAguasFootprintB), false, 'ponta externa continua fora — cumeeira de verdade além da junção');
-  assert.equal(ridgeCapFullyInside(fullRidgeA, [duasAguasFootprintB]), false, 'com só uma ponta dentro, a regra (as duas pontas) corretamente NÃO omite a peça inteira');
-  void duasAguasFootprintA;
+// DEC-160 deixou EM ABERTO o caso PARCIAL (uma ponta dentro, a outra
+// fora) — documentado então como limitação de duas-águas×duas-águas,
+// mas reproduzido ao vivo (sem WebGL, via import direto de
+// Scene3DRenderer + rebuild manual num THREE.Scene isolado) revelou que
+// o MESMO caso parcial também acontece em quatro-águas×quatro-águas
+// (a cumeeira CENTRAL de um hip grande pode só encostar parcialmente
+// na pegada de um hip menor formando L) — Product Owner reportou o
+// sintoma de novo com print ("espigão que não deveria existir") depois
+// de arrastar duas coberturas quatro-águas pra formar um L. Números
+// reais: casa grande 20×12m + casa menor 12×16m, telhados forçados pra
+// quatroAguas (setRoofPieceType) — a cumeeira central do telhado maior
+// (roof_20) tem uma ponta dentro da pegada do menor (roof_21) e a
+// outra de fato fora.
+test('Scene3DRenderer: cumeeira com sobreposição PARCIAL (uma ponta dentro, outra fora) é APARADA na fronteira do vizinho, não omitida nem preservada inteira — reprodução real quatro-águas×quatro-águas', () => {
+  const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 21000);
+  assert.match(roofsBlock, /function ridgeCapPartialOverlapFootprints\(ends: any\) \{/);
+  assert.match(roofsBlock, /return overlappingFootprintsForHipCorners\.filter\(function \(r: any\) \{\s*return pointInsideRect\(ends\.a, r\) !== pointInsideRect\(ends\.b, r\);\s*\}\);/);
+  assert.match(roofsBlock, /clipMeshOutsideRects\(m, ridgeCapPartialRects\.length \? trimRects\.concat\(ridgeCapPartialRects\) : trimRects\);/);
+
+  function pointInRect(pt, r) {
+    return pt.x > r.minX + 1e-6 && pt.x < r.maxX - 1e-6 && pt.z > r.minZ + 1e-6 && pt.z < r.maxZ - 1e-6;
+  }
+
+  // Reprodução real extraída ao vivo (console, THREE.Scene isolado —
+  // sem depender de WebGL): casa 20×12m + casa 12×16m formando L,
+  // telhados forçados pra quatroAguas.
+  const roofBigFootprint = { minX: -0.96, maxX: 1.5451444387435913, minZ: -0.5451444983482361, maxZ: 1.0451444387435913 };
+  const roofSmallFootprint = { minX: -0.71, maxX: 1.0451444387435913, minZ: -0.56, maxZ: 2.045144557952881 };
+  const centralCapSmall = { a: { x: 0.25, z: 0.75 }, b: { x: 0.25, z: 1.25 } }; // cumeeira central do telhado MENOR
+
+  const aIn = pointInRect(centralCapSmall.a, roofBigFootprint);
+  const bIn = pointInRect(centralCapSmall.b, roofBigFootprint);
+  assert.equal(aIn, true, 'ponta "a" da cumeeira central do menor cai dentro da pegada do maior');
+  assert.equal(bIn, false, 'ponta "b" continua de fato fora — cumeeira real continuando além da junção');
+  assert.notEqual(aIn, bIn, 'exatamente uma ponta dentro — é o caso PARCIAL, nem omitir tudo nem preservar tudo é correto aqui');
+  void roofSmallFootprint;
 });
 
 // Bug real (Product Owner, com print): dois quatroAguas do mesmo grupo

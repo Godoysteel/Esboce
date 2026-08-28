@@ -1837,6 +1837,29 @@ Product Owner deu a pista da correção certa: "acho que nesse caso as faces do 
 - Manter as 18 esferas e só aumentar ainda mais o nudge — descartada nas tentativas 1 e 2, confirmado pelo Product Owner que não resolvia.
 - Adicionar um seletor de modo (canto/aresta/face) por botão ou aba — descartada: contraria o pedido explícito do Product Owner de interação "sem botões, sem abas".
 
-**Testado:** suíte completa com teste novo confirmando a forma de cada handle (esfera pro canto, `CylinderGeometry` orientado pela aresta real via quaternion, plano com os 4 cantos reais da face). Não verificado visualmente (sem WebGL disponível nesta sessão) — EM ABERTO até o Product Owner confirmar no site.
+**Testado:** suíte completa com teste novo confirmando a forma de cada handle (esfera pro canto, `CylinderGeometry` orientado pela aresta real via quaternion, plano com os 4 cantos reais da face). Não verificado visualmente (sem WebGL disponível nesta sessão).
+
+**Resultado:** Product Owner testou ao vivo e reportou que também NÃO funcionou ("não deu certo"), sem detalhar o sintoma novo (ainda sobrepondo? impossível de clicar? a coisa errada se move?). Sessão encerrada nesse ponto ("desisto por hoje") antes de conseguir esse detalhe.
+
+**EM ABERTO — não tentar uma 4ª correção às cegas.** As três tentativas anteriores (DEC-164 tentativas 1/2/3) foram todas ajustes de geometria/aparência da alça sem NENHUMA verificação visual real (o ambiente de desenvolvimento desta sessão não tem WebGL) — mesmo padrão de erro já vivido e corrigido no DEC-150/151/152 (três tentativas de correção do espigão que "passavam no teste" mas não resolviam o sintoma reportado, porque ninguém confirmava com números/imagem real antes de tentar de novo). Próxima sessão: pedir print de tela ou descrição exata do que está acontecendo AGORA (qual alça, o que esperava vs. o que aconteceu) antes de mexer no código de novo.
+
+---
+
+# DEC-165 — Cumeeira com sobreposição PARCIAL (uma ponta dentro, outra fora) é aparada na fronteira do vizinho, não mais preservada inteira
+
+**Data:** 28/08/2026
+**Status:** Implementado, testado, verificado com números reais (sem WebGL — ver metodologia)
+
+**Contexto:** Product Owner reportou com 3 prints em sequência (bom dia, sessão nova): arrastou uma cobertura quatro-águas pra encostar em outra, formando um L, e um espigão sobrou onde não devia (seta vermelha no print, num canto reentrante do L). Esta é EXATAMENTE a limitação documentada como conhecida e deliberadamente não resolvida na DEC-160 ("caso parcial... fica documentado como limitação CONHECIDA") — só que a DEC-160 achou que o caso parcial era exclusivo de duas-águas×duas-águas; a reprodução desta sessão mostrou que o MESMO caso também acontece em quatro-águas×quatro-águas (a cumeeira CENTRAL de um hip grande, não só a cumeeira inteira de um duas-águas).
+
+**Metodologia (sem repetir o erro do DEC-164 — só corrigir depois de números reais):** sem WebGL disponível nesta sessão (mesma limitação de ambiente), reproduzi diretamente via `import()` dinâmico de `Scene3DRenderer.ts` + `three.js` (path resolvido do Vite, `/node_modules/.vite/deps/three.js`) no console do navegador, chamando `Scene3DRenderer.rebuild(new THREE.Scene(), project, {width:0,height:0}, viewState)` manualmente — não precisa de `WebGLRenderer` nenhum, só constrói o grafo de cena (Three.js puro, sem GPU). Casa grande 20×12m + casa menor 12×16m, telhados forçados pra `quatroAguas` (`setRoofPieceType`) — a cumeeira central do telhado MAIOR tem uma ponta (a: x=0,25, z=0,75) dentro da pegada do menor e a outra (b: x=0,25, z=1,25) de fato fora.
+
+**Decisão:** em vez de omitir a peça inteira (cortaria cumeeira real que continua além da junção) ou preservar inteira (é o bug relatado), a peça é APARADA na fronteira real da pegada do vizinho — reaproveitando `clipMeshOutsideRects` (mesmo primitivo já usado pelo `trimRects`/DEC-150), seguro aqui porque a cumeeira é aproximadamente NIVELADA ao longo do próprio comprimento (não sofre o problema original do DEC-150, que era cortar reto na vertical uma ÁGUA INCLINADA — a cumeeira não é inclinada na direção do corte). Nova função `ridgeCapPartialOverlapFootprints(ends)` identifica, entre os telhados que já se sabe que sobrepõem (`overlappingFootprintsForHipCorners`, já calculado pro DEC-152/160), quais têm EXATAMENTE uma ponta dentro (`pointInsideRect(a) !== pointInsideRect(b)`) — esses retângulos entram na mesma lista de corte de malha já usada por `trimRects`.
+
+**Verificado:** reproduzindo o MESMO cenário depois da correção, a cumeeira que antes sobrevivia inteira (z de 0,75 a 1,25) agora tem a malha real cortada, começando em ~z=0,96 em vez de z=0,75 — a porção que estava dentro da pegada do vizinho foi removida. Pequena imprecisão residual (~0,085 unidades, plausivelmente o próprio arco da peça — WING=0,12m × seno do ângulo de inclinação — não é uma linha perfeita, tem espessura própria) é aceitável e da mesma ordem de grandeza já presente no `trimRects` original (DEC-150), não um bug novo.
+
+**Testado:** suíte completa + 2 testes novos (`tests/wall-geometry.test.mjs`) — um confirma a nova função e sua integração no laço de composição, outro usa os números reais desta reprodução (não hipotéticos) pra provar que é de fato o caso "uma ponta dentro, outra fora" (não o caso já coberto pela DEC-160).
+
+**Pendência:** não verificado visualmente em navegador de verdade (renderização de pixels) — aguardando confirmação do Product Owner no site publicado, desta vez com números reais por trás da correção, não um ajuste às cegas.
 
 ---

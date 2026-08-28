@@ -1,5 +1,9 @@
 # Changelog
 
+## Alterado — 28/08/2026
+
+- Corrigido: telhado em L com duas coberturas quatro-águas ainda podia sobrar um pedaço de espigão visível na junção — a cumeeira central de um telhado maior, quando só encosta PARCIALMENTE na pegada de um telhado menor (uma ponta dentro, a outra de fato fora), agora é aparada na fronteira real, em vez de sobreviver inteira. Ver DEC-165.
+
 ## Alterado — 27/08/2026
 
 - A identificação visual do isolamento em paredes Steel Frame foi reforçada com uma hachura diagonal semitransparente sobre a cor do sistema aplicado. A hachura acompanha os recortes de portas e janelas e complementa a faixa turquesa no topo.
