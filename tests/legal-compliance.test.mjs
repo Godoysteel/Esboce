@@ -30,12 +30,15 @@ test("termos e privacidade ficam públicos e identificam operador e canal", asyn
     assert.match(document, /Rogério dos Santos Godoy/);
     assert.match(document, /privacidade@esboce\.com\.br/);
     assert.match(document, /18 anos/);
-    assert.match(document, /2026-08-10/);
   }
+  assert.match(terms, new RegExp(TERMS_VERSION.replaceAll(".", "\\.")));
+  assert.match(privacy, new RegExp(PRIVACY_VERSION.replaceAll(".", "\\.")));
   assert.match(privacy, /Supabase/);
   assert.match(privacy, /GitHub Pages/);
   assert.match(privacy, /Resend/);
   assert.match(privacy, /Cloudflare Turnstile/);
+  assert.match(privacy, /Cloudflare Web Analytics/);
+  assert.match(privacy, /sem cookies de análise/);
   assert.match(privacy, /Sentry/);
   assert.match(privacy, /não enviar nome, e-mail, conteúdo dos projetos/);
   assert.match(privacy, /direitos/i);
