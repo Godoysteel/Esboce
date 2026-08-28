@@ -2956,6 +2956,24 @@ import {
       return;
     }
 
+    // Mesma ferramenta "Apagar", agora numa peça de telhado QUALQUER
+    // (água, tabeira, oitão) sem ridgePieceId — só diagnóstico, não
+    // apaga/oculta nada (essas peças não têm um "id de peça" estável
+    // pra alternar, ao contrário do espigão/cumeeira acima). Existe
+    // porque descrever de longe qual peça está errada numa junção
+    // complexa (ex.: "a tabeira passando reto" num encontro em L de
+    // duas-águas) é impreciso — clicar direto na peça e ler a
+    // coordenada exata (convertida pra unidade do modelo, a mesma do
+    // console) tira a ambiguidade.
+    if (currentTool === 'demolish' && mesh && mesh.userData.roofId && !mesh.userData.wallId) {
+      var diagHit = pickMeshHit(e.clientX, e.clientY);
+      var diagModelPt = diagHit ? worldToModel(diagHit.point.x, diagHit.point.z) : null;
+      var diagKind = mesh.userData.gableSide ? ('parede do oitão "' + mesh.userData.gableSide + '"') : 'água/tabeira';
+      hintEl.textContent = 'Peça de telhado (diagnóstico, não apaga) — telhado ' + mesh.userData.roofId + ', ' + diagKind
+        + (diagHit ? ', clique em x=' + diagModelPt!.x.toFixed(2) + ' y=' + diagModelPt!.y.toFixed(2) + ' (altura mundo=' + diagHit.point.y.toFixed(2) + 'm)' : '');
+      return;
+    }
+
     // Ferramenta Drywall ativa + clicou numa parede: alterna a parede
     // entre drywall (padrão Standard-ST nas duas faces) e o sistema
     // construtivo padrão do projeto — mesmo princípio de clique único e
