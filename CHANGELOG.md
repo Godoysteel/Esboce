@@ -2,6 +2,8 @@
 
 ## Alterado — 28/08/2026
 
+- Corrigido: a soleira que fecha o piso onde ficava uma parede interna (ao apagar a parede ou colocar um arco entre dois cômodos) sempre usava o piso padrão do catálogo, mesmo depois do usuário escolher outro piso em Materiais. Agora usa o piso real de um dos cômodos ligados. Ver DEC-173.
+
 - Estúdio de Fachadas: ao usar uma construção existente, o usuário agora seleciona uma ou mais paredes diretamente no modelo; após confirmar, somente elas permanecem visíveis e são alinhadas lado a lado em uma vista paralela para composição.
 - Estúdio de Fachadas: primeiro elemento próprio com letreiro em letras-caixa, edição de texto, dimensões, elevação, cores, iluminação frontal/interna/halo, exclusão, persistência e comparação dia/noite.
 - Iniciado o Estúdio de Fachadas: nova entrada dedicada com dois caminhos — enquadrar a construção atual ou criar um plano de fachada vazio de 10 m. A primeira entrega abre uma vista frontal vinculada ao mesmo modelo 3D, reaproveita a ferramenta funcional de pele de vidro e apresenta, sem fingir disponibilidade, os próximos grupos de letreiros, marquises, brises, ripados/vazados e visualização dia/noite. Ver ADR-010.

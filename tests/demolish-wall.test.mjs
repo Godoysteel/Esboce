@@ -164,8 +164,10 @@ test('parede demolida ganha o mesmo tratamento de "buraco no piso" que arco/port
   // Vão sintético cobrindo o comprimento INTEIRO (não um trecho) —
   // offset no meio, largura = comprimento todo da parede.
   assert.match(demolishedSlabBlock, /offset: wallLenM \/ 2, width: wallLenM/);
-  // Soleira interna (dois cômodos) usa o mapa SEM FILTRO
-  assert.match(demolishedSlabBlock, /buildThresholdSlab\(w, wallFootprintsFull, yOffset, offsetX, offsetY, scale\)/);
+  // Soleira interna (dois cômodos) usa o mapa SEM FILTRO, e o piso REAL
+  // de um dos dois cômodos ligados (nunca mais o piso padrão fixo do
+  // catálogo, ignorando o que o usuário escolheu — bug real relatado).
+  assert.match(demolishedSlabBlock, /buildThresholdSlab\(w, wallFootprintsFull, yOffset, offsetX, offsetY, scale, finishProductD\)/);
   // Soleira externa (um lado só) reaproveita a MESMA função já usada
   // pro arco/porta pra fora, sem duplicar lógica de geometria.
   assert.match(demolishedSlabBlock, /buildExteriorSoleira\(w, fullSpanOpening, yOffset, offsetX, offsetY, scale\)/);

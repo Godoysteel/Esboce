@@ -4207,7 +4207,7 @@ export function hashColorHex(key: string): number {
   // z-fighting com a aba da fundação (que fica bem perto do nível do
   // piso ali); virar peça própria, mais alta, evita esse problema de
   // vez, além de ficar mais fiel à realidade construtiva.
-  function buildThresholdSlab(wall: any, wallFootprintsMap: any, yOffset: any, offsetX: any, offsetY: any, scale: any) {
+  function buildThresholdSlab(wall: any, wallFootprintsMap: any, yOffset: any, offsetX: any, offsetY: any, scale: any, finishProduct: any) {
     var fp = wallFootprintsMap[wall.id];
     if (!fp) return null;
     var shape = new THREE.Shape();
@@ -4217,7 +4217,13 @@ export function hashColorHex(key: string): number {
     });
     shape.closePath();
     var thickness = 0.03;
-    var product = Catalog.getProduct(DEFAULT_FLOOR_FINISH_ID);
+    // finishProduct vem do piso REAL de um dos cômodos ligados por essa
+    // soleira (ver chamadores) — antes essa peça sempre usava o piso
+    // PADRÃO do catálogo, ignorando qualquer piso escolhido pelo usuário
+    // (Product Owner: "mantém uma soleira com o piso antigo, não
+    // atualiza pro piso que eu coloco"). Cai no padrão só quando nenhum
+    // dos dois cômodos tem piso próprio ainda.
+    var product = finishProduct || Catalog.getProduct(DEFAULT_FLOOR_FINISH_ID);
     var colorHex = product ? parseInt(product.assets.colorHex.slice(1), 16) : 0xCFE8CF;
     var texture = product ? buildCeramicTexture(product.assets.colorHex, 1, 0) : null;
     return makeSlabMesh(shape, thickness, yOffset + thickness, colorHex, 1, true, texture);
@@ -6649,6 +6655,18 @@ export function hashColorHex(key: string): number {
       //   verdade, não o piso disfarçado de soleira.
       // - Nenhum dos dois lados: nada pra fechar, ignora.
       if (layers.laje) {
+        // Piso REAL de um cômodo (mesma regra do laço principal do piso
+        // acima: só conta se o usuário já escolheu um piso de verdade em
+        // Materiais, categoria floor_tile). Usado pra soleira/laje de
+        // ligação NUNCA mais usar o piso padrão do catálogo quando um
+        // dos dois cômodos já tem piso próprio escolhido.
+        function roomFloorFinishProduct(room: any) {
+          if (!room) return null;
+          var key = Core.findRoomWallIds(floorData.walls, room).slice().sort().join(',');
+          var finishId = (floorData.roomFinishes || {})[key];
+          var finish = finishId && Catalog.getProduct(finishId);
+          return (finish && finish.category === 'floor_tile') ? finish : null;
+        }
         var thresholdWallIds: any = {};
         (floorData.openings || []).forEach(function (op) {
           if (op.sillHeight > 0.02) return;
@@ -6658,7 +6676,7 @@ export function hashColorHex(key: string): number {
           var roomA = adj.roomA, roomB = adj.roomB;
           if (roomA && roomB) {
             if (thresholdWallIds[op.wallId]) return; // essa parede já vai ganhar soleira por outra abertura
-            thresholdWallIds[op.wallId] = true;
+            thresholdWallIds[op.wallId] = { roomA: roomA, roomB: roomB };
           } else if (roomA || roomB) {
             var soleira = tagCategory(buildExteriorSoleira(wall, op, yOffset, offsetX, offsetY, scale), 'laje');
             soleira.userData.openingId = op.id;
@@ -6669,7 +6687,9 @@ export function hashColorHex(key: string): number {
         Object.keys(thresholdWallIds).forEach(function (wallId) {
           var wall = floorData.walls.filter(function (w) { return w.id === wallId; })[0];
           if (!wall) return;
-          var slab = buildThresholdSlab(wall, wallFootprints, yOffset, offsetX, offsetY, scale);
+          var adjRooms = thresholdWallIds[wallId];
+          var finishProduct = roomFloorFinishProduct(adjRooms.roomA) || roomFloorFinishProduct(adjRooms.roomB);
+          var slab = buildThresholdSlab(wall, wallFootprints, yOffset, offsetX, offsetY, scale, finishProduct);
           if (!slab) return;
           tagCategory(slab, 'laje');
           scene.add(slab);
@@ -6701,7 +6721,8 @@ export function hashColorHex(key: string): number {
           var fullSpanOpening: any = { id: 'demolida-' + w.id, wallId: w.id, kind: 'arco', offset: wallLenM / 2, width: wallLenM, sillHeight: 0 };
           var adjD = Core.findRoomsAdjacentToOpening(w, fullSpanOpening, rooms);
           if (adjD.roomA && adjD.roomB) {
-            var slabD = buildThresholdSlab(w, wallFootprintsFull, yOffset, offsetX, offsetY, scale);
+            var finishProductD = roomFloorFinishProduct(adjD.roomA) || roomFloorFinishProduct(adjD.roomB);
+            var slabD = buildThresholdSlab(w, wallFootprintsFull, yOffset, offsetX, offsetY, scale, finishProductD);
             if (slabD) { tagCategory(slabD, 'laje'); scene.add(slabD); registry.roomMeshes.push(slabD); }
           } else if (adjD.roomA || adjD.roomB) {
             var soleiraD = tagCategory(buildExteriorSoleira(w, fullSpanOpening, yOffset, offsetX, offsetY, scale), 'laje');

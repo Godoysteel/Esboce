@@ -2032,3 +2032,20 @@ O problema era que o corte de MALHA (`trimRects`, restante da DEC-165) rodava **
 **Pendência:** confirmar no Cloudflare Web Analytics, depois de alguns dias de tráfego real, que a fatia vermelha do CLS diminuiu — essa correção resolve a causa medida, mas só o painel real vai confirmar o efeito agregado.
 
 ---
+
+# DEC-173 — Soleira entre cômodos usava sempre o piso PADRÃO do catálogo, ignorando o piso escolhido pelo usuário
+
+**Data:** 28/08/2026
+**Status:** Implementado e verificado com a cor real do pixel renderizado.
+
+**Contexto:** Product Owner relatou: "quando eu apago uma parede ou coloco o arco, ele mantém uma soleira com o piso antigo, ele não atualiza para o piso que eu coloco" — especificamente em paredes INTERNAS (não a soleira externa de mármore, que é uma peça diferente).
+
+**Causa:** `buildThresholdSlab` (`Scene3DRenderer.ts`) — a peça de piso que fecha o vão onde ficava a parede (arco/porta entre dois cômodos, ou parede inteira demolida) — sempre usava `Catalog.getProduct(DEFAULT_FLOOR_FINISH_ID)` (o piso padrão de fábrica, "Laminado Carvalho Claro") diretamente, sem NUNCA olhar `floorData.roomFinishes` (onde fica o piso que o usuário realmente escolheu em Materiais pra cada cômodo). Diferente do laço principal do piso de cada cômodo (que já checa `roomFinishes` corretamente), essa peça de ligação nunca recebeu esse tratamento.
+
+**Correção:** nova função `roomFloorFinishProduct(room)` (mesma regra do laço principal: só conta se o piso é `category === 'floor_tile'`), chamada nos dois pontos que constroem a soleira interna — o laço de arco/porta entre cômodos e o laço de parede demolida — passando o piso do cômodo A (ou do B, se A não tiver piso próprio) pra dentro de `buildThresholdSlab`, que ganhou um novo parâmetro `finishProduct` (cai no padrão só se NENHUM dos dois cômodos tiver piso escolhido).
+
+**Verificado ao vivo (cor real do pixel renderizado, sem WebGL):** dois cômodos 4×4m ligados por uma parede — cômodo A com piso "Preto Mosaico" (#282828) escolhido em Materiais, cômodo B sem escolha própria (fica no padrão). Demolindo a parede entre eles e reconstruindo a cena, a peça de soleira mede pixel `rgb(40,40,40)` — exatamente `#282828`, o piso do cômodo A — em vez do tom claro do piso padrão antigo.
+
+**Testado:** suíte completa (675 testes) + `tests/demolish-wall.test.mjs` atualizado pra checar a nova assinatura com `finishProductD`.
+
+---
