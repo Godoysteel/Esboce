@@ -4,7 +4,7 @@
 
 **Status:** Canônico
 
-**Atualização:** 11/08/2026
+**Atualização:** 28/08/2026
 
 ## Estado atual
 
@@ -45,6 +45,7 @@ Baseline verificada em 10/08/2026:
 - prévias isoladas da Vercel para validação antes do merge;
 - Resend via SMTP próprio para e-mails do Supabase;
 - Cloudflare Turnstile nos fluxos sensíveis;
+- Cloudflare Web Analytics com métricas agregadas de acesso, sem cookies de análise;
 - Sentry com coleta mínima e sem telemetria invasiva;
 - gates automáticos de qualidade e deploy.
 

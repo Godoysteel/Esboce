@@ -2,6 +2,7 @@
 
 ## Alterado — 28/08/2026
 
+- Operação: ativado o Cloudflare Web Analytics no domínio oficial para acompanhar visitas, páginas, origens, países, navegadores e dispositivos de forma agregada e sem cookies de análise. A Política de Privacidade foi versionada como `2026-08-28.1`, passou a identificar esse tratamento e o aceite jurídico acompanha a nova versão.
 - Corrigido: telhado em L com duas coberturas quatro-águas ainda podia sobrar um pedaço de espigão visível na junção — a cumeeira central de um telhado maior, quando só encosta PARCIALMENTE na pegada de um telhado menor (uma ponta dentro, a outra de fato fora), agora é aparada na fronteira real, em vez de sobreviver inteira. Ver DEC-165.
 - Corrigido (regressão da correção acima): telhados em nível/ático (mesmo conjunto, mesma cumeeira) não devem mais disputar espigão/cumeeira entre si — evita que a cumeeira legítima que liga os dois níveis seja apagada por engano. Ver DEC-166.
 - Nova ferramenta: com "Apagar" selecionada, clicar numa peça de espigão/cumeeira do telhado (em vez de uma parede) esconde só aquela peça — não mexe na geometria de verdade, só na exibição — e clicar de novo na mesma peça restaura. Útil pra remover na hora qualquer sobra que as regras automáticas ainda não cobrem. Ver DEC-166.
