@@ -5759,7 +5759,28 @@ export function hashColorHex(key: string): number {
             var steelFrameFaceAssemblyId = side === 'a' ? w.faceAAssemblyId : w.faceBAssemblyId;
             var steelFrameFaceConfigured = project.constructionSystem === 'light_steel_frame' && !!steelFrameFaceAssemblyId;
             var faceColor = highlighted ? SELECTED_ACCENT : steelFrameFaceConfigured ? steelFrameAssemblyColorHex(steelFrameFaceAssemblyId) : (DEBUG_COLOR_MODE ? hashColorHex(w.id + '-' + side) : faceColorHex);
-            var faceMat = new THREE.MeshStandardMaterial({
+            // Parede crua (sem acabamento escolhido) usa material SEM
+            // resposta a luz (MeshBasicMaterial) — com MeshStandardMaterial
+            // a cor branca pura virava um cinza-azulado dependendo da
+            // face (a luz de preenchimento fria + o hemisfério céu/chão
+            // do EsboceApplication tingem normais verticais nesse tom);
+            // Product Owner relatou não gostar ("não gosto desse cinza
+            // azulado"). Cor lisa sempre branca resolve sem mexer na
+            // iluminação da casa inteira (afetaria telhado, terreno etc.
+            // também). Acabamentos de verdade (cerâmica, textura PBR,
+            // Steel Frame) e a seleção continuam recebendo luz — ali a
+            // sombra ajuda a ler o material real.
+            var isPlainWallFace = !product && !steelFrameFaceConfigured && !highlighted && !DEBUG_COLOR_MODE;
+            var faceMat = isPlainWallFace ? new THREE.MeshBasicMaterial({
+              color: floorIdx === editingIdx ? pickColor(faceColor, wallCategory, viewState) : faceColor,
+              side: THREE.DoubleSide,
+              polygonOffset: true,
+              polygonOffsetFactor: 1,
+              polygonOffsetUnits: 1,
+              transparent: wallsTransparent,
+              opacity: wallsTransparent ? WALL_TRANSPARENT_OPACITY : 1,
+              depthWrite: !wallsTransparent
+            }) : new THREE.MeshStandardMaterial({
               color: (floorIdx === editingIdx && !DEBUG_COLOR_MODE) ? pickColor(faceColor, wallCategory, viewState) : faceColor,
               map: DEBUG_COLOR_MODE ? null : (hasRealTexture ? wallPbrMaps!.map : ceramicMap),
               normalMap: DEBUG_COLOR_MODE ? null : (hasRealTexture ? wallPbrMaps!.normalMap : null),

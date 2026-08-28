@@ -2057,3 +2057,20 @@ O problema era que o corte de MALHA (`trimRects`, restante da DEC-165) rodava **
 **Testado:** suíte completa (675 testes, sem regressão).
 
 ---
+
+# DEC-174 — Face da parede sem acabamento aparecia cinza-azulada em vez de branca
+
+**Data:** 28/08/2026
+**Status:** Implementado e verificado (cor do material extraída sem WebGL).
+
+**Contexto:** Product Owner reportou, olhando uma parede recém-desenhada sem nenhum acabamento aplicado: "gostaria de deixar a face branca, não gosto desse cinza azulado". A cor-base da face (`wallDefaultColor`) já era `GABLE_COLOR = 0xFFFFFF` (branco puro) — o problema não era o valor da cor, e sim como ela chegava na tela.
+
+**Causa:** a face usava `THREE.MeshStandardMaterial` (material sensível à luz da cena). O `EsboceApplication.ts` monta a iluminação com uma luz hemisférica céu/chão (`0xd8efff`/`0x8b795f`) mais uma luz de preenchimento fria (`0xc5e5f2`) além do sol quente principal — normais verticais (o caso de toda face de parede) recebem uma mistura que pende pro tom acinzentado/azulado dessas duas fontes frias, mesmo com o material sendo branco puro. Esse comportamento já tinha sido identificado e aceito de propósito numa decisão anterior (comentário no código, linhas ~163-179: "só some de vez se a luz virar neutra/branca também, mudança bem maior") — só que o próprio Product Owner, revendo o resultado agora, prefere branco liso ao efeito de profundidade.
+
+**Correção:** só a face SEM acabamento escolhido (sem produto do Catálogo, sem face Steel Frame configurada, sem seleção, fora do modo debug) passa a usar `THREE.MeshBasicMaterial` — material que ignora completamente as luzes da cena, mostrando sempre a cor exata configurada. Isso resolve só o caso reclamado, sem alterar a iluminação da casa inteira (que afetaria telhado, terreno, etc. — descartado de propósito por ser uma mudança bem maior). Acabamentos reais (cerâmica, textura PBR de parede, Steel Frame) e a seleção continuam em `MeshStandardMaterial`, recebendo luz normalmente — ali a variação de sombra ajuda a ler o material de verdade.
+
+**Verificado (extração direta da cor do material, sem WebGL):** reconstruindo a cena com `Scene3DRenderer.rebuild`, toda face de parede sem acabamento aparece como `MeshBasicMaterial` cor `#ffffff` — antes era `MeshStandardMaterial`, cuja cor final dependia da mistura das luzes.
+
+**Testado:** suíte completa (675 testes) + `tests/wall-transparency.test.mjs` atualizado (a checagem de opacidade da camada "Paredes transparentes" agora confere as DUAS ramificações do material — crua e com acabamento).
+
+---
