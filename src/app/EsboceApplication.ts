@@ -414,6 +414,10 @@ export class EsboceApplication {
     const facadeWorkspace = this.requireElement("facadeWorkspace");
     const facadeWorkspaceSubtitle = this.requireElement("facadeWorkspaceSubtitle");
     const facadeSignForm = this.requireElement("facadeSignForm");
+    const facadeWallPicker = this.requireElement("facadeWallPicker");
+    const facadeWallPickerCount = this.requireElement("facadeWallPickerCount");
+    const facadeWallPickerConfirm = this.requireElement("facadeWallPickerConfirm") as HTMLButtonElement;
+    const selectedFacadeWallIds = new Set<string>();
     let activeFacadeWallId: string | null = null;
     let editingFacadeSignId: string | null = null;
     let facadeNightMode = false;
@@ -510,6 +514,8 @@ export class EsboceApplication {
       facadeWorkspace.classList.remove('visible');
       facadeWorkspace.setAttribute('aria-hidden', 'true');
       facadeSignForm.classList.remove('visible');
+      facadeWallPicker.classList.remove('visible');
+      ViewportController.clearFacadeIsolation();
       if (mode === '2d') this.viewport2D?.show();
       else this.viewport2D?.hide();
       this.requireElement("navGizmoCanvas").style.visibility = mode === '3d' ? 'visible' : 'hidden';
@@ -519,7 +525,7 @@ export class EsboceApplication {
       facadeStartOverlay.classList.toggle('visible', visible);
       facadeStartOverlay.setAttribute('aria-hidden', String(!visible));
     };
-    const enterFacadeStudio = (wallId: string | undefined, sourceLabel: string) => {
+    const enterFacadeStudio = (wallId: string | undefined, sourceLabel: string, isolatedWallIds?: string[]) => {
       this.viewMode = '3d';
       this.viewport2D?.hide();
       view3DBtn.classList.remove('active');
@@ -532,7 +538,9 @@ export class EsboceApplication {
       facadeWorkspaceSubtitle.textContent = sourceLabel;
       setFacadeOverlayVisible(false);
       showCategory(undefined);
-      const focusedWallId = ViewportController.focusFacade(wallId);
+      if (isolatedWallIds?.length) ViewportController.isolateFacadeWalls(isolatedWallIds);
+      else ViewportController.clearFacadeIsolation();
+      const focusedWallId = isolatedWallIds?.[0] || ViewportController.focusFacade(wallId);
       activeFacadeWallId = focusedWallId;
       this.requireElement('viewportHint').textContent = focusedWallId
         ? 'Vista de fachada ativa — a pele de vidro já edita o mesmo modelo 3D. Novos elementos serão adicionados por etapas.'
@@ -546,7 +554,31 @@ export class EsboceApplication {
       if (event.target === facadeStartOverlay) setFacadeOverlayVisible(false);
     });
     this.requireElement('facadeUseProjectBtn').addEventListener('click', () => {
-      enterFacadeStudio(undefined, 'Construção atual · vista frontal vinculada ao projeto');
+      setFacadeOverlayVisible(false);
+      selectedFacadeWallIds.clear();
+      facadeWallPickerCount.textContent = 'Nenhuma parede selecionada';
+      facadeWallPickerConfirm.disabled = true;
+      facadeWallPicker.classList.add('visible');
+      facadeWallPicker.setAttribute('aria-hidden', 'false');
+      ViewportController.beginFacadeWallSelection((wallId) => {
+        if (selectedFacadeWallIds.has(wallId)) selectedFacadeWallIds.delete(wallId); else selectedFacadeWallIds.add(wallId);
+        const count = selectedFacadeWallIds.size;
+        facadeWallPickerCount.textContent = count ? `${count} ${count === 1 ? 'parede selecionada' : 'paredes selecionadas'}` : 'Nenhuma parede selecionada';
+        facadeWallPickerConfirm.disabled = count === 0;
+      });
+    });
+    this.requireElement('facadeWallPickerCancel').addEventListener('click', () => {
+      facadeWallPicker.classList.remove('visible');
+      facadeWallPicker.setAttribute('aria-hidden', 'true');
+      ViewportController.beginFacadeWallSelection(null);
+      setFacadeOverlayVisible(true);
+    });
+    facadeWallPickerConfirm.addEventListener('click', () => {
+      const ids = Array.from(selectedFacadeWallIds);
+      if (!ids.length) return;
+      facadeWallPicker.classList.remove('visible');
+      facadeWallPicker.setAttribute('aria-hidden', 'true');
+      enterFacadeStudio(ids[0], `Construção atual · ${ids.length} ${ids.length === 1 ? 'parede isolada' : 'paredes isoladas em paralelo'}`, ids);
     });
     this.requireElement('facadeBlankBtn').addEventListener('click', () => {
       const walls = Store.currentWalls();

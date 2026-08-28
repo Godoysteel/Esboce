@@ -14,7 +14,7 @@ O Esboce terá um **Estúdio de Fachadas** como modo de trabalho do projeto atua
 
 O acesso oferecerá dois caminhos:
 
-1. **Usar a construção atual:** enquadra frontalmente uma parede principal do pavimento e permite compor sobre a geometria existente.
+1. **Usar a construção atual:** entra em seleção múltipla; o usuário clica nas paredes que receberão a fachada e confirma. O Estúdio cria uma projeção temporária na qual somente essas paredes e seus elementos vinculados aparecem, alinhados lado a lado em vista paralela. A geometria original e suas identificações não são alteradas.
 2. **Começar com fachada vazia:** cria um plano inicial isolado de 10 m dentro do projeto e abre o mesmo ambiente de composição.
 
 ## Experiência pretendida
@@ -58,3 +58,7 @@ O realismo será construído sobre geometria paramétrica, espessuras reais, mat
 O primeiro elemento próprio do Estúdio é o letreiro iluminado vinculado a uma parede. A entidade `FacadeSign` é persistida no pavimento e contém texto, dimensões, elevação, posição, acabamento da face, cor da luz e uma das três soluções visuais: iluminação frontal, interna ou efeito halo.
 
 A edição acontece na barra contextual do Estúdio e atualiza o mesmo objeto. A prévia noturna aumenta a emissão luminosa para facilitar a avaliação, sem alterar os dados construtivos nem criar uma cópia do projeto.
+
+## Seleção e isolamento de paredes existentes
+
+O isolamento é exclusivamente visual. O renderizador deriva uma cena de apresentação com as paredes selecionadas horizontalizadas e separadas por um intervalo constante. Portas, janelas, pele de vidro e letreiros continuam associados aos identificadores originais. Ao sair do Estúdio, o projeto volta à disposição espacial normal sem qualquer conversão de coordenadas.

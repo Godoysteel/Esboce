@@ -2,6 +2,7 @@
 
 ## Alterado — 28/08/2026
 
+- Estúdio de Fachadas: ao usar uma construção existente, o usuário agora seleciona uma ou mais paredes diretamente no modelo; após confirmar, somente elas permanecem visíveis e são alinhadas lado a lado em uma vista paralela para composição.
 - Estúdio de Fachadas: primeiro elemento próprio com letreiro em letras-caixa, edição de texto, dimensões, elevação, cores, iluminação frontal/interna/halo, exclusão, persistência e comparação dia/noite.
 - Iniciado o Estúdio de Fachadas: nova entrada dedicada com dois caminhos — enquadrar a construção atual ou criar um plano de fachada vazio de 10 m. A primeira entrega abre uma vista frontal vinculada ao mesmo modelo 3D, reaproveita a ferramenta funcional de pele de vidro e apresenta, sem fingir disponibilidade, os próximos grupos de letreiros, marquises, brises, ripados/vazados e visualização dia/noite. Ver ADR-010.
 - Operação: ativado o Cloudflare Web Analytics no domínio oficial para acompanhar visitas, páginas, origens, países, navegadores e dispositivos de forma agregada e sem cookies de análise. A Política de Privacidade foi versionada como `2026-08-28.1`, passou a identificar esse tratamento e o aceite jurídico acompanha a nova versão.

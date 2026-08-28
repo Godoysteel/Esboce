@@ -42,6 +42,7 @@ Baseline verificada em 10/08/2026:
 ### Estúdio de Fachadas
 
 - entrada dedicada com vista frontal sobre o mesmo modelo do projeto;
+- seleção múltipla de paredes da construção, com isolamento e alinhamento paralelo entregue;
 - início pela construção atual ou por um plano de fachada vazio de 10 m;
 - pele de vidro já disponível no fluxo inicial;
 - letreiro iluminado em letras-caixa com configuração e prévia dia/noite entregue;

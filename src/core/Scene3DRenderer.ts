@@ -45,6 +45,7 @@ export interface ViewState {
   heightAdjustArmedWallId?: string | null;
   roomGroupWallIds?: string[] | null;
   selectedColumn?: Column | null;
+  facadeIsolatedWallIds?: string[] | null;
   selectedOpening?: Opening | null;
   selectedRoof?: Roof | null;
   selectedVaranda?: Varanda | null;
@@ -5264,6 +5265,33 @@ export function hashColorHex(key: string): number {
   }
 
   export function rebuild(scene: THREE.Scene, project: Project, canvasSize: any, viewState: ViewState) {
+    if (viewState.facadeIsolatedWallIds?.length) {
+      const selected = new Set(viewState.facadeIsolatedWallIds);
+      let cursorM = 0;
+      const isolatedProject: Project = {
+        ...project,
+        hydraulics: { nodes: [], segments: [] },
+        floors: project.floors.map((sourceFloor, floorIndex) => {
+          if (floorIndex !== project.currentFloorIndex) return { ...sourceFloor, walls: [], columns: [], roofs: [], openings: [], varandas: [], lajes: [], furniture: [], glazingPanels: [], facadeSigns: [], balconyRailings: [], volumeBoxes: [], stairs: [] };
+          const walls = sourceFloor.walls.filter((wall) => selected.has(wall.id)).map((wall) => {
+            const lengthM = Core.wallLengthMeters(wall);
+            const clone = { ...wall, x1: cursorM * Core.GRID, y1: 0, x2: (cursorM + lengthM) * Core.GRID, y2: 0 };
+            cursorM += lengthM + 1;
+            return clone;
+          });
+          return {
+            ...sourceFloor,
+            walls,
+            columns: [], roofs: [], varandas: [], lajes: [], furniture: [], balconyRailings: [], volumeBoxes: [], stairs: [],
+            openings: sourceFloor.openings.filter((opening) => selected.has(opening.wallId)),
+            glazingPanels: (sourceFloor.glazingPanels || []).filter((panel) => panel.wallId && selected.has(panel.wallId)),
+            facadeSigns: (sourceFloor.facadeSigns || []).filter((sign) => selected.has(sign.wallId)),
+          };
+        }),
+      };
+      delete isolatedProject.terreno;
+      project = isolatedProject;
+    }
     clearRegistry();
 
     var scale = 1 / Core.GRID, offsetX = 0, offsetY = 0;

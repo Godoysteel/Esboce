@@ -66,6 +66,8 @@ import {
   var floorFinishRotation = 0;
   var selectedWallId: any = null, selectedColumnId: any = null, selectedRoofId: any = null, selectedOpeningId: any = null, selectedVarandaId: any = null, selectedLajeId: any = null, selectedFurnitureId: any = null, selectedGlazingPanelId: any = null, selectedBalconyRailingId: any = null, selectedVolumeBoxId: any = null, selectedStairId: any = null, selectedForroRoomKey: any = null, selectedHydraulicNodeId: any = null;
   var steelFrameSurfaceSelectionHandler: ((target: { kind: 'wall-face' | 'gable-face' | 'stepped-wall-face' | 'roof'; entityId: string; side?: 'a' | 'b' }) => boolean) | null = null;
+  var facadeWallSelectionHandler: ((wallId: string) => void) | null = null;
+  var facadeIsolatedWallIds: string[] | null = null;
   var steelFrameRoofHidden = false;
   // Alça de altura do cômodo (DEC-116) só existe/é clicável enquanto
   // esta variável apontar pra parede selecionada — precisa de um clique
@@ -1686,6 +1688,7 @@ import {
       terrenoToolActive: currentTool === 'terreno',
       hideRoofs: steelFrameRoofHidden,
       steelFrameConfigMode: !!steelFrameSurfaceSelectionHandler
+      ,facadeIsolatedWallIds: facadeIsolatedWallIds
     });
     positionGizmoAndShapePanel();
     updateDimLabels();
@@ -2876,6 +2879,15 @@ import {
 
     // 2) elemento existente
     var mesh = pickMesh(e.clientX, e.clientY);
+
+    if (facadeWallSelectionHandler) {
+      if (mesh?.userData.wallId) {
+        facadeWallSelectionHandler(mesh.userData.wallId);
+        select(mesh.userData.wallId);
+        hintEl.textContent = 'Parede marcada para a fachada. Selecione outras ou confirme a vista.';
+      } else hintEl.textContent = 'Clique diretamente nas paredes que receberão a fachada.';
+      return;
+    }
 
     if (steelFrameSurfaceSelectionHandler) {
       var sfHit = pickMeshHit(e.clientX, e.clientY);
@@ -5747,6 +5759,24 @@ import {
       hintEl.textContent = 'Clique diretamente em uma face de parede, oitão ou cobertura.';
     }
   }
+  export function beginFacadeWallSelection(handler: ((wallId: string) => void) | null): void {
+    facadeWallSelectionHandler = handler;
+    facadeIsolatedWallIds = null;
+    setTool(null);
+    hintEl.textContent = handler ? 'Clique nas paredes que receberão a fachada e depois confirme.' : '';
+    render();
+  }
+  export function isolateFacadeWalls(wallIds: string[]): void {
+    facadeWallSelectionHandler = null;
+    facadeIsolatedWallIds = wallIds.slice();
+    deselect();
+    const totalWidthM = wallIds.reduce((total, id) => total + (Store.findWall(id) ? Core.wallLengthMeters(Store.findWall(id)!) : 0), 0) + Math.max(0, wallIds.length - 1);
+    camAngle = Math.PI / 2; camElev = 0.04; camDist = Math.max(8, totalWidthM * 0.72);
+    camTarget.x = 0; camTarget.y = 1.45; camTarget.z = 0; updateCam(); render();
+  }
+  export function clearFacadeIsolation(): void {
+    facadeWallSelectionHandler = null; facadeIsolatedWallIds = null; render();
+  }
   export function setSteelFrameRoofHidden(hidden: boolean) {
     if (steelFrameRoofHidden === hidden) return;
     steelFrameRoofHidden = hidden;
@@ -5804,6 +5834,7 @@ export const ViewportController = {
   resetCamera,
   focusFacade,
   setFacadeNightMode,
+  beginFacadeWallSelection, isolateFacadeWalls, clearFacadeIsolation,
   toggleTouchCameraMode,
   getZoomPercent, zoomIn, zoomOut, setOnZoomChanged,
   toggleLayersMenuAtElement,
