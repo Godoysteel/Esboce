@@ -2061,16 +2061,18 @@ O problema era que o corte de MALHA (`trimRects`, restante da DEC-165) rodava **
 # DEC-174 — Face da parede sem acabamento aparecia cinza-azulada em vez de branca
 
 **Data:** 28/08/2026
-**Status:** Implementado e verificado (cor do material extraída sem WebGL).
+**Status:** Implementado e verificado (propriedades do material extraídas sem WebGL). Ajuste fino (`emissiveIntensity`) pendente de confirmação visual do Product Owner.
 
 **Contexto:** Product Owner reportou, olhando uma parede recém-desenhada sem nenhum acabamento aplicado: "gostaria de deixar a face branca, não gosto desse cinza azulado". A cor-base da face (`wallDefaultColor`) já era `GABLE_COLOR = 0xFFFFFF` (branco puro) — o problema não era o valor da cor, e sim como ela chegava na tela.
 
 **Causa:** a face usava `THREE.MeshStandardMaterial` (material sensível à luz da cena). O `EsboceApplication.ts` monta a iluminação com uma luz hemisférica céu/chão (`0xd8efff`/`0x8b795f`) mais uma luz de preenchimento fria (`0xc5e5f2`) além do sol quente principal — normais verticais (o caso de toda face de parede) recebem uma mistura que pende pro tom acinzentado/azulado dessas duas fontes frias, mesmo com o material sendo branco puro. Esse comportamento já tinha sido identificado e aceito de propósito numa decisão anterior (comentário no código, linhas ~163-179: "só some de vez se a luz virar neutra/branca também, mudança bem maior") — só que o próprio Product Owner, revendo o resultado agora, prefere branco liso ao efeito de profundidade.
 
-**Correção:** só a face SEM acabamento escolhido (sem produto do Catálogo, sem face Steel Frame configurada, sem seleção, fora do modo debug) passa a usar `THREE.MeshBasicMaterial` — material que ignora completamente as luzes da cena, mostrando sempre a cor exata configurada. Isso resolve só o caso reclamado, sem alterar a iluminação da casa inteira (que afetaria telhado, terreno, etc. — descartado de propósito por ser uma mudança bem maior). Acabamentos reais (cerâmica, textura PBR de parede, Steel Frame) e a seleção continuam em `MeshStandardMaterial`, recebendo luz normalmente — ali a variação de sombra ajuda a ler o material de verdade.
+**1ª tentativa (revertida):** trocar a face sem acabamento pra `THREE.MeshBasicMaterial` (ignora completamente a luz da cena, mostra sempre a cor exata configurada). Resolveu o tom errado, mas trocou por outro problema: sem nenhuma luz incidindo, TODAS as faces ficam exatamente na mesma cor plana, sem nenhuma sombra entre a face mais e a menos exposta ao sol — Product Owner: "ficou muito forte, parece até que emite luz".
 
-**Verificado (extração direta da cor do material, sem WebGL):** reconstruindo a cena com `Scene3DRenderer.rebuild`, toda face de parede sem acabamento aparece como `MeshBasicMaterial` cor `#ffffff` — antes era `MeshStandardMaterial`, cuja cor final dependia da mistura das luzes.
+**Correção final:** volta pra `THREE.MeshStandardMaterial` (mantém a resposta à luz e a variação de sombra entre as faces — a profundidade que o usuário não reclamou de perder) e soma, só na face sem acabamento (sem produto do Catálogo, sem face Steel Frame configurada, sem seleção, fora do modo debug), um branco EMISSIVO leve (`emissive: 0xFFFFFF, emissiveIntensity: 0.15`) — um valor somado por cima do resultado já iluminado, igual em toda a face, que clareia e dessatura o tom acinzentado/azulado sem apagar de vez a diferença entre a face mais e a menos iluminada. Acabamentos reais (cerâmica, textura PBR, Steel Frame) e a seleção não recebem esse reforço, continuam exatamente como antes.
 
-**Testado:** suíte completa (675 testes) + `tests/wall-transparency.test.mjs` atualizado (a checagem de opacidade da camada "Paredes transparentes" agora confere as DUAS ramificações do material — crua e com acabamento).
+**Verificado (propriedades do material extraídas sem WebGL, não o pixel final renderizado):** reconstruindo a cena com `Scene3DRenderer.rebuild`, toda face de parede sem acabamento aparece como `MeshStandardMaterial` com `emissive: #ffffff` e `emissiveIntensity: 0.15`. O valor `0.15` é uma estimativa de engenharia (não dá pra calcular o pixel final exato sem GPU de verdade nesta reprodução) — pode precisar de ajuste fino depois do Product Owner conferir ao vivo no site.
+
+**Testado:** suíte completa (675 testes) + `tests/wall-transparency.test.mjs` revertido pra checar de volta um único bloco `MeshStandardMaterial`.
 
 ---
