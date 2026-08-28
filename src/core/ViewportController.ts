@@ -2911,6 +2911,14 @@ import {
         var newOpening = Store.commands.insertOpening(mesh.userData.wallId, currentTool, gpIns.x, gpIns.y, productOverride);
         if (newOpening) {
           if (pendingCommercialSelection) Store.commands.setCommercialSelection(Store.currentFloor().id + ':opening:' + newOpening.id, pendingCommercialSelection);
+          // Ferramenta desarma sozinha depois de UMA porta/janela/arco —
+          // Product Owner relatou esquecer a ferramenta ainda armada e,
+          // ao tentar arrastar uma parede/cômodo em seguida, criar uma
+          // abertura sem querer (a inserção acontece no pointerdown, não
+          // dá pra "virar" um arraste depois). setTool(null) já chama
+          // deselect() internamente — por isso roda ANTES de
+          // selectOpening, senão desmarcava a própria porta recém-criada.
+          setTool(null);
           selectOpening(newOpening.id);
         }
         else {

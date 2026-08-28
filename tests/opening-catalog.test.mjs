@@ -61,6 +61,30 @@ test('seletor de esquadria (ViewportController) guarda o produto escolhido antes
   assert.match(source, /Padrão \(editável depois\)/);
 });
 
+// Bug real (Product Owner): a inserção de porta/janela/arco acontece no
+// PONTEIRO PARA BAIXO (pointerdown), não no soltar — então não dá pra
+// "virar" um clique nisso num arraste de parede depois. A ferramenta
+// ficava armada indefinidamente até o usuário clicar de novo no botão
+// (ou noutra ferramenta), e esquecer disso fazia um arraste de
+// parede/cômodo virar uma abertura sem querer. Corrigido: depois de
+// inserir COM SUCESSO, a ferramenta desarma sozinha (volta pra seleção)
+// — só quando a inserção falha ("não cabe aqui") ela continua armada,
+// pra tentar de novo noutro lugar.
+test('ferramenta Porta/Janela/Arco desarma sozinha (volta pra seleção) depois de inserir uma abertura com sucesso — evita abertura acidental ao tentar arrastar uma parede em seguida', () => {
+  const source = readFileSync(new URL('../src/core/ViewportController.ts', import.meta.url), 'utf8');
+  const start = source.indexOf("Ferramenta Porta/Janela/Arco ativa + clicou numa parede");
+  assert.notEqual(start, -1);
+  const end = source.indexOf('\n    }\n\n    // Ferramenta Quebrar parede', start);
+  const body = source.slice(start, end);
+  assert.match(body, /var newOpening = Store\.commands\.insertOpening\(mesh\.userData\.wallId, currentTool, gpIns\.x, gpIns\.y, productOverride\);/);
+  assert.match(body, /if \(newOpening\) \{[\s\S]*?setTool\(null\);\s*selectOpening\(newOpening\.id\);/);
+  // Na falha, a ferramenta continua armada — nenhum setTool(null) no
+  // ramo "else" (só a mensagem de aviso).
+  const elseStart = body.indexOf('else {');
+  const elseBody = body.slice(elseStart);
+  assert.doesNotMatch(elseBody.split('return;')[0], /setTool\(null\)/);
+});
+
 test('todas as 30 esquadrias têm thumbnail', () => {
   const doorsAndWindows = [...Catalog.getProductsByCategory('door'), ...Catalog.getProductsByCategory('window')];
   assert.equal(doorsAndWindows.length, 30);

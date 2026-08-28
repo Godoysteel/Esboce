@@ -1996,3 +1996,20 @@ O problema era que o corte de MALHA (`trimRects`, restante da DEC-165) rodava **
 **Pendência:** nenhuma — confirmado.
 
 ---
+
+# DEC-171 — Ferramenta Porta/Janela/Arco desarma sozinha depois de inserir uma abertura
+
+**Data:** 28/08/2026
+**Status:** Implementado e testado.
+
+**Contexto:** Product Owner relatou: "às vezes esqueço que apertei o botão de janela ou porta, tento arrastar uma parede ou cômodos e ele cria uma abertura sem querer, tem que haver um modo de os cliques não persistirem nos botões". Causa: a inserção de porta/janela/arco acontece no `pointerdown` (não no soltar) — assim que o botão do mouse desce sobre uma parede com a ferramenta armada, a abertura já é criada, sem chance de "virar" um arraste de parede/cômodo depois. Como a ferramenta ficava armada indefinidamente (só desarmava clicando de novo no botão ou trocando de ferramenta), era fácil esquecer o estado e tomar um susto.
+
+**Decisão (perguntado ao Product Owner, que confirmou):** depois de inserir UMA abertura com sucesso, a ferramenta desarma sozinha (volta pro modo seleção) — pra colocar a próxima porta/janela, precisa clicar no botão de novo. Alternativa cogitada (manter armada, só reforçar visualmente) foi descartada pelo próprio Product Owner em favor da mais segura.
+
+**Implementação:** `ViewportController.ts`, no bloco de inserção de porta/janela/arco — depois de `Store.commands.insertOpening(...)` retornar uma abertura válida, chama `setTool(null)` antes de `selectOpening(newOpening.id)` (a ordem importa: `setTool(null)` chama `deselect()` internamente, que desmarcaria a própria porta recém-criada se rodasse depois). Na falha ("não cabe aqui"), a ferramenta continua armada — faz sentido tentar de novo noutro lugar da mesma parede sem precisar reativar o botão.
+
+**Testado:** suíte completa (663 testes) + novo teste em `tests/opening-catalog.test.mjs` confirmando a ordem `setTool(null)` → `selectOpening` no caminho de sucesso, e a ausência de `setTool(null)` no caminho de falha.
+
+**Pendência:** verificação visual no site publicado (ambiente desta sessão não tem WebGL) — a lógica foi verificada por leitura de código (`selectOpening`/`deselect` não dependem uma da outra nem de `currentTool`, sem conflito de ordem).
+
+---

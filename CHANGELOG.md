@@ -13,6 +13,7 @@
 - Corrigido: no encontro em L de dois telhados duas-águas, a parede do oitão perdia um pedaço da própria forma ("face apagada") — o corte de malha usado pra cortar a água nesse tipo de encontro estava sendo aplicado também na parede, que é vertical e não deveria passar por esse corte. Ver DEC-169.
 - Corrigido (mesmo encontro em L de duas-águas): a tabeira (faixa de acabamento do beiral) continuava passando reto, com uma fresta, mesmo depois da correção acima — dois mecanismos de corte diferentes disputavam a mesma peça com critérios levemente distintos. Agora só um deles atua em cada caso, e o corte da tabeira segue uma diagonal de vale coerente. Ver DEC-169.
 - Corrigido: na quina EXTERNA do L (longe do vão), o beiral de um telhado duas-águas avançava bem além de onde a parede do oitão do vizinho termina, ficando "flutuando" no ar na frente dela — agora é cortado exatamente no plano da parede alheia. Ver DEC-170.
+- Corrigido: as ferramentas Porta, Janela e Arco agora desarmam sozinhas depois de inserir uma abertura, voltando pro modo seleção — evita criar uma abertura sem querer ao esquecer a ferramenta ainda ativa e tentar arrastar uma parede ou cômodo em seguida. Ver DEC-171.
 
 ## Alterado — 27/08/2026
 
