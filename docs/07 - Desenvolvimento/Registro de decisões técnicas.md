@@ -2076,3 +2076,134 @@ O problema era que o corte de MALHA (`trimRects`, restante da DEC-165) rodava **
 **Testado:** suíte completa (675 testes) + `tests/wall-transparency.test.mjs` revertido pra checar de volta um único bloco `MeshStandardMaterial`.
 
 ---
+
+# DEC-175 — Bloco de Volumetria ganha elemento estrutural + material (Fase B da DEC-163)
+
+**Data:** 01/09/2026
+**Status:** Implementado e verificado (typecheck + suíte de testes).
+
+**Contexto:** feedback de um engenheiro testando o Esboce: teve dificuldade desenhando com a ferramenta de Parede e "ficou sem piso" (paredes soltas nunca fecham um cômodo, então `Core.detectRooms` não encontra nada pra gerar piso — comportamento existente, não uma regressão). Discutindo o caminho pra frente, o Product Owner decidiu não tentar consertar a ferramenta de Parede livre e em vez disso investir no "cubo mágico": o Bloco de Volumetria, já moldável livremente por canto/aresta/face desde a DEC-163 (que deixou explicitamente em aberto uma "Fase B" de sistema de materiais — "fica pra uma etapa seguinte"). Pedido: o bloco deve poder ser marcado com que ELEMENTO estrutural ele representa (parede, marquise, pilar, cobertura) e que MATERIAL (madeira, concreto, tijolo, metalão, ACM, Steel Frame — lista completa da DEC-163 — mais telhado, pedido nesta rodada), refletindo os dois no quantitativo/orçamento em vez de sempre cair no genérico R$260/m².
+
+**Decisão de escopo (confirmada com o Product Owner):**
+- Lista de materiais: os 6 da DEC-163 + telhado (7 no total).
+- Preço por MATERIAL usa a mesma métrica que o bloco já mede hoje — m² de SUPERFÍCIE total (`Core.volumeBoxSurfaceAreaM2`), não volume/peça real. Os preços reais já rastreados por volume/peça (`concretePerM3`, `brickPerUnit`, `woodPerM3`) foram considerados e descartados: exigiriam calcular o volume de um sólido moldado livremente (cantos deslocados) e estimar contagem de peças reais numa forma arbitrária — complexidade sem ganho claro nesta fase. Cada material novo ganha sua própria chave `MaterialPriceKey` (`volumeBox{Material}PerM2`) com preço médio de mercado estimado (ver comentário em `ESTIMATED_MARKET_PRICES`, `MaterialsPanel.ts`), mesmo padrão "Vórtice Materiais" das demais peças sem fornecedor externo cadastrado — pronta pra virar preço real no futuro se um SKU for cadastrado na migration, sem mudar nenhuma linha de código.
+- `elementType` é etiqueta pura pro quantitativo (`VolumeBoxElementType` em `types.ts`) — não muda geometria, gizmo ou qualquer outro comportamento do bloco.
+- Textura PBR real por material fica fora de escopo nesta rodada — só cor sólida padrão por material (`Scene3DRenderer.buildVolumeBoxMaterial`, reaproveitando os mesmos tons de madeira/tijolo já usados no poste da Varanda) quando o bloco não tem `colorHex`/`finishProductId` próprio.
+
+**Implementação:**
+- `types.ts`: `VolumeBoxElementType`/`VolumeBoxMaterial` (uniões de string) + `VolumeBox.elementType?`/`VolumeBox.structuralMaterial?`, ambos opcionais — projeto salvo antes desta versão não muda nada.
+- `Store.ts`: `setVolumeBoxElementType`/`setVolumeBoxMaterial`, mesmo padrão de `setColumnShape`/`setVolumeBoxFinish` (undo snapshot + emit); `undefined` desmarca (clicar de novo no botão já ativo).
+- `ProjectPersistence.ts` (`parseVolumeBox`): os dois campos novos validados contra a união via `enumValue` — sem isso não sobreviveriam a salvar/carregar (parser é whitelist campo-a-campo, não spread genérico).
+- `index.html`/`ViewportController.ts`: painel novo `volumeBoxTypePanel` (mesmo padrão de `columnShapePanel`/`stairTypePanel` — popover com botões curtos, empilhado à esquerda do gizmo de ação via `stackLeftOf`), dois grupos (Elemento: Pd/Mq/Pl/Cb; Material: Md/Cc/Tj/Mt/Ac/SF/Tl) separados por um divisor visual.
+- `MaterialsPanel.ts`: quando o bloco não tem `finishProductId` mas tem `structuralMaterial`, a área de superfície entra num balde novo (`totals.volumeBoxMaterialAreaM2`, chaveado por `elementType::material`) em vez do genérico `volumeBoxGenericAreaM2` — blocos sem NENHUMA marcação continuam exatamente no comportamento antigo. `buildRows()` gera uma linha por combinação, categoria = nome do elemento (ou "Volumetria" se só o material foi marcado).
+
+**Testado:** typecheck (`npm run typecheck`, limpo) + suíte completa (677 testes, incluindo um teste novo em `tests/materials-coverage.test.mjs` que confirma as 7 chaves de preço novas e a lógica de linha por material).
+
+---
+
+# DEC-176 — Fecha a DEC-164 (EM ABERTO): alças de canto/aresta saem de vez, Bloco de Volumetria molda só por push-pull de face
+
+**Data:** 01/09/2026
+**Status:** Implementado e verificado ao vivo no navegador (WebGL disponível nesta sessão, ao contrário da DEC-164).
+
+**Contexto:** a DEC-164 ficou EM ABERTO depois de 3 tentativas de correção de geometria/aparência das alças de canto/aresta/face (todas reportadas pelo Product Owner como "não deu certo", a última sem nem detalhar o sintoma) — o próprio registro pedia pra não tentar uma 4ª correção às cegas sem repro exata. Nesta sessão, o Product Owner não pediu mais uma correção da MESMA abordagem — pediu pra mudar a abordagem: "ele deve extrudar somente as faces". Em vez de tentar consertar as 20 alças de canto+aresta pela quarta vez, elas saem de cena — só as 6 alças de face (push-pull) continuam.
+
+**Decisão:** manter só o push-pull de face. Como toda face-drag já movia os 4 cantos da face juntos, ao longo da normal (nunca um canto isolado), o bloco nunca mais fica torto/skewed sem querer — é sempre um paralelepípedo reto, só largura/altura/profundidade mudam. `VolumeBox.cornerOffsets` continua existindo como formato de dado (Core.ts não mudou nenhuma função de geometria/área/volume), só a UI de canto/aresta que saiu.
+
+**Implementação:**
+- `Scene3DRenderer.ts`: removida a geração das 8 esferas de canto e 12 cilindros de aresta; só o plano de face continua.
+- `ViewportController.ts`: removidos os 3 blocos (pointerdown/pointermove/pointerup) que tratavam `volumeBoxCorner:`/`volumeBoxEdge:`.
+- `Store.ts`: removidos `updateVolumeBoxCornerLive`/`updateVolumeBoxEdgeLive` e o helper `worldDeltaToVolumeBoxLocal` (só existia pra esses dois — `updateVolumeBoxFaceLive` usa a normal local direto, não converte delta de mundo).
+- `Core.ts`: removido `VOLUME_BOX_EDGES` (topologia de aresta), sem mais nenhum consumidor.
+
+**Verificado ao vivo — e um bug real encontrado no caminho:** testando o arraste de face com o bloco longe da origem (depois de alguns arrastes de corpo acumulados), o clique bem no meio da face visível não acertava a alça nenhuma vez — sempre caía no arraste do CORPO inteiro em vez do push-pull. Instrumentei `THREE.Object3D.prototype.add` no console pra capturar a geometria real de cada `volumeBoxFace:N` gerada e comparei com o bloco visível: a alça de face de um bloco 1x1x1 tinha só ~0,05m de extensão nos eixos X/Z (devia ter ~1m) — uma fatia fina perto do centro em vez de cobrir a face inteira. Causa raiz: `vbLocalToWorld` (função interna, só usada pra posicionar as alças) multiplicava `local.x`/`local.z` por `scale` de novo — mas esses valores (vindos de `Core.volumeBoxCornerLocalPositions`) já estão em METROS reais, igual `local.y` na linha de baixo (que corretamente nunca multiplicou por `scale`); só o CENTRO (`vbCenterWorldX/Z`) precisa de `* scale` porque parte de `vbSel.x/y` em unidade de grade. Com `scale ≈ 1/GRID`, a alça de face ficava ~20x menor que devia, apertada perto do centro do bloco — exatamente o sintoma "as alças estão todas juntas" reportado nesta sessão, e muito provavelmente a causa raiz nunca diagnosticada da DEC-164 inteira (as alças de canto/aresta antigas usavam a MESMA função, então sofriam do mesmo encolhimento). Corrigido removendo o `* scale` extra em `vbLocalToWorld`. Depois da correção: arrastar o meio de uma face move só os 4 cantos daquela face, mesmo offset nos 4, box não sai do lugar — confirmado numericamente (`Store.getProject()`) e visualmente (screenshot antes/depois).
+
+**Testado:** typecheck limpo + suíte completa (676 testes — `tests/volumetria.test.mjs` reescrito pra afirmar a AUSÊNCIA das alças de canto/aresta em vez da presença) + verificação ao vivo no navegador (WebGL real, ao contrário da DEC-164) confirmando o push-pull de face funcionando depois da correção do bug de escala.
+
+---
+
+# DEC-177 — Página Bold ACM entra como referência pública separada de oferta comercial
+
+**Data:** 01/09/2026
+**Status:** Implementado e verificado (typecheck, testes e build).
+
+**Contexto:** o Product Owner pediu uma página da Bold dentro do catálogo do Esboce e forneceu como origem a categoria pública de chapas de ACM. Não foi apresentada autorização comercial, API, tabela contratual, licença de imagens ou confirmação de parceria.
+
+**Decisão:** criar uma aba especial **Bold · ACM**, seguindo o precedente técnico da aba estática de construção a seco, mas com identidade e conteúdo próprios. O recorte usa dez referências públicas da linha EasyBold +5, consultadas em 01/09/2026, e mantém em `BoldCatalog.ts` a origem, a data e os valores exibidos. Em vez de copiar fotografias comerciais, os cartões usam amostras CSS aproximadas de cor/acabamento; cada cartão leva à página pública da Bold.
+
+**Limite comercial:** a interface afirma explicitamente que os preços são referências públicas sujeitas a confirmação e que a página não representa parceria oficial nem proposta comercial. Os itens não são cadastrados como ofertas do Supabase, não entram no orçamento e ainda não podem ser aplicados automaticamente à geometria 3D. Uma integração real exigirá acordo, SKUs estáveis, atualização de preço/estoque, imagens licenciadas e regra de aplicação/quantificação.
+
+**Implementação:**
+- `src/core/BoldCatalog.ts`: tipagem, dez referências, data da consulta e URLs de procedência.
+- `src/app/EsboceApplication.ts`: aba dedicada, página, cartões acessíveis por teclado e links externos seguros.
+- `index.html`: identidade visual da página, amostras de acabamento e layout responsivo dentro do painel existente.
+- `docs/06 - Especificações/Catálogo Bold ACM.md`: especificação funcional, fontes e limites.
+- `tests/bold-catalog.test.mjs`: cobertura estrutural da página e das ressalvas comerciais.
+
+---
+
+# DEC-178 — ACM Bold passa de amostra visual para acabamento PBR aplicável
+
+**Data:** 01/09/2026
+**Status:** Implementado e verificado (ativos, typecheck, testes e build).
+
+**Contexto:** depois da página Bold entrar no catálogo, o Product Owner pediu textura PBR para todas as cores de ACM exibidas e representação fiel da diferença entre cor, brilho e acabamento quando o material fosse aplicado.
+
+**Decisão:** as dez variações dimensionais compartilham sete materiais visuais únicos. Cada um recebe albedo, normal, rugosidade, metalicidade e AO, além de parâmetros físicos por produto (`metalness`, `roughness`, `clearcoat`, `clearcoatRoughness` e `normalScale`). Acabamentos brilhantes usam verniz alto e baixa rugosidade; metálicos elevam metalicidade sem gravar reflexo no albedo; fosco usa rugosidade alta; Madeira Clara e Cimento Queimado preservam a estampa impressa, mas continuam se comportando como coating sobre ACM, não como madeira/concreto maciços.
+
+**Geração e procedência:** os sete albedos foram gerados com a ferramenta integrada `image_gen` a partir de prompts de textura ortográfica, repetível, sem juntas/rebites/texto e sem iluminação direcional embutida. Os arquivos originais ficam como `albedo-source.png`. `scripts/texturas/generate_bold_acm_pbr.py` produz os mapas finais de 1024 px e documenta as calibrações, permitindo regeneração consistente.
+
+**Aplicação:** os produtos Bold são registrados localmente no `Catalog` como revestimentos externos. Clicar no cartão arma a ferramenta de aplicação para face externa ou Bloco de Volumetria, grava o snapshot comercial público e fecha o catálogo. Paredes, oitões e blocos usam `MeshPhysicalMaterial` apenas quando o produto possui `pbrMaterial`; os demais materiais continuam no caminho legado `MeshStandardMaterial`.
+
+**Quantitativo:** cada variação mantém o preço público por peça e a cobertura física da chapa (`6,10 m²` para 1.220 × 5.000 mm; `7,50 m²` para 1.500 × 5.000 mm). Isso permite arredondar a compra para chapas inteiras sem confundir escala de textura com cobertura comercial.
+
+**Limite:** a fidelidade é uma aproximação digital calibrada, não medição espectrofotométrica nem substituto de amostra física. Reflexos finais também dependem da iluminação e do ambiente da cena.
+
+---
+
+# DEC-179 — Cubo mágico: material é escolhido no clique do botão que cria, não depois
+
+**Data:** 01/09/2026
+**Status:** Implementado e verificado ao vivo.
+
+**Contexto:** depois da DEC-175 (material como marcação pós-criação, painel no gizmo) e DEC-176 (só push-pull de face), Product Owner pediu mais um ajuste de fluxo: "quando clicar no botão para criar o cubo mágico já deve aparecer uma lista perguntando de que material ele é feito" — em vez de nascer sem marcação e exigir abrir o painel de elemento/material depois.
+
+**Também discutido nesta sessão (não implementado ainda):** a ideia de o cubo aceitar QUALQUER produto do Catálogo (não só os 7 materiais fixos da DEC-175) — incluindo os que o Codex está trazendo pra Bold (chapas de ACM) — com alguma forma de distinguir se um produto do catálogo é revestimento (superfície) ou o material que compõe a estrutura do próprio bloco. Isso exige uma decisão de modelo de dados (campo novo no Catálogo, ou inferência por categoria) ainda em aberto — fica pra uma rodada futura. Esta DEC cobre só o REPOSICIONAMENTO do momento da pergunta (criação em vez de pós-criação), reaproveitando a mesma lista fixa de 7 materiais que já existia.
+
+**Implementação:** clicar no botão "Cubo mágico" não chama mais `Store.commands.createVolumeBox` direto — abre `volumeBoxMaterialPickerPanel` (mesmo padrão visual/estrutural do seletor de esquadria por material, `openingPickerPanel`/DEC anterior de portas e janelas — painel fixo no canto, não preso a nenhum objeto 3D). Escolher um material chama `placeRoomPreset('volumetria', material)`, que cria o bloco e já aplica `Store.commands.setVolumeBoxMaterial` nele (e seleciona, pra mostrar a marcação confirmada no painel de elemento/material da DEC-175). "Padrão (sem material definido)" cria sem marcação nenhuma — comportamento idêntico ao de antes desta mudança. Clicar fora do painel (fora dele e fora do próprio botão) cancela sem criar nada.
+
+**Testado:** typecheck limpo + suíte completa (681 testes, 3 novos cobrindo o painel no HTML, o botão abrindo o seletor em vez de criar direto, e o clique de material chamando `placeRoomPreset` com o valor certo) + verificação ao vivo: botão abre a lista, escolher "Tijolo" cria o cubo já na cor de tijolo e com `structuralMaterial: "tijolo"` no Store, "Padrão" cria sem marcação, clique fora fecha sem criar nada.
+
+---
+
+# DEC-180 — ACM sai da lista de material ESTRUTURAL do Cubo mágico (é revestimento, não estrutura)
+
+**Data:** 01/09/2026
+**Status:** Implementado e verificado (typecheck + suíte).
+
+**Contexto:** enquanto a página Bold ACM entrava no catálogo (DEC-177/178, Codex), ficou pendente nesta sessão terminar de descrever a distinção revestimento-vs-estrutura pro material do Cubo mágico. Product Owner completou o raciocínio: "o ACM é revestimento, estrutura para o ACM seria perfis de alumínio ou metalon" — ou seja, `VolumeBoxMaterial` (DEC-175/179, classificação ESTRUTURAL) nunca deveria ter tido "acm" como opção; um bloco revestido de ACM de verdade já é coberto pelo mecanismo de acabamento real (`finishProductId`, catálogo Bold da DEC-178), e a estrutura por baixo desse revestimento é "metalao" — que já existia na lista.
+
+**Decisão:** remover `'acm'` de `VolumeBoxMaterial` (agora 6 opções: madeira/concreto/tijolo/metalao/steelFrame/telhado). Nenhuma substituição necessária — "metalao" já representa corretamente o perfil metálico/alumínio que sustenta um ACM real.
+
+**Implementação:** removido de `types.ts` (união), `Scene3DRenderer.ts` (cor padrão), `MaterialsPanel.ts` (label, chave de preço, união `MaterialPriceKey`, `REFERENCE_PRICES`/`ESTIMATED_MARKET_PRICES`/`VORTICE_MATERIAL_SKUS`), `index.html` (botão "Ac" do painel de elemento/material), `ViewportController.ts` (lista do seletor de material na criação, DEC-179), `ProjectPersistence.ts` (validação do enum ao carregar). Não mexeu em nada do catálogo Bold ACM (`BoldCatalog.ts`, `Catalog.ts`) — os dois sistemas são eixos diferentes e continuam coexistindo (acabamento real tem prioridade de custo sobre a classificação estrutural genérica, já decidido na DEC-175).
+
+**Testado:** typecheck limpo + suíte completa (682 testes, incluindo os testes de cobertura de material atualizados de 7 pra 6 chaves).
+
+---
+
+# DEC-181 — Material "Metalão" vira esqueleto procedural de 12 perfis, não bloco sólido colorido
+
+**Data:** 01/09/2026
+**Status:** Implementado e verificado ao vivo (WebGL real).
+
+**Contexto:** depois da DEC-180 (ACM é revestimento, não estrutura), Product Owner pediu que ativar "Metalão" no Cubo mágico gere uma representação de verdade de estrutura de aço/alumínio, não só tingir o bloco de cinza. Perguntado sobre a forma exata, escolheu a opção mais simples entre as apresentadas: as 12 arestas do volume viram perfis tubulares — o bloco vira uma "gaiola" vazada em vez de sólido.
+
+**Pesquisa feita antes de decidir:** instalação real de fachada ACM usa uma subestrutura bem mais densa que só o contorno — grade soldada de colunas verticais + travessas horizontais ("grelhas" pré-montadas em oficina), com metalon (aço) sendo o material popular de mercado mesmo o correto por especificação sendo alumínio (fontes: Networking Engenharia, Alucomposto, manual Alucomaxx). Confrontado com isso, Product Owner confirmou explicitamente: manter o esqueleto simples por ora, estudar mais casos (o próximo citado foi marquise de loja com 1m de balanço) antes de generalizar uma regra por `elementType`. Reforço estrutural específico por elemento (ex.: escora diagonal de marquise em balanço, já que um esqueleto retangular flutuando sem apoio não é estruturalmente plausível) fica **fora de escopo desta rodada**, adiado de propósito.
+
+**Implementação:** `buildVolumeBoxMesh` (Scene3DRenderer.ts) agora checa `box.structuralMaterial === 'metalao'` primeiro — se verdadeiro, chama `buildVolumeBoxMetalaoFrame` em vez do caminho sólido de sempre. A nova função usa `Core.volumeBoxCornerLocalPositions` (mesma matemática de sempre, respeitando qualquer face já puxada) e uma lista local de 12 pares de índice de canto (a mesma topologia que saiu de `Core.ts` na DEC-176 — reintroduzida aqui só neste escopo, não exportada de novo) — cada aresta vira um `THREE.BoxGeometry` fino (~5cm de seção) orientado por quaternion entre os 2 cantos reais, material `MeshStandardMaterial` com `metalness: 0.85` pra ler como metal de verdade. Não aplica `finishProductId`/`colorHex` nesta primeira versão — sempre a mesma cor de perfil.
+
+**Limitação visual conhecida:** enquanto o bloco está SELECIONADO, as alças de face (overlay translúcido cor âmbar, `SELECTED_ACCENT`) cobrem o esqueleto e fazem parecer sólido de novo — o esqueleto só fica visualmente claro com o bloco deselecionado. Aceito por ora (a interação de puxar face continua funcionando igual); ajustar a opacidade/cor do overlay especificamente pra este material fica pra depois, se incomodar na prática.
+
+**Testado:** typecheck limpo + suíte completa (683 testes) + verificação ao vivo: ativar "Metalão" no seletor de criação, deselecionar o bloco e confirmar visualmente o esqueleto de 12 perfis metálicos (instrumentação de `THREE.Object3D.prototype.add` confirmou 12 `BoxGeometry` com `metalness: 0.85` adicionados por rebuild, nenhum bloco sólido).
+
+---

@@ -352,6 +352,10 @@
   .shape-panel button.st.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
   .shape-panel button.ft { margin: 0; padding: 0; width: 30px; height: 30px; font-size: 12px; font-weight: 700; border-radius: 6px; line-height: 1; }
   .shape-panel button.ft.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
+  .volume-type-panel { grid-template-columns: repeat(4, 30px); }
+  .shape-panel button.vt { margin: 0; padding: 0; width: 30px; height: 30px; font-size: 11px; font-weight: 700; border-radius: 6px; line-height: 1; }
+  .shape-panel button.vt.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
+  .shape-panel .shape-panel-divider { grid-column: 1 / -1; height: 1px; background: #D3D1C7; margin: 3px 0; }
   .finish-panel { grid-template-columns: repeat(4, 26px); }
   .finish-panel button.fn { margin: 0; padding: 0; width: 26px; height: 26px; border-radius: 50%; border: 2px solid #FFFFFF; box-shadow: 0 0 0 1px #D3D1C7; cursor: pointer; }
   .finish-panel button.fn.active { box-shadow: 0 0 0 2px #534AB7; }
@@ -1239,6 +1243,35 @@
   .catalog-card-fornecedor { font-size: 11px; color: #534AB7; margin: -2px 0 6px; }
   .catalog-card-preco { font-size: 14px; font-weight: 700; color: #2C2C2A; }
   .catalog-card-preco.consulta { font-size: 12px; font-weight: 500; color: #9C9A92; }
+  .catalog-tab.bold-tab.active { background:#171717; border-color:#171717; }
+  .bold-catalog-page { color:#252521; }
+  .bold-catalog-hero {
+    position:relative; overflow:hidden; margin:-16px -20px 14px; padding:22px 20px 20px;
+    color:#fff; background:linear-gradient(145deg,#101110 0%,#292b29 68%,#3d403d 100%);
+  }
+  .bold-catalog-hero::after {
+    content:""; position:absolute; width:170px; height:170px; right:-65px; bottom:-105px;
+    border:24px solid #f1c400; border-radius:50%; opacity:.92;
+  }
+  .bold-wordmark { display:inline-block; color:#f1c400; font-size:28px; line-height:1; font-weight:900; letter-spacing:-1.5px; }
+  .bold-catalog-kicker { margin:16px 0 4px; color:#f1c400; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.12em; }
+  .bold-catalog-hero h3 { position:relative; z-index:1; max-width:310px; margin:0 0 7px; font-size:20px; line-height:1.15; }
+  .bold-catalog-hero > p:not(.bold-catalog-kicker) { position:relative; z-index:1; max-width:320px; margin:0; color:#d7d8d5; font-size:12px; line-height:1.45; }
+  .bold-catalog-tags { position:relative; z-index:1; display:flex; gap:6px; margin-top:13px; }
+  .bold-catalog-tags span { padding:4px 8px; border:1px solid #656762; border-radius:999px; color:#f4f4f1; font-size:10px; }
+  .bold-catalog-notice { margin:0 0 14px; padding:10px 11px; border-left:3px solid #f1c400; background:#fff9d9; color:#59574f; font-size:11px; line-height:1.45; }
+  .bold-product-card { cursor:pointer; }
+  .bold-product-card:focus-visible { outline:3px solid rgba(83,74,183,.28); outline-offset:2px; }
+  .bold-product-swatch { position:relative; height:112px; border-bottom:1px solid #deddd7; }
+  .bold-product-swatch::after { content:""; position:absolute; inset:0; background:linear-gradient(115deg,transparent 30%,rgba(255,255,255,.2) 48%,transparent 65%); }
+  .bold-product-swatch span { position:absolute; z-index:1; right:7px; bottom:7px; padding:3px 7px; border-radius:999px; background:rgba(15,15,14,.72); color:#fff; font-size:9px; font-weight:700; }
+  .bold-source-link { display:inline-block; margin-top:7px; color:#534AB7; font-size:11px; font-weight:700; }
+  .bold-origin-link { display:inline-block; margin:7px 0 0 8px; color:#66645e; font-size:10px; text-decoration:underline; }
+  .bold-catalog-resources { margin-top:15px; padding:14px; border:1px solid #d8d7d1; border-radius:8px; background:#f7f7f4; }
+  .bold-catalog-resources strong { font-size:13px; }
+  .bold-catalog-resources p { margin:4px 0 10px; color:#66645e; font-size:11px; line-height:1.4; }
+  .bold-catalog-resources div { display:flex; flex-wrap:wrap; gap:8px; }
+  .bold-catalog-resources a { padding:6px 9px; border-radius:6px; background:#171717; color:#fff; font-size:11px; font-weight:700; text-decoration:none; }
   .catalog-badge {
     display: inline-block; font-size: 10px; font-weight: 600; text-transform: uppercase;
     letter-spacing: .03em; padding: 2px 7px; border-radius: 999px; margin-top: 6px;
@@ -1502,6 +1535,7 @@
       <button class="facade-exit" id="facadeExitBtn" title="Voltar ao modo 3D" aria-label="Sair do Estúdio de Fachadas">×</button>
     </div>
     <div class="facade-workspace-actions" aria-label="Elementos de fachada">
+      <button class="facade-tool" id="facadeParallelViewBtn">Vista paralela</button>
       <button class="facade-tool" id="facadeGlazingBtn">Pele de vidro</button>
       <button class="facade-tool" id="facadeSignBtn">Letreiro iluminado</button>
       <button class="facade-tool" disabled title="Próxima etapa">Marquise</button>
@@ -1802,12 +1836,12 @@
         <svg class="ts-icon" viewBox="0 0 40 40" fill="currentColor" stroke="none"><circle cx="20" cy="20" r="12"/></svg>
         <span>Coluna red.</span>
       </button>
-      <button class="ts-btn" id="addVolumeBoxBtn" data-room-preset="volumetria" title="Volumetria — clique pra criar um bloco sólido, arraste pra posicionar e encostar numa parede">
+      <button class="ts-btn" id="addVolumeBoxBtn" data-room-preset="volumetria" title="Cubo mágico — clique pra criar um cubo moldável, arraste pra posicionar e puxe as faces pra dar forma">
         <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M20 5 34 12v16L20 35 6 28V12z"/>
           <path d="M20 5v30M6 12l14 7 14-7"/>
         </svg>
-        <span>Volumetria</span>
+        <span>Cubo mágico</span>
       </button>
       <button class="ts-btn" id="addStairBtn" data-room-preset="escada" title="Escada — clique pra criar, arraste pra posicionar perto de uma parede ou coluna">
         <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2262,6 +2296,19 @@
     <button class="sp" data-shape="quadrada" title="Coluna quadrada">▢</button>
     <button class="sp" data-shape="redonda" title="Coluna redonda">◯</button>
   </div>
+  <div id="volumeBoxTypePanel" class="shape-panel volume-type-panel">
+    <button class="vt" data-vbelement="parede" title="Elemento: parede">Pd</button>
+    <button class="vt" data-vbelement="marquise" title="Elemento: marquise">Mq</button>
+    <button class="vt" data-vbelement="pilar" title="Elemento: pilar">Pl</button>
+    <button class="vt" data-vbelement="cobertura" title="Elemento: cobertura">Cb</button>
+    <div class="shape-panel-divider"></div>
+    <button class="vt" data-vbmaterial="madeira" title="Material: madeira">Md</button>
+    <button class="vt" data-vbmaterial="concreto" title="Material: concreto">Cc</button>
+    <button class="vt" data-vbmaterial="tijolo" title="Material: tijolo">Tj</button>
+    <button class="vt" data-vbmaterial="metalao" title="Material: metalão">Mt</button>
+    <button class="vt" data-vbmaterial="steelFrame" title="Material: Steel Frame">SF</button>
+    <button class="vt" data-vbmaterial="telhado" title="Material: telhado">Tl</button>
+  </div>
   <div id="roofTypePanel" class="shape-panel roof-type-panel">
     <label class="roof-parameter roof-elevation" id="roofElevationControl"><span>Subir telhado inteiro</span><output id="roofElevationValue">3,15 m</output><input id="roofElevationInput" type="range" min="2.85" max="8" step="0.05" aria-label="Altura da base do telhado em metros"></label>
     <button class="roof-axis" title="Alternar a direção da cumeeira ou do caimento">↔ Direção: eixo X</button>
@@ -2276,6 +2323,7 @@
   <button id="generateAtticBtn" style="display:none; position:absolute; right:112px; bottom:82px; z-index:40; padding:13px 20px; border:0; border-radius:14px; background:#5A49C7; color:#fff; font-weight:700; box-shadow:0 8px 28px rgba(40,32,105,.3);">Gerar ático</button>
   <style>#generateAtticBtn.visible{display:block !important}</style>
   <div id="openingPickerPanel" class="shape-panel finish-panel tool-picker"></div>
+  <div id="volumeBoxMaterialPickerPanel" class="shape-panel finish-panel tool-picker"></div>
   <div id="objectPanel" class="object-panel">
     <div class="object-panel-header">
       <strong id="objectPanelTitle"></strong>

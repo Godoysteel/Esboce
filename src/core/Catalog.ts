@@ -457,6 +457,48 @@ export const products: Product[] = [
       assets: { colorHex: '#D9D5C7', textureUrl: null, modelUrl: 'models/armario.glb' } }
   ];
 
+// ACM Bold — página pública curada (DEC-177/178). Entra como acabamento
+// aplicável de fachada, mas continua separado das ofertas vindas do Supabase.
+// A área por peça usa a chapa inteira (largura × 5 m) no quantitativo.
+const boldAcmColors: Record<string, string> = {
+  'azul-cobalto-fosco': '#164A8A',
+  'grafite-metalico': '#4D5154',
+  'laranja-brilho': '#E55416',
+  'dourado-metalico': '#C8A451',
+  'branco-brilho': '#F2F2EF',
+  'madeira-clara': '#D3A260',
+  'cimento-queimado': '#929492',
+};
+export function registerBoldCatalogProducts(items: readonly any[]): void {
+items.forEach(function (item) {
+  if (products.some(function (product) { return product.id === item.id; })) return;
+  const base = PUBLIC_BASE_URL + 'textures/acm/bold/' + item.textureSlug + '/';
+  products.push({
+    id: item.id,
+    name: item.name + ' ' + item.dimensions,
+    manufacturer: 'bold',
+    category: 'floor_tile',
+    commercial: { sku: item.id, price: item.publicPriceBrl, unit: 'peca' },
+    assets: {
+      colorHex: boldAcmColors[item.textureSlug]!,
+      textureUrl: null,
+      thumbnailUrl: base + 'albedo.jpg',
+      tileMeters: 5,
+      pecaCoverageM2: item.dimensions.startsWith('1.500') ? 7.5 : 6.1,
+      applicationSurface: 'external',
+      pbrMaterial: item.pbr,
+      textures: {
+        map: base + 'albedo.jpg',
+        normalMap: base + 'normal.jpg',
+        roughnessMap: base + 'roughness.jpg',
+        metalnessMap: base + 'metalness.jpg',
+        aoMap: base + 'ao.jpg',
+      },
+    },
+  });
+});
+}
+
 // Revestimentos comerciais reais: o UUID de products é criado pelo Supabase e
 // varia entre instalações, portanto a associação visual é feita pelo SKU
 // estável do catálogo do Mercador. Somente itens com fonte oficial verificada
@@ -533,4 +575,4 @@ export function getProductsByCategory(cat: ProductCategory): Product[] { return 
 export function getProduct(id: string): Product | null { return products.find((p) => p.id === id) || null; }
 
 // Namespace de compatibilidade, mesma razão do Core.ts (chamadas Catalog.xxx no código legado).
-export const Catalog = { manufacturer, products, registerCommercialProducts, getCommercialCatalogPhoto, getProductsByCategory, getProduct };
+export const Catalog = { manufacturer, products, registerCommercialProducts, registerBoldCatalogProducts, getCommercialCatalogPhoto, getProductsByCategory, getProduct };

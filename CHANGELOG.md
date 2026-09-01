@@ -245,6 +245,7 @@ Todas as alterações relevantes do Esboce serão registradas neste arquivo.
 
 ## Plataforma, persistência e qualidade
 
+- Adicionada ao catálogo a página **Bold · ACM**, com dez referências públicas de chapas, sete conjuntos PBR, aplicação em fachada/volumetria, dimensões, preços datados e links para o catálogo e o manual do fabricante. A interface deixa explícito que não representa parceria oficial nem proposta comercial.
 - Reconciliada a estabilização geométrica com o `main`: cálculos compartilhados de fundação, oitão e cobertura foram consolidados em `QuantityGeometry.ts`, sem duplicar as regras usadas pelo quantitativo.
 - Projetos salvos passaram a usar documento versionado (`schemaVersion`), normalização e validação de estrutura, tamanho, tipos, identificadores duplicados e referências órfãs. Documentos legados suportados são migrados na leitura; versões futuras incompatíveis são recusadas com mensagem clara.
 - Adicionados exportação e importação de backup JSON. O salvamento e a abertura pelo Supabase usam a mesma validação do backup.

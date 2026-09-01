@@ -413,14 +413,19 @@ export function computeBalconyRailingJoints(railings: BalconyRailing[]): Record<
   return result;
 }
 
-// Bloco de Volumetria — nasce solto, sempre livre (sem ímã de parede —
-// ver comentário completo em types.ts). Tamanho padrão pequeno
-// (1x1x0,3m) — ponto de partida neutro, ajustável em qualquer direção
-// pelas alças de arraste (largura/profundidade/altura/elevação).
+// Cubo mágico (Bloco de Volumetria) — nasce solto, sempre livre (sem
+// ímã de parede — ver comentário completo em types.ts). Nasce um cubo
+// DE VERDADE (1x1x1m, as 3 dimensões iguais — Product Owner: "quero
+// que seja realmente um formato de cubo") — ponto de partida neutro,
+// ajustável em qualquer direção pelas 6 alças de face (push-pull, ver
+// DEC-176). Cor padrão amarelo-gema (destoante de propósito — Product
+// Owner: "quero que ele tenha uma cor destoante" — pra nunca se
+// confundir com parede/piso/grama enquanto ainda não tem acabamento
+// escolhido).
 export const VOLUME_BOX_DEFAULT_WIDTH_M = 1.0;
 export const VOLUME_BOX_DEFAULT_HEIGHT_M = 1.0;
-export const VOLUME_BOX_DEFAULT_DEPTH_M = 0.3;
-export const VOLUME_BOX_DEFAULT_COLOR = '#C9C4B8';
+export const VOLUME_BOX_DEFAULT_DEPTH_M = 1.0;
+export const VOLUME_BOX_DEFAULT_COLOR = '#FFC72C';
 export const VOLUME_BOX_MIN_SIZE_M = 0.2;
 export const VOLUME_BOX_MAX_SIZE_M = 30;
 export const VOLUME_BOX_MIN_HEIGHT_M = 0.2;
@@ -469,13 +474,6 @@ const VOLUME_BOX_FACES: { corners: [number, number, number, number] }[] = [
   { corners: [0, 1, 5, 4] }, // bottom (-Y)
   { corners: [4, 5, 7, 6] }, // back   (+Z)
   { corners: [0, 2, 3, 1] }, // front  (-Z)
-];
-
-// 12 arestas (pares de índice de canto) — laço de baixo, laço de cima, 4 verticais.
-export const VOLUME_BOX_EDGES: [number, number][] = [
-  [0, 1], [1, 5], [5, 4], [4, 0],
-  [2, 3], [3, 7], [7, 6], [6, 2],
-  [0, 2], [1, 3], [5, 7], [4, 6],
 ];
 
 function vec3Sub(a: Vec3, b: Vec3): Vec3 { return { x: a.x - b.x, y: a.y - b.y, z: a.z - b.z }; }
@@ -2405,7 +2403,7 @@ export const Core = {
   computeBalconyRailingJoints, RAILING_JOIN_TOL_MODEL,
   createVolumeBoxEntity, VOLUME_BOX_DEFAULT_WIDTH_M, VOLUME_BOX_DEFAULT_HEIGHT_M, VOLUME_BOX_DEFAULT_DEPTH_M, VOLUME_BOX_DEFAULT_COLOR,
   VOLUME_BOX_MIN_SIZE_M, VOLUME_BOX_MAX_SIZE_M, VOLUME_BOX_MIN_HEIGHT_M, VOLUME_BOX_MAX_HEIGHT_M, VOLUME_BOX_MAX_SILL_HEIGHT_M,
-  VOLUME_BOX_EDGES, volumeBoxCornerLocalPositions, volumeBoxFaces, volumeBoxSurfaceAreaM2, volumeBoxVolumeM3,
+  volumeBoxCornerLocalPositions, volumeBoxFaces, volumeBoxSurfaceAreaM2, volumeBoxVolumeM3,
   createStairEntity, stairFootprintRectangle, stairLegWorldRectangle, nearestSupportDistanceMeters,
   STAIR_MIN_WIDTH_M, STAIR_MAX_WIDTH_M, STAIR_DEFAULT_WIDTH_M, STAIR_SUPPORT_HINT_TOLERANCE_M,
   createPlanUnderlayEntity, PLAN_UNDERLAY_DEFAULT_WIDTH_M, PLAN_UNDERLAY_DEFAULT_OPACITY,

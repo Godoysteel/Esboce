@@ -1,5 +1,5 @@
 import type {
-  Column, Floor, Furniture, GlazingPanel, FacadeSign, BalconyRailing, VolumeBox, Stair, PlanUnderlay, HydraulicNode, HydraulicSegment, Laje, Opening, Project, ProjectLayers, Roof, Terreno, Varanda, Wall, ForroBoardType, CommercialSelection,
+  Column, Floor, Furniture, GlazingPanel, FacadeSign, BalconyRailing, VolumeBox, VolumeBoxElementType, VolumeBoxMaterial, Stair, PlanUnderlay, HydraulicNode, HydraulicSegment, Laje, Opening, Project, ProjectLayers, Roof, Terreno, Varanda, Wall, ForroBoardType, CommercialSelection,
 } from './types.js';
 
 // v6: adiciona `project.terreno` (opcional) — tamanho do lote e muros de
@@ -440,6 +440,14 @@ function parseVolumeBox(value: unknown, path: string): VolumeBox {
   if (colorHex !== undefined) box.colorHex = colorHex;
   if (sillHeightM !== undefined) box.sillHeightM = sillHeightM;
   if (finishProductId !== undefined) box.finishProductId = finishProductId;
+  // Fase B da DEC-163 (ver DEC-175) — etiqueta de elemento estrutural e
+  // material, ambas opcionais.
+  if (v.elementType != null) {
+    box.elementType = enumValue<VolumeBoxElementType>(v.elementType, ['parede', 'marquise', 'pilar', 'cobertura'], `${path}.elementType`);
+  }
+  if (v.structuralMaterial != null) {
+    box.structuralMaterial = enumValue<VolumeBoxMaterial>(v.structuralMaterial, ['madeira', 'concreto', 'tijolo', 'metalao', 'steelFrame', 'telhado'], `${path}.structuralMaterial`);
+  }
   return box;
 }
 

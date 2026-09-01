@@ -33,7 +33,7 @@ test('Scene3DRenderer reduz a opacidade da FACE e da TAMPA DE TOPO da parede qua
   assert.match(rendererSource, /var wallsTransparent = !!layers\.paredesTransparentes;/);
   // A opacidade tem que ser MENOR que 1 (senão "transparente" não faz nada)
   assert.ok(0.28 < 1);
-  const faceMatBlock = rendererSource.slice(rendererSource.indexOf('var faceMat = new THREE.MeshStandardMaterial'), rendererSource.indexOf('var faceMat = new THREE.MeshStandardMaterial') + 1400);
+  const faceMatBlock = rendererSource.slice(rendererSource.indexOf('var faceMat = new FaceMaterialClass'), rendererSource.indexOf('var faceMat = new FaceMaterialClass') + 1700);
   assert.match(faceMatBlock, /transparent: wallsTransparent/);
   assert.match(faceMatBlock, /opacity: wallsTransparent \? WALL_TRANSPARENT_OPACITY : 1/);
   const topMatBlock = rendererSource.slice(rendererSource.indexOf('var topMat = new THREE.MeshStandardMaterial'), rendererSource.indexOf('var topMat = new THREE.MeshStandardMaterial') + 400);
@@ -44,7 +44,7 @@ test('Scene3DRenderer reduz a opacidade da FACE e da TAMPA DE TOPO da parede qua
 test('wallsTransparent é calculado ANTES de ser usado (bug de ordem já corrigido nesta sessão)', () => {
   const declIndex = rendererSource.indexOf('var wallsTransparent = !!layers.paredesTransparentes;');
   const topMatIndex = rendererSource.indexOf('var topMat = new THREE.MeshStandardMaterial');
-  const faceMatIndex = rendererSource.indexOf('var faceMat = new THREE.MeshStandardMaterial');
+  const faceMatIndex = rendererSource.indexOf('var faceMat = new FaceMaterialClass');
   assert.ok(declIndex > -1 && topMatIndex > -1 && faceMatIndex > -1);
   assert.ok(declIndex < topMatIndex, 'wallsTransparent precisa vir ANTES de topMat');
   assert.ok(declIndex < faceMatIndex, 'wallsTransparent precisa vir ANTES de faceMat');

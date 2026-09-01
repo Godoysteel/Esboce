@@ -67,6 +67,7 @@ import {
   var selectedWallId: any = null, selectedColumnId: any = null, selectedRoofId: any = null, selectedOpeningId: any = null, selectedVarandaId: any = null, selectedLajeId: any = null, selectedFurnitureId: any = null, selectedGlazingPanelId: any = null, selectedBalconyRailingId: any = null, selectedVolumeBoxId: any = null, selectedStairId: any = null, selectedForroRoomKey: any = null, selectedHydraulicNodeId: any = null;
   var steelFrameSurfaceSelectionHandler: ((target: { kind: 'wall-face' | 'gable-face' | 'stepped-wall-face' | 'roof'; entityId: string; side?: 'a' | 'b' }) => boolean) | null = null;
   var facadeWallSelectionHandler: ((wallId: string) => void) | null = null;
+  var facadeActiveWallHandler: ((wallId: string) => void) | null = null;
   var facadeIsolatedWallIds: string[] | null = null;
   var steelFrameRoofHidden = false;
   // Alça de altura do cômodo (DEC-116) só existe/é clicável enquanto
@@ -179,7 +180,7 @@ import {
   var MIN_DIST = 3, MAX_DIST = 35;
   var touchCameraMode = false;
 
-  var gizmoEl: any, gzSwapBtnEl: any, openingGizmoEl: any, roomGizmoEl: any, volumeBoxGizmoEl: any, stairGizmoEl: any, stairTypePanelEl: any, forroTypePanelEl: any, planUnderlayGizmoEl: any, columnShapePanelEl: any, roofTypePanelEl: any, roofElevationControlEl: any, roofElevationInputEl: any, roofElevationValueEl: any, roofPitchDragCotaEl: any, varandaTypePanelEl: any, varandaWidthInputEl: any, varandaHeightInputEl: any, varandaPitchInputEl: any, paintPickerPanelEl: any, openingPickerPanelEl: any, objectPanelEl: any, objectPanelTitleEl: any, objectPanelBodyEl: any, hintEl: any, layersContextMenuEl: any, hydraulicWallPromptEl: any, hydraulicWallElevationPanelEl: any, hydraulicWallElevationTitleEl: any, hydraulicWallElevationSvgEl: any, hydraulicRouteDrawBarEl: any, hydraulicRouteDrawCountEl: any;
+  var gizmoEl: any, gzSwapBtnEl: any, openingGizmoEl: any, roomGizmoEl: any, volumeBoxGizmoEl: any, volumeBoxTypePanelEl: any, stairGizmoEl: any, stairTypePanelEl: any, forroTypePanelEl: any, planUnderlayGizmoEl: any, columnShapePanelEl: any, roofTypePanelEl: any, roofElevationControlEl: any, roofElevationInputEl: any, roofElevationValueEl: any, roofPitchDragCotaEl: any, varandaTypePanelEl: any, varandaWidthInputEl: any, varandaHeightInputEl: any, varandaPitchInputEl: any, paintPickerPanelEl: any, openingPickerPanelEl: any, volumeBoxMaterialPickerPanelEl: any, objectPanelEl: any, objectPanelTitleEl: any, objectPanelBodyEl: any, hintEl: any, layersContextMenuEl: any, hydraulicWallPromptEl: any, hydraulicWallElevationPanelEl: any, hydraulicWallElevationTitleEl: any, hydraulicWallElevationSvgEl: any, hydraulicRouteDrawBarEl: any, hydraulicRouteDrawCountEl: any;
   // Estado do desenho de percurso guiado (H2): fixtureId sendo roteada e os
   // pontos-guia já clicados (só plano — a queda vertical final é
   // automática, ver Hydraulics.buildGuidedColdWaterHeaderRoute). null =
@@ -1252,7 +1253,7 @@ import {
         positionFloatingPanel(roomGizmoEl, hydraulicWorld.x, hydraulicTop, hydraulicWorld.z, 0);
         roomGizmoEl.classList.add('visible');
       }
-      gizmoEl.classList.remove('visible'); openingGizmoEl.classList.remove('visible'); columnShapePanelEl.classList.remove('visible'); roofTypePanelEl.classList.remove('visible'); volumeBoxGizmoEl?.classList.remove('visible'); stairGizmoEl?.classList.remove('visible'); stairTypePanelEl?.classList.remove('visible'); forroTypePanelEl?.classList.remove('visible'); planUnderlayGizmoEl?.classList.remove('visible');
+      gizmoEl.classList.remove('visible'); openingGizmoEl.classList.remove('visible'); columnShapePanelEl.classList.remove('visible'); roofTypePanelEl.classList.remove('visible'); volumeBoxGizmoEl?.classList.remove('visible'); volumeBoxTypePanelEl?.classList.remove('visible'); stairGizmoEl?.classList.remove('visible'); stairTypePanelEl?.classList.remove('visible'); forroTypePanelEl?.classList.remove('visible'); planUnderlayGizmoEl?.classList.remove('visible');
       return;
     }
     var inactiveHydraulicFlipButton = roomGizmoEl.querySelector('[data-action="flipHydraulicFace"]');
@@ -1278,7 +1279,7 @@ import {
         positionFloatingPanel(openingGizmoEl, wpO.x, topY, wpO.z, 0);
         openingGizmoEl.classList.add('visible');
       }
-      gizmoEl.classList.remove('visible'); columnShapePanelEl.classList.remove('visible'); roofTypePanelEl.classList.remove('visible'); volumeBoxGizmoEl?.classList.remove('visible'); stairGizmoEl?.classList.remove('visible'); stairTypePanelEl?.classList.remove('visible'); forroTypePanelEl?.classList.remove('visible'); planUnderlayGizmoEl?.classList.remove('visible');
+      gizmoEl.classList.remove('visible'); columnShapePanelEl.classList.remove('visible'); roofTypePanelEl.classList.remove('visible'); volumeBoxGizmoEl?.classList.remove('visible'); volumeBoxTypePanelEl?.classList.remove('visible'); stairGizmoEl?.classList.remove('visible'); stairTypePanelEl?.classList.remove('visible'); forroTypePanelEl?.classList.remove('visible'); planUnderlayGizmoEl?.classList.remove('visible');
       return;
     }
     openingGizmoEl.classList.remove('visible');
@@ -1300,7 +1301,7 @@ import {
         positionFloatingPanel(roomGizmoEl, wpG.x, topYG, wpG.z, 0);
         roomGizmoEl.classList.add('visible');
       }
-      gizmoEl.classList.remove('visible'); columnShapePanelEl.classList.remove('visible'); roofTypePanelEl.classList.remove('visible'); volumeBoxGizmoEl?.classList.remove('visible'); stairGizmoEl?.classList.remove('visible'); stairTypePanelEl?.classList.remove('visible'); forroTypePanelEl?.classList.remove('visible'); planUnderlayGizmoEl?.classList.remove('visible');
+      gizmoEl.classList.remove('visible'); columnShapePanelEl.classList.remove('visible'); roofTypePanelEl.classList.remove('visible'); volumeBoxGizmoEl?.classList.remove('visible'); volumeBoxTypePanelEl?.classList.remove('visible'); stairGizmoEl?.classList.remove('visible'); stairTypePanelEl?.classList.remove('visible'); forroTypePanelEl?.classList.remove('visible'); planUnderlayGizmoEl?.classList.remove('visible');
       return;
     }
     roomGizmoEl.classList.remove('visible');
@@ -1313,6 +1314,7 @@ import {
       if (!vbSel) {
         selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false;
         volumeBoxGizmoEl?.classList.remove('visible');
+        volumeBoxTypePanelEl?.classList.remove('visible');
       } else {
         var centerVb = volumeBoxModelCenter(vbSel);
         var wpVb = modelToWorld(centerVb.x, centerVb.y);
@@ -1321,12 +1323,23 @@ import {
           positionFloatingPanel(volumeBoxGizmoEl, wpVb.x, topYVb, wpVb.z, 0);
           volumeBoxGizmoEl.classList.add('visible');
         }
+        // Painel de elemento/material (Fase B da DEC-163, ver DEC-175) —
+        // mesmo padrão de stairTypePanelEl: empilhado à esquerda do
+        // gizmo de ação.
+        if (volumeBoxTypePanelEl) {
+          positionFloatingPanel(volumeBoxTypePanelEl, wpVb.x, topYVb, wpVb.z, -60);
+          volumeBoxTypePanelEl.classList.add('visible');
+          stackLeftOf(volumeBoxTypePanelEl, volumeBoxGizmoEl, 8);
+          volumeBoxTypePanelEl.querySelectorAll('[data-vbelement]').forEach(function (btn: any) { btn.classList.toggle('active', btn.dataset.vbelement === vbSel!.elementType); });
+          volumeBoxTypePanelEl.querySelectorAll('[data-vbmaterial]').forEach(function (btn: any) { btn.classList.toggle('active', btn.dataset.vbmaterial === vbSel!.structuralMaterial); });
+        }
       }
       gizmoEl.classList.remove('visible'); columnShapePanelEl.classList.remove('visible'); roofTypePanelEl.classList.remove('visible'); roomGizmoEl.classList.remove('visible'); planUnderlayGizmoEl?.classList.remove('visible');
       return;
     }
     roomGizmoEl.classList.remove('visible');
     volumeBoxGizmoEl?.classList.remove('visible');
+    volumeBoxTypePanelEl?.classList.remove('visible');
 
     // Escada: gizmo próprio (stairGizmoEl), mesmo padrão do Bloco de
     // Volumetria — posicionado acima do topo do lance (nível do
@@ -2475,6 +2488,59 @@ import {
     openingPickerPanelEl.classList.add('visible');
   }
 
+  // Cubo mágico — pergunta o material JÁ no clique do botão que cria
+  // (Product Owner: "quando clicar no botão para criar o cubo mágico
+  // já deve aparecer uma lista perguntando de que material ele é
+  // feito"), em vez de nascer sem marcação e exigir abrir o painel
+  // depois (ver Store.commands.setVolumeBoxMaterial / DEC-175). Lista
+  // de hoje é a mesma enum fixa de 7 materiais — trocar a fonte pra
+  // qualquer produto real do Catálogo (com distinção revestimento vs.
+  // estrutura) fica pra uma rodada futura, discutido mas ainda não
+  // decidido nesta sessão.
+  var VOLUME_BOX_MATERIAL_OPTIONS: [string, string][] = [
+    ['madeira', 'Madeira'], ['concreto', 'Concreto'], ['tijolo', 'Tijolo'], ['metalao', 'Metalão'],
+    ['steelFrame', 'Steel Frame'], ['telhado', 'Telhado'],
+  ];
+  var volumeBoxMaterialPickerOutsideHandler: any = null;
+  function closeVolumeBoxMaterialPicker() {
+    volumeBoxMaterialPickerPanelEl.classList.remove('visible');
+    if (volumeBoxMaterialPickerOutsideHandler) {
+      document.removeEventListener('pointerdown', volumeBoxMaterialPickerOutsideHandler, true);
+      volumeBoxMaterialPickerOutsideHandler = null;
+    }
+  }
+  function openVolumeBoxMaterialPicker() {
+    volumeBoxMaterialPickerPanelEl.innerHTML = '';
+    var title = document.createElement('div');
+    title.className = 'paint-help';
+    title.textContent = 'De que material é o cubo mágico?';
+    volumeBoxMaterialPickerPanelEl.appendChild(title);
+    var list = document.createElement('div');
+    list.className = 'paint-surface-nav';
+    VOLUME_BOX_MATERIAL_OPTIONS.forEach(function (item) {
+      var btn = document.createElement('button');
+      btn.className = 'paint-surface';
+      btn.dataset.volumeBoxMaterial = item[0];
+      btn.textContent = item[1];
+      list.appendChild(btn);
+    });
+    var defaultBtn = document.createElement('button');
+    defaultBtn.className = 'paint-surface';
+    defaultBtn.dataset.volumeBoxMaterial = '';
+    defaultBtn.textContent = 'Padrão (sem material definido)';
+    list.appendChild(defaultBtn);
+    volumeBoxMaterialPickerPanelEl.appendChild(list);
+    volumeBoxMaterialPickerPanelEl.classList.add('visible');
+    // Clique fora (fora do painel E fora do próprio botão que abriu)
+    // cancela sem criar nada — mesmo princípio de fechar sem escolher.
+    volumeBoxMaterialPickerOutsideHandler = function (e: any) {
+      if (volumeBoxMaterialPickerPanelEl.contains(e.target)) return;
+      if (e.target.closest && e.target.closest('[data-room-preset="volumetria"]')) return;
+      closeVolumeBoxMaterialPicker();
+    };
+    document.addEventListener('pointerdown', volumeBoxMaterialPickerOutsideHandler, true);
+  }
+
   function cancelPlacing() {
     placingDraw = false;
     drawStart = null; drawPreview = null;
@@ -2786,34 +2852,6 @@ import {
           dragElementStart = { widthM: brHeightBottom.widthM, heightM: brHeightBottom.heightM, sillHeightM: brHeightBottom.sillHeightM || 0, startScreenY: e.clientY, lastHeightM: brHeightBottom.heightM, lastSillHeightM: brHeightBottom.sillHeightM || 0 };
           beginBalconyResizePreview(brHeightBottom.id);
         }
-      } else if (handle.indexOf('volumeBoxCorner:') === 0) {
-        // Cubo moldável — alça de CANTO: move 1 canto livre em X/Y/Z.
-        // Horizontal (X/Z) vem do raycast contra o chão (mesma técnica
-        // de sempre); vertical (Y) vem do delta de tela, mesmo
-        // heurístico já usado pelas alças de altura antigas.
-        var vbCornerBox = Store.findVolumeBox(selectedVolumeBoxId);
-        var vbCornerGround = getGroundModelPoint(e.clientX, e.clientY);
-        if (vbCornerBox && vbCornerGround) {
-          dragElementStart = {
-            cornerIndex: parseInt(handle.slice('volumeBoxCorner:'.length), 10),
-            groundStart: vbCornerGround, startScreenY: e.clientY,
-            baseOffsets: cloneVolumeBoxCornerOffsets(vbCornerBox),
-          };
-          beginVolumeBoxResizePreview(vbCornerBox.id);
-        }
-      } else if (handle.indexOf('volumeBoxEdge:') === 0) {
-        // Alça de ARESTA: os 2 cantos da aresta se movem juntos (mesmo
-        // delta) — meio-termo entre canto único e face inteira.
-        var vbEdgeBox = Store.findVolumeBox(selectedVolumeBoxId);
-        var vbEdgeGround = getGroundModelPoint(e.clientX, e.clientY);
-        if (vbEdgeBox && vbEdgeGround) {
-          dragElementStart = {
-            edgeIndex: parseInt(handle.slice('volumeBoxEdge:'.length), 10),
-            groundStart: vbEdgeGround, startScreenY: e.clientY,
-            baseOffsets: cloneVolumeBoxCornerOffsets(vbEdgeBox),
-          };
-          beginVolumeBoxResizePreview(vbEdgeBox.id);
-        }
       } else if (handle.indexOf('volumeBoxFace:') === 0) {
         // Alça de FACE: push-pull ao longo da PRÓPRIA normal da face —
         // calculada uma vez aqui (início do arraste), não muda de
@@ -2886,6 +2924,11 @@ import {
         select(mesh.userData.wallId);
         hintEl.textContent = 'Parede marcada para a fachada. Selecione outras ou confirme a vista.';
       } else hintEl.textContent = 'Clique diretamente nas paredes que receberão a fachada.';
+      return;
+    }
+    if (facadeIsolatedWallIds?.length && mesh?.userData.wallId && facadeIsolatedWallIds.indexOf(mesh.userData.wallId) !== -1) {
+      facadeActiveWallHandler?.(mesh.userData.wallId);
+      hintEl.textContent = 'Parede ativa da fachada selecionada — os novos elementos serão aplicados nela.';
       return;
     }
 
@@ -3959,38 +4002,6 @@ import {
       }
       return;
     }
-    if (dragMode && dragMode.indexOf('volumeBoxCorner:') === 0) {
-      var vbCornerDragBox = Store.findVolumeBox(selectedVolumeBoxId);
-      var vbCornerGroundNow = getGroundModelPoint(e.clientX, e.clientY);
-      if (vbCornerDragBox && vbCornerGroundNow && dragElementStart) {
-        var vbCornerDx = (vbCornerGroundNow.x - dragElementStart.groundStart.x) / Core.GRID;
-        var vbCornerDz = (vbCornerGroundNow.y - dragElementStart.groundStart.y) / Core.GRID;
-        var vbCornerDy = (dragElementStart.startScreenY - e.clientY) * 0.02;
-        dragElementStart.lastDelta = { x: vbCornerDx, y: vbCornerDy, z: vbCornerDz };
-        var vbCornerWorking = dragElementStart.baseOffsets.map(function (o: any) { return { x: o.x, y: o.y, z: o.z }; });
-        var vbCornerTarget = vbCornerWorking[dragElementStart.cornerIndex];
-        vbCornerTarget.x += vbCornerDx; vbCornerTarget.y += vbCornerDy; vbCornerTarget.z += vbCornerDz;
-        updateVolumeBoxSkewPreview(vbCornerDragBox, vbCornerWorking);
-      }
-      return;
-    }
-    if (dragMode && dragMode.indexOf('volumeBoxEdge:') === 0) {
-      var vbEdgeDragBox = Store.findVolumeBox(selectedVolumeBoxId);
-      var vbEdgeGroundNow = getGroundModelPoint(e.clientX, e.clientY);
-      if (vbEdgeDragBox && vbEdgeGroundNow && dragElementStart) {
-        var vbEdgeDx = (vbEdgeGroundNow.x - dragElementStart.groundStart.x) / Core.GRID;
-        var vbEdgeDz = (vbEdgeGroundNow.y - dragElementStart.groundStart.y) / Core.GRID;
-        var vbEdgeDy = (dragElementStart.startScreenY - e.clientY) * 0.02;
-        dragElementStart.lastDelta = { x: vbEdgeDx, y: vbEdgeDy, z: vbEdgeDz };
-        var vbEdgeWorking = dragElementStart.baseOffsets.map(function (o: any) { return { x: o.x, y: o.y, z: o.z }; });
-        var vbEdgePair = Core.VOLUME_BOX_EDGES[dragElementStart.edgeIndex]!;
-        vbEdgePair.forEach(function (ci: number) {
-          vbEdgeWorking[ci].x += vbEdgeDx; vbEdgeWorking[ci].y += vbEdgeDy; vbEdgeWorking[ci].z += vbEdgeDz;
-        });
-        updateVolumeBoxSkewPreview(vbEdgeDragBox, vbEdgeWorking);
-      }
-      return;
-    }
     if (dragMode && dragMode.indexOf('volumeBoxFace:') === 0) {
       // Push-pull: vertical usa o delta de tela (mesma heurística das
       // antigas alças de altura); as outras 4 projetam o movimento do
@@ -4382,24 +4393,6 @@ import {
       clearStairResizePreview();
       if (selectedStairId && finalStWidth) {
         Store.commands.updateStairWidthLive(selectedStairId, finalStWidth, dragElementStart.centerDeltaM || 0);
-      }
-      dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
-      return;
-    }
-    if (dragMode && dragMode.indexOf('volumeBoxCorner:') === 0) {
-      var finalVbCornerDelta = dragElementStart && dragElementStart.lastDelta;
-      clearVolumeBoxResizePreview();
-      if (selectedVolumeBoxId && finalVbCornerDelta) {
-        Store.commands.updateVolumeBoxCornerLive(selectedVolumeBoxId, dragElementStart.cornerIndex, finalVbCornerDelta.x, finalVbCornerDelta.y, finalVbCornerDelta.z);
-      }
-      dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
-      return;
-    }
-    if (dragMode && dragMode.indexOf('volumeBoxEdge:') === 0) {
-      var finalVbEdgeDelta = dragElementStart && dragElementStart.lastDelta;
-      clearVolumeBoxResizePreview();
-      if (selectedVolumeBoxId && finalVbEdgeDelta) {
-        Store.commands.updateVolumeBoxEdgeLive(selectedVolumeBoxId, dragElementStart.edgeIndex, finalVbEdgeDelta.x, finalVbEdgeDelta.y, finalVbEdgeDelta.z);
       }
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
@@ -5294,7 +5287,7 @@ import {
     return { x1: x1, y1: y1, x2: Core.snap(x1 + wPx), y2: Core.snap(y1 + dPx) };
   }
 
-  function placeRoomPreset(key: any) {
+  function placeRoomPreset(key: any, volumeBoxMaterial?: any) {
     if (key === 'varanda') {
       // Mesma lógica de encaixe que um cômodo usa (computeNextRoomSlot)
       // — a varanda "pensa" como se fosse um quarto com quatro paredes
@@ -5354,9 +5347,13 @@ import {
       var gyV = isFinite(minYv) ? minYv : 0;
       deselect();
       var newBox = Store.commands.createVolumeBox(gxV, gyV);
+      if (newBox && volumeBoxMaterial) {
+        Store.commands.setVolumeBoxMaterial(newBox.id, volumeBoxMaterial);
+        selectVolumeBox(newBox.id);
+      }
       hintEl.textContent = newBox
-        ? 'Volume criado — arraste o corpo pra posicionar e as alças nas bordas pra ajustar largura, profundidade e altura. Pinte com a Lata de tinta, igual uma parede.'
-        : 'Não foi possível criar o volume.';
+        ? 'Cubo mágico criado — arraste o corpo pra posicionar e puxe qualquer face pra esticar/encolher nessa direção. Pinte com a Lata de tinta, igual uma parede.'
+        : 'Não foi possível criar o cubo mágico.';
       return;
     }
     if (key === 'escada') {
@@ -5463,6 +5460,7 @@ import {
     layersContextMenuEl = document.getElementById('layersContextMenu');
     columnShapePanelEl = document.getElementById('columnShapePanel');
     roofTypePanelEl = document.getElementById('roofTypePanel');
+    volumeBoxTypePanelEl = document.getElementById('volumeBoxTypePanel');
     roofElevationControlEl = document.getElementById('roofElevationControl');
     roofElevationInputEl = document.getElementById('roofElevationInput');
     roofElevationValueEl = document.getElementById('roofElevationValue');
@@ -5474,6 +5472,7 @@ import {
     generateAtticBtnEl = document.getElementById('generateAtticBtn');
     paintPickerPanelEl = document.getElementById('paintPickerPanel');
     openingPickerPanelEl = document.getElementById('openingPickerPanel');
+    volumeBoxMaterialPickerPanelEl = document.getElementById('volumeBoxMaterialPickerPanel');
     objectPanelEl = document.getElementById('objectPanel');
     objectPanelTitleEl = document.getElementById('objectPanelTitle');
     objectPanelBodyEl = document.getElementById('objectPanelBody');
@@ -5545,6 +5544,25 @@ import {
       var btn = e.target.closest('button.sp');
       if (!btn || !selectedColumnId) return;
       Store.commands.setColumnShape(selectedColumnId, btn.dataset.shape);
+    });
+    volumeBoxTypePanelEl?.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
+    volumeBoxTypePanelEl?.addEventListener('click', function (e: any) {
+      if (!selectedVolumeBoxId) return;
+      var elBtn = e.target.closest('button[data-vbelement]');
+      if (elBtn) {
+        var vbCur = Store.findVolumeBox(selectedVolumeBoxId);
+        var nextElement = vbCur && vbCur.elementType === elBtn.dataset.vbelement ? undefined : elBtn.dataset.vbelement;
+        Store.commands.setVolumeBoxElementType(selectedVolumeBoxId, nextElement);
+        render();
+        return;
+      }
+      var matBtn = e.target.closest('button[data-vbmaterial]');
+      if (matBtn) {
+        var vbCurM = Store.findVolumeBox(selectedVolumeBoxId);
+        var nextMaterial = vbCurM && vbCurM.structuralMaterial === matBtn.dataset.vbmaterial ? undefined : matBtn.dataset.vbmaterial;
+        Store.commands.setVolumeBoxMaterial(selectedVolumeBoxId, nextMaterial);
+        render();
+      }
     });
     roofTypePanelEl.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
     roofTypePanelEl.addEventListener('click', function (e: any) {
@@ -5697,8 +5715,16 @@ import {
     document.querySelectorAll('[data-room-preset]').forEach(function (btn: any) {
       btn.addEventListener('click', function () {
         if (btn.dataset.roomPreset !== 'varanda' && btn.dataset.roomPreset !== 'glazing' && btn.dataset.roomPreset !== 'volumetria' && btn.dataset.roomPreset !== 'sacada-vidro' && !requireLajeBelowOrHint()) return;
+        if (btn.dataset.roomPreset === 'volumetria') { openVolumeBoxMaterialPicker(); return; }
         placeRoomPreset(btn.dataset.roomPreset);
       });
+    });
+    volumeBoxMaterialPickerPanelEl.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
+    volumeBoxMaterialPickerPanelEl.addEventListener('click', function (e: any) {
+      var vbmBtn = e.target.closest('button[data-volume-box-material]');
+      if (!vbmBtn) return;
+      closeVolumeBoxMaterialPicker();
+      placeRoomPreset('volumetria', vbmBtn.dataset.volumeBoxMaterial || undefined);
     });
     document.querySelectorAll('[data-disabled-label]').forEach(function (btn: any) {
       btn.addEventListener('click', function () { flashDisabledHint(btn.dataset.disabledLabel); });
@@ -5770,12 +5796,17 @@ import {
     facadeWallSelectionHandler = null;
     facadeIsolatedWallIds = wallIds.slice();
     deselect();
-    const totalWidthM = wallIds.reduce((total, id) => total + (Store.findWall(id) ? Core.wallLengthMeters(Store.findWall(id)!) : 0), 0) + Math.max(0, wallIds.length - 1);
+    resetFacadeParallelView();
+  }
+  export function setFacadeActiveWallHandler(handler: ((wallId: string) => void) | null): void { facadeActiveWallHandler = handler; }
+  export function resetFacadeParallelView(): void {
+    const ids = facadeIsolatedWallIds || [];
+    const totalWidthM = ids.reduce((total, id) => total + (Store.findWall(id) ? Core.wallLengthMeters(Store.findWall(id)!) : 0), 0) + Math.max(0, ids.length - 1);
     camAngle = Math.PI / 2; camElev = 0.04; camDist = Math.max(8, totalWidthM * 0.72);
     camTarget.x = 0; camTarget.y = 1.45; camTarget.z = 0; updateCam(); render();
   }
   export function clearFacadeIsolation(): void {
-    facadeWallSelectionHandler = null; facadeIsolatedWallIds = null; render();
+    facadeWallSelectionHandler = null; facadeActiveWallHandler = null; facadeIsolatedWallIds = null; render();
   }
   export function setSteelFrameRoofHidden(hidden: boolean) {
     if (steelFrameRoofHidden === hidden) return;
@@ -5786,6 +5817,11 @@ import {
     var product = Catalog.getProduct(productId);
     if (!product) return false;
     pendingCommercialSelection = selection;
+    if (product.assets.applicationSurface === 'external') {
+      currentPaintSurface = 'external'; currentPaintProductId = productId; setTool('paintBucket');
+      hintEl.textContent = 'ACM carregado. Clique em uma face externa ou bloco de volumetria para aplicar.';
+      return true;
+    }
     if (product.category === 'paint') {
       currentPaintSurface = 'walls'; currentPaintProductId = productId; setTool('paintBucket');
       hintEl.textContent = 'Produto carregado. Clique somente nas paredes compatíveis.';
@@ -5835,6 +5871,7 @@ export const ViewportController = {
   focusFacade,
   setFacadeNightMode,
   beginFacadeWallSelection, isolateFacadeWalls, clearFacadeIsolation,
+  setFacadeActiveWallHandler, resetFacadeParallelView,
   toggleTouchCameraMode,
   getZoomPercent, zoomIn, zoomOut, setOnZoomChanged,
   toggleLayersMenuAtElement,

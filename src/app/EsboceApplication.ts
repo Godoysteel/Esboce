@@ -25,8 +25,11 @@ import {
 import type { ConstructionSystem, CommercialSelection } from "../core/types.js";
 import { constructionSystemDefinition } from "../core/ConstructionSystem.js";
 import { PLACLUX_PRODUCTS, PLACLUX_SUPPLIER } from "../core/PlacluxCatalog.js";
+import { BOLD_ACM_MANUAL_URL, BOLD_ACM_PRODUCTS, BOLD_CATEGORY_URL, BOLD_PRICE_REFERENCE_DATE } from "../core/BoldCatalog.js";
 
 const PLACLUX_CATALOG_TAB = "__placlux__";
+const BOLD_CATALOG_TAB = "__bold__";
+Catalog.registerBoldCatalogProducts(BOLD_ACM_PRODUCTS);
 
 export class EsboceApplication {
   private readonly scene = new THREE.Scene();
@@ -538,8 +541,14 @@ export class EsboceApplication {
       facadeWorkspaceSubtitle.textContent = sourceLabel;
       setFacadeOverlayVisible(false);
       showCategory(undefined);
-      if (isolatedWallIds?.length) ViewportController.isolateFacadeWalls(isolatedWallIds);
-      else ViewportController.clearFacadeIsolation();
+      if (isolatedWallIds?.length) {
+        ViewportController.isolateFacadeWalls(isolatedWallIds);
+        ViewportController.setFacadeActiveWallHandler((selectedWallId) => {
+          activeFacadeWallId = selectedWallId;
+          editingFacadeSignId = null;
+          facadeWorkspaceSubtitle.textContent = `Parede ativa selecionada · ${isolatedWallIds.length} ${isolatedWallIds.length === 1 ? 'parede isolada' : 'paredes em paralelo'}`;
+        });
+      } else ViewportController.clearFacadeIsolation();
       const focusedWallId = isolatedWallIds?.[0] || ViewportController.focusFacade(wallId);
       activeFacadeWallId = focusedWallId;
       this.requireElement('viewportHint').textContent = focusedWallId
@@ -594,6 +603,10 @@ export class EsboceApplication {
     this.requireElement('facadeGlazingBtn').addEventListener('click', () => {
       showCategory('aberturas');
       this.requireElement('addGlazingPanelBtn').click();
+    });
+    this.requireElement('facadeParallelViewBtn').addEventListener('click', () => {
+      ViewportController.resetFacadeParallelView();
+      this.requireElement('viewportHint').textContent = 'Câmera restaurada para a vista paralela das paredes isoladas.';
     });
     const signText = this.requireElement('facadeSignText') as HTMLInputElement;
     const signWidth = this.requireElement('facadeSignWidth') as HTMLInputElement;
@@ -1648,7 +1661,8 @@ export class EsboceApplication {
       this.catalogActiveDeptId = PLACLUX_CATALOG_TAB;
     }
     const visibleProducts = this.catalogProductsWithPhotos();
-    if (!this.catalogActiveDeptId || (this.catalogActiveDeptId !== PLACLUX_CATALOG_TAB && !visibleProducts.some((product) => product.department_id === this.catalogActiveDeptId))) {
+    const isSpecialCatalogTab = this.catalogActiveDeptId === PLACLUX_CATALOG_TAB || this.catalogActiveDeptId === BOLD_CATALOG_TAB;
+    if (!this.catalogActiveDeptId || (!isSpecialCatalogTab && !visibleProducts.some((product) => product.department_id === this.catalogActiveDeptId))) {
       this.catalogActiveDeptId = this.catalogDepartments?.find((department) =>
         visibleProducts.some((product) => product.department_id === department.id)
       )?.id ?? null;
@@ -1734,6 +1748,16 @@ export class EsboceApplication {
       this.renderCatalogGrid();
     });
     tabsEl.appendChild(placluxTab);
+    const boldTab = document.createElement("div");
+    boldTab.className = "catalog-tab bold-tab" + (this.catalogActiveDeptId === BOLD_CATALOG_TAB ? " active" : "");
+    boldTab.textContent = `Bold · ACM (${BOLD_ACM_PRODUCTS.length})`;
+    boldTab.addEventListener("click", () => {
+      this.catalogActiveDeptId = BOLD_CATALOG_TAB;
+      this.catalogActiveCategoriaFilter = null;
+      this.renderCatalogTabs();
+      this.renderCatalogGrid();
+    });
+    tabsEl.appendChild(boldTab);
     // Só mostra departamento que tem pelo menos 1 produto — uma aba
     // vazia não ajuda ninguém a navegar.
     departments
@@ -1756,6 +1780,10 @@ export class EsboceApplication {
     const bodyEl = this.requireElement("catalogBody");
     if (this.catalogActiveDeptId === PLACLUX_CATALOG_TAB) {
       this.renderPlacluxCatalog(bodyEl);
+      return;
+    }
+    if (this.catalogActiveDeptId === BOLD_CATALOG_TAB) {
+      this.renderBoldCatalog(bodyEl);
       return;
     }
     const filter = this.catalogActiveCategoriaFilter;
@@ -1899,6 +1927,83 @@ export class EsboceApplication {
       grid.appendChild(card);
     });
     bodyEl.appendChild(grid);
+  }
+
+  private renderBoldCatalog(bodyEl: HTMLElement): void {
+    bodyEl.innerHTML = "";
+    const page = document.createElement("section");
+    page.className = "bold-catalog-page";
+    page.innerHTML = `<header class="bold-catalog-hero">
+      <span class="bold-wordmark" aria-label="Bold">BOLD</span>
+      <p class="bold-catalog-kicker">Chapas de ACM</p>
+      <h3>Acabamentos para fachadas e comunicação visual</h3>
+      <p>Uma seleção do catálogo público da Bold para comparar cores, acabamentos e formatos durante a especificação.</p>
+      <div class="bold-catalog-tags"><span>3 mm</span><span>até 5 m</span><span>10 referências</span></div>
+    </header>`;
+
+    const notice = document.createElement("p");
+    notice.className = "bold-catalog-notice";
+    notice.textContent = `Referência pública consultada em ${BOLD_PRICE_REFERENCE_DATE}. Preço e disponibilidade devem ser confirmados no site da Bold; esta página não representa parceria oficial nem proposta comercial.`;
+    page.appendChild(notice);
+
+    const grid = document.createElement("div");
+    grid.className = "catalog-grid bold-catalog-grid";
+    BOLD_ACM_PRODUCTS.forEach((product) => {
+      const card = document.createElement("article");
+      card.className = "catalog-card bold-product-card";
+      card.tabIndex = 0;
+      card.setAttribute("role", "link");
+      card.setAttribute("aria-label", `Ver ${product.name} no catálogo público da Bold`);
+      const texturePreview = `${import.meta.env.BASE_URL}textures/acm/bold/${product.textureSlug}/albedo.jpg`;
+      card.innerHTML = `<div class="bold-product-swatch" style="background-image:url('${texturePreview}');background-color:${product.swatch}">
+          <span>${product.finish}</span>
+        </div>
+        <div class="catalog-card-info">
+          <p class="catalog-card-nome">${product.name}</p>
+          <p class="catalog-card-fabricante">${product.line} · ${product.dimensions} · ${product.thicknessMm} mm</p>
+          <p class="catalog-card-fornecedor">Referência pública Bold</p>
+          <div class="catalog-card-preco">R$ ${product.publicPriceBrl.toFixed(2).replace(".", ",")}</div>
+          <span class="bold-source-link">Aplicar na fachada</span>
+          <a class="bold-origin-link" href="${product.sourceUrl}" target="_blank" rel="noopener noreferrer">Ver origem ↗</a>
+        </div>`;
+      const applyProduct = () => {
+        const local = Catalog.getProduct(product.id);
+        if (!local) return;
+        const selection: CommercialSelection = {
+          productId: local.id,
+          offerId: `bold-public-${local.id}`,
+          supplierId: "bold-public-reference",
+          supplierName: "Bold — referência pública",
+          supplierSku: local.commercial.sku,
+          price: product.publicPriceBrl,
+          currency: "BRL",
+          region: "Brasil",
+          priceDate: "2026-09-01",
+          kind: "market_reference",
+          selectedAt: new Date().toISOString(),
+        };
+        if (!ViewportController.activateCatalogProduct(product.id, selection)) return;
+        this.requireElement("catalogOverlay").classList.remove("visible");
+        this.setCatalogEntryButtonsActive(false);
+      };
+      card.querySelector(".bold-origin-link")?.addEventListener("click", (event) => event.stopPropagation());
+      card.addEventListener("click", applyProduct);
+      card.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          applyProduct();
+        }
+      });
+      grid.appendChild(card);
+    });
+    page.appendChild(grid);
+
+    const resources = document.createElement("footer");
+    resources.className = "bold-catalog-resources";
+    resources.innerHTML = `<strong>Antes de especificar</strong><p>Confira aplicação, usinagem, fixação e manutenção na documentação do fabricante.</p>
+      <div><a href="${BOLD_CATEGORY_URL}" target="_blank" rel="noopener noreferrer">Catálogo completo ↗</a><a href="${BOLD_ACM_MANUAL_URL}" target="_blank" rel="noopener noreferrer">Manual de instalação ↗</a></div>`;
+    page.appendChild(resources);
+    bodyEl.appendChild(page);
   }
 
   private placoGlasrocProducts(): CatalogProductWithDepartment[] {

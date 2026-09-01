@@ -9,7 +9,7 @@ import { buildColdWaterKitchenPrototype, buildColdWaterNetworkFromFixtures, buil
 import type {
   Project, Floor, Wall, Column, Roof, Opening, OpeningKind, Varanda, Laje, Furniture, ColumnShape, RoofType,
   RidgeAxis, VarandaFrontSide, FoundationType, StoreEvent, StoreListener, ForroBoardType,
-  WallSnapshot, LinkedWallUpdate, GlazingPanel, GlazingGlassMaterial, FacadeSign, BalconyRailing, VolumeBox, Stair, StairModel, PlanUnderlay, Terreno, TerrenoMuroSide, CommercialSelection,
+  WallSnapshot, LinkedWallUpdate, GlazingPanel, GlazingGlassMaterial, FacadeSign, BalconyRailing, VolumeBox, VolumeBoxElementType, VolumeBoxMaterial, Stair, StairModel, PlanUnderlay, Terreno, TerrenoMuroSide, CommercialSelection,
   HydraulicNetworkType, HydraulicNode, HydraulicSegment,
 } from './types.js';
 
@@ -213,8 +213,7 @@ export function findVolumeBox(id: string): VolumeBox | null {
   return null;
 }
 
-// Cubo moldável — helpers privados compartilhados pelos 3 comandos de
-// canto/aresta/face (updateVolumeBoxCornerLive/EdgeLive/FaceLive).
+// Cubo moldável — helper privado usado por updateVolumeBoxFaceLive.
 function ensureVolumeBoxCornerOffsets(b: VolumeBox): NonNullable<VolumeBox['cornerOffsets']> {
   if (!b.cornerOffsets) {
     b.cornerOffsets = [
@@ -223,15 +222,6 @@ function ensureVolumeBoxCornerOffsets(b: VolumeBox): NonNullable<VolumeBox['corn
     ];
   }
   return b.cornerOffsets;
-}
-// Delta em coordenadas de MUNDO → deslocamento LOCAL do box, desfazendo
-// a rotação em passos de 90° (mesmo cos/sin(angle) já usado no resize
-// antigo de largura/profundidade) — Y não gira (o box só gira em torno
-// do próprio eixo Y).
-function worldDeltaToVolumeBoxLocal(b: VolumeBox, dxM: number, dyM: number, dzM: number): { x: number; y: number; z: number } {
-  const angle = (b.rotationDeg || 0) * Math.PI / 180;
-  const cos = Math.cos(angle), sin = Math.sin(angle);
-  return { x: cos * dxM + sin * dzM, y: dyM, z: -sin * dxM + cos * dzM };
 }
 // Acrescenta (nunca sobrescreve) um deslocamento local ao canto —
 // preserva qualquer torção já aplicada antes por outra alça vizinha.
@@ -2182,41 +2172,15 @@ export const commands = {
     emit({ type: 'VolumeBoxRotated', volumeBoxId });
   },
 
-  // Cubo moldável — substitui as antigas alças de largura/profundidade/
-  // altura/elevação (updateVolumeBoxSizeLive/DepthLive/VerticalLive):
-  // empurrar a face "direita" JÁ é o resize de largura de antes quando
-  // não há torção nenhuma, manter as duas alças ao mesmo tempo seria
-  // redundante. As três abaixo (canto/aresta/face) sempre ACRESCENTAM
-  // um delta ao(s) canto(s) já existente(s) — nunca sobrescrevem —
-  // pra preservar qualquer torção anterior num canto vizinho. dxM/dzM
-  // chegam em coordenadas de MUNDO e passam pela rotação de 90° do
-  // box (mesmo cos/sin(angle) já usado no resize antigo) antes de
-  // virar deslocamento local; dyM (vertical) não precisa de rotação —
-  // o box só gira em torno do eixo Y. Todas as três dão snapshot de
-  // undo no commit (diferente das 4 antigas, que não davam) — moldar
-  // um canto é uma mudança estrutural maior que um resize uniforme, e
-  // sem "desfazer fácil" só olhando o número.
-  updateVolumeBoxCornerLive(volumeBoxId: string, cornerIndex: number, dxM: number, dyM: number, dzM: number): void {
-    const b = findVolumeBox(volumeBoxId); if (!b) return;
-    pushUndoSnapshot();
-    const offsets = ensureVolumeBoxCornerOffsets(b);
-    const local = worldDeltaToVolumeBoxLocal(b, dxM, dyM, dzM);
-    addToVolumeBoxCornerOffset(offsets, cornerIndex, local);
-    emit({ type: 'VolumeBoxCornerMoved', volumeBoxId, cornerIndex, live: true });
-  },
-
-  // Move os 2 cantos da aresta juntos (mesmo delta nos dois) — meio-termo
-  // entre mexer um canto só e empurrar a face inteira.
-  updateVolumeBoxEdgeLive(volumeBoxId: string, edgeIndex: number, dxM: number, dyM: number, dzM: number): void {
-    const b = findVolumeBox(volumeBoxId); if (!b) return;
-    const edge = Core.VOLUME_BOX_EDGES[edgeIndex]; if (!edge) return;
-    pushUndoSnapshot();
-    const offsets = ensureVolumeBoxCornerOffsets(b);
-    const local = worldDeltaToVolumeBoxLocal(b, dxM, dyM, dzM);
-    edge.forEach((cornerIndex) => addToVolumeBoxCornerOffset(offsets, cornerIndex, local));
-    emit({ type: 'VolumeBoxEdgeMoved', volumeBoxId, edgeIndex, live: true });
-  },
-
+  // Cubo moldável — só push-pull de face (DEC-176: as alças de
+  // canto/aresta da DEC-163/164 ficaram confusas em 3 rodadas de teste
+  // do Product Owner e saíram). Empurrar a face "direita" JÁ é o
+  // resize de largura de antes quando não há torção nenhuma — como só
+  // face resta, o box nunca mais fica torto. Sempre ACRESCENTA um
+  // delta ao(s) canto(s) já existente(s) — nunca sobrescreve. Dá
+  // snapshot de undo no commit — moldar uma face é mudança estrutural
+  // maior que um resize uniforme, sem "desfazer fácil" só olhando o
+  // número.
   // Push-pull: move os 4 cantos da face juntos, ao longo da PRÓPRIA
   // normal da face (calculada uma vez, no início do arraste — ver
   // ViewportController — pra não mudar de direção no meio do gesto se
@@ -2241,6 +2205,26 @@ export const commands = {
     pushUndoSnapshot();
     b.finishProductId = productId;
     emit({ type: 'VolumeBoxFinishSet', volumeBoxId, productId });
+  },
+
+  // Fase B da DEC-163 (ver DEC-175) — etiqueta de elemento estrutural
+  // pro quantitativo, sem efeito em geometria/gizmo. Clicar de novo no
+  // mesmo botão já ativo desmarca (undefined), mesmo espírito de toggle
+  // do botão de ferramenta já ativa.
+  setVolumeBoxElementType(volumeBoxId: string, elementType: VolumeBoxElementType | undefined): void {
+    const b = findVolumeBox(volumeBoxId); if (!b) return;
+    pushUndoSnapshot();
+    if (elementType) b.elementType = elementType; else delete b.elementType;
+    emit({ type: 'VolumeBoxElementTypeSet', volumeBoxId, elementType });
+  },
+
+  // Fase B da DEC-163 (ver DEC-175) — material que governa o preço no
+  // quantitativo (MaterialsPanel.ts) quando não há finishProductId.
+  setVolumeBoxMaterial(volumeBoxId: string, material: VolumeBoxMaterial | undefined): void {
+    const b = findVolumeBox(volumeBoxId); if (!b) return;
+    pushUndoSnapshot();
+    if (material) b.structuralMaterial = material; else delete b.structuralMaterial;
+    emit({ type: 'VolumeBoxMaterialSet', volumeBoxId, material });
   },
 
   // Escada — sempre livre, sem ímã de parede (mesmo espírito do Bloco de

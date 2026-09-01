@@ -274,6 +274,20 @@ test('Bloco de Volumetria: custo usa o produto pintado (Lata de tinta) quando ex
   assert.match(materialsSource, /pushMaterial\('Volumetria', 'Bloco de Volumetria \(sem acabamento\)'/);
 });
 
+// Fase B da DEC-163 (ver Registro de Decisões Técnicas, DEC-175):
+// blocos sem acabamento pintado mas com elemento/material marcado
+// (elementType/structuralMaterial) ganham preço por material em vez de
+// sempre cair no genérico — mesma auditoria de cobertura de cima,
+// agora pra essa combinação nova.
+test('Bloco de Volumetria com elemento/material marcado (sem acabamento pintado) tem preço por material, não só o genérico', () => {
+  const materials = ['Madeira', 'Concreto', 'Tijolo', 'Metalao', 'SteelFrame', 'Telhado'];
+  materials.forEach((m) => {
+    assert.match(materialsSource, new RegExp('volumeBox' + m + 'PerM2'), `MaterialPriceKey/preço de referência faltando pra ${m}`);
+  });
+  assert.match(materialsSource, /totals\.volumeBoxMaterialAreaM2\[materialKey\]/);
+  assert.match(materialsSource, /VOLUME_BOX_MATERIAL_PRICE_KEY\[material\]/);
+});
+
 // Móveis: soma o preço já cadastrado no PRÓPRIO produto do Catálogo
 // (Furniture.productId) — sem estimativa nova inventada aqui (os
 // móveis de exemplo do Catálogo estão com preço 0 hoje; é uma tarefa

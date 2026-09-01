@@ -2915,6 +2915,7 @@ export function hashColorHex(key: string): number {
         map: load(tex.map, true),
         normalMap: load(tex.normalMap, false),
         roughnessMap: load(tex.roughnessMap, false),
+        metalnessMap: load(tex.metalnessMap, false),
         aoMap: load(tex.aoMap, false)
       };
     }
@@ -2969,11 +2970,18 @@ export function hashColorHex(key: string): number {
     var product = productId ? Catalog.getProduct(productId) : null;
     if (product && product.category === 'floor_tile' && product.assets.textures) {
       var gablePbrMaps = buildWallFaceMaterial(product);
-      return new THREE.MeshStandardMaterial({
+      var pbr = product.assets.pbrMaterial;
+      var GableMaterialClass: any = pbr ? THREE.MeshPhysicalMaterial : THREE.MeshStandardMaterial;
+      var gableMaterial = new GableMaterialClass({
         color: 0xFFFFFF,
-        map: gablePbrMaps.map, normalMap: gablePbrMaps.normalMap, roughnessMap: gablePbrMaps.roughnessMap, aoMap: gablePbrMaps.aoMap,
+        map: gablePbrMaps.map, normalMap: gablePbrMaps.normalMap, roughnessMap: gablePbrMaps.roughnessMap,
+        metalnessMap: gablePbrMaps.metalnessMap, aoMap: gablePbrMaps.aoMap,
+        roughness: pbr?.roughness ?? 1, metalness: pbr?.metalness ?? 0,
+        clearcoat: pbr?.clearcoat || 0, clearcoatRoughness: pbr?.clearcoatRoughness || 0,
         side: THREE.DoubleSide
       });
+      if (pbr?.normalScale && gableMaterial.normalScale) gableMaterial.normalScale.setScalar(pbr.normalScale);
+      return gableMaterial;
     }
     if (product && product.category === 'floor_tile') {
       return new THREE.MeshStandardMaterial({
@@ -3577,22 +3585,47 @@ export function hashColorHex(key: string): number {
   // repetição proporcional por face (simplificação aceitável pra um
   // bloco de estudo volumétrico, diferente da parede que tem só 2
   // faces de tamanho fixo).
+  // Fase B da DEC-163 (ver DEC-175): cor sólida padrão por material,
+  // usada só quando o bloco não tem colorHex/finishProductId próprio —
+  // mesmos tons de madeira/tijolo já usados no poste da Varanda
+  // (postMaterial, ver buildRoofUmaAgua/varanda contour acima), sem
+  // textura PBR nova nesta rodada (fora de escopo, ver DEC-175).
+  var VOLUME_BOX_MATERIAL_COLORS: Record<string, string> = {
+    madeira: '#8B5A2B',
+    concreto: '#C7C5BE',
+    tijolo: '#A84F32',
+    metalao: '#6E7378',
+    steelFrame: '#CBD0D6',
+    telhado: '#A65A3A',
+  };
   function buildVolumeBoxMaterial(box: any) {
     var product = box.finishProductId ? Catalog.getProduct(box.finishProductId) : null;
     var hasRealTexture = !!(product && product.category === 'floor_tile' && product.assets.textures);
     var isCeramic = !!(product && product.category === 'floor_tile' && !hasRealTexture);
     var ceramicMap = isCeramic ? buildCeramicTexture(product!.assets.colorHex, 1, 0) : null;
     var wallPbrMaps = hasRealTexture ? buildWallFaceMaterial(product) : null;
-    var colorHex = product ? product.assets.colorHex : (box.colorHex || Core.VOLUME_BOX_DEFAULT_COLOR);
-    return new THREE.MeshStandardMaterial({
+    // box.colorHex é sempre preenchido na criação (Core.createVolumeBoxEntity
+    // grava VOLUME_BOX_DEFAULT_COLOR de cara, nunca fica undefined num bloco
+    // novo) — então o material precisa vencer ESSE valor-padrão de estoque
+    // pra aparecer, não só entrar como fallback de undefined.
+    var materialDefaultColor = box.structuralMaterial ? VOLUME_BOX_MATERIAL_COLORS[box.structuralMaterial] : null;
+    var colorHex = product ? product.assets.colorHex : (materialDefaultColor || box.colorHex || Core.VOLUME_BOX_DEFAULT_COLOR);
+    var physical = product && product.assets.pbrMaterial;
+    var MaterialClass: any = physical ? THREE.MeshPhysicalMaterial : THREE.MeshStandardMaterial;
+    var material = new MaterialClass({
       color: new THREE.Color((isCeramic || hasRealTexture) ? '#ffffff' : colorHex),
       map: hasRealTexture ? wallPbrMaps!.map : ceramicMap,
       normalMap: hasRealTexture ? wallPbrMaps!.normalMap : null,
       roughnessMap: hasRealTexture ? wallPbrMaps!.roughnessMap : null,
+      metalnessMap: hasRealTexture ? wallPbrMaps!.metalnessMap : null,
       aoMap: hasRealTexture ? wallPbrMaps!.aoMap : null,
-      roughness: hasRealTexture ? 1 : 0.85,
-      metalness: 0.05,
+      roughness: physical ? physical.roughness : (hasRealTexture ? 1 : 0.85),
+      metalness: physical ? physical.metalness : 0.05,
+      clearcoat: physical?.clearcoat || 0,
+      clearcoatRoughness: physical?.clearcoatRoughness || 0,
     });
+    if (physical?.normalScale && material.normalScale) material.normalScale.setScalar(physical.normalScale);
+    return material;
   }
 
   // Cubo moldável: malha construída a partir dos 8 cantos reais
@@ -3622,12 +3655,52 @@ export function hashColorHex(key: string): number {
     return geo;
   }
 
+  // 12 arestas (pares de índice de canto) — mesma topologia fixa de
+  // sempre (Core.VOLUME_BOX_CORNER_SIGNS), reintroduzida aqui só pra
+  // esta função (a versão compartilhada em Core.ts saiu na DEC-176
+  // porque nenhuma alça de aresta usava mais). Escopo local de
+  // propósito — nenhum outro lugar precisa da lista de arestas hoje.
+  var VOLUME_BOX_METALAO_EDGES: [number, number][] = [
+    [0, 1], [1, 5], [5, 4], [4, 0],
+    [2, 3], [3, 7], [7, 6], [6, 2],
+    [0, 2], [1, 3], [5, 7], [4, 6],
+  ];
+  var VOLUME_BOX_METALAO_PROFILE_M = 0.05; // seção quadrada do perfil, ~5cm — leitura visual de metalon comum
+  // Material "metalão" (DEC-180, Product Owner: "estrutura para o ACM
+  // seria perfis de alumínio ou metalon") — em vez de um bloco sólido
+  // colorido, o volume vira um esqueleto procedural: as 12 arestas
+  // reais viram perfis tubulares (BoxGeometry fino orientado por
+  // quaternion, mesma técnica que a antiga alça-cilindro de aresta
+  // usava pra apontar de um canto a outro), material metálico de
+  // verdade (metalness alto). Não aplica finishProductId/colorHex
+  // nesta primeira versão — sempre a mesma cor de perfil metálico,
+  // igual qualquer outro material estrutural só muda a cor sólida.
+  function buildVolumeBoxMetalaoFrame(box: any) {
+    var corners = Core.volumeBoxCornerLocalPositions(box);
+    var profileMat = new THREE.MeshStandardMaterial({ color: 0x9AA0A6, metalness: 0.85, roughness: 0.35 });
+    var group = new THREE.Group();
+    VOLUME_BOX_METALAO_EDGES.forEach(function (edge) {
+      var a = corners[edge[0]]!, b = corners[edge[1]]!;
+      var dir = new THREE.Vector3(b.x - a.x, b.y - a.y, b.z - a.z);
+      var len = dir.length();
+      if (len < 1e-6) return;
+      dir.normalize();
+      var profileGeo = new THREE.BoxGeometry(VOLUME_BOX_METALAO_PROFILE_M, len, VOLUME_BOX_METALAO_PROFILE_M);
+      var profileMesh = new THREE.Mesh(profileGeo, profileMat);
+      profileMesh.position.set((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
+      profileMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+      group.add(profileMesh);
+    });
+    return group;
+  }
+
   // Exportada (não só de uso interno) — ViewportController reconstrói a
   // prévia de arraste chamando esta função direto com um box sintético
   // (entidade real + cornerOffsets de trabalho), mesmo princípio de
   // createRoofResizePreviewMeshes acima, sem precisar de um builder de
   // prévia paralelo.
   export function buildVolumeBoxMesh(box: any) {
+    if (box.structuralMaterial === 'metalao') return buildVolumeBoxMetalaoFrame(box);
     var geo = buildVolumeBoxGeometry(box);
     var mat = buildVolumeBoxMaterial(box);
     var mesh = new THREE.Mesh(geo, mat);
@@ -4377,6 +4450,7 @@ export function hashColorHex(key: string): number {
         map: load(tex.map, true),
         normalMap: load(tex.normalMap, false),
         roughnessMap: load(tex.roughnessMap, false),
+        metalnessMap: load(tex.metalnessMap, false),
         aoMap: load(tex.aoMap, false)
       };
     }
@@ -4393,7 +4467,7 @@ export function hashColorHex(key: string): number {
       return c;
     }
     var mat = new THREE.MeshStandardMaterial({
-      map: cloneMap(maps.map), normalMap: cloneMap(maps.normalMap), roughnessMap: cloneMap(maps.roughnessMap), aoMap: cloneMap(maps.aoMap),
+      map: cloneMap(maps.map), normalMap: cloneMap(maps.normalMap), roughnessMap: cloneMap(maps.roughnessMap), metalnessMap: cloneMap(maps.metalnessMap), aoMap: cloneMap(maps.aoMap),
       side: THREE.DoubleSide
     });
     // Mesmo "scale" ajustável (0,25–4) que buildCeramicTexture já aceita
@@ -4442,7 +4516,7 @@ export function hashColorHex(key: string): number {
       c.repeat.set(repeatUnits, repeatUnits);
       return c;
     }
-    return { map: cloneMap(maps.map), normalMap: cloneMap(maps.normalMap), roughnessMap: cloneMap(maps.roughnessMap), aoMap: cloneMap(maps.aoMap) };
+    return { map: cloneMap(maps.map), normalMap: cloneMap(maps.normalMap), roughnessMap: cloneMap(maps.roughnessMap), metalnessMap: cloneMap(maps.metalnessMap), aoMap: cloneMap(maps.aoMap) };
   }
 
   function buildCeramicTexture(colorHex: string, scale: number, rotationDeg: number) {
@@ -5111,13 +5185,16 @@ export function hashColorHex(key: string): number {
     }
 
     if (viewState.selectedVolumeBox) {
-      // Bloco de Volumetria — cubo moldável: 8 alças de canto, 12 de
-      // meio de aresta e 6 de centro de face (push-pull), substituindo
-      // as antigas 6 alças de largura/profundidade/altura/elevação —
-      // empurrar a face "direita" JÁ é o resize de largura de antes
-      // quando não há torção nenhuma (Core.volumeBoxFaces/
-      // Core.VOLUME_BOX_EDGES/Core.volumeBoxCornerLocalPositions
-      // definem a topologia fixa: sempre 8-12-6, ver Core.ts).
+      // Bloco de Volumetria — moldável só por push-pull de face (6
+      // alças). As tentativas com alças de canto/aresta também
+      // clicáveis (DEC-163/DEC-164) ficaram confusas nos testes do
+      // Product Owner mesmo depois de 3 correções — decisão foi
+      // simplificar pra só face, que sozinha já cobre o caso comum
+      // (empurrar a face "direita" é o resize de largura de sempre) e
+      // nunca deixa o bloco torto sem querer. Core.volumeBoxFaces/
+      // Core.volumeBoxCornerLocalPositions ainda definem a topologia
+      // fixa 8-12-6 (cornerOffsets continua sendo o dado bruto), só a
+      // UI de canto/aresta que saiu.
       var vbSel = viewState.selectedVolumeBox;
       var vbYOffset = viewState.editingYOffset;
       var vbSill = vbSel.sillHeightM || 0;
@@ -5130,53 +5207,25 @@ export function hashColorHex(key: string): number {
       // pela MESMA convenção de eixo já usada acima (vbAxisX/Y = eixo
       // local de largura, vbDepthAxisX/Y = eixo local de profundidade).
       function vbLocalToWorld(local: any) {
+        // BUG real encontrado nesta sessão (explica o "não deu certo" da
+        // DEC-164 sem detalhe nenhum): local.x/local.z JÁ vêm em metros
+        // reais (Core.volumeBoxCornerLocalPositions), igual local.y logo
+        // abaixo (que corretamente NUNCA multiplicou por scale) — só o
+        // CENTRO (vbCenterWorldX/Z) precisa de `* scale` porque ele parte
+        // de vbSel.x/y em unidade de GRADE. Multiplicar local.x/z por
+        // scale de novo encolhia a alça de face ~20x (scale ≈ 1/GRID),
+        // apertando as 6 alças numa fatia fina perto do centro do bloco
+        // em vez de cobrirem a face inteira — por isso pareciam "todas
+        // juntas" e quase impossíveis de acertar.
         return {
-          x: vbCenterWorldX + (vbAxisX * local.x + vbDepthAxisX * local.z) * scale,
+          x: vbCenterWorldX + vbAxisX * local.x + vbDepthAxisX * local.z,
           y: vbCenterWorldY + local.y,
-          z: vbCenterWorldZ + (vbAxisY * local.x + vbDepthAxisY * local.z) * scale,
+          z: vbCenterWorldZ + vbAxisY * local.x + vbDepthAxisY * local.z,
         };
       }
-      // Duas tentativas anteriores (nudge 6cm, depois 18cm, com/sem a
-      // camada de aresta) usaram esferas pequenas flutuando perto da
-      // superfície pras 3 alças — Product Owner testou as duas e
-      // reportou que continuavam se misturando. Mudança de abordagem:
-      // em vez de marcadores separados flutuando PERTO da face/aresta,
-      // a PRÓPRIA face (um plano cobrindo a área real dela) e a
-      // PRÓPRIA aresta (um cilindro ao longo do comprimento real dela)
-      // viram a área clicável — sem ponto pra "acertar", clica em
-      // qualquer parte da face/aresta que já está vendo. Canto continua
-      // esfera pequena (não tem área própria pra virar superfície).
       var vbCorners = Core.volumeBoxCornerLocalPositions(vbSel);
       var vbFaces = Core.volumeBoxFaces(vbSel);
-      var VB_CORNER_NUDGE_M = 0.05;
       var VB_SURFACE_NUDGE_M = 0.015; // só o bastante pra não brigar (z-fighting) com a malha sólida por baixo
-      vbCorners.forEach(function (corner: any, i: number) {
-        var len = Math.hypot(corner.x, corner.y, corner.z) || 1;
-        var nudged = { x: corner.x + (corner.x / len) * VB_CORNER_NUDGE_M, y: corner.y + (corner.y / len) * VB_CORNER_NUDGE_M, z: corner.z + (corner.z / len) * VB_CORNER_NUDGE_M };
-        var world = vbLocalToWorld(nudged);
-        var handle = new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 12), new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: true }));
-        handle.position.set(world.x, world.y, world.z);
-        handle.userData.handle = 'volumeBoxCorner:' + i;
-        handle.renderOrder = 999; scene.add(handle); registry.handleMeshes.push(handle);
-      });
-      // Aresta: cilindro ligando os 2 cantos de verdade (cada ponta
-      // deslocada na própria direção radial, mesma técnica do canto).
-      Core.VOLUME_BOX_EDGES.forEach(function (edge: any, i: number) {
-        var a = vbCorners[edge[0]]!, b = vbCorners[edge[1]]!;
-        var lenA = Math.hypot(a.x, a.y, a.z) || 1, lenB = Math.hypot(b.x, b.y, b.z) || 1;
-        var aWorld = vbLocalToWorld({ x: a.x + (a.x / lenA) * VB_SURFACE_NUDGE_M, y: a.y + (a.y / lenA) * VB_SURFACE_NUDGE_M, z: a.z + (a.z / lenA) * VB_SURFACE_NUDGE_M });
-        var bWorld = vbLocalToWorld({ x: b.x + (b.x / lenB) * VB_SURFACE_NUDGE_M, y: b.y + (b.y / lenB) * VB_SURFACE_NUDGE_M, z: b.z + (b.z / lenB) * VB_SURFACE_NUDGE_M });
-        var dir = new THREE.Vector3(bWorld.x - aWorld.x, bWorld.y - aWorld.y, bWorld.z - aWorld.z);
-        var edgeLen = dir.length();
-        if (edgeLen < 1e-6) return;
-        dir.normalize();
-        var edgeGeo = new THREE.CylinderGeometry(0.035, 0.035, edgeLen, 8);
-        var edgeHandle = new THREE.Mesh(edgeGeo, new THREE.MeshBasicMaterial({ color: 0xffd166, transparent: true, opacity: 0.6, depthTest: true }));
-        edgeHandle.position.set((aWorld.x + bWorld.x) / 2, (aWorld.y + bWorld.y) / 2, (aWorld.z + bWorld.z) / 2);
-        edgeHandle.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
-        edgeHandle.userData.handle = 'volumeBoxEdge:' + i;
-        edgeHandle.renderOrder = 999; scene.add(edgeHandle); registry.handleMeshes.push(edgeHandle);
-      });
       // Face: plano cobrindo os 4 cantos reais da face (cada canto
       // deslocado na normal de verdade da face — a mesma direção do
       // push-pull), não só um ponto no centro.
@@ -5770,15 +5819,21 @@ export function hashColorHex(key: string): number {
             // um branco emissivo leve por cima, que clareia/dessatura o
             // tom sem apagar a diferença entre face mais e menos iluminada.
             var isPlainWallFace = !product && !steelFrameFaceConfigured && !highlighted && !DEBUG_COLOR_MODE;
-            var faceMat = new THREE.MeshStandardMaterial({
+            var physical = product && product.assets.pbrMaterial;
+            var FaceMaterialClass: any = physical ? THREE.MeshPhysicalMaterial : THREE.MeshStandardMaterial;
+            var faceMat = new FaceMaterialClass({
               color: (floorIdx === editingIdx && !DEBUG_COLOR_MODE) ? pickColor(faceColor, wallCategory, viewState) : faceColor,
               emissive: isPlainWallFace ? 0xFFFFFF : 0x000000,
               emissiveIntensity: isPlainWallFace ? 0.15 : 0,
               map: DEBUG_COLOR_MODE ? null : (hasRealTexture ? wallPbrMaps!.map : ceramicMap),
               normalMap: DEBUG_COLOR_MODE ? null : (hasRealTexture ? wallPbrMaps!.normalMap : null),
               roughnessMap: DEBUG_COLOR_MODE ? null : (hasRealTexture ? wallPbrMaps!.roughnessMap : null),
+              metalnessMap: DEBUG_COLOR_MODE ? null : (hasRealTexture ? wallPbrMaps!.metalnessMap : null),
               aoMap: DEBUG_COLOR_MODE ? null : (hasRealTexture ? wallPbrMaps!.aoMap : null),
-              roughness: 1,
+              roughness: physical ? physical.roughness : 1,
+              metalness: physical ? physical.metalness : 0,
+              clearcoat: physical?.clearcoat || 0,
+              clearcoatRoughness: physical?.clearcoatRoughness || 0,
               flatShading: true,
               side: THREE.DoubleSide,
               polygonOffset: true,
@@ -5792,6 +5847,7 @@ export function hashColorHex(key: string): number {
               opacity: wallsTransparent ? WALL_TRANSPARENT_OPACITY : 1,
               depthWrite: !wallsTransparent
             });
+            if (physical?.normalScale && faceMat.normalScale) faceMat.normalScale.setScalar(physical.normalScale);
             // Sem tagCategory/wallId de propósito: a face não é alvo de
             // clique próprio — a caixa de referência (mesma posição)
             // já cobre isso, então o clique passa direto pra ela.

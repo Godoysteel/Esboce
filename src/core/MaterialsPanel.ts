@@ -16,7 +16,7 @@ import {
   umaAguaBackWallAreaMeters as calculateUmaAguaBackWallAreaMeters,
 } from './QuantityGeometry.js';
 import type { FoundationQuantity } from './QuantityGeometry.js';
-import type { Point, Wall, Roof, Column, Laje, Project, CommercialSelection } from './types.js';
+import type { Point, Wall, Roof, Column, Laje, Project, CommercialSelection, VolumeBoxMaterial } from './types.js';
 import { constructionSystemDefinition, hasCeramicMasonryEstimate } from './ConstructionSystem.js';
 import * as SteelFrameConfigurator from './SteelFrameConfigurator.js';
 import { STEEL_FRAME_FACE_ASSEMBLIES, quantityWithWaste, steelFrameSpecificationIssues, drywallPartitionSpecificationIssues } from './SteelFrameAssemblies.js';
@@ -364,6 +364,12 @@ interface Totals {
   balconyRailingLengthM: number;
   varandaAreaM2: number;
   volumeBoxAreaM2: number; volumeBoxProductCost: number; volumeBoxGenericAreaM2: number;
+  // Fase B da DEC-163 (ver DEC-175): área por (elementType, material) de
+  // blocos SEM finishProductId mas COM structuralMaterial — chave
+  // `${elementType || 'volumetria'}::${material}`, separado de
+  // volumeBoxGenericAreaM2 (que continua só pros blocos sem NENHUMA
+  // marcação, retrocompatibilidade total).
+  volumeBoxMaterialAreaM2: Record<string, number>;
   stairCount: number;
   furnitureCount: number; furnitureCost: number;
 }
@@ -456,7 +462,7 @@ export function compute(): ComputeResult {
     vergaCount: 0, vergaSpanM: 0,
     roofTimberAreaM2: 0,
     glazingPanelAreaM2: 0, balconyRailingLengthM: 0, varandaAreaM2: 0,
-    volumeBoxAreaM2: 0, volumeBoxProductCost: 0, volumeBoxGenericAreaM2: 0,
+    volumeBoxAreaM2: 0, volumeBoxProductCost: 0, volumeBoxGenericAreaM2: 0, volumeBoxMaterialAreaM2: {},
     stairCount: 0,
     furnitureCount: 0, furnitureCost: 0
   };
@@ -695,8 +701,17 @@ export function compute(): ComputeResult {
         : undefined;
       const cost = b.finishProductId ? productUnitCost(b.finishProductId, surfaceAreaM2, selection?.price) : null;
       if (b.finishProductId) addCommercialQuantity(volumeBoxCommercial, b.finishProductId, surfaceAreaM2, selection);
-      if (cost != null) totals.volumeBoxProductCost += cost;
-      else totals.volumeBoxGenericAreaM2 += surfaceAreaM2;
+      if (cost != null) {
+        totals.volumeBoxProductCost += cost;
+      } else if (b.structuralMaterial) {
+        // Fase B da DEC-163 (ver DEC-175): sem acabamento pintado mas com
+        // material marcado — preço por m² do material vence sobre o
+        // genérico R$260/m² (que fica só pros blocos sem NENHUMA marcação).
+        const materialKey = (b.elementType || 'volumetria') + '::' + b.structuralMaterial;
+        totals.volumeBoxMaterialAreaM2[materialKey] = (totals.volumeBoxMaterialAreaM2[materialKey] || 0) + surfaceAreaM2;
+      } else {
+        totals.volumeBoxGenericAreaM2 += surfaceAreaM2;
+      }
     });
 
     // Escada: item posicionado, mesmo nível de detalhe que Bloco de
@@ -1426,7 +1441,7 @@ interface RealPriceMatch {
   kind: CommercialSelection['kind'];
   estimated?: boolean;
 }
-type MaterialPriceKey = 'cementPerKg' | 'limePerKg' | 'sandPerM3' | 'concretePerM3' | 'steelPerKg' | 'brickPerUnit' | 'woodPerM3' | 'windowPerM2' | 'nailPerKg' | 'forroPlacaSTPerM2' | 'forroPlacaRUPerM2' | 'forroPlacaRFPerM2' | 'forroPlacaCimenticiaPerM2' | 'forroF530PerM' | 'forroTabicaPerM' | 'forroPenduralPerUnit' | 'baseboardPerM' | 'woodDoorPerUnit' | 'sillPerM' | 'glazingPanelPerM2' | 'balconyRailingPerM' | 'varandaPerM2' | 'volumeBoxGenericPerM2' | 'stairPerUnit' | 'hydraulicDestinationBoxPerUnit' | 'eifsWasherPerUnit' | 'pingadeiraPerUnit' | 'glasrocXBoardPerM2' | 'glasrocBasecoatPerKg' | 'glasrocMeshPerM2' | 'glasrocWrbPerM2' | 'glasrocScrewPerUnit' | 'glasrocEpsPerM2' | 'substrateBoardPerM2';
+type MaterialPriceKey = 'cementPerKg' | 'limePerKg' | 'sandPerM3' | 'concretePerM3' | 'steelPerKg' | 'brickPerUnit' | 'woodPerM3' | 'windowPerM2' | 'nailPerKg' | 'forroPlacaSTPerM2' | 'forroPlacaRUPerM2' | 'forroPlacaRFPerM2' | 'forroPlacaCimenticiaPerM2' | 'forroF530PerM' | 'forroTabicaPerM' | 'forroPenduralPerUnit' | 'baseboardPerM' | 'woodDoorPerUnit' | 'sillPerM' | 'glazingPanelPerM2' | 'balconyRailingPerM' | 'varandaPerM2' | 'volumeBoxGenericPerM2' | 'volumeBoxMadeiraPerM2' | 'volumeBoxConcretoPerM2' | 'volumeBoxTijoloPerM2' | 'volumeBoxMetalaoPerM2' | 'volumeBoxSteelFramePerM2' | 'volumeBoxTelhadoPerM2' | 'stairPerUnit' | 'hydraulicDestinationBoxPerUnit' | 'eifsWasherPerUnit' | 'pingadeiraPerUnit' | 'glasrocXBoardPerM2' | 'glasrocBasecoatPerKg' | 'glasrocMeshPerM2' | 'glasrocWrbPerM2' | 'glasrocScrewPerUnit' | 'glasrocEpsPerM2' | 'substrateBoardPerM2';
 let realPrices: { [K in MaterialPriceKey]?: RealPriceMatch } = {};
 let realHydraulicPrices: Record<string, RealPriceMatch> = {};
 let realPricesFetchStarted = false;
@@ -1461,6 +1476,17 @@ const VORTICE_MATERIAL_SKUS: Record<MaterialPriceKey, { sku: string; unitDivisor
   balconyRailingPerM: { sku: 'vortice-sacada-vidro-m', unitDivisor: 1 },
   varandaPerM2: { sku: 'vortice-varanda-m2', unitDivisor: 1 },
   volumeBoxGenericPerM2: { sku: 'vortice-volumetria-m2', unitDivisor: 1 },
+  // Fase B da DEC-163 (ver DEC-175) — mesmo SKU "Vórtice Materiais"
+  // (preço médio de referência, não fornecedor externo de verdade) que
+  // volumeBoxGenericPerM2 já usa; sem cadastro na migration ainda —
+  // ensureRealPrices() não encontra e cai em REFERENCE_PRICES (estimado),
+  // exatamente como decidido com o Product Owner.
+  volumeBoxMadeiraPerM2: { sku: 'vortice-volumetria-madeira-m2', unitDivisor: 1 },
+  volumeBoxConcretoPerM2: { sku: 'vortice-volumetria-concreto-m2', unitDivisor: 1 },
+  volumeBoxTijoloPerM2: { sku: 'vortice-volumetria-tijolo-m2', unitDivisor: 1 },
+  volumeBoxMetalaoPerM2: { sku: 'vortice-volumetria-metalao-m2', unitDivisor: 1 },
+  volumeBoxSteelFramePerM2: { sku: 'vortice-volumetria-steelframe-m2', unitDivisor: 1 },
+  volumeBoxTelhadoPerM2: { sku: 'vortice-volumetria-telhado-m2', unitDivisor: 1 },
   stairPerUnit: { sku: 'vortice-escada-un', unitDivisor: 1 },
   hydraulicDestinationBoxPerUnit: { sku: 'vortice-caixa-hidraulica-un', unitDivisor: 1 },
   eifsWasherPerUnit: { sku: 'vortice-eifs-arandela-pct100', unitDivisor: 100 },
@@ -1641,6 +1667,12 @@ const REFERENCE_PRICES = {
   balconyRailingPerM: 420.00,
   varandaPerM2: 320.00,
   volumeBoxGenericPerM2: 260.00,
+  volumeBoxMadeiraPerM2: 220.00,
+  volumeBoxConcretoPerM2: 320.00,
+  volumeBoxTijoloPerM2: 200.00,
+  volumeBoxMetalaoPerM2: 380.00,
+  volumeBoxSteelFramePerM2: 280.00,
+  volumeBoxTelhadoPerM2: 210.00,
   stairPerUnit: 3500.00,
   hydraulicDestinationBoxPerUnit: 115.00,
   eifsWasherPerUnit: 0.4792,
@@ -1678,6 +1710,29 @@ const REFERENCE_PRICES = {
 //     faces, valor mais conservador que o CUB/m² residencial completo
 //     (~R$1.950-3.100/m² pra PR/RS/SC em 2025, fonte blog Cassol) já
 //     que não inclui fundação/telhado/instalações — só a massa em si.
+//   • volumeBox{Madeira,Concreto,Tijolo,Metalao,SteelFrame,Telhado}PerM2
+//     (Fase B da DEC-163, ver DEC-175 e DEC-180): mesmo bloco de
+//     volumetria acima, mas com structuralMaterial marcado — troca o
+//     genérico pelo preço médio do material escolhido, por m² de
+//     SUPERFÍCIE (mesma métrica que o bloco já usa, decisão do Product
+//     Owner: não vale a pena calcular volume/contagem de peças reais
+//     pra uma forma livre). SEM entrada de ACM de propósito — ACM é
+//     revestimento, não estrutura (Product Owner, DEC-180); "metalao"
+//     já cobre o perfil de alumínio/metalon que sustenta um ACM de
+//     verdade, aplicado como acabamento via finishProductId (catálogo
+//     Bold, ver BoldCatalog.ts), não por esta classificação estrutural.
+//     Faixas de mercado 2025-2026, meio da faixa em cada uma:
+//     madeira (parede/estrutura de madeira tratada, com fechamento)
+//     ~R$180-260/m²; concreto aparente (fôrma+aço+concreto+acabamento
+//     básico) ~R$280-360/m²; tijolo aparente (alvenaria estrutural +
+//     rejunte, sem reboco) ~R$170-230/m²; metalão (estrutura em perfil
+//     metálico pesado, inclusive o substrato de um ACM) ~R$320-440/m²;
+//     Steel Frame (parede leve montada com fechamento básico)
+//     ~R$220-340/m² — mesma família construtiva do Sistema Construtivo
+//     Steel Frame do projeto
+//     (ver DEC-159), mas aqui é só a média de mercado, não decomposta
+//     camada a camada; telhado (estrutura + cobertura básica, como massa
+//     de volumetria, não o objeto Telhado real) ~R$180-250/m².
 //   • rodapePerM: rodapé cerâmico/poliestireno assentado, faixa de
 //     mercado ~R$12-25/m instalado — meio da faixa.
 //   • soleiraPerM: soleira de granito/mármore sob porta, faixa de
@@ -1706,6 +1761,12 @@ const ESTIMATED_MARKET_PRICES = {
   balconyRailingPerM: 420.00,
   varandaPerM2: 320.00,
   volumeBoxGenericPerM2: 260.00,
+  volumeBoxMadeiraPerM2: 220.00,
+  volumeBoxConcretoPerM2: 320.00,
+  volumeBoxTijoloPerM2: 200.00,
+  volumeBoxMetalaoPerM2: 380.00,
+  volumeBoxSteelFramePerM2: 280.00,
+  volumeBoxTelhadoPerM2: 210.00,
   rodapePerM: 18.00,
   soleiraPerM: 90.00,
   hydraulicDestinationBoxUnit: 115.00,
@@ -1882,6 +1943,21 @@ export interface SupplierBudget {
   rows: (string | number)[][];
   total: number;
 }
+
+// Fase B da DEC-163 (ver DEC-175) — nome de exibição e chave de preço
+// por material do Bloco de Volumetria, usados só na montagem da linha
+// de orçamento (compute() já resolveu a área por chave elementType::material).
+const VOLUME_BOX_MATERIAL_LABEL: Record<VolumeBoxMaterial, string> = {
+  madeira: 'Madeira', concreto: 'Concreto', tijolo: 'Tijolo', metalao: 'Metalão',
+  steelFrame: 'Steel Frame', telhado: 'Telhado',
+};
+const VOLUME_BOX_MATERIAL_PRICE_KEY: Record<VolumeBoxMaterial, MaterialPriceKey> = {
+  madeira: 'volumeBoxMadeiraPerM2', concreto: 'volumeBoxConcretoPerM2', tijolo: 'volumeBoxTijoloPerM2',
+  metalao: 'volumeBoxMetalaoPerM2', steelFrame: 'volumeBoxSteelFramePerM2', telhado: 'volumeBoxTelhadoPerM2',
+};
+const VOLUME_BOX_ELEMENT_LABEL: Record<string, string> = {
+  parede: 'Parede', marquise: 'Marquise', pilar: 'Pilar', cobertura: 'Cobertura',
+};
 
 export function buildRows(): (string | number)[][] {
   const q = compute();
@@ -2113,6 +2189,17 @@ export function buildRows(): (string | number)[][] {
   if (q.totals.volumeBoxGenericAreaM2 > 0) {
     pushMaterial('Volumetria', 'Bloco de Volumetria (sem acabamento)', q.totals.volumeBoxGenericAreaM2, 'm²', q.totals.volumeBoxGenericAreaM2 * materialPrice('volumeBoxGenericPerM2'), 'volumeBoxGenericPerM2');
   }
+  // Fase B da DEC-163 (ver DEC-175): bloco sem acabamento pintado mas
+  // com elemento/material marcado — uma linha por combinação, categoria
+  // = nome do elemento (ou "Volumetria" se só o material foi marcado).
+  Object.keys(q.totals.volumeBoxMaterialAreaM2).forEach(function (materialKey) {
+    const areaM2 = q.totals.volumeBoxMaterialAreaM2[materialKey]!;
+    if (areaM2 <= 0) return;
+    const [elementKey, material] = materialKey.split('::') as [string, VolumeBoxMaterial];
+    const category = VOLUME_BOX_ELEMENT_LABEL[elementKey] || 'Volumetria';
+    const priceKey = VOLUME_BOX_MATERIAL_PRICE_KEY[material];
+    pushMaterial(category, VOLUME_BOX_MATERIAL_LABEL[material], areaM2, 'm²', areaM2 * materialPrice(priceKey), priceKey);
+  });
   // Escada: contagem + preço de referência único (ver
   // ESTIMATED_MARKET_PRICES.stairPerUnit) — mesmo nível de detalhe que
   // Bloco de Volumetria/Varanda hoje.

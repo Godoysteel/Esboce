@@ -60,24 +60,47 @@ test('placeRoomPreset cria um Bloco de Volumetria solto pra key "volumetria"', (
   assert.match(viewportSource, /Store\.commands\.createVolumeBox\(/);
 });
 
+// DEC-179: clicar no botão "Cubo mágico" não cria mais na hora — abre
+// uma lista perguntando o material primeiro (Product Owner: "quando
+// clicar no botão para criar o cubo mágico já deve aparecer uma lista
+// perguntando de que material ele é feito"). Escolher um material cria
+// o bloco já marcado (Store.commands.setVolumeBoxMaterial); "Padrão"
+// cria sem marcação nenhuma, igual sempre foi.
+test('index.html: existe o painel de escolha de material do Cubo mágico', () => {
+  assert.match(html, /id="volumeBoxMaterialPickerPanel"/);
+});
+
+test('clicar no botão "Cubo mágico" abre o seletor de material em vez de criar direto — placeRoomPreset só roda depois da escolha', () => {
+  const start = viewportSource.indexOf("document.querySelectorAll('[data-room-preset]')");
+  assert.ok(start !== -1);
+  const end = viewportSource.indexOf('\n    });', start);
+  const body = viewportSource.slice(start, end);
+  assert.match(body, /if \(btn\.dataset\.roomPreset === 'volumetria'\) \{ openVolumeBoxMaterialPicker\(\); return; \}/);
+});
+
+test('painel de material: escolher um item chama placeRoomPreset com o material; "Padrão" passa undefined (sem marcação)', () => {
+  assert.match(viewportSource, /function openVolumeBoxMaterialPicker\(\)/);
+  const start = viewportSource.indexOf('volumeBoxMaterialPickerPanelEl.addEventListener(\'click\'');
+  assert.ok(start !== -1);
+  const end = viewportSource.indexOf('\n    });', start);
+  const body = viewportSource.slice(start, end);
+  assert.match(body, /closeVolumeBoxMaterialPicker\(\);/);
+  assert.match(body, /placeRoomPreset\('volumetria', vbmBtn\.dataset\.volumeBoxMaterial \|\| undefined\);/);
+});
+
 test('sem ímã de parede nenhum: nearestWallForVolumeBoxAttach/attachVolumeBoxToWall não existem mais', () => {
   assert.doesNotMatch(viewportSource, /nearestWallForVolumeBoxAttach/);
   assert.doesNotMatch(viewportSource, /attachVolumeBoxToWall/);
   assert.doesNotMatch(viewportSource, /VOLUME_BOX_ATTACH_TOLERANCE_MODEL/);
 });
 
-// Cubo moldável (Product Owner: "tipo Blender", moldável puxando canto/
-// aresta/face, topologia SEMPRE fixa — 8 cantos, 12 arestas, 6 faces,
-// nunca vira forma em L nem ganha vértice novo). Duas tentativas com
-// esferas pequenas flutuando perto da superfície (nudge 6cm, depois
-// 18cm sem a camada de aresta) não resolveram — Product Owner reportou
-// as duas vezes que as alças continuavam se misturando. Terceira
-// tentativa, pedida explicitamente pelo Product Owner: em vez de
-// marcador separado, a PRÓPRIA face (plano cobrindo a área real dela)
-// e a PRÓPRIA aresta (cilindro ao longo do comprimento real dela)
-// viram a área clicável — sem ponto pra "acertar". Canto continua
-// esfera pequena (não tem área própria).
-test('Scene3DRenderer: canto é esfera pequena, aresta é cilindro ao longo da aresta real, face é um plano cobrindo a face real — não mais pontos flutuando perto da superfície', () => {
+// Cubo moldável — DEC-176: as alças de canto (esfera) e aresta
+// (cilindro) da DEC-163/DEC-164 ficaram confusas em 3 rodadas de teste
+// do Product Owner ("EM ABERTO — não tentar uma 4ª correção às
+// cegas") e saíram de vez — só push-pull de face (plano cobrindo a
+// área real dela) continua. Sem canto/aresta soltos, o bloco nunca
+// mais fica torto sem querer.
+test('Scene3DRenderer: só a alça de face existe (plano cobrindo a face real) — canto e aresta saíram (DEC-176)', () => {
   assert.match(rendererSource, /function buildVolumeBoxHitMesh/);
   assert.doesNotMatch(rendererSource, /function buildVolumeBoxPreviewMesh/);
   assert.doesNotMatch(rendererSource, /function buildVolumeBoxAttachedMesh/);
@@ -92,15 +115,12 @@ test('Scene3DRenderer: canto é esfera pequena, aresta é cilindro ao longo da a
   const body = rendererSource.slice(start, end);
   assert.match(body, /Core\.volumeBoxCornerLocalPositions\(vbSel\)/);
   assert.match(body, /Core\.volumeBoxFaces\(vbSel\)/);
-  assert.match(body, /Core\.VOLUME_BOX_EDGES\.forEach/);
-  assert.match(body, /'volumeBoxCorner:' \+ i/);
-  assert.match(body, /'volumeBoxEdge:' \+ i/);
   assert.match(body, /'volumeBoxFace:' \+ i/);
-  // Canto: esfera pequena.
-  assert.match(body, /new THREE\.SphereGeometry\(0\.08, 12, 12\)/);
-  // Aresta: cilindro entre os 2 cantos reais (não uma esfera no meio).
-  assert.match(body, /new THREE\.CylinderGeometry\(0\.035, 0\.035, edgeLen, 8\)/);
-  assert.match(body, /edgeHandle\.quaternion\.setFromUnitVectors/);
+  // Canto e aresta saíram de vez (DEC-176) — sem esfera de canto nem cilindro de aresta.
+  assert.doesNotMatch(body, /'volumeBoxCorner:' \+ i/);
+  assert.doesNotMatch(body, /'volumeBoxEdge:' \+ i/);
+  assert.doesNotMatch(body, /new THREE\.SphereGeometry\(0\.08, 12, 12\)/);
+  assert.doesNotMatch(body, /new THREE\.CylinderGeometry\(0\.035, 0\.035, edgeLen, 8\)/);
   // Face: plano com os 4 cantos reais da face (não uma esfera no centro).
   assert.match(body, /faceGeo\.setIndex\(\[0, 1, 2, 0, 2, 3\]\)/);
   assert.match(body, /face\.cornerIndices\.map/);
@@ -125,12 +145,12 @@ test('Scene3DRenderer: bloco pintável reaproveita a mesma regra de textura real
   assert.match(body, /box\.finishProductId/);
 });
 
-test('Store: canto/aresta/face são arraste de verdade (Live), sem mais os comandos antigos de largura/profundidade/altura/elevação por eixo', () => {
-  assert.match(storeSource, /updateVolumeBoxCornerLive\(volumeBoxId: string, cornerIndex: number, dxM: number, dyM: number, dzM: number\): void \{/);
-  assert.match(storeSource, /updateVolumeBoxEdgeLive\(volumeBoxId: string, edgeIndex: number, dxM: number, dyM: number, dzM: number\): void \{/);
+test('Store: só face é arraste de verdade (Live) — canto e aresta saíram (DEC-176), sem mais os comandos antigos de largura/profundidade/altura/elevação por eixo', () => {
   assert.match(storeSource, /updateVolumeBoxFaceLive\(volumeBoxId: string, faceIndex: number, deltaAlongNormalM: number\): void \{/);
   assert.match(storeSource, /rotateVolumeBox\(volumeBoxId: string, stepDeg\?: number\): void \{/);
   assert.match(storeSource, /setVolumeBoxFinish\(volumeBoxId: string, productId: string\): void \{/);
+  assert.doesNotMatch(storeSource, /updateVolumeBoxCornerLive\(/);
+  assert.doesNotMatch(storeSource, /updateVolumeBoxEdgeLive\(/);
   assert.doesNotMatch(storeSource, /updateVolumeBoxSizeLive\(/);
   assert.doesNotMatch(storeSource, /updateVolumeBoxDepthLive\(/);
   assert.doesNotMatch(storeSource, /updateVolumeBoxVerticalLive\(/);
@@ -140,14 +160,12 @@ test('Store: canto/aresta/face são arraste de verdade (Live), sem mais os coman
   assert.doesNotMatch(storeSource, /resizeVolumeBoxDepth\(/);
 });
 
-test('Store: updateVolumeBoxCornerLive/EdgeLive/FaceLive dão snapshot de undo no commit (diferente dos 4 comandos antigos, que não davam) — moldar um canto é mudança estrutural maior que um resize uniforme', () => {
-  ['updateVolumeBoxCornerLive', 'updateVolumeBoxEdgeLive', 'updateVolumeBoxFaceLive'].forEach((name) => {
-    const start = storeSource.indexOf(name + '(');
-    assert.ok(start !== -1, name + ' não encontrado');
-    const end = storeSource.indexOf('\n  },', start);
-    const body = storeSource.slice(start, end);
-    assert.match(body, /pushUndoSnapshot\(\);/, name + ' deveria chamar pushUndoSnapshot()');
-  });
+test('Store: updateVolumeBoxFaceLive dá snapshot de undo no commit — moldar uma face é mudança estrutural maior que um resize uniforme', () => {
+  const start = storeSource.indexOf('updateVolumeBoxFaceLive(');
+  assert.ok(start !== -1, 'updateVolumeBoxFaceLive não encontrado');
+  const end = storeSource.indexOf('\n  },', start);
+  const body = storeSource.slice(start, end);
+  assert.match(body, /pushUndoSnapshot\(\);/, 'updateVolumeBoxFaceLive deveria chamar pushUndoSnapshot()');
 });
 
 test('Store: delta de canto/aresta ACRESCENTA ao offset já existente (nunca sobrescreve) e trava em ±VOLUME_BOX_MAX_SIZE_M', () => {
@@ -159,14 +177,8 @@ test('Store: delta de canto/aresta ACRESCENTA ao offset já existente (nunca sob
   assert.match(body, /Math\.max\(-Core\.VOLUME_BOX_MAX_SIZE_M, Math\.min\(Core\.VOLUME_BOX_MAX_SIZE_M, v\)\)/);
 });
 
-test('Store: delta em coordenadas de mundo passa pela rotação de 90° do box antes de virar deslocamento local (Y não gira)', () => {
-  const start = storeSource.indexOf('function worldDeltaToVolumeBoxLocal(');
-  assert.ok(start !== -1);
-  const end = storeSource.indexOf('\n}', start);
-  const body = storeSource.slice(start, end);
-  assert.match(body, /y: dyM/, 'Y passa direto, sem rotação');
-  assert.match(body, /x: cos \* dxM \+ sin \* dzM/);
-  assert.match(body, /z: -sin \* dxM \+ cos \* dzM/);
+test('Store: worldDeltaToVolumeBoxLocal saiu — era usado só por canto/aresta (DEC-176), face-live não converte delta de mundo (usa a normal local direto)', () => {
+  assert.doesNotMatch(storeSource, /function worldDeltaToVolumeBoxLocal\(/);
 });
 
 test('GizmoController liga o volumeBoxGizmo a girar (90°)/excluir/fechar — nada mais', () => {
@@ -253,4 +265,22 @@ test('colapsar uma ARESTA inteira (2 cantos) contra a aresta oposta vira uma cun
   box.cornerOffsets = [zero, zero, zero, zero, zero, zero, down, down];
   const w = 2, h = 2, d = 2;
   assert.ok(Math.abs(volumeBoxVolumeM3(box) - (w * h * d) / 2) < 1e-9);
+});
+
+// DEC-181: material "metalão" (Product Owner, DEC-180: "estrutura para
+// o ACM seria perfis de alumínio ou metalon") vira esqueleto procedural
+// nas 12 arestas em vez de bloco sólido colorido — escopo desta rodada
+// é só o esqueleto genérico; reforço específico por elementType (ex.:
+// escora de marquise em balanço) fica pra uma rodada futura, depois de
+// mapear mais casos reais (decisão explícita do Product Owner).
+test('buildVolumeBoxMesh: bloco com structuralMaterial "metalao" vira esqueleto de 12 perfis metálicos, não o bloco sólido de sempre', () => {
+  assert.match(rendererSource, /function buildVolumeBoxMetalaoFrame\(box: any\)/);
+  assert.match(rendererSource, /if \(box\.structuralMaterial === 'metalao'\) return buildVolumeBoxMetalaoFrame\(box\);/);
+  const start = rendererSource.indexOf('function buildVolumeBoxMetalaoFrame(box: any) {');
+  const end = rendererSource.indexOf('\n  }', start);
+  const body = rendererSource.slice(start, end);
+  assert.match(body, /Core\.volumeBoxCornerLocalPositions\(box\)/);
+  assert.match(body, /metalness: 0\.85/, 'perfil precisa ler como metal de verdade, não a cor lisa genérica');
+  assert.match(body, /new THREE\.BoxGeometry\(VOLUME_BOX_METALAO_PROFILE_M, len, VOLUME_BOX_METALAO_PROFILE_M\)/);
+  assert.match(body, /profileMesh\.quaternion\.setFromUnitVectors/);
 });

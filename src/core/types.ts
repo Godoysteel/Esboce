@@ -294,6 +294,22 @@ export interface FacadeSign {
   normalSign: -1 | 1;
 }
 
+// Fase B da DEC-163 (ver DEC-175): que ELEMENTO estrutural o bloco
+// representa — pura etiqueta pro quantitativo/orçamento, não muda
+// geometria nem comportamento de gizmo nenhum.
+export type VolumeBoxElementType = 'parede' | 'marquise' | 'pilar' | 'cobertura';
+// Fase B da DEC-163 (ver DEC-175): que MATERIAL ESTRUTURAL o bloco
+// representa — junto com VolumeBoxElementType, governa o preço no
+// quantitativo (MaterialsPanel.ts) quando não há finishProductId
+// escolhido; sem textura própria ainda, só cor sólida padrão por
+// material (Scene3DRenderer.buildVolumeBoxMaterial). NÃO inclui ACM de
+// propósito (DEC-180) — Product Owner: "o ACM é revestimento, estrutura
+// para o ACM seria perfis de alumínio ou metalon" — ACM entra como
+// acabamento de verdade via finishProductId (catálogo Bold, ver
+// BoldCatalog.ts), nunca como esta classificação estrutural; "metalao"
+// já cobre o substrato metálico que sustenta o ACM.
+export type VolumeBoxMaterial = 'madeira' | 'concreto' | 'tijolo' | 'metalao' | 'steelFrame' | 'telhado';
+
 // Bloco de Volumetria (massa procedural — sacada, marquise, qualquer
 // volume solto) — box sólido, SEMPRE livre nas 3 dimensões (posição,
 // altura/elevação, profundidade), sem ímã de parede nenhum: Product
@@ -322,6 +338,10 @@ export interface VolumeBox {
   colorHex?: string;
   /** Acabamento tipo parede aplicado pela ferramenta Lata de tinta (mesmo catálogo de "paint" usado em Wall.finishA/B). Presente = sobrescreve colorHex. */
   finishProductId?: string;
+  /** Que elemento estrutural este bloco representa (parede/marquise/pilar/cobertura) — DEC-175, Fase B da DEC-163. Ausente = "Volumetria" genérica, comportamento original. */
+  elementType?: VolumeBoxElementType;
+  /** Que material este bloco representa — DEC-175. Governa o preço no quantitativo (MaterialsPanel.ts) quando não há finishProductId; ausente = cai no genérico R$/m² de sempre. */
+  structuralMaterial?: VolumeBoxMaterial;
   /** Deslocamento local (metros) de cada um dos 8 cantos em relação à posição
    * "ideal" do box reto derivada de widthM/heightM/depthM — índice 0-7 =
    * bit0:X (0=-hw,1=+hw) bit1:Y (0=-hh,1=+hh) bit2:Z (0=-hd,1=+hd); ver
@@ -596,6 +616,7 @@ export interface ProductTextures {
   map?: string;
   normalMap?: string;
   roughnessMap?: string;
+  metalnessMap?: string;
   aoMap?: string;
 }
 
@@ -615,6 +636,16 @@ export interface ProductAssets {
   // Decisões Técnicas).
   pecaCoverageM2?: number;
   textures?: ProductTextures;
+  /** Parâmetros físicos do coating. Ausente mantém o material padrão legado. */
+  pbrMaterial?: {
+    metalness: number;
+    roughness: number;
+    clearcoat?: number;
+    clearcoatRoughness?: number;
+    normalScale?: number;
+  };
+  /** Superfície sugerida ao carregar o produto pelo catálogo. */
+  applicationSurface?: 'walls' | 'floors' | 'external' | 'roofs';
   // Caminho (relativo a public/, sem barra inicial) de um modelo glTF/GLB
   // pronto — usado por produtos da categoria 'furniture'. Nunca um caminho
   // absoluto fixo: o carregador sempre prefixa com import.meta.env.BASE_URL.
