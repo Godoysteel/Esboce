@@ -400,8 +400,11 @@ import {
       scene.remove(volumeBoxResizePreview);
       volumeBoxResizePreview.traverse(function (object: any) {
         if (object.geometry && object.geometry.dispose) object.geometry.dispose();
-        var materials = object.material ? (Array.isArray(object.material) ? object.material : [object.material]) : [];
-        materials.forEach(function (material: any) { if (material && material.dispose) material.dispose(); });
+        // O material é o MeshBasicMaterial compartilhado de
+        // getVolumeBoxResizePreviewMaterial() (reaproveitado entre
+        // gestos de redimensionamento, ver updateVolumeBoxSkewPreview)
+        // — nunca descarta ele aqui, senão o próximo arraste usaria um
+        // material já com dispose() chamado.
       });
     }
     volumeBoxResizePreview = null;
@@ -438,19 +441,44 @@ import {
     updateVolumeBoxSkewPreview(box, box.cornerOffsets);
   }
 
+  // Material fantasma único, reaproveitado por TODO gesto de
+  // redimensionamento do Cubo mágico — nunca descartado entre frames
+  // nem entre gestos (só existe uma vez na vida do app). Achado real
+  // (travamento reportado por usuário): antes, updateVolumeBoxSkewPreview
+  // criava um MeshBasicMaterial novo a cada pointermove, sem nunca
+  // descartar o anterior.
+  var volumeBoxResizePreviewMaterial: any = null;
+  function getVolumeBoxResizePreviewMaterial() {
+    if (!volumeBoxResizePreviewMaterial) {
+      volumeBoxResizePreviewMaterial = new THREE.MeshBasicMaterial({ color: 0x79c8ee, transparent: true, opacity: 0.28, depthWrite: false, side: THREE.DoubleSide });
+    }
+    return volumeBoxResizePreviewMaterial;
+  }
+
   // Reconstrói a malha fantasma a partir de uma cópia de trabalho de
-  // cornerOffsets (Scene3DRenderer.buildVolumeBoxMesh aceita um box
+  // cornerOffsets (Core.volumeBoxCornerLocalPositions aceita um box
   // sintético — entidade real + cornerOffsets ainda não commitados).
   // 8 vértices, 36 índices — barato o bastante pra rodar a cada
-  // pointermove sem preocupação de desempenho.
+  // pointermove sem preocupação de desempenho, DESDE que não passe por
+  // Scene3DRenderer.buildVolumeBoxMesh: essa função monta um acabamento
+  // de verdade por face (até 6 materiais PBR, cada um clonando texturas
+  // reais — ver DEC-182) ou o esqueleto de metalão inteiro (DEC-181),
+  // caro demais pra rodar 60x/segundo só pra virar um cubo azul
+  // translúcido em seguida. Usa só a GEOMETRIA (buildVolumeBoxGeometry,
+  // sem material nenhum) direto, reaproveitando o mesmo Mesh e o mesmo
+  // material entre frames — só a geometria antiga é descartada a cada
+  // atualização.
   function updateVolumeBoxSkewPreview(box: any, cornerOffsets: any): void {
     if (!volumeBoxResizePreview) return;
-    while (volumeBoxResizePreview.children.length) volumeBoxResizePreview.remove(volumeBoxResizePreview.children[0]);
-    var previewGroup: any = Scene3DRenderer.buildVolumeBoxMesh(Object.assign({}, box, { cornerOffsets: cornerOffsets }));
-    previewGroup.traverse(function (obj: any) {
-      if (obj.isMesh) obj.material = new THREE.MeshBasicMaterial({ color: 0x79c8ee, transparent: true, opacity: 0.28, depthWrite: false, side: THREE.DoubleSide });
-    });
-    volumeBoxResizePreview.add(previewGroup);
+    var geo = Scene3DRenderer.buildVolumeBoxGeometry(Object.assign({}, box, { cornerOffsets: cornerOffsets }));
+    var previewMesh: any = volumeBoxResizePreview.children[0];
+    if (previewMesh && previewMesh.isMesh) {
+      previewMesh.geometry.dispose();
+      previewMesh.geometry = geo;
+    } else {
+      while (volumeBoxResizePreview.children.length) volumeBoxResizePreview.remove(volumeBoxResizePreview.children[0]);
+      volumeBoxResizePreview.add(new THREE.Mesh(geo, getVolumeBoxResizePreviewMaterial()));
+    }
   }
 
   function clearStairResizePreview() {

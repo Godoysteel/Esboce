@@ -357,3 +357,62 @@ test('ViewportController: soltar o arraste horizontal do Cubo mágico passa pelo
   assert.match(before, /var vbSnapped = snapVolumeBoxToWalls\(vbEntUp, dragElementStart\.x \+ dxVbUp, dragElementStart\.y \+ dyVbUp\);/);
   assert.match(before, /Store\.commands\.updateVolumeBoxBodyLive\(vbId, vbSnapped\.x, vbSnapped\.y, dragElementStart\.liveSillHeightM\);/);
 });
+
+// Vazamento de memória de GPU achado a partir de reclamação real de
+// usuário ("o esboce está travando") — updateVolumeBoxSkewPreview roda
+// a cada pointermove durante o arraste de face/aresta/canto do Cubo
+// mágico. Antes de existir acabamento por face (DEC-182), reconstruir
+// a malha inteira a cada frame era barato (BoxGeometry + 1 material
+// sólido). Depois da DEC-182, a mesma chamada passou a montar até 6
+// materiais PBR reais (clonando texturas) só pra jogar tudo fora um
+// instante depois e virar um cubo azul translúcido — sem nenhum
+// dispose() no meio do gesto.
+test('updateVolumeBoxSkewPreview: usa só buildVolumeBoxGeometry (nunca buildVolumeBoxMesh) e descarta a geometria antiga a cada frame — não recria material a cada pointermove', () => {
+  const start = viewportSource.indexOf('function updateVolumeBoxSkewPreview(box: any, cornerOffsets: any): void {');
+  assert.ok(start !== -1);
+  const end = viewportSource.indexOf('\n  }', start);
+  const body = viewportSource.slice(start, end);
+  assert.match(body, /Scene3DRenderer\.buildVolumeBoxGeometry\(/);
+  assert.doesNotMatch(body, /Scene3DRenderer\.buildVolumeBoxMesh\(/);
+  assert.match(body, /previewMesh\.geometry\.dispose\(\);/);
+  assert.match(body, /getVolumeBoxResizePreviewMaterial\(\)/);
+  // nunca "new THREE.MeshBasicMaterial" dentro da função — só via getVolumeBoxResizePreviewMaterial (criado uma vez só)
+  assert.doesNotMatch(body, /new THREE\.MeshBasicMaterial/);
+});
+
+test('getVolumeBoxResizePreviewMaterial: material fantasma criado uma única vez e reaproveitado (guard "if (!volumeBoxResizePreviewMaterial)")', () => {
+  assert.match(viewportSource, /var volumeBoxResizePreviewMaterial: any = null;/);
+  const start = viewportSource.indexOf('function getVolumeBoxResizePreviewMaterial() {');
+  assert.ok(start !== -1);
+  const end = viewportSource.indexOf('\n  }', start);
+  const body = viewportSource.slice(start, end);
+  assert.match(body, /if \(!volumeBoxResizePreviewMaterial\) \{/);
+});
+
+test('clearVolumeBoxResizePreview: não descarta mais o material compartilhado do preview (só a geometria) — evita usar um material com dispose() já chamado no próximo arraste', () => {
+  const start = viewportSource.indexOf('function clearVolumeBoxResizePreview() {');
+  assert.ok(start !== -1);
+  const end = viewportSource.indexOf('\n  }', start);
+  const body = viewportSource.slice(start, end);
+  assert.match(body, /if \(object\.geometry && object\.geometry\.dispose\) object\.geometry\.dispose\(\);/);
+  assert.doesNotMatch(body, /material\.dispose\(\)/);
+});
+
+// Achado secundário na mesma investigação: os dois descartadores de
+// malha da cena de verdade (fora do preview) só liberavam mat.map,
+// nunca normalMap/roughnessMap/aoMap/metalnessMap — todo acabamento
+// PBR real (Bold ACM, ver DEC-182) vazava 3-4 texturas por rebuild
+// completo (que já roda a cada pointermove de parede/cômodo/etc, ver
+// comentário de disposeObject3D).
+test('disposeObject3D e disposeObject3DTree descartam normalMap/roughnessMap/aoMap/metalnessMap, não só map', () => {
+  ['function disposeObject3D(obj: any) {', 'function disposeObject3DTree(obj: any) {'].forEach((sig) => {
+    const start = rendererSource.indexOf(sig);
+    assert.ok(start !== -1, sig);
+    const end = rendererSource.indexOf('\n  }', start);
+    const body = rendererSource.slice(start, end);
+    assert.match(body, /mat\.normalMap\.dispose\(\)/, sig);
+    assert.match(body, /mat\.roughnessMap\.dispose\(\)/, sig);
+    assert.match(body, /mat\.aoMap\.dispose\(\)/, sig);
+    assert.match(body, /mat\.metalnessMap\.dispose\(\)/, sig);
+  });
+});

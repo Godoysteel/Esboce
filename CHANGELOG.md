@@ -10,6 +10,7 @@
 - A Lata de tinta no Cubo mágico agora pinta só a face clicada (ex.: aplicar um ACM do catálogo Bold numa única face), em vez do bloco inteiro de uma vez — as outras faces continuam com o acabamento/material que já tinham. Ver DEC-182.
 - Cubo mágico com material "Metalão": quando o bloco é esticado na largura, o esqueleto agora repete um perfil vertical intermediário a cada 1200mm (no máximo), em vez de só os 2 perfis das pontas — mais fiel a uma subestrutura de fachada real. Ver DEC-183.
 - O Cubo mágico agora pode subir/descer: segurando Shift enquanto arrasta o corpo, o arraste vertical do mouse ajusta a altura em vez de mover no plano do chão. Ao soltar um arraste normal perto de uma parede alinhada ao mundo, a posição agora encosta exatamente na face dela (sem girar o bloco). Ver DEC-184.
+- Corrigido: arrastar uma face/aresta/canto do Cubo mágico (principalmente com acabamento de textura real aplicado, ex. ACM Bold) podia travar o app depois de alguns segundos — o preview do arraste vazava texturas e geometrias na GPU a cada movimento do mouse, sem nunca liberar a memória. Ver DEC-185.
 
 ## Alterado — 28/08/2026
 

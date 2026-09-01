@@ -866,7 +866,15 @@ export function hashColorHex(key: string): number {
       if (child.geometry) child.geometry.dispose();
       var mats = Array.isArray(child.material) ? child.material : (child.material ? [child.material] : []);
       mats.forEach(function (mat: any) {
+        // Mesma lista de mapas PBR de disposeObject3D acima — o Cubo
+        // mágico passa por AQUI (registry.furnitureMeshes), e cada face
+        // com acabamento real pode ter até 4 texturas clonadas (ver
+        // DEC-182); sem descartar as 3 extras, cada rebuild vazava GPU.
         if (mat.map) mat.map.dispose();
+        if (mat.normalMap) mat.normalMap.dispose();
+        if (mat.roughnessMap) mat.roughnessMap.dispose();
+        if (mat.aoMap) mat.aoMap.dispose();
+        if (mat.metalnessMap) mat.metalnessMap.dispose();
         mat.dispose();
       });
     });
@@ -4763,6 +4771,16 @@ export function hashColorHex(key: string): number {
       // corromperia na tela na primeira mudança de modelo depois de
       // importar.
       if (mat.map && !mat.userData?.sharedMap) mat.map.dispose();
+      // Acabamento PBR real (buildWallFaceMaterial/Bold ACM, ver
+      // DEC-182) clona normalMap/roughnessMap/aoMap/metalnessMap por
+      // material — nenhum deles é o cache compartilhado (só `map` tem
+      // essa exceção, ver comentário acima), então sempre seguro
+      // descartar aqui. Sem isso, cada acabamento com textura de
+      // verdade vazava 3-4 texturas extras por rebuild.
+      if (mat.normalMap) mat.normalMap.dispose();
+      if (mat.roughnessMap) mat.roughnessMap.dispose();
+      if (mat.aoMap) mat.aoMap.dispose();
+      if (mat.metalnessMap) mat.metalnessMap.dispose();
       mat.dispose();
     });
   }
@@ -6923,6 +6941,7 @@ export const Scene3DRenderer = {
   createRoofResizePreviewMeshes,
   createWallResizePreviewMeshes,
   buildVolumeBoxMesh,
+  buildVolumeBoxGeometry,
   setOnFurnitureAssetLoaded,
   setFacadeNightMode,
   getFurnitureMeshes,
