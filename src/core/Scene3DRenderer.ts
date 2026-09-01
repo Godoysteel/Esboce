@@ -870,7 +870,12 @@ export function hashColorHex(key: string): number {
         // mágico passa por AQUI (registry.furnitureMeshes), e cada face
         // com acabamento real pode ter até 4 texturas clonadas (ver
         // DEC-182); sem descartar as 3 extras, cada rebuild vazava GPU.
-        if (mat.map) mat.map.dispose();
+        // sharedMap: mesma exceção de disposeObject3D — o letreiro de
+        // fachada (buildFacadeSignMesh/getFacadeSignTexture) reaproveita
+        // a MESMA CanvasTexture entre rebuilds quando nada do letreiro
+        // mudou; descartar aqui destruiria a textura que o cache ainda
+        // pretende reaproveitar no próximo rebuild.
+        if (mat.map && !mat.userData?.sharedMap) mat.map.dispose();
         if (mat.normalMap) mat.normalMap.dispose();
         if (mat.roughnessMap) mat.roughnessMap.dispose();
         if (mat.aoMap) mat.aoMap.dispose();
@@ -3364,7 +3369,23 @@ export function hashColorHex(key: string): number {
     return hitMesh;
   }
 
-  function buildFacadeSignMesh(sign: any, wall: any, scale: number, offsetX: number, offsetY: number, yOffset: number) {
+  // Cache por letreiro (chave = id + assinatura das propriedades que
+  // afetam o desenho do canvas) — mesma técnica de getPlanUnderlayTexture
+  // acima. Achado real (Product Owner: "ainda está travando... verifique
+  // sistema de fachada"): buildFacadeSignMesh rodava a cada rebuild()
+  // completo da cena (ou seja, a CADA ação qualquer no app — criar um
+  // cômodo, mover uma parede, etc., não só interações na fachada),
+  // desenhando um canvas 1024x256 com ctx.shadowBlur (caro no Canvas2D)
+  // e subindo uma textura nova pra GPU do zero toda vez, mesmo quando
+  // nada do letreiro mudou. As texturas antigas eram descartadas
+  // corretamente (não era vazamento), mas o trabalho repetido e caro
+  // rodando de forma síncrona em toda ação do app é que travava a UI.
+  var facadeSignTextureCache: Record<string, { key: string; texture: THREE.CanvasTexture }> = {};
+  function getFacadeSignTexture(sign: any): THREE.CanvasTexture {
+    var key = sign.text + '|' + sign.faceColorHex + '|' + sign.lightColorHex + '|' + sign.lighting + '|' + (facadeNightMode ? '1' : '0');
+    var cached = facadeSignTextureCache[sign.id];
+    if (cached && cached.key === key) return cached.texture;
+    if (cached) cached.texture.dispose();
     var canvas = document.createElement('canvas'); canvas.width = 1024; canvas.height = 256;
     var ctx = canvas.getContext('2d')!;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -3374,12 +3395,22 @@ export function hashColorHex(key: string): number {
     ctx.fillStyle = sign.lighting === 'internal' ? sign.lightColorHex : sign.faceColorHex;
     ctx.fillText(sign.text, canvas.width / 2, canvas.height / 2);
     var texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
+    facadeSignTextureCache[sign.id] = { key: key, texture: texture };
+    return texture;
+  }
+
+  function buildFacadeSignMesh(sign: any, wall: any, scale: number, offsetX: number, offsetY: number, yOffset: number) {
+    var texture = getFacadeSignTexture(sign);
     var material = new THREE.MeshStandardMaterial({
       map: texture, transparent: true, alphaTest: 0.02, side: THREE.DoubleSide,
       roughness: 0.28, metalness: 0.18,
       emissive: new THREE.Color(sign.lightColorHex), emissiveMap: texture,
       emissiveIntensity: facadeNightMode ? 3.2 : (sign.lighting === 'front' ? 0.55 : 1.05),
     });
+    // sharedMap: a textura vem do cache de getFacadeSignTexture — marca
+    // pra disposeObject3D/disposeObject3DTree NUNCA descartar map aqui
+    // (só o cache decide quando a textura de um letreiro é substituída).
+    material.userData.sharedMap = true;
     var plane = new THREE.Mesh(new THREE.PlaneGeometry(sign.widthM, sign.heightM), material);
     var backing = new THREE.Mesh(new THREE.PlaneGeometry(sign.widthM * 0.985, sign.heightM * 0.9), new THREE.MeshStandardMaterial({ color: 0x171719, roughness: 0.5 }));
     backing.position.z = -0.035; plane.position.z = 0.025;
@@ -5419,6 +5450,16 @@ export function hashColorHex(key: string): number {
       project = isolatedProject;
     }
     clearRegistry();
+
+    // Poda o cache de textura de letreiro (getFacadeSignTexture) pra
+    // não segurar GPU de letreiros já apagados pra sempre — só roda uma
+    // vez por rebuild completo, custo desprezível mesmo com muitos
+    // letreiros.
+    var liveFacadeSignIds = new Set<string>();
+    project.floors.forEach(function (floorData) { (floorData.facadeSigns || []).forEach(function (sign) { liveFacadeSignIds.add(sign.id); }); });
+    Object.keys(facadeSignTextureCache).forEach(function (id) {
+      if (!liveFacadeSignIds.has(id)) { facadeSignTextureCache[id]!.texture.dispose(); delete facadeSignTextureCache[id]; }
+    });
 
     var scale = 1 / Core.GRID, offsetX = 0, offsetY = 0;
     var layers = project.layers;
