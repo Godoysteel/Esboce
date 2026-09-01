@@ -1,5 +1,13 @@
 # Changelog
 
+## Alterado — 01/09/2026
+
+- O Bloco de Volumetria virou **Cubo mágico**: agora pode ser marcado com o elemento estrutural que representa (parede, marquise, pilar, cobertura) e o material que o compõe, entrando no quantitativo por esse material em vez de cair sempre no preço genérico. A escolha do material acontece já no clique do botão que cria o cubo, por uma lista. Ver DEC-175, DEC-179.
+- O Cubo mágico nasce com formato de cubo (1×1×1 m, antes era achatado) e cor amarelo-gema de destaque, pra ficar fácil de identificar na cena.
+- Simplificadas as alças de moldagem do Cubo mágico: só restou o puxar por FACE (empurra/estica aquela face na direção normal). As alças de canto e aresta, que ficavam confusas e se sobrepunham, foram removidas — e a correção revelou um bug real de escala que travava o arraste de face quando o cubo já tinha sido movido da origem. Ver DEC-176.
+- ACM saiu da lista de material estrutural do Cubo mágico: é sempre revestimento/acabamento (chapa), nunca a estrutura em si — a estrutura equivalente (perfil de alumínio/metalon) já é representada pelo material "Metalão". Ver DEC-180.
+- Cubo mágico com material "Metalão" agora renderiza como um esqueleto tubular procedural nas 12 arestas (perfis metálicos), em vez de um bloco sólido colorido — mais fiel ao que esse material realmente representa. Ver DEC-181.
+
 ## Alterado — 28/08/2026
 
 - Corrigido: a soleira que fecha o piso onde ficava uma parede interna (ao apagar a parede ou colocar um arco entre dois cômodos) sempre usava o piso padrão do catálogo, mesmo depois do usuário escolher outro piso em Materiais. Agora usa o piso real de um dos cômodos ligados. Ver DEC-173.
