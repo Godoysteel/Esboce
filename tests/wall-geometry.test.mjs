@@ -1273,6 +1273,36 @@ test('tampa parcial de canto cobre o vão quando a vizinha do canto "fechado" é
   assert.match(wallFlow, /if \(!generatedAtticRoof\) \{\s*\n\s*if \(!\(fp\.p1Free/);
 });
 
+// Achado real de performance (Product Owner: "quando eu clico para gerar
+// um cômodo ele demora a criar o cômodo") — neighborMaxHeightAt varria
+// TODAS as paredes do pavimento (activeWallsForFootprint.forEach) a cada
+// chamada, e era chamada 2× por parede no laço de paredes: O(paredes²)
+// só nesta função. Substituído por um índice espacial de cantos
+// (cornerBuckets), construído uma vez por rebuild, que reduz cada
+// chamada a olhar só as ~9 células vizinhas em vez de todas as paredes.
+// Verificado ao vivo (dois cenários: dois cômodos coincidentes e um
+// cômodo só com uma parede mais baixa) que a tampa parcial continua
+// aparecendo exatamente na mesma faixa de altura que o código antigo.
+test('neighborMaxHeightAt usa um índice espacial de cantos (cornerBuckets) em vez de varrer todas as paredes por chamada — O(paredes), não O(paredes²)', () => {
+  const start = scene3DRendererSource.indexOf('function neighborMaxHeightAt(px: number, py: number, excludeId: string) {');
+  assert.ok(start !== -1);
+  const end = scene3DRendererSource.indexOf('\n      }', start);
+  const body = scene3DRendererSource.slice(start, end);
+  // não varre mais activeWallsForFootprint diretamente dentro da função
+  assert.doesNotMatch(body, /activeWallsForFootprint\.forEach/);
+  assert.match(body, /var bucket = cornerBuckets\[\(bx \+ dx\) \+ ',' \+ \(by \+ dy\)\];/);
+  // mesmo critério de distância/exclusão de sempre — só muda ONDE procura, não o QUE conta como vizinho
+  assert.match(body, /if \(entry\.id === excludeId\) return;/);
+  assert.match(body, /if \(Math\.hypot\(entry\.x - px, entry\.y - py\) > Core\.COINCIDENCE_TOL\) return;/);
+
+  const bucketBuildStart = scene3DRendererSource.indexOf('activeWallsForFootprint.forEach(function (w) {', start - 1500);
+  assert.ok(bucketBuildStart !== -1 && bucketBuildStart < start, 'construção dos buckets deve vir ANTES de neighborMaxHeightAt, uma vez só por rebuild');
+  const bucketBuildBody = scene3DRendererSource.slice(bucketBuildStart, start);
+  assert.match(bucketBuildBody, /var h = wallEffectiveHeight\(w\);/);
+  assert.match(bucketBuildBody, /addCornerBucketEntry\(w\.x1, w\.y1, w\.id, h\);/);
+  assert.match(bucketBuildBody, /addCornerBucketEntry\(w\.x2, w\.y2, w\.id, h\);/);
+});
+
 // DEC-92 — correção pós-lançamento: resolveRoomHeightUpdate (DEC-88) só
 // aplica a regra "parede compartilhada nunca fica mais baixa que o
 // cômodo vizinho" NO MOMENTO do arraste. Uma mudança de topologia DEPOIS

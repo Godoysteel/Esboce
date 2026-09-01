@@ -5558,16 +5558,45 @@ export function hashColorHex(key: string): number {
       // paredes na MESMA altura; com Wall.heightM (DEC-88) elas podem
       // divergir, e a mais alta fica com um vão aberto acima da mais
       // baixa — ver comentário completo junto da tampa parcial abaixo.
+      //
+      // Achado real de performance (Product Owner: "quando eu clico para
+      // gerar um cômodo ele demora a criar o cômodo", DEC-186/187):
+      // antes, cada chamada varria TODAS as paredes do pavimento
+      // (activeWallsForFootprint.forEach) — chamada 2× por parede no
+      // laço abaixo, isso é O(paredes²) SÓ nesta função. Com um projeto
+      // de ~48 paredes já eram ~4600 comparações por rebuild, repetido a
+      // CADA rebuild (ou seja, a cada ação qualquer no app). Agora
+      // indexa os cantos uma vez (cornerBuckets, chave = coordenada
+      // arredondada em múltiplos de COINCIDENCE_TOL) e cada chamada só
+      // olha as ~9 células vizinhas — O(paredes) no total pro pavimento
+      // inteiro, não O(paredes²).
+      var cornerBuckets: Record<string, { id: string; x: number; y: number; h: number }[]> = {};
+      function cornerBucketKey(px: number, py: number) {
+        return Math.round(px / Core.COINCIDENCE_TOL) + ',' + Math.round(py / Core.COINCIDENCE_TOL);
+      }
+      function addCornerBucketEntry(px: number, py: number, id: string, h: number) {
+        var key = cornerBucketKey(px, py);
+        (cornerBuckets[key] || (cornerBuckets[key] = [])).push({ id: id, x: px, y: py, h: h });
+      }
+      activeWallsForFootprint.forEach(function (w) {
+        var h = wallEffectiveHeight(w);
+        addCornerBucketEntry(w.x1, w.y1, w.id, h);
+        addCornerBucketEntry(w.x2, w.y2, w.id, h);
+      });
       function neighborMaxHeightAt(px: number, py: number, excludeId: string) {
         var maxH: number | null = null;
-        activeWallsForFootprint.forEach(function (other) {
-          if (other.id === excludeId) return;
-          var atEnd1 = Math.hypot(other.x1 - px, other.y1 - py) <= Core.COINCIDENCE_TOL;
-          var atEnd2 = Math.hypot(other.x2 - px, other.y2 - py) <= Core.COINCIDENCE_TOL;
-          if (!atEnd1 && !atEnd2) return;
-          var h = wallEffectiveHeight(other);
-          if (maxH === null || h > maxH) maxH = h;
-        });
+        var bx = Math.round(px / Core.COINCIDENCE_TOL), by = Math.round(py / Core.COINCIDENCE_TOL);
+        for (var dx = -1; dx <= 1; dx++) {
+          for (var dy = -1; dy <= 1; dy++) {
+            var bucket = cornerBuckets[(bx + dx) + ',' + (by + dy)];
+            if (!bucket) continue;
+            bucket.forEach(function (entry) {
+              if (entry.id === excludeId) return;
+              if (Math.hypot(entry.x - px, entry.y - py) > Core.COINCIDENCE_TOL) return;
+              if (maxH === null || entry.h > maxH) maxH = entry.h;
+            });
+          }
+        }
         return maxH;
       }
 
