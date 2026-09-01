@@ -3324,15 +3324,20 @@ import {
           balconyRailingDragMesh = findBalconyRailingSceneObject(balconyRailingId);
           Store.commands.beginTransaction();
         } else if (mesh.userData.volumeBoxId) {
-          // Bloco de Volumetria: sempre livre, arrasta o corpo direto
-          // (sem ímã de parede — ver types.ts).
+          // Bloco de Volumetria: sempre livre no plano do chão (sem ímã
+          // de parede na POSIÇÃO enquanto arrasta — o snap acontece só
+          // ao SOLTAR, ver snapVolumeBoxToWalls); Shift+arraste vertical
+          // sobe/desce o bloco (sillHeightM) — Product Owner: "deve ser
+          // possível movimentar o cubo mágico para todos os ângulos e um
+          // snap nas paredes".
           var volumeBoxId = mesh.userData.volumeBoxId;
           var vbEnt = Store.findVolumeBox(volumeBoxId)!;
           selectVolumeBox(volumeBoxId);
           dragMode = 'volumeBoxBody';
-          dragElementStart = { x: vbEnt.x || 0, y: vbEnt.y || 0 };
+          dragElementStart = { x: vbEnt.x || 0, y: vbEnt.y || 0, sillHeightM: vbEnt.sillHeightM || 0, liveSillHeightM: vbEnt.sillHeightM || 0, startScreenY: e.clientY };
           dragGroundStart = getGroundModelPoint(e.clientX, e.clientY);
           volumeBoxDragMesh = findVolumeBoxSceneObject(volumeBoxId);
+          if (volumeBoxDragMesh) dragElementStart.startMeshY = volumeBoxDragMesh.position.y;
           Store.commands.beginTransaction();
         } else if (mesh.userData.stairId) {
           // Escada: sempre livre, arrasta o corpo direto (sem ímã de
@@ -3480,6 +3485,57 @@ import {
   // só considera paredes/lajes PERPENDICULARES a esse eixo (paredes
   // aqui são sempre 0°/90°, DEC-28, e laje é sempre retilínea, então
   // não precisa de footprint completo).
+  // Snap de posição do Cubo mágico contra parede (Product Owner: "um
+  // snap nas paredes") — ao soltar o arraste do corpo, se a face mais
+  // próxima do bloco ficar perto o bastante de uma parede ALINHADA AO
+  // MUNDO (horizontal ou vertical no plano — a esmagadora maioria das
+  // paredes desenhadas pela ferramenta de Ambientes/Paredes), ajusta
+  // X/Y pra encostar exatamente nela. NUNCA gira o bloco (decisão
+  // explícita: "Só posição") — por isso uma parede em diagonal fica de
+  // fora: não dá pra encostar uma face reta nela sem girar o bloco
+  // junto, e mover só a posição deixaria um canto encostado e o resto
+  // flutuando. rotationDeg do Cubo mágico só anda em passos de 90°
+  // (rotateVolumeBox), então os eixos largura/profundidade do bloco
+  // ficam sempre alinhados a X ou Y do modelo — swapped decide qual
+  // dimensão (widthM/depthM) projeta em qual eixo do mundo.
+  var VOLUME_BOX_WALL_SNAP_TOLERANCE_GRID = 0.3 * Core.GRID; // 30cm
+  function snapVolumeBoxToWalls(box: any, xGrid: number, yGrid: number): { x: number; y: number } {
+    var rotSteps = Math.round((box.rotationDeg || 0) / 90);
+    var swapped = ((rotSteps % 2) + 2) % 2 === 1;
+    var halfExtentXGrid = ((swapped ? box.depthM : box.widthM) * Core.GRID) / 2;
+    var halfExtentZGrid = ((swapped ? box.widthM : box.depthM) * Core.GRID) / 2;
+    var wallHalfThickGrid = (Core.WALL_THICK * Core.GRID) / 2;
+    var bestGapGrid = VOLUME_BOX_WALL_SNAP_TOLERANCE_GRID;
+    var snapped = { x: xGrid, y: yGrid };
+    Store.currentWalls().forEach(function (w: any) {
+      var wallLenGrid = Math.hypot(w.x2 - w.x1, w.y2 - w.y1);
+      if (wallLenGrid < Core.GRID * 0.3) return; // parede curta demais pra servir de encosto
+      var horizontal = Math.abs(w.y2 - w.y1) < Core.GRID * 0.05;
+      var vertical = Math.abs(w.x2 - w.x1) < Core.GRID * 0.05;
+      if (horizontal) {
+        var minX = Math.min(w.x1, w.x2) - halfExtentXGrid, maxX = Math.max(w.x1, w.x2) + halfExtentXGrid;
+        if (xGrid < minX || xGrid > maxX) return;
+        // Valor com sinal: positivo = bloco ainda tem vão até a parede,
+        // negativo = bloco já passou da face da parede (encostou forte
+        // ou soltou meio sobreposto) — os dois casos contam como "perto
+        // o bastante" pelo módulo, senão soltar exatamente em cima da
+        // parede (gap negativo) nunca dispararia o snap.
+        var gapY = Math.abs(yGrid - w.y1) - halfExtentZGrid - wallHalfThickGrid;
+        if (Math.abs(gapY) >= bestGapGrid) return;
+        bestGapGrid = Math.abs(gapY);
+        snapped = { x: xGrid, y: w.y1 + (yGrid >= w.y1 ? 1 : -1) * (halfExtentZGrid + wallHalfThickGrid) };
+      } else if (vertical) {
+        var minY = Math.min(w.y1, w.y2) - halfExtentZGrid, maxY = Math.max(w.y1, w.y2) + halfExtentZGrid;
+        if (yGrid < minY || yGrid > maxY) return;
+        var gapX = Math.abs(xGrid - w.x1) - halfExtentXGrid - wallHalfThickGrid;
+        if (Math.abs(gapX) >= bestGapGrid) return;
+        bestGapGrid = Math.abs(gapX);
+        snapped = { x: w.x1 + (xGrid >= w.x1 ? 1 : -1) * (halfExtentXGrid + wallHalfThickGrid), y: yGrid };
+      }
+    });
+    return snapped;
+  }
+
   // Ímã de encosto do painel de Envidraçamento (DEC-56) — ao soltar o
   // arraste do corpo, acha a parede mais próxima (menor distância
   // perpendicular do CENTRO do painel até o segmento da parede,
@@ -3697,13 +3753,25 @@ import {
     if (dragMode === 'volumeBoxBody') {
       // Mesmo raciocínio de performance do painel de Envidraçamento
       // acima — só move o mesh visual direto durante o arraste.
-      var vbG = getGroundModelPoint(e.clientX, e.clientY);
-      if (vbG && dragGroundStart && volumeBoxDragMesh) {
-        var dxVb = vbG.x - dragGroundStart.x, dyVb = vbG.y - dragGroundStart.y;
-        var liveXVb = dragElementStart.x + dxVb, liveYVb = dragElementStart.y + dyVb;
-        var wpVb = modelToWorld(liveXVb, liveYVb);
-        volumeBoxDragMesh.position.x = wpVb.x;
-        volumeBoxDragMesh.position.z = wpVb.z;
+      // Segurar Shift troca o gesto: em vez de deslocar no plano do
+      // chão (X/Z), o arraste vertical do mouse sobe/desce o bloco
+      // (sillHeightM) — Product Owner: "movimentar o cubo mágico para
+      // todos os ângulos" (hoje só dava pra mover no plano do chão).
+      if (volumeBoxDragMesh) {
+        if (e.shiftKey) {
+          var deltaSillVb = (dragElementStart.startScreenY - e.clientY) * 0.02;
+          dragElementStart.liveSillHeightM = Math.max(0, Math.min(10, dragElementStart.sillHeightM + deltaSillVb));
+          volumeBoxDragMesh.position.y = dragElementStart.startMeshY + (dragElementStart.liveSillHeightM - dragElementStart.sillHeightM);
+        } else {
+          var vbG = getGroundModelPoint(e.clientX, e.clientY);
+          if (vbG && dragGroundStart) {
+            var dxVb = vbG.x - dragGroundStart.x, dyVb = vbG.y - dragGroundStart.y;
+            var liveXVb = dragElementStart.x + dxVb, liveYVb = dragElementStart.y + dyVb;
+            var wpVb = modelToWorld(liveXVb, liveYVb);
+            volumeBoxDragMesh.position.x = wpVb.x;
+            volumeBoxDragMesh.position.z = wpVb.z;
+          }
+        }
       }
       return;
     }
@@ -4471,15 +4539,24 @@ import {
     }
     if (dragMode === 'volumeBoxBody') {
       // Mesmo padrão do painel de Envidraçamento — única atualização de
-      // Store no fim do arraste. Sem ímã de parede (Product Owner
-      // pediu bloco sempre livre — "tirar o imã e fazer as alças em
-      // todas as direções").
+      // Store no fim do arraste. Sem ímã de parede na POSIÇÃO durante o
+      // arraste (bloco continua livre pra posicionar em qualquer
+      // lugar) — mas ao SOLTAR, se uma face ficar perto o bastante de
+      // uma parede alinhada ao mundo, a posição (só X/Y, nunca o
+      // ângulo — Product Owner: "Só posição") é ajustada pra encostar
+      // nela (snapVolumeBoxToWalls).
       var vbId = selectedVolumeBoxId;
-      if (vbId && dragElementStart && dragGroundStart) {
-        var vbUp = getGroundModelPoint(e.clientX, e.clientY);
-        if (vbUp) {
-          var dxVbUp = vbUp.x - dragGroundStart.x, dyVbUp = vbUp.y - dragGroundStart.y;
-          Store.commands.updateVolumeBoxBodyLive(vbId, dragElementStart.x + dxVbUp, dragElementStart.y + dyVbUp);
+      var vbEntUp = vbId ? Store.findVolumeBox(vbId) : null;
+      if (vbId && vbEntUp && dragElementStart && dragGroundStart) {
+        if (e.shiftKey) {
+          Store.commands.updateVolumeBoxBodyLive(vbId, dragElementStart.x, dragElementStart.y, dragElementStart.liveSillHeightM);
+        } else {
+          var vbUp = getGroundModelPoint(e.clientX, e.clientY);
+          if (vbUp) {
+            var dxVbUp = vbUp.x - dragGroundStart.x, dyVbUp = vbUp.y - dragGroundStart.y;
+            var vbSnapped = snapVolumeBoxToWalls(vbEntUp, dragElementStart.x + dxVbUp, dragElementStart.y + dyVbUp);
+            Store.commands.updateVolumeBoxBodyLive(vbId, vbSnapped.x, vbSnapped.y, dragElementStart.liveSillHeightM);
+          }
         }
       }
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;

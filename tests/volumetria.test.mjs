@@ -312,3 +312,48 @@ test('buildVolumeBoxMetalaoFrame: perfil vertical intermediário se repete a cad
   assert.match(body, /addProfile\(lerpVec3\(corners\[0\]!, corners\[1\]!, t\), lerpVec3\(corners\[2\]!, corners\[3\]!, t\)\);/);
   assert.match(body, /addProfile\(lerpVec3\(corners\[4\]!, corners\[5\]!, t\), lerpVec3\(corners\[6\]!, corners\[7\]!, t\)\);/);
 });
+
+// Movimento livre do Cubo mágico (Product Owner: "deve ser possível
+// movimentar o cubo mágico para todos os ângulos") — antes, arrastar o
+// corpo só movia no plano do chão (X/Y); não dava pra subir/descer o
+// bloco (ex.: marquise na altura de uma verga). Shift+arraste vertical
+// agora ajusta sillHeightM, mesmo gesto de tecla-modificadora usado
+// pra precisão em outras ferramentas do app.
+test('Store.commands.updateVolumeBoxBodyLive aceita sillHeightM opcional — grava só quando informado (retrocompat do arraste horizontal, que não muda altura)', () => {
+  const start = storeSource.indexOf('updateVolumeBoxBodyLive(volumeBoxId: string, x: number, y: number, sillHeightM?: number): void {');
+  assert.ok(start !== -1);
+  const end = storeSource.indexOf('\n  },', start);
+  const body = storeSource.slice(start, end);
+  assert.match(body, /if \(sillHeightM != null\) b\.sillHeightM = sillHeightM;/);
+});
+
+test('ViewportController: Shift+arraste no corpo do Cubo mágico vira gesto vertical (sillHeightM), sem Shift continua livre no plano do chão', () => {
+  const start = viewportSource.indexOf("if (dragMode === 'volumeBoxBody') {");
+  assert.ok(start !== -1);
+  const end = viewportSource.indexOf('\n    if (dragMode', start + 10);
+  const body = viewportSource.slice(start, end);
+  assert.match(body, /if \(e\.shiftKey\) \{/);
+  assert.match(body, /var deltaSillVb = \(dragElementStart\.startScreenY - e\.clientY\) \* 0\.02;/);
+  assert.match(body, /dragElementStart\.liveSillHeightM = Math\.max\(0, Math\.min\(10, dragElementStart\.sillHeightM \+ deltaSillVb\)\);/);
+});
+
+// Snap de posição (Product Owner: "um snap nas paredes", confirmado
+// depois: "Só posição" — nunca gira o bloco pra encaixar).
+test('snapVolumeBoxToWalls: existe, só encosta em parede alinhada ao mundo (nunca gira o bloco), e resolve largura/profundidade pelos passos de 90° do rotationDeg', () => {
+  const start = viewportSource.indexOf('function snapVolumeBoxToWalls(box: any, xGrid: number, yGrid: number)');
+  assert.ok(start !== -1);
+  const end = viewportSource.indexOf('\n  }', start);
+  const body = viewportSource.slice(start, end);
+  assert.match(body, /var rotSteps = Math\.round\(\(box\.rotationDeg \|\| 0\) \/ 90\);/);
+  assert.match(body, /var horizontal = Math\.abs\(w\.y2 - w\.y1\) < Core\.GRID \* 0\.05;/);
+  assert.match(body, /var vertical = Math\.abs\(w\.x2 - w\.x1\) < Core\.GRID \* 0\.05;/);
+  // nunca escreve em box.rotationDeg — só ajusta x/y
+  assert.doesNotMatch(body, /rotationDeg\s*=/);
+});
+
+test('ViewportController: soltar o arraste horizontal do Cubo mágico passa pelo snap de parede antes de commitar no Store', () => {
+  const start = viewportSource.indexOf('dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;\n      volumeBoxDragMesh = null;');
+  const before = viewportSource.slice(Math.max(0, start - 900), start);
+  assert.match(before, /var vbSnapped = snapVolumeBoxToWalls\(vbEntUp, dragElementStart\.x \+ dxVbUp, dragElementStart\.y \+ dyVbUp\);/);
+  assert.match(before, /Store\.commands\.updateVolumeBoxBodyLive\(vbId, vbSnapped\.x, vbSnapped\.y, dragElementStart\.liveSillHeightM\);/);
+});

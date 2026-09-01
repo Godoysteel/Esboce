@@ -2146,10 +2146,14 @@ export const commands = {
   },
 
   // Arrasta o corpo livremente nas 4 direções do plano — mesma técnica
-  // "Live" de updateBalconyRailingBodyLive.
-  updateVolumeBoxBodyLive(volumeBoxId: string, x: number, y: number): void {
+  // "Live" de updateBalconyRailingBodyLive. sillHeightM opcional:
+  // ViewportController só passa um valor novo quando o gesto era
+  // vertical (Shift+arraste, ver snapVolumeBoxToWalls/onPointerMove) —
+  // Product Owner: "movimentar o cubo mágico para todos os ângulos".
+  updateVolumeBoxBodyLive(volumeBoxId: string, x: number, y: number, sillHeightM?: number): void {
     const b = findVolumeBox(volumeBoxId); if (!b) return;
     b.x = x; b.y = y;
+    if (sillHeightM != null) b.sillHeightM = sillHeightM;
     emit({ type: 'VolumeBoxMoved', volumeBoxId, live: true });
   },
 
