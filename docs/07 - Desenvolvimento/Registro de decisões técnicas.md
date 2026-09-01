@@ -2207,3 +2207,41 @@ O problema era que o corte de MALHA (`trimRects`, restante da DEC-165) rodava **
 **Testado:** typecheck limpo + suíte completa (683 testes) + verificação ao vivo: ativar "Metalão" no seletor de criação, deselecionar o bloco e confirmar visualmente o esqueleto de 12 perfis metálicos (instrumentação de `THREE.Object3D.prototype.add` confirmou 12 `BoxGeometry` com `metalness: 0.85` adicionados por rebuild, nenhum bloco sólido).
 
 ---
+
+# DEC-182 — Cubo mágico: Lata de tinta passa a pintar só a FACE clicada, não mais o bloco inteiro
+
+**Data:** 01/09/2026
+**Status:** Implementado e verificado ao vivo (WebGL real).
+
+**Contexto:** desde que o Cubo mágico ganhou acabamento tipo parede (`finishProductId`, ver comentário histórico "Product Owner: ele deve poder ser pintado como as paredes"), a Lata de tinta pintava o bloco inteiro com um acabamento só, nas 6 faces, sem distinção — mesmo clicando numa face específica. Product Owner reportou o caso concreto do catálogo Bold ACM: "quando eu seleciono um acm no catálogo e aplico em uma face do cubo mágico, essa face deve receber a textura do acm" — ACM é tipicamente aplicado numa fachada (uma face), não no volume inteiro (ex.: um Cubo mágico representando uma parede externa deveria poder ter ACM só na face voltada pra rua, mantendo as outras faces com o material estrutural/cor padrão).
+
+**Decisão:** a Lata de tinta clicando num Cubo mágico agora pinta só a face clicada, mesmo espírito de `setWallFinishFace` (que já distingue lado A/B da parede), mas com 6 faces em vez de 2.
+
+**Implementação:**
+- `types.ts`: novo campo opcional `VolumeBox.faceFinishProductId?: (string | undefined)[]` — índice 0-5, mesma ordem de `Core.VOLUME_BOX_FACES`/`volumeBoxFaces` (direita, esquerda, topo, baixo, fundo, frente). `finishProductId` (bloco inteiro) continua existindo e agora serve de **acabamento-padrão pras faces sem override próprio** — retrocompatibilidade total: um bloco salvo antes desta feature, com só `finishProductId`, continua renderizando as 6 faces iguais, exatamente como antes.
+- `Store.ts`: comando `setVolumeBoxFinish` (bloco inteiro) foi substituído por `setVolumeBoxFaceFinish(volumeBoxId, faceIndex, productId)`, que grava só a posição `faceIndex` do array.
+- `ViewportController.ts`: o handler da Lata de tinta em cima de um volume agora lê `paintHit.faceIndex` (índice do triângulo do raycast do Three.js) e calcula `Math.floor(paintHit.faceIndex / 2)` — cada face do cubo é sempre 2 triângulos consecutivos, na mesma ordem em que `buildVolumeBoxGeometry` empilha os grupos, então a divisão inteira dá o índice de face 0-5 direto, sem precisar recalcular normal/plano.
+- `Scene3DRenderer.ts`: `buildVolumeBoxGeometry` agora registra um `geo.addGroup(...)` por face (2 triângulos = 6 índices cada, grupo = índice da face) — o mesmo buffer serve tanto pro raycast (via `faceIndex`) quanto pro material por grupo. `buildVolumeBoxMaterial(box, faceIndex)` ganhou o parâmetro `faceIndex` e resolve o produto daquela face via a nova função `volumeBoxFaceProductId` (override da face, senão `finishProductId` geral). `buildVolumeBoxMesh` monta um **array de 6 materiais** (um por `buildVolumeBoxMaterial(box, i)`) e passa pro `THREE.Mesh` — o Three.js usa os grupos da geometria pra desenhar cada face com seu material.
+- `ProjectPersistence.ts`: `parseVolumeBox` valida `faceFinishProductId` como lista opcional de strings (posição `null`/ausente = sem override).
+- `MaterialsPanel.ts`: o quantitativo agora itera as 6 faces (`Core.volumeBoxFaces(b)`) em vez de somar a área de superfície inteira de uma vez — cada face resolve seu produto (override da face, senão o geral) e é orçada pela ÁREA DAQUELA FACE; face sem produto nenhum cai no material estrutural (`structuralMaterial`) ou no genérico R$/m², do jeito que o bloco inteiro caía antes.
+
+**Não afeta o material "Metalão"** (DEC-181): o esqueleto procedural não usa `buildVolumeBoxGeometry`/materiais por face — continua sempre a mesma cor de perfil metálico, sem acabamento pintável nesta rodada (um Cubo mágico com ACM numa face normalmente representaria a chapa já montada sobre a subestrutura de metalão de OUTRO bloco, não o mesmo bloco).
+
+**Testado:** typecheck limpo + suíte completa (685 testes, 4 assertões antigas atualizadas pra nova assinatura/comportamento + 2 testes novos) + verificação ao vivo: criei um Cubo mágico "Padrão (sem material definido)", carreguei "ACM Azul Cobalto Fosco" do catálogo Bold e cliquei em duas faces diferentes — cada uma pintou individualmente (azul ACM), a terceira face visível permaneceu com a cor padrão do bloco, sem nenhum erro no console.
+
+---
+
+# DEC-183 — Metalão: perfil vertical intermediário repete a cada 1200mm quando o bloco é esticado
+
+**Data:** 01/09/2026
+**Status:** Implementado e verificado ao vivo (WebGL real).
+
+**Contexto:** o esqueleto de metalão da DEC-181 desenha só as 12 arestas fixas do volume — pra um bloco largo (ex. um Cubo mágico esticado representando uma parede/marquise de vários metros), isso deixa só 2 perfis verticais, um em cada ponta, sem nenhum montante intermediário. Product Owner: "a estrutura do metalão deve ir se repetindo os perfís verticais a cada 1200 mm quando extrudado" — mesma lógica de montante de subestrutura de fachada real (a pesquisa já feita na DEC-181 confirmou que a subestrutura de mercado é uma grade densa, não só o contorno).
+
+**Decisão:** subdividir o vão real entre os 2 perfis verticais de canto (frente e fundo) em partes iguais de **no máximo 1200mm**, um perfil novo na frente e outro no fundo por divisão — em vez de espaçamento fixo de 1200mm a partir de uma ponta (que deixaria uma sobra estreita e desigual na última divisão), a distribuição uniforme mantém o espaçamento sempre ≤1200mm e visualmente regular.
+
+**Implementação:** `buildVolumeBoxMetalaoFrame` (Scene3DRenderer.ts) ganhou uma função interna `addProfile(a, b)` (extraída do corpo do `forEach` das 12 arestas fixas, sem mudar comportamento) e, depois de desenhar as 12 arestas, calcula `localWidthM = Math.abs(corners[1].x - corners[0].x)` — a distância real entre os cantos ao longo do eixo X, já contando qualquer deformação de `cornerOffsets` (não usa `box.widthM`, que fica parado no valor de criação porque o push-pull de face nunca escreve nele, só em `cornerOffsets`). `divisions = Math.ceil(localWidthM / 1.2)` (mínimo 1) e, para cada `i` de 1 até `divisions - 1`, interpola (`lerpVec3`) a posição em `t = i / divisions` entre os cantos 0↔1 (base frente) e 2↔3 (topo frente) pro perfil da frente, e 4↔5 / 6↔7 pro perfil do fundo. Um cubo padrão (1m, abaixo do limiar) continua com só os 2 perfis de canto de sempre — `divisions = Math.ceil(1/1.2) = 1`, nenhuma iteração.
+
+**Testado:** typecheck limpo + suíte completa (685 testes, 1 teste novo) + verificação ao vivo: criei um Cubo mágico "Metalão", esticando a largura pra ~5m puxando a face lateral — o esqueleto foi de 2 perfis verticais (só os cantos) pra 4 (2 intermediários), espaçados igualmente, confirmando a subdivisão automática.
+
+---

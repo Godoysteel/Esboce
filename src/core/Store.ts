@@ -2198,13 +2198,18 @@ export const commands = {
   },
 
   // Acabamento tipo parede aplicado pela ferramenta Lata de tinta —
-  // mesmo padrão de setWallFinishFace/setRoofFinish, mas sem distinção
-  // de face (o box inteiro usa o mesmo acabamento nas 6 faces).
-  setVolumeBoxFinish(volumeBoxId: string, productId: string): void {
+  // mesmo padrão de setWallFinishFace (dois lados), mas com 6 faces:
+  // só a face clicada (faceIndex, ver Core.VOLUME_BOX_FACES) recebe o
+  // produto. Product Owner: "quando eu seleciono um acm no catálogo e
+  // aplico em uma face do cubo mágico, essa face deve receber a
+  // textura do acm" — antes o box inteiro virava um acabamento só.
+  setVolumeBoxFaceFinish(volumeBoxId: string, faceIndex: number, productId: string): void {
     const b = findVolumeBox(volumeBoxId); if (!b) return;
     pushUndoSnapshot();
-    b.finishProductId = productId;
-    emit({ type: 'VolumeBoxFinishSet', volumeBoxId, productId });
+    const faces = b.faceFinishProductId ? b.faceFinishProductId.slice() : [undefined, undefined, undefined, undefined, undefined, undefined];
+    faces[faceIndex] = productId;
+    b.faceFinishProductId = faces;
+    emit({ type: 'VolumeBoxFaceFinishSet', volumeBoxId, faceIndex, productId });
   },
 
   // Fase B da DEC-163 (ver DEC-175) — etiqueta de elemento estrutural
@@ -2278,7 +2283,8 @@ export const commands = {
     emit({ type: 'StairResized', stairId, live: true });
   },
 
-  // Acabamento tipo parede — mesmo padrão de setVolumeBoxFinish.
+  // Acabamento tipo parede — mesmo padrão de setWallFinishFace, mas
+  // sem distinção de lado (escada inteira usa o mesmo acabamento).
   setStairFinish(stairId: string, productId: string): void {
     const s = findStair(stairId); if (!s) return;
     pushUndoSnapshot();

@@ -258,19 +258,21 @@ test('ESTIMATED_MARKET_PRICES tem os 4 valores de referência esperados (m² de 
 });
 
 // Bloco de Volumetria: mesmo padrão fornecedor-real-primeiro de portas/
-// janelas — se tem finishProductId escolhido (Lata de tinta, DEC-134),
-// usa o preço do PRÓPRIO produto pela área de superfície (as 6 faces);
-// sem acabamento, cai na média de mercado genérica.
-test('Bloco de Volumetria: custo usa o produto pintado (Lata de tinta) quando existe, senão a média de mercado genérica pela área de superfície', () => {
+// janelas, mas por FACE (Product Owner: "aplico em uma face do cubo
+// mágico, essa face deve receber a textura") — cada uma das 6 faces
+// resolve seu próprio produto (faceFinishProductId da face, senão o
+// finishProductId geral do bloco) e é orçada pela ÁREA DAQUELA FACE;
+// face sem produto nenhum cai no material estrutural ou no genérico.
+test('Bloco de Volumetria: custo usa o produto pintado por FACE (Lata de tinta) quando existe, senão a média de mercado genérica pela área daquela face', () => {
   const start = materialsSource.indexOf('(floor.volumeBoxes || []).forEach(function (b) {');
   const end = materialsSource.indexOf('\n    });', start);
   const body = materialsSource.slice(start, end);
-  // Cubo moldável: área real por face (soma dos cantos de verdade),
-  // não mais a fórmula fixa de caixa reta — ver Core.volumeBoxSurfaceAreaM2
-  // e o teste de regressão numérica em tests/volumetria.test.mjs.
-  assert.match(body, /const surfaceAreaM2 = Core\.volumeBoxSurfaceAreaM2\(b\);/);
-  assert.match(body, /productUnitCost\(b\.finishProductId, surfaceAreaM2, selection\?\.price\)/);
-  assert.match(body, /addCommercialQuantity\(volumeBoxCommercial, b\.finishProductId, surfaceAreaM2, selection\)/);
+  // Cubo moldável: área real por face (Core.volumeBoxFaces, a partir dos
+  // cantos de verdade), não mais a fórmula fixa de caixa reta.
+  assert.match(body, /const faces = Core\.volumeBoxFaces\(b\);/);
+  assert.match(body, /const faceProductId = \(b\.faceFinishProductId && b\.faceFinishProductId\[faceIndex\]\) \|\| b\.finishProductId;/);
+  assert.match(body, /productUnitCost\(faceProductId, face\.areaM2, selection\?\.price\)/);
+  assert.match(body, /addCommercialQuantity\(volumeBoxCommercial, faceProductId, face\.areaM2, selection\)/);
   assert.match(materialsSource, /pushMaterial\('Volumetria', 'Bloco de Volumetria \(sem acabamento\)'/);
 });
 

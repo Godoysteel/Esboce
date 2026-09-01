@@ -336,8 +336,10 @@ export interface VolumeBox {
   sillHeightM?: number;
   /** Cor sólida — usada só quando não há finishProductId. */
   colorHex?: string;
-  /** Acabamento tipo parede aplicado pela ferramenta Lata de tinta (mesmo catálogo de "paint" usado em Wall.finishA/B). Presente = sobrescreve colorHex. */
+  /** Acabamento tipo parede aplicado pela ferramenta Lata de tinta (mesmo catálogo de "paint" usado em Wall.finishA/B). Presente = sobrescreve colorHex. Serve de acabamento-padrão pras faces sem faceFinishProductId próprio (retrocompat de blocos salvos antes da pintura por face). */
   finishProductId?: string;
+  /** Acabamento POR FACE (índice 0-5, mesma ordem de Core.VOLUME_BOX_FACES/volumeBoxFaces: direita,esquerda,topo,baixo,fundo,frente) — a Lata de tinta agora pinta só a face clicada (Product Owner: "aplico em uma face do cubo mágico, essa face deve receber a textura"). Índice ausente/undefined = cai em finishProductId (acabamento geral do bloco), depois em colorHex/structuralMaterial, mesma cascata de sempre. */
+  faceFinishProductId?: (string | undefined)[];
   /** Que elemento estrutural este bloco representa (parede/marquise/pilar/cobertura) — DEC-175, Fase B da DEC-163. Ausente = "Volumetria" genérica, comportamento original. */
   elementType?: VolumeBoxElementType;
   /** Que material este bloco representa — DEC-175. Governa o preço no quantitativo (MaterialsPanel.ts) quando não há finishProductId; ausente = cai no genérico R$/m² de sempre. */

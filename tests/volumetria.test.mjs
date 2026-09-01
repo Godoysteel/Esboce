@@ -135,20 +135,29 @@ test('Scene3DRenderer.buildVolumeBoxMesh é exportada — ViewportController rec
   assert.match(body, /buildVolumeBoxMesh,/);
 });
 
-test('Scene3DRenderer: bloco pintável reaproveita a mesma regra de textura real vs. cor lisa da face de parede (categoria floor_tile x paint)', () => {
-  const start = rendererSource.indexOf('function buildVolumeBoxMaterial(box: any) {');
+test('Scene3DRenderer: bloco pintável reaproveita a mesma regra de textura real vs. cor lisa da face de parede (categoria floor_tile x paint), agora resolvida por FACE', () => {
+  const start = rendererSource.indexOf('function buildVolumeBoxMaterial(box: any, faceIndex: number) {');
   assert.ok(start !== -1);
   const end = rendererSource.indexOf('\n  }', start);
   const body = rendererSource.slice(start, end);
   assert.match(body, /product && product\.category === 'floor_tile' && product\.assets\.textures/);
   assert.match(body, /buildWallFaceMaterial\(product\)/);
-  assert.match(body, /box\.finishProductId/);
+  assert.match(body, /var productId = volumeBoxFaceProductId\(box, faceIndex\);/);
+});
+
+test('Scene3DRenderer: volumeBoxFaceProductId — face com faceFinishProductId próprio vence, senão cai no finishProductId geral do bloco (retrocompat)', () => {
+  const start = rendererSource.indexOf('function volumeBoxFaceProductId(box: any, faceIndex: number)');
+  assert.ok(start !== -1);
+  const end = rendererSource.indexOf('\n  }', start);
+  const body = rendererSource.slice(start, end);
+  assert.match(body, /box\.faceFinishProductId \? box\.faceFinishProductId\[faceIndex\] : undefined/);
+  assert.match(body, /return faceOverride \|\| box\.finishProductId;/);
 });
 
 test('Store: só face é arraste de verdade (Live) — canto e aresta saíram (DEC-176), sem mais os comandos antigos de largura/profundidade/altura/elevação por eixo', () => {
   assert.match(storeSource, /updateVolumeBoxFaceLive\(volumeBoxId: string, faceIndex: number, deltaAlongNormalM: number\): void \{/);
   assert.match(storeSource, /rotateVolumeBox\(volumeBoxId: string, stepDeg\?: number\): void \{/);
-  assert.match(storeSource, /setVolumeBoxFinish\(volumeBoxId: string, productId: string\): void \{/);
+  assert.match(storeSource, /setVolumeBoxFaceFinish\(volumeBoxId: string, faceIndex: number, productId: string\): void \{/);
   assert.doesNotMatch(storeSource, /updateVolumeBoxCornerLive\(/);
   assert.doesNotMatch(storeSource, /updateVolumeBoxEdgeLive\(/);
   assert.doesNotMatch(storeSource, /updateVolumeBoxSizeLive\(/);
@@ -190,12 +199,13 @@ test('GizmoController liga o volumeBoxGizmo a girar (90°)/excluir/fechar — na
   assert.doesNotMatch(body, /nudgeVolumeBoxHeight|resizeVolumeBoxWidth|resizeVolumeBoxHeight/);
 });
 
-test('ViewportController: produto carregado do catálogo aplica acabamento tipo parede num volume clicado', () => {
-  const start = viewportSource.indexOf('if (canPaintSurface && paintHit && paintHit.object.userData.volumeBoxId && currentPaintProductId) {');
+test('ViewportController: produto carregado do catálogo aplica acabamento tipo parede só na FACE do volume clicada (faceIndex do raycast/2)', () => {
+  const start = viewportSource.indexOf("if (canPaintSurface && paintHit && paintHit.object.userData.volumeBoxId && currentPaintProductId && typeof paintHit.faceIndex === 'number') {");
   assert.ok(start !== -1);
   const end = viewportSource.indexOf('\n      }', start);
   const body = viewportSource.slice(start, end);
-  assert.match(body, /Store\.commands\.setVolumeBoxFinish\(paintHit\.object\.userData\.volumeBoxId, currentPaintProductId\);/);
+  assert.match(body, /var vbClickedFaceIndex = Math\.floor\(paintHit\.faceIndex \/ 2\);/);
+  assert.match(body, /Store\.commands\.setVolumeBoxFaceFinish\(paintHit\.object\.userData\.volumeBoxId, vbClickedFaceIndex, currentPaintProductId\);/);
 });
 
 // Cubo moldável (alças de canto/aresta/face) — Product Owner pediu um
@@ -283,4 +293,22 @@ test('buildVolumeBoxMesh: bloco com structuralMaterial "metalao" vira esqueleto 
   assert.match(body, /metalness: 0\.85/, 'perfil precisa ler como metal de verdade, não a cor lisa genérica');
   assert.match(body, /new THREE\.BoxGeometry\(VOLUME_BOX_METALAO_PROFILE_M, len, VOLUME_BOX_METALAO_PROFILE_M\)/);
   assert.match(body, /profileMesh\.quaternion\.setFromUnitVectors/);
+});
+
+// Product Owner: "a estrutura do metalão deve ir se repetindo os
+// perfís verticais a cada 1200 mm quando extrudado" — sem isso, um
+// bloco largo (parede/marquise esticada) ficava só com os 2 perfis de
+// canto, longe demais um do outro pra sustentar fachada de verdade.
+test('buildVolumeBoxMetalaoFrame: perfil vertical intermediário se repete a cada 1200mm (no máximo) quando o bloco é esticado na largura', () => {
+  const start = rendererSource.indexOf('function buildVolumeBoxMetalaoFrame(box: any) {');
+  const end = rendererSource.indexOf('\n  }', start);
+  const body = rendererSource.slice(start, end);
+  assert.match(rendererSource, /var VOLUME_BOX_METALAO_STUD_SPACING_M = 1\.2;/);
+  assert.match(body, /var localWidthM = Math\.abs\(corners\[1\]!\.x - corners\[0\]!\.x\);/);
+  assert.match(body, /var divisions = Math\.max\(1, Math\.ceil\(localWidthM \/ VOLUME_BOX_METALAO_STUD_SPACING_M\)\);/);
+  // Cada divisão intermediária adiciona um perfil na frente E outro no
+  // fundo (mesmo par que os cantos já têm), interpolando entre os
+  // cantos reais (respeita cornerOffsets de um bloco já moldado).
+  assert.match(body, /addProfile\(lerpVec3\(corners\[0\]!, corners\[1\]!, t\), lerpVec3\(corners\[2\]!, corners\[3\]!, t\)\);/);
+  assert.match(body, /addProfile\(lerpVec3\(corners\[4\]!, corners\[5\]!, t\), lerpVec3\(corners\[6\]!, corners\[7\]!, t\)\);/);
 });

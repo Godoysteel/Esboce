@@ -440,6 +440,15 @@ function parseVolumeBox(value: unknown, path: string): VolumeBox {
   if (colorHex !== undefined) box.colorHex = colorHex;
   if (sillHeightM !== undefined) box.sillHeightM = sillHeightM;
   if (finishProductId !== undefined) box.finishProductId = finishProductId;
+  // Acabamento por face (Lata de tinta clicando numa face específica)
+  // — lista opcional de até 6 posições, índice 0-5 = Core.VOLUME_BOX_FACES;
+  // posição ausente/null cai no finishProductId geral (cascata igual a
+  // Scene3DRenderer.volumeBoxFaceProductId).
+  if (v.faceFinishProductId != null) {
+    const rawFaceFinishes = array(v.faceFinishProductId, `${path}.faceFinishProductId`);
+    box.faceFinishProductId = rawFaceFinishes.map((item, i) =>
+      item == null ? undefined : optionalString(item, `${path}.faceFinishProductId[${i}]`));
+  }
   // Fase B da DEC-163 (ver DEC-175) — etiqueta de elemento estrutural e
   // material, ambas opcionais.
   if (v.elementType != null) {

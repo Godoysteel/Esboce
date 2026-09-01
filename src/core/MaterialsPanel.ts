@@ -684,34 +684,41 @@ export function compute(): ComputeResult {
     });
 
     // Bloco de Volumetria: mesmo padrão fornecedor-real-primeiro de
-    // portas/janelas — se tem finishProductId (pintado com a Lata de
-    // tinta, ver DEC-134), usa o preço do próprio produto pela área de
-    // superfície total (6 faces, mesmo material nas 6); sem acabamento
-    // escolhido, cai na média de mercado genérica em buildRows().
+    // portas/janelas — cada uma das 6 faces resolve seu próprio produto
+    // (faceFinishProductId da face, senão o finishProductId geral do
+    // bloco — Product Owner: "aplico em uma face do cubo mágico, essa
+    // face deve receber a textura", a Lata de tinta agora pinta só a
+    // face clicada) e é orçada pela ÁREA DAQUELA FACE, não mais pela
+    // superfície inteira; face sem produto nenhum cai no material
+    // estrutural ou no genérico, do mesmo jeito que o bloco inteiro
+    // caía antes.
     (floor.volumeBoxes || []).forEach(function (b) {
-      // Área real por face (Core.volumeBoxSurfaceAreaM2) — soma das 6
-      // faces via os cantos de verdade (Core.volumeBoxCornerLocalPositions),
-      // não mais a fórmula fixa de caixa reta: bate exatamente com ela
-      // quando b.cornerOffsets está ausente (box reto), e continua
-      // correta depois que o cubo é moldado puxando canto/aresta/face.
-      const surfaceAreaM2 = Core.volumeBoxSurfaceAreaM2(b);
-      totals.volumeBoxAreaM2 += surfaceAreaM2;
-      const selection = b.finishProductId
-        ? selectedOffer(project, floor.id + ':volume:' + b.id, b.finishProductId)
-        : undefined;
-      const cost = b.finishProductId ? productUnitCost(b.finishProductId, surfaceAreaM2, selection?.price) : null;
-      if (b.finishProductId) addCommercialQuantity(volumeBoxCommercial, b.finishProductId, surfaceAreaM2, selection);
-      if (cost != null) {
-        totals.volumeBoxProductCost += cost;
-      } else if (b.structuralMaterial) {
-        // Fase B da DEC-163 (ver DEC-175): sem acabamento pintado mas com
-        // material marcado — preço por m² do material vence sobre o
-        // genérico R$260/m² (que fica só pros blocos sem NENHUMA marcação).
-        const materialKey = (b.elementType || 'volumetria') + '::' + b.structuralMaterial;
-        totals.volumeBoxMaterialAreaM2[materialKey] = (totals.volumeBoxMaterialAreaM2[materialKey] || 0) + surfaceAreaM2;
-      } else {
-        totals.volumeBoxGenericAreaM2 += surfaceAreaM2;
-      }
+      // Área real por face (Core.volumeBoxFaces) — a partir dos cantos de
+      // verdade (Core.volumeBoxCornerLocalPositions), não mais a fórmula
+      // fixa de caixa reta: bate exatamente com ela quando b.cornerOffsets
+      // está ausente (box reto), e continua correta depois que o cubo é
+      // moldado puxando canto/aresta/face.
+      const faces = Core.volumeBoxFaces(b);
+      faces.forEach(function (face, faceIndex) {
+        totals.volumeBoxAreaM2 += face.areaM2;
+        const faceProductId = (b.faceFinishProductId && b.faceFinishProductId[faceIndex]) || b.finishProductId;
+        const selection = faceProductId
+          ? selectedOffer(project, floor.id + ':volume:' + b.id + ':face' + faceIndex, faceProductId)
+          : undefined;
+        const cost = faceProductId ? productUnitCost(faceProductId, face.areaM2, selection?.price) : null;
+        if (faceProductId) addCommercialQuantity(volumeBoxCommercial, faceProductId, face.areaM2, selection);
+        if (cost != null) {
+          totals.volumeBoxProductCost += cost;
+        } else if (b.structuralMaterial) {
+          // Fase B da DEC-163 (ver DEC-175): sem acabamento pintado mas com
+          // material marcado — preço por m² do material vence sobre o
+          // genérico R$260/m² (que fica só pros blocos sem NENHUMA marcação).
+          const materialKey = (b.elementType || 'volumetria') + '::' + b.structuralMaterial;
+          totals.volumeBoxMaterialAreaM2[materialKey] = (totals.volumeBoxMaterialAreaM2[materialKey] || 0) + face.areaM2;
+        } else {
+          totals.volumeBoxGenericAreaM2 += face.areaM2;
+        }
+      });
     });
 
     // Escada: item posicionado, mesmo nível de detalhe que Bloco de

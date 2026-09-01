@@ -7,6 +7,8 @@
 - Simplificadas as alças de moldagem do Cubo mágico: só restou o puxar por FACE (empurra/estica aquela face na direção normal). As alças de canto e aresta, que ficavam confusas e se sobrepunham, foram removidas — e a correção revelou um bug real de escala que travava o arraste de face quando o cubo já tinha sido movido da origem. Ver DEC-176.
 - ACM saiu da lista de material estrutural do Cubo mágico: é sempre revestimento/acabamento (chapa), nunca a estrutura em si — a estrutura equivalente (perfil de alumínio/metalon) já é representada pelo material "Metalão". Ver DEC-180.
 - Cubo mágico com material "Metalão" agora renderiza como um esqueleto tubular procedural nas 12 arestas (perfis metálicos), em vez de um bloco sólido colorido — mais fiel ao que esse material realmente representa. Ver DEC-181.
+- A Lata de tinta no Cubo mágico agora pinta só a face clicada (ex.: aplicar um ACM do catálogo Bold numa única face), em vez do bloco inteiro de uma vez — as outras faces continuam com o acabamento/material que já tinham. Ver DEC-182.
+- Cubo mágico com material "Metalão": quando o bloco é esticado na largura, o esqueleto agora repete um perfil vertical intermediário a cada 1200mm (no máximo), em vez de só os 2 perfis das pontas — mais fiel a uma subestrutura de fachada real. Ver DEC-183.
 
 ## Alterado — 28/08/2026
 

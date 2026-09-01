@@ -3129,13 +3129,18 @@ import {
         return;
       }
       // Bloco de Volumetria: mesmo catálogo de acabamento de parede
-      // (Product Owner: "ele deve poder ser pintado como as paredes")
-      // — o box inteiro usa o mesmo acabamento nas 6 faces, sem
-      // distinção de lado A/B como a parede tem.
-      if (canPaintSurface && paintHit && paintHit.object.userData.volumeBoxId && currentPaintProductId) {
-        Store.commands.setVolumeBoxFinish(paintHit.object.userData.volumeBoxId, currentPaintProductId);
-        if (pendingCommercialSelection) Store.commands.setCommercialSelection(Store.currentFloor().id + ':volume:' + paintHit.object.userData.volumeBoxId, pendingCommercialSelection);
-        hintEl.textContent = 'Bloco pintado. Clique em outro pra continuar.';
+      // (Product Owner: "ele deve poder ser pintado como as paredes"),
+      // mas só a FACE clicada recebe o produto — Product Owner: "aplico
+      // em uma face do cubo mágico, essa face deve receber a textura".
+      // O hitMesh usa a mesma geometria/ordem de faces de
+      // buildVolumeBoxGeometry (Core.VOLUME_BOX_FACES): cada face vira
+      // 2 triângulos consecutivos, então faceIndex/2 (piso) dá o índice
+      // da face 0-5 direto, sem precisar recalcular normal/plano aqui.
+      if (canPaintSurface && paintHit && paintHit.object.userData.volumeBoxId && currentPaintProductId && typeof paintHit.faceIndex === 'number') {
+        var vbClickedFaceIndex = Math.floor(paintHit.faceIndex / 2);
+        Store.commands.setVolumeBoxFaceFinish(paintHit.object.userData.volumeBoxId, vbClickedFaceIndex, currentPaintProductId);
+        if (pendingCommercialSelection) Store.commands.setCommercialSelection(Store.currentFloor().id + ':volume:' + paintHit.object.userData.volumeBoxId + ':face' + vbClickedFaceIndex, pendingCommercialSelection);
+        hintEl.textContent = 'Face pintada. Clique em outra face pra continuar.';
         return;
       }
       if (canPaintSurface && paintHit && paintHit.object.userData.roomKey && currentPaintProductId) {
