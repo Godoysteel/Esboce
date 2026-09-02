@@ -6576,15 +6576,38 @@ export function hashColorHex(key: string): number {
           // vizinho for CLARAMENTE mais alto (o caso original da DEC-165:
           // telhado grande de verdade mais alto que o pequeno que invade a
           // pegada dele).
-          function otherRoofPeakY(r: any) {
+          // Bug real (Product Owner, reprodução com números exatos do
+          // console — dois quatro-águas em L, um deles um hip QUADRADO
+          // sem cumeeira, só um pico único): comparar contra o PICO único
+          // do vizinho (antigo otherRoofPeakY) é só uma aproximação —
+          // vale pra um vizinho "alto por igual" ao longo de toda a
+          // sobreposição (telhado comprido), mas um hip quadrado tem
+          // altura bem MENOR perto da própria borda (sobe até o pico só
+          // bem no meio dele). Usar o pico inteiro fazia cortar a malha
+          // da cumeeira bem além do ponto onde o vizinho de verdade fica
+          // mais alto, sobrando um buraco no meio da cumeeira mesmo onde
+          // o sombreamento por pixel (que já usa a fórmula certa do hip,
+          // ver applyRoomBoxClipping/isHip) nunca a esconderia. Agora
+          // mede a altura REAL do vizinho (mesma fórmula hip/cumeeira do
+          // shader) exatamente no ponto onde a cumeeira entra na pegada
+          // dele, não o pico inteiro.
+          function otherRoofHeightAtPoint(r: any, pt: any) {
             var match = roofPeakBoxes.find(function (b: any) { return b.minX === r.minX && b.maxX === r.maxX && b.minZ === r.minZ && b.maxZ === r.maxZ; });
-            return match ? match.baseY + match.peakAboveBase : -Infinity;
+            if (!match) return -Infinity;
+            if (match.isHip) {
+              var distX = Math.min(pt.x - match.minX, match.maxX - pt.x);
+              var distZ = Math.min(pt.z - match.minZ, match.maxZ - pt.z);
+              return match.baseY + match.tanPitch * Math.min(distX, distZ);
+            }
+            var coord = match.axisIsZ ? pt.z : pt.x;
+            return match.baseY + match.peakAboveBase - match.tanPitch * Math.abs(coord - match.ridgeCoord);
           }
           function ridgeCapPartialOverlapFootprints(ends: any) {
             var ownPeakY = ownSurfaceBox ? ownSurfaceBox.baseY + ownSurfaceBox.peakAboveBase : -Infinity;
             return overlappingFootprintsForHipCorners.filter(function (r: any) {
-              if (pointInsideRect(ends.a, r) === pointInsideRect(ends.b, r)) return false;
-              return otherRoofPeakY(r) > ownPeakY + 1e-4;
+              var aInside = pointInsideRect(ends.a, r), bInside = pointInsideRect(ends.b, r);
+              if (aInside === bInside) return false;
+              return otherRoofHeightAtPoint(r, aInside ? ends.a : ends.b) > ownPeakY + 1e-4;
             });
           }
           // roofCutRegions só sabe calcular o plano inclinado de verdade

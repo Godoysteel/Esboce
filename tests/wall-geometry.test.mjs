@@ -1594,7 +1594,7 @@ test('Scene3DRenderer.applyRoomBoxClipping: telhado quatro-águas (isHip) usa ca
 test('Scene3DRenderer: cada telhado calcula a caixa dos cômodos ESTRITAMENTE mais altos que ele (nunca a própria) e aplica applyRoomBoxClipping em toda peça', () => {
   const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
   assert.notEqual(roofsStart, -1);
-  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 32000);
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 33000);
   assert.match(roofsBlock, /var roomHeightBoxes = allFloorRoomClipBoxes\[floorIdx\] \|\| \[\];/);
   assert.match(roofsBlock, /var roomClipBoxes = roomHeightBoxes\.concat\(higherFloorRoomHeightBoxes\)\.filter\(function \(b: any\) \{ return b\.baseY > pieceBaseY \+ 1e-4; \}\);/);
   assert.match(roofsBlock, /var clipBoxesForThisRoof = roomClipBoxes\.concat\(otherRoofClipBoxes\);/);
@@ -1621,7 +1621,7 @@ test('telhado de um pavimento também soma as caixas de cômodo de pavimentos SU
   assert.ok(loopIdx > preloopStart, 'allFloorRoomClipBoxes precisa ser calculado antes do project.floors.forEach principal');
 
   const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
-  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 32000);
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 33000);
   assert.match(roofsBlock, /for \(var higherFloorIdx = floorIdx \+ 1; higherFloorIdx < allFloorRoomClipBoxes\.length; higherFloorIdx\+\+\) \{/);
   assert.match(roofsBlock, /higherFloorRoomHeightBoxes = higherFloorRoomHeightBoxes\.concat\(allFloorRoomClipBoxes\[higherFloorIdx\] \|\| \[\]\);/);
 });
@@ -1661,7 +1661,7 @@ test('Scene3DRenderer.roofSlopeSurfaceParams: mesma matemática de vão/beiral j
 test('Scene3DRenderer: caixa de telhado-vs-telhado compara a SUPERFÍCIE REAL ponto a ponto (nem pico nem área decidem um vencedor pro par inteiro) — isHip pra quatro-águas, sem pré-filtro', () => {
   const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
   assert.notEqual(roofsStart, -1);
-  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 32000);
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 33000);
   assert.match(roofsBlock, /var roofPeakBoxes = floorData\.roofs\.map\(function \(r: any\) \{/);
   assert.match(roofsBlock, /var rSlope = roofSlopeSurfaceParams\(r, scale, offsetX, offsetY\);/);
   assert.match(roofsBlock, /isHip: r\.type === 'quatroAguas' \? 1 : 0,/);
@@ -1732,7 +1732,7 @@ test('Scene3DRenderer.buildRoofQuatroAguas: cada espigão de canto marca o próp
 test('Scene3DRenderer: espigão de canto some quando o próprio canto do beiral cai dentro da pegada de outro telhado que se sobrepõe de verdade — sobra só a quina externa', () => {
   const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
   assert.notEqual(roofsStart, -1);
-  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 32000);
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 33000);
   assert.match(roofsBlock, /if \(other\.id === roof\.id \|\| valleyPartnerIds\[other\.id\]\) return false;[\s\S]*?var steppedRidgePair = !!\(\s*roof\.compoundGroupId && other\.compoundGroupId === roof\.compoundGroupId &&\s*other\.ridgeAxis === roof\.ridgeAxis &&\s*\(roof\.steppedLowerRoofId \|\| other\.steppedLowerRoofId \|\| roof\.atticMode \|\| other\.atticMode\)\s*\);\s*if \(steppedRidgePair\) return false;\s*var otherFootprint = roofWorldFootprint\(other, scale, offsetX, offsetY\);\s*return rectsOverlapArea\(ownFootprint, otherFootprint\) > 1e-6;\s*\}\)\.map\(function \(other\) \{ return roofWorldFootprint\(other, scale, offsetX, offsetY\); \}\);/);
   // Cumeeira em níveis (compoundGroupId + mesmo ridgeAxis + um trecho
   // steppedLowerRoofId/atticMode): os dois trechos NÃO competem aqui —
@@ -1798,7 +1798,7 @@ test('Scene3DRenderer: cumeeira central/contínua (sem hipCornerXZ) marca as dua
 
 test('Scene3DRenderer: cumeeira central some quando as DUAS pontas caem dentro da pegada do telhado vizinho — reprodução real do L em quatro-águas', () => {
   const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
-  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 32000);
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 33000);
   assert.match(roofsBlock, /function ridgeCapFullyInsideOtherRoof\(ends: any\) \{\s*return hipCornerInsideOtherRoof\(ends\.a\) && hipCornerInsideOtherRoof\(ends\.b\);\s*\}/);
   assert.match(roofsBlock, /if \(m\.userData\.ridgeCapEndsXZ\) \{\s*if \(ridgeCapFullyInsideOtherRoof\(m\.userData\.ridgeCapEndsXZ\)\) return;\s*ridgeCapPartialRects = ridgeCapPartialOverlapFootprints\(m\.userData\.ridgeCapEndsXZ\);\s*\}/);
 
@@ -1834,8 +1834,8 @@ test('Scene3DRenderer: cumeeira central some quando as DUAS pontas caem dentro d
 // outra de fato fora.
 test('Scene3DRenderer: cumeeira com sobreposição PARCIAL (uma ponta dentro, outra fora) é APARADA na fronteira do vizinho, não omitida nem preservada inteira — reprodução real quatro-águas×quatro-águas', () => {
   const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
-  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 32000);
-  assert.match(roofsBlock, /function ridgeCapPartialOverlapFootprints\(ends: any\) \{\s*var ownPeakY = ownSurfaceBox \? ownSurfaceBox\.baseY \+ ownSurfaceBox\.peakAboveBase : -Infinity;\s*return overlappingFootprintsForHipCorners\.filter\(function \(r: any\) \{\s*if \(pointInsideRect\(ends\.a, r\) === pointInsideRect\(ends\.b, r\)\) return false;\s*return otherRoofPeakY\(r\) > ownPeakY \+ 1e-4;\s*\}\);\s*\}/);
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 33000);
+  assert.match(roofsBlock, /function ridgeCapPartialOverlapFootprints\(ends: any\) \{\s*var ownPeakY = ownSurfaceBox \? ownSurfaceBox\.baseY \+ ownSurfaceBox\.peakAboveBase : -Infinity;\s*return overlappingFootprintsForHipCorners\.filter\(function \(r: any\) \{\s*var aInside = pointInsideRect\(ends\.a, r\), bInside = pointInsideRect\(ends\.b, r\);\s*if \(aInside === bInside\) return false;\s*return otherRoofHeightAtPoint\(r, aInside \? ends\.a : ends\.b\) > ownPeakY \+ 1e-4;\s*\}\);\s*\}/);
   assert.match(roofsBlock, /clipMeshOutsideRects\(m, trimRects\.concat\(gableClipRects, ridgeCapPartialRects\)\);/);
 
   function pointInRect(pt, r) {
@@ -1876,10 +1876,10 @@ test('Scene3DRenderer: cumeeira com sobreposição PARCIAL (uma ponta dentro, ou
 // escondida manualmente.
 test('Scene3DRenderer: cumeeira central NÃO é aparada quando o telhado vizinho não é realmente mais alto ali (picos empatados) — a comparação pixel a pixel já resolve sozinha; reprodução real do projeto do Product Owner', () => {
   const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
-  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 32000);
-  assert.match(roofsBlock, /function otherRoofPeakY\(r: any\) \{\s*var match = roofPeakBoxes\.find\(function \(b: any\) \{ return b\.minX === r\.minX && b\.maxX === r\.maxX && b\.minZ === r\.minZ && b\.maxZ === r\.maxZ; \}\);\s*return match \? match\.baseY \+ match\.peakAboveBase : -Infinity;\s*\}/);
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 33000);
+  assert.match(roofsBlock, /function otherRoofHeightAtPoint\(r: any, pt: any\) \{\s*var match = roofPeakBoxes\.find\(function \(b: any\) \{ return b\.minX === r\.minX && b\.maxX === r\.maxX && b\.minZ === r\.minZ && b\.maxZ === r\.maxZ; \}\);\s*if \(!match\) return -Infinity;\s*if \(match\.isHip\) \{\s*var distX = Math\.min\(pt\.x - match\.minX, match\.maxX - pt\.x\);\s*var distZ = Math\.min\(pt\.z - match\.minZ, match\.maxZ - pt\.z\);\s*return match\.baseY \+ match\.tanPitch \* Math\.min\(distX, distZ\);\s*\}\s*var coord = match\.axisIsZ \? pt\.z : pt\.x;\s*return match\.baseY \+ match\.peakAboveBase - match\.tanPitch \* Math\.abs\(coord - match\.ridgeCoord\);\s*\}/);
   assert.match(roofsBlock, /var ownPeakY = ownSurfaceBox \? ownSurfaceBox\.baseY \+ ownSurfaceBox\.peakAboveBase : -Infinity;/);
-  assert.match(roofsBlock, /return otherRoofPeakY\(r\) > ownPeakY \+ 1e-4;/);
+  assert.match(roofsBlock, /return otherRoofHeightAtPoint\(r, aInside \? ends\.a : ends\.b\) > ownPeakY \+ 1e-4;/);
 
   // Dados reais copiados do console do Product Owner (floor completo):
   // roof_26 (x1:-45,y1:-40,x2:120,y2:40,ridgeAxis:'x') + roof_27
@@ -1896,6 +1896,70 @@ test('Scene3DRenderer: cumeeira central NÃO é aparada quando o telhado vizinho
   assert.ok(Math.abs(peak26 - peak27) < 1e-9, 'os dois telhados têm exatamente o mesmo pico — não existe "vizinho mais alto" real aqui');
 });
 
+// DEC-175: variação real do MESMO bug de comparar só o PICO do vizinho
+// (Product Owner, print circulando "a cumeeira se quebra na metade" —
+// dois quatro-águas em L, um deles um hip QUADRADO sem cumeeira própria,
+// só um pico único bem mais alto que o do telhado grande). Reprodução
+// real (console do Product Owner, Store.currentRoofs()): roof_14
+// (x1:-35,y1:-30,x2:95,y2:30, ridgeAxis:'x') + roof_15 (x1:35,y1:-50,
+// x2:115,y2:30, ridgeAxis:'x'), ambos quatroAguas, parapetHeight:0.5,
+// GRID=20 (unidades/metro). O antigo `otherRoofPeakY` comparava o PICO
+// único de roof_15 (mais alto que a cumeeira de roof_14) e cortava a
+// malha inteira da cumeeira de roof_14 a partir da borda da pegada de
+// roof_15 — mas um hip QUADRADO só alcança esse pico bem no MEIO dele; a
+// altura de verdade perto da própria borda é bem menor, ainda mais baixa
+// que a cumeeira de roof_14 em quase todo o trecho sobreposto. Verificado
+// ao vivo (Scene3DRenderer.rebuild real, sem WebGL): antes da correção a
+// malha da cumeeira de roof_14 terminava em x=1,35m (cortada) em vez do
+// seu fim natural x=3,25m — sobrava um buraco de 1,9m no meio dela, bem
+// onde o sombreamento por pixel (fórmula isHip correta) nunca a
+// esconderia de verdade.
+test('Scene3DRenderer: cumeeira central NÃO é cortada pela pegada inteira de um hip QUADRADO vizinho — usa a altura REAL dele no ponto de entrada, não o pico único; reprodução real do projeto do Product Owner (print "cumeeira quebra na metade")', () => {
+  const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 33000);
+  assert.match(roofsBlock, /if \(match\.isHip\) \{\s*var distX = Math\.min\(pt\.x - match\.minX, match\.maxX - pt\.x\);\s*var distZ = Math\.min\(pt\.z - match\.minZ, match\.maxZ - pt\.z\);\s*return match\.baseY \+ match\.tanPitch \* Math\.min\(distX, distZ\);\s*\}/);
+
+  const GRID = 20;
+  const ROOF_OVERHANG = 0.4;
+  const tanPitch = Math.tan(28 * Math.PI / 180);
+  function m(units) { return units / GRID; }
+
+  // roof_14: pegada com beiral (metros) e cumeeira central real (R1-R2).
+  const r14 = { minX: m(-35) - ROOF_OVERHANG, maxX: m(95) + ROOF_OVERHANG, minZ: m(-30) - ROOF_OVERHANG, maxZ: m(30) + ROOF_OVERHANG };
+  const halfSpan14 = (r14.maxZ - r14.minZ) / 2;
+  const ridgeZ14 = (m(-30) + m(30)) / 2;
+  const r1x14 = Math.min(r14.minX + halfSpan14, r14.maxX - halfSpan14);
+  const r2x14 = Math.max(r14.minX + halfSpan14, r14.maxX - halfSpan14);
+  const ownPeakY14 = halfSpan14 * tanPitch; // baseY comum omitido (mesma base nos dois)
+
+  // roof_15: pegada com beiral — footprint QUADRADO (sem cumeeira própria).
+  const r15 = { minX: m(35) - ROOF_OVERHANG, maxX: m(115) + ROOF_OVERHANG, minZ: m(-50) - ROOF_OVERHANG, maxZ: m(30) + ROOF_OVERHANG };
+
+  function otherRoofHeightAtPoint(r, pt) {
+    const distX = Math.min(pt.x - r.minX, r.maxX - pt.x);
+    const distZ = Math.min(pt.z - r.minZ, r.maxZ - pt.z);
+    return r.tanPitch * Math.min(distX, distZ);
+  }
+  r15.tanPitch = tanPitch;
+
+  // A ponta R2 da cumeeira central de roof_14 cai dentro da pegada de
+  // roof_15 (o outro extremo, R1, fica de fato fora) — é o caso PARCIAL.
+  const endInside = { x: r2x14, z: ridgeZ14 };
+  function pointInRect(pt, r) { return pt.x > r.minX + 1e-6 && pt.x < r.maxX - 1e-6 && pt.z > r.minZ + 1e-6 && pt.z < r.maxZ - 1e-6; }
+  assert.equal(pointInRect({ x: r1x14, z: ridgeZ14 }, r15), false, 'ponta R1 continua de fato fora da pegada de roof_15');
+  assert.equal(pointInRect(endInside, r15), true, 'ponta R2 cai dentro da pegada de roof_15 — caso PARCIAL');
+
+  const heightAtEntry = otherRoofHeightAtPoint(r15, endInside);
+  assert.ok(heightAtEntry <= ownPeakY14 + 1e-4, 'a altura REAL de roof_15 exatamente onde a cumeeira de roof_14 entra na pegada dele NÃO é maior que a própria cumeeira — a correção não deve cortar nada aqui');
+
+  // O antigo mecanismo (pico único) cortaria de qualquer forma, porque o
+  // PICO de roof_15 (no meio do hip quadrado, longe dessa borda) é bem
+  // mais alto que a cumeeira de roof_14.
+  const halfSpan15 = Math.min(r15.maxX - r15.minX, r15.maxZ - r15.minZ) / 2;
+  const oldPeak15 = halfSpan15 * tanPitch;
+  assert.ok(oldPeak15 > ownPeakY14 + 1e-4, 'o PICO único de roof_15 (comparação antiga) é claramente mais alto que a cumeeira de roof_14 — por isso o mecanismo antigo cortava errado');
+});
+
 // DEC-166: regressão do "steppedRidgePair" (Product Owner reportou que a
 // correção não trouxe a cumeeira de volta) levou a extrair os dados reais
 // do projeto dele via console (Store.getProject()...roofs) — dois
@@ -1910,7 +1974,7 @@ test('Scene3DRenderer: cumeeira central NÃO é aparada quando o telhado vizinho
 // compartilhada, aqui x=6.4/z=2.4) — sobrava um espigão duplicado ali.
 test('Scene3DRenderer: espigão duplicado quando dois telhados em L compartilham EXATAMENTE o mesmo canto de beiral — só o telhado de id menor mantém a peça (reprodução real, dados extraídos do projeto do Product Owner)', () => {
   const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
-  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 32000);
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 33000);
   assert.match(roofsBlock, /function hipCornerCoincidesWithLowerIdRoof\(pt: any\) \{\s*return roofPeakBoxes\.some\(function \(b: any\) \{\s*if \(b\.id === roof\.id \|\| b\.id >= roof\.id\) return false;\s*return \(Math\.abs\(pt\.x - b\.minX\) < 1e-4 \|\| Math\.abs\(pt\.x - b\.maxX\) < 1e-4\)\s*&& \(Math\.abs\(pt\.z - b\.minZ\) < 1e-4 \|\| Math\.abs\(pt\.z - b\.maxZ\) < 1e-4\);\s*\}\);\s*\}/);
   assert.match(roofsBlock, /if \(m\.userData\.hipCornerXZ && hipCornerCoincidesWithLowerIdRoof\(m\.userData\.hipCornerXZ\)\) return;/);
 
@@ -1949,7 +2013,7 @@ test('Scene3DRenderer: espigão duplicado quando dois telhados em L compartilham
 // desempate por id (só existe UMA peça em cada ponto, não uma dupla).
 test('Scene3DRenderer: canto de espigão que cai em cima da ARESTA RETA (não do canto) do telhado vizinho também é omitido, sem desempate — reprodução real, segunda peça reportada pelo Product Owner via ferramenta Apagar', () => {
   const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
-  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 32000);
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 33000);
   assert.match(roofsBlock, /function hipCornerOnOtherRoofStraightEdge\(pt: any\) \{\s*return roofPeakBoxes\.some\(function \(b: any\) \{\s*if \(b\.id === roof\.id\) return false;\s*var onXEdge = \(Math\.abs\(pt\.x - b\.minX\) < 1e-4 \|\| Math\.abs\(pt\.x - b\.maxX\) < 1e-4\)\s*&& pt\.z > b\.minZ \+ 1e-6 && pt\.z < b\.maxZ - 1e-6;\s*var onZEdge = \(Math\.abs\(pt\.z - b\.minZ\) < 1e-4 \|\| Math\.abs\(pt\.z - b\.maxZ\) < 1e-4\)\s*&& pt\.x > b\.minX \+ 1e-6 && pt\.x < b\.maxX - 1e-6;\s*return onXEdge \|\| onZEdge;\s*\}\);\s*\}/);
   assert.match(roofsBlock, /if \(m\.userData\.hipCornerXZ && hipCornerOnOtherRoofStraightEdge\(m\.userData\.hipCornerXZ\)\) return;/);
 
@@ -1985,7 +2049,7 @@ test('Scene3DRenderer: canto de espigão que cai em cima da ARESTA RETA (não do
 test('Scene3DRenderer: trimRects (corte de malha real, não por pixel) só se aplica a pares duasAguas×duasAguas — quatroAguas nunca cai nesse corte reto na vertical', () => {
   const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
   assert.notEqual(roofsStart, -1);
-  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 32000);
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 33000);
   assert.match(roofsBlock, /var trimRects = roof\.type !== 'duasAguas' \? \[\] : floorData\.roofs\.filter\(function \(other\) \{/);
   assert.match(roofsBlock, /other\.ridgeAxis === roof\.ridgeAxis \|\| other\.type !== 'duasAguas'\) return false;/);
 });
@@ -2006,7 +2070,7 @@ test('Scene3DRenderer: trimRects (corte de malha real, não por pixel) só se ap
 // valleyPartnerIds).
 test('Scene3DRenderer: trimRects só entra em cena pra pares que SÃO valleyPartnerIds — pares já cobertos pelo sombreamento por pixel (otherRoofClipBoxes) não precisam do corte de malha redundante', () => {
   const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
-  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 32000);
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 33000);
   assert.match(roofsBlock, /var trimRects = roof\.type !== 'duasAguas' \? \[\] : floorData\.roofs\.filter\(function \(other\) \{\s*if \(!roof\.compoundGroupId \|\| other\.compoundGroupId !== roof\.compoundGroupId \|\| other\.id === roof\.id \|\| other\.ridgeAxis === roof\.ridgeAxis \|\| other\.type !== 'duasAguas'\) return false;\s*if \(!valleyPartnerIds\[other\.id\]\) return false;/);
 });
 
@@ -2020,7 +2084,7 @@ test('Scene3DRenderer: trimRects só entra em cena pra pares que SÃO valleyPart
 // virava 6, mais estreito que o lado oposto não afetado).
 test('Scene3DRenderer: parede do oitão (gableSide) nunca passa pelo corte de malha reto (trimRects) — só água/tabeira são peças planas o suficiente pra esse corte fazer sentido', () => {
   const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
-  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 32000);
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 33000);
   assert.match(roofsBlock, /if \(!m\.userData\.gableSide\) clipMeshOutsideRects\(m, trimRects\.concat\(gableClipRects, ridgeCapPartialRects\)\);/);
 });
 
@@ -2035,7 +2099,7 @@ test('Scene3DRenderer: parede do oitão (gableSide) nunca passa pelo corte de ma
 // por isso a primeira tentativa não fazia nada).
 test('Scene3DRenderer: gableClipRects usa a posição real da PAREDE do oitão vizinho (nominalWallRect + GABLE_WALL_EXTEND), não a pegada do telhado — beiral não fica flutuando além da parede alheia', () => {
   const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
-  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 32000);
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 33000);
   assert.match(roofsBlock, /var gableClipRects = roof\.type !== 'duasAguas' \? \[\] : floorData\.roofs\.filter\(function \(other\) \{\s*return !!\(roof\.compoundGroupId && other\.compoundGroupId === roof\.compoundGroupId && other\.id !== roof\.id && other\.ridgeAxis !== roof\.ridgeAxis && other\.type === 'duasAguas'\);\s*\}\)\.reduce\(function \(regions: any\[\], other\) \{\s*var otherNominal = nominalWallRect\(other\);/);
   assert.match(roofsBlock, /var gMinX = otherNominal\.minX - GABLE_WALL_EXTEND, gMaxX = otherNominal\.maxX \+ GABLE_WALL_EXTEND;/);
   assert.match(roofsBlock, /var gMinZ = otherNominal\.minZ - GABLE_WALL_EXTEND, gMaxZ = otherNominal\.maxZ \+ GABLE_WALL_EXTEND;/);
@@ -2067,7 +2131,7 @@ test('Scene3DRenderer: gableClipRects usa a posição real da PAREDE do oitão v
 // é os dois dividirem a linha do meio).
 test('Scene3DRenderer: pegadas em L (canto reentrante) resolvem o encontro pela bissetriz do vale, não pela disputa de área — cada uma escondendo só o que atravessa pro lado da outra', () => {
   const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
-  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 32000);
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 33000);
   // Detecção usa o retângulo NOMINAL (sem ROOF_OVERHANG) — roofWorldFootprint
   // já infla a pegada pelo beiral, então duas pegadas encostadas na
   // parede de verdade chegam SOBREPOSTAS (não só tocando) e a detecção

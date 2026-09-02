@@ -2058,25 +2058,6 @@ O problema era que o corte de MALHA (`trimRects`, restante da DEC-165) rodava **
 
 ---
 
-# DEC-174 — Face da parede sem acabamento aparecia cinza-azulada em vez de branca
-
-**Data:** 28/08/2026
-**Status:** Implementado e verificado (propriedades do material extraídas sem WebGL). Ajuste fino (`emissiveIntensity`) pendente de confirmação visual do Product Owner.
-
-**Contexto:** Product Owner reportou, olhando uma parede recém-desenhada sem nenhum acabamento aplicado: "gostaria de deixar a face branca, não gosto desse cinza azulado". A cor-base da face (`wallDefaultColor`) já era `GABLE_COLOR = 0xFFFFFF` (branco puro) — o problema não era o valor da cor, e sim como ela chegava na tela.
-
-**Causa:** a face usava `THREE.MeshStandardMaterial` (material sensível à luz da cena). O `EsboceApplication.ts` monta a iluminação com uma luz hemisférica céu/chão (`0xd8efff`/`0x8b795f`) mais uma luz de preenchimento fria (`0xc5e5f2`) além do sol quente principal — normais verticais (o caso de toda face de parede) recebem uma mistura que pende pro tom acinzentado/azulado dessas duas fontes frias, mesmo com o material sendo branco puro. Esse comportamento já tinha sido identificado e aceito de propósito numa decisão anterior (comentário no código, linhas ~163-179: "só some de vez se a luz virar neutra/branca também, mudança bem maior") — só que o próprio Product Owner, revendo o resultado agora, prefere branco liso ao efeito de profundidade.
-
-**1ª tentativa (revertida):** trocar a face sem acabamento pra `THREE.MeshBasicMaterial` (ignora completamente a luz da cena, mostra sempre a cor exata configurada). Resolveu o tom errado, mas trocou por outro problema: sem nenhuma luz incidindo, TODAS as faces ficam exatamente na mesma cor plana, sem nenhuma sombra entre a face mais e a menos exposta ao sol — Product Owner: "ficou muito forte, parece até que emite luz".
-
-**Correção final:** volta pra `THREE.MeshStandardMaterial` (mantém a resposta à luz e a variação de sombra entre as faces — a profundidade que o usuário não reclamou de perder) e soma, só na face sem acabamento (sem produto do Catálogo, sem face Steel Frame configurada, sem seleção, fora do modo debug), um branco EMISSIVO leve (`emissive: 0xFFFFFF, emissiveIntensity: 0.15`) — um valor somado por cima do resultado já iluminado, igual em toda a face, que clareia e dessatura o tom acinzentado/azulado sem apagar de vez a diferença entre a face mais e a menos iluminada. Acabamentos reais (cerâmica, textura PBR, Steel Frame) e a seleção não recebem esse reforço, continuam exatamente como antes.
-
-**Verificado (propriedades do material extraídas sem WebGL, não o pixel final renderizado):** reconstruindo a cena com `Scene3DRenderer.rebuild`, toda face de parede sem acabamento aparece como `MeshStandardMaterial` com `emissive: #ffffff` e `emissiveIntensity: 0.15`. O valor `0.15` é uma estimativa de engenharia (não dá pra calcular o pixel final exato sem GPU de verdade nesta reprodução) — pode precisar de ajuste fino depois do Product Owner conferir ao vivo no site.
-
-**Testado:** suíte completa (675 testes) + `tests/wall-transparency.test.mjs` revertido pra checar de volta um único bloco `MeshStandardMaterial`.
-
----
-
 # DEC-175 — Bloco de Volumetria ganha elemento estrutural + material (Fase B da DEC-163)
 
 **Data:** 01/09/2026
@@ -2577,3 +2558,39 @@ O core geométrico mais caro (`Core.detectRooms`/`Core.computeWallFootprints`, a
 **Fora de escopo (documentado, não corrigido agora):** o custo O(telhados²) de recorte entre telhados vizinhos (`otherRoofClipBoxes`/`hipCornerInsideOtherRoof` etc., achado pelo agente de investigação) segue sem índice espacial — mesma decisão de risco da DEC-187 (código com histórico de bugs sutis em encontros de telhado em L, DEC-165 a DEC-170; qualquer otimização ali pede um escopo dedicado, com comparação ponto-a-ponto antes/depois). Na prática esse termo só pesa em projetos com VÁRIOS telhados no mesmo pavimento — a maioria dos projetos reais tem só 1 a 4 peças, então o ganho desta rodada (parar de rebuildar por frame) já resolve o sintoma relatado.
 
 **Testado:** typecheck limpo + suíte completa (723 testes — `wall-geometry.test.mjs` ajustado pra nova assinatura de `previewRoofResize`, `roof-editor-controls.test.mjs` reescrito pra afirmar ausência de escrita no Store durante o pointermove de cumeeira/parapeito e a presença do commit único no pointerup). Verificação ao vivo: criado um telhado de duas águas real, arrastada a alça da cumeeira — o fantasma acompanhou o mouse suavemente, e ao soltar o `pitchDeg` gravado no Store foi de 28° pra 36° (conferido via `Store.currentRoofs()`), telhado visivelmente mais alto, sem erros no console.
+
+---
+
+# DEC-203 — Face da parede sem acabamento aparecia cinza-azulada em vez de branca
+
+**Data:** 02/09/2026
+**Status:** Implementado e verificado (propriedades do material extraídas sem WebGL). Ajuste fino (`emissiveIntensity`) pendente de confirmação visual do Product Owner.
+
+**Contexto:** Product Owner reportou, olhando uma parede recém-desenhada sem nenhum acabamento aplicado: "gostaria de deixar a face branca, não gosto desse cinza azulado". A cor-base da face (`wallDefaultColor`) já era `GABLE_COLOR = 0xFFFFFF` (branco puro) — o problema não era o valor da cor, e sim como ela chegava na tela.
+
+**Causa:** a face usava `THREE.MeshStandardMaterial` (material sensível à luz da cena). O `EsboceApplication.ts` monta a iluminação com uma luz hemisférica céu/chão (`0xd8efff`/`0x8b795f`) mais uma luz de preenchimento fria (`0xc5e5f2`) além do sol quente principal — normais verticais (o caso de toda face de parede) recebem uma mistura que pende pro tom acinzentado/azulado dessas duas fontes frias, mesmo com o material sendo branco puro. Esse comportamento já tinha sido identificado e aceito de propósito numa decisão anterior (comentário no código, linhas ~163-179: "só some de vez se a luz virar neutra/branca também, mudança bem maior") — só que o próprio Product Owner, revendo o resultado agora, prefere branco liso ao efeito de profundidade.
+
+**1ª tentativa (revertida):** trocar a face sem acabamento pra `THREE.MeshBasicMaterial` (ignora completamente a luz da cena, mostra sempre a cor exata configurada). Resolveu o tom errado, mas trocou por outro problema: sem nenhuma luz incidindo, TODAS as faces ficam exatamente na mesma cor plana, sem nenhuma sombra entre a face mais e a menos exposta ao sol — Product Owner: "ficou muito forte, parece até que emite luz".
+
+**Correção final:** volta pra `THREE.MeshStandardMaterial` (mantém a resposta à luz e a variação de sombra entre as faces — a profundidade que o usuário não reclamou de perder) e soma, só na face sem acabamento (sem produto do Catálogo, sem face Steel Frame configurada, sem seleção, fora do modo debug), um branco EMISSIVO leve (`emissive: 0xFFFFFF, emissiveIntensity: 0.15`) — um valor somado por cima do resultado já iluminado, igual em toda a face, que clareia e dessatura o tom acinzentado/azulado sem apagar de vez a diferença entre a face mais e a menos iluminada. Acabamentos reais (cerâmica, textura PBR, Steel Frame) e a seleção não recebem esse reforço, continuam exatamente como antes.
+
+**Verificado (propriedades do material extraídas sem WebGL, não o pixel final renderizado):** reconstruindo a cena com `Scene3DRenderer.rebuild`, toda face de parede sem acabamento aparece como `MeshStandardMaterial` com `emissive: #ffffff` e `emissiveIntensity: 0.15`. O valor `0.15` é uma estimativa de engenharia (não dá pra calcular o pixel final exato sem GPU de verdade nesta reprodução) — pode precisar de ajuste fino depois do Product Owner conferir ao vivo no site.
+
+**Testado:** suíte completa (675 testes) + `tests/wall-transparency.test.mjs` revertido pra checar de volta um único bloco `MeshStandardMaterial`.
+
+---
+
+# DEC-204 — Cumeeira central de um quatro-águas quebrava na metade ao encostar num hip QUADRADO vizinho
+
+**Data:** 02/09/2026
+**Status:** Implementado e verificado (reconstrução real da cena, sem WebGL, com os números exatos do projeto do Product Owner).
+
+**Contexto:** Product Owner mandou print com a cumeeira central de um telhado quatro-águas circulada, relatando: "essa parte que um telhado avança sobre o outro a cumeeira se quebra na metade". Dados reais extraídos do console (`Store.currentRoofs()`/`Store.currentWalls()`): `roof_14` (x1:-35,y1:-30,x2:95,y2:30, quatroAguas, ridgeAxis:'x') avançando deliberadamente além da própria parede (que só vai até x=35) pra se encaixar em `roof_15` (x1:35,y1:-50,x2:115,y2:30, quatroAguas, ridgeAxis:'x') — `roof_15` tem base QUADRADA (4×4m), ou seja, é um hip puro sem cumeeira própria, só um pico único.
+
+**Causa:** `ridgeCapPartialOverlapFootprints` (`Scene3DRenderer.ts`) — mecanismo que apara a malha da cumeeira central quando uma ponta cai dentro da pegada de um telhado vizinho claramente mais alto (DEC-165/167) — decidia "vizinho mais alto" comparando contra o PICO ÚNICO do vizinho (`otherRoofPeakY`, um valor escalar). Isso é uma aproximação válida só quando a altura do vizinho é razoavelmente uniforme ao longo de toda a sobreposição (ex.: outro telhado comprido) — mas um hip QUADRADO só alcança o próprio pico bem no meio dele; perto da própria borda a altura real é bem menor. Resultado: `roof_15` (pico 1,276m) comparava mais alto que a cumeeira de `roof_14` (1,010m) e a correção cortava a malha inteira a partir da borda da pegada de `roof_15` (x=1,35m) — bem mais cedo que o fim natural da cumeeira (x=3,25m) — mesmo a altura REAL de `roof_15` sendo menor que a cumeeira de `roof_14` em quase todo esse trecho (o sombreamento por pixel já existente, que usa a fórmula certa do hip — `isHip`/`applyRoomBoxClipping` — nunca esconderia essa parte).
+
+**Correção:** nova função `otherRoofHeightAtPoint(r, pt)` — mesma fórmula hip/cumeeira já usada no shader (`min(distX, distZ) * tanPitch` pra hip, ou a fórmula de cumeeira reta caso contrário) — usada no lugar do pico único, avaliada exatamente no ponto onde a cumeeira ENTRA na pegada do vizinho (a ponta que caiu dentro), não em toda a pegada. `ridgeCapPartialOverlapFootprints` só corta a malha quando essa altura LOCAL do vizinho supera a própria cumeeira ali — deixando o sombreamento por pixel (já correto) decidir o resto, igual o espírito original da DEC-167.
+
+**Verificado ao vivo (reconstrução real da cena, sem WebGL, com os números exatos do print):** antes da correção, a malha da cumeeira central de `roof_14` media `x: [-0,25, 1,35]` (cortada); depois, `x: [-0,25, 3,25]` — o comprimento natural completo. Confirmado também por cálculo direto dos uniforms do shader que o sombreamento por pixel NUNCA esconderia essa cumeeira em nenhum ponto do trecho (a altura do vizinho só alcança a da cumeeira exatamente na borda, x=3,25m, nunca antes).
+
+**Testado:** suíte completa (724 testes) + novo teste em `tests/wall-geometry.test.mjs` com os números reais do projeto do Product Owner, incluindo o cálculo que prova que a comparação antiga (pico único) cortaria errado enquanto a nova (altura no ponto de entrada) não corta.
