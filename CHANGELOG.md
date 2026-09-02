@@ -13,6 +13,9 @@
 - Corrigido: arrastar uma face/aresta/canto do Cubo mágico (principalmente com acabamento de textura real aplicado, ex. ACM Bold) podia travar o app depois de alguns segundos — o preview do arraste vazava texturas e geometrias na GPU a cada movimento do mouse, sem nunca liberar a memória. Ver DEC-185.
 - Corrigido: um letreiro de fachada já criado deixava QUALQUER ação no app mais lenta (não só editar o próprio letreiro) — a textura do texto era redesenhada do zero a cada atualização da cena. Agora só é redesenhada quando o texto/cor/iluminação do letreiro realmente muda. Ver DEC-186 (que também documenta a causa maior e ainda não totalmente resolvida da lentidão em projetos com muitas paredes).
 - Melhorada a performance ao criar/mover parede ou cômodo em projetos com bastante parede: o cálculo de altura de canto (usado pra fechar direito o encontro entre paredes de alturas diferentes) ficou ~2,5-3× mais rápido, testado com 40 paredes. Ainda não resolve o travamento por completo — a causa maior segue documentada na DEC-186/187 pra uma próxima rodada. Ver DEC-187.
+- Corrigido: segurar Shift pra mover o Cubo mágico na vertical não funcionava — um atalho de teclado sem relação nenhuma (Shift pra forçar início de parede em cima de outra) estava sequestrando qualquer clique com Shift antes de chegar no cubo. Corrigido.
+- Cubo mágico "Metalão": os perfis horizontais agora também se repetem a cada 1200mm quando o bloco é esticado na altura (antes só os verticais repetiam na largura), formando uma grade completa.
+- Cubo mágico "Metalão": as faces agora ficam invisíveis até você pintar uma com um acabamento do catálogo (ex. ACM) — antes pintar uma face do metalão não tinha efeito visual nenhum. Dá pra montar a estrutura em grade e ir preenchendo painel por painel. Ver DEC-188.
 
 ## Alterado — 28/08/2026
 

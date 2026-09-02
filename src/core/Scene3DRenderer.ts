@@ -3648,6 +3648,16 @@ export function hashColorHex(key: string): number {
   function buildVolumeBoxMaterial(box: any, faceIndex: number) {
     var productId = volumeBoxFaceProductId(box, faceIndex);
     var product = productId ? Catalog.getProduct(productId) : null;
+    // Metalão (DEC-181/187): a malha de faces é só o "vidro" onde um
+    // acabamento (ex. chapa ACM) é encaixado na estrutura — Product
+    // Owner: "a face dele deve ser invisível porém deve ser clicável
+    // quando for adicionar a textura" (a estrutura em si não tem
+    // parede/vedação própria, só os perfis). Face sem produto próprio
+    // fica com opacity 0 (não aparece, mas o raycast do hitMesh
+    // continua enxergando o mesmo grupo de geometria pra pintar).
+    if (box.structuralMaterial === 'metalao' && !product) {
+      return new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
+    }
     var hasRealTexture = !!(product && product.category === 'floor_tile' && product.assets.textures);
     var isCeramic = !!(product && product.category === 'floor_tile' && !hasRealTexture);
     var ceramicMap = isCeramic ? buildCeramicTexture(product!.assets.colorHex, 1, 0) : null;
@@ -3730,19 +3740,19 @@ export function hashColorHex(key: string): number {
   // reais viram perfis tubulares (BoxGeometry fino orientado por
   // quaternion, mesma técnica que a antiga alça-cilindro de aresta
   // usava pra apontar de um canto a outro), material metálico de
-  // verdade (metalness alto). Não aplica finishProductId/colorHex
-  // nesta primeira versão — sempre a mesma cor de perfil metálico,
-  // igual qualquer outro material estrutural só muda a cor sólida.
+  // verdade (metalness alto). O acabamento por face (ACM etc.) não é
+  // aplicado NOS PERFIS — vai na malha de faces invisível-até-pintar
+  // que buildVolumeBoxMesh soma por cima (ver comentário lá).
   //
-  // Montantes intermediários: quando o cubo é esticado na largura
-  // (alça de face esquerda/direita, cornerOffsets em X), os 2 perfis
-  // verticais dos cantos ficam longe demais um do outro pra sustentar
-  // uma fachada de verdade — Product Owner pediu perfil vertical
-  // repetindo a cada 1200mm. Subdivide o vão real entre os cantos
-  // (corners[1].x - corners[0].x, já em metros e já deformado por
+  // Montantes/travessas intermediários: quando o cubo é esticado na
+  // largura OU na altura (alças de face, cornerOffsets), os 2 perfis
+  // de canto ficam longe demais um do outro pra sustentar uma fachada
+  // de verdade — Product Owner pediu que os perfis (verticais E
+  // horizontais) repitam a cada 1200mm quando extrudado. Subdivide o
+  // vão real entre os cantos (já em metros e já deformado por
   // cornerOffsets) em partes iguais de no máximo
-  // VOLUME_BOX_METALAO_STUD_SPACING_M, um perfil na frente (Z=-hd) e
-  // outro no fundo (Z=+hd) por divisão — mesmo par que os cantos já
+  // VOLUME_BOX_METALAO_STUD_SPACING_M — um perfil na frente (Z=-hd) e
+  // outro no fundo (Z=+hd) por divisão, mesmo par que os cantos já
   // têm.
   function buildVolumeBoxMetalaoFrame(box: any) {
     var corners = Core.volumeBoxCornerLocalPositions(box);
@@ -3761,11 +3771,26 @@ export function hashColorHex(key: string): number {
     }
     VOLUME_BOX_METALAO_EDGES.forEach(function (edge) { addProfile(corners[edge[0]]!, corners[edge[1]]!); });
     var localWidthM = Math.abs(corners[1]!.x - corners[0]!.x);
-    var divisions = Math.max(1, Math.ceil(localWidthM / VOLUME_BOX_METALAO_STUD_SPACING_M));
-    for (var i = 1; i < divisions; i++) {
-      var t = i / divisions;
+    var widthDivisions = Math.max(1, Math.ceil(localWidthM / VOLUME_BOX_METALAO_STUD_SPACING_M));
+    for (var i = 1; i < widthDivisions; i++) {
+      var t = i / widthDivisions;
       addProfile(lerpVec3(corners[0]!, corners[1]!, t), lerpVec3(corners[2]!, corners[3]!, t));
       addProfile(lerpVec3(corners[4]!, corners[5]!, t), lerpVec3(corners[6]!, corners[7]!, t));
+    }
+    // Travessas horizontais intermediárias: mesma lógica dos montantes
+    // verticais acima, mas subdividindo a ALTURA (Product Owner: "os
+    // perfís horisontais também devem se repetir quando extruda") — sem
+    // isso, um bloco esticado na altura (ex. fachada de pé-direito
+    // duplo) ficava só com a travessa de baixo e a de cima, longe
+    // demais uma da outra. corners[2].y - corners[0].y é o vão real
+    // entre baixo e cima no canto frente-esquerda (já deformado por
+    // cornerOffsets), mesmo raciocínio de localWidthM acima.
+    var localHeightM = Math.abs(corners[2]!.y - corners[0]!.y);
+    var heightDivisions = Math.max(1, Math.ceil(localHeightM / VOLUME_BOX_METALAO_STUD_SPACING_M));
+    for (var j = 1; j < heightDivisions; j++) {
+      var tj = j / heightDivisions;
+      addProfile(lerpVec3(corners[0]!, corners[2]!, tj), lerpVec3(corners[1]!, corners[3]!, tj));
+      addProfile(lerpVec3(corners[4]!, corners[6]!, tj), lerpVec3(corners[5]!, corners[7]!, tj));
     }
     return group;
   }
@@ -3776,17 +3801,28 @@ export function hashColorHex(key: string): number {
   // createRoofResizePreviewMeshes acima, sem precisar de um builder de
   // prévia paralelo.
   export function buildVolumeBoxMesh(box: any) {
-    if (box.structuralMaterial === 'metalao') return buildVolumeBoxMetalaoFrame(box);
     var geo = buildVolumeBoxGeometry(box);
     // Um material por face (grupos 0-5 já vêm de buildVolumeBoxGeometry)
     // — cada face resolve seu próprio produto via volumeBoxFaceProductId
     // (faceFinishProductId próprio ou o finishProductId geral do bloco).
+    // No metalão, buildVolumeBoxMaterial já devolve invisível pra face
+    // sem produto — a malha entra igual pro bloco sólido, só que quase
+    // sempre transparente, servindo de "vidro" pro raycast de clique
+    // continuar achando a face certa mesmo sem nada pintado ainda.
     var materials = [0, 1, 2, 3, 4, 5].map(function (faceIdx) { return buildVolumeBoxMaterial(box, faceIdx); });
     var mesh = new THREE.Mesh(geo, materials);
-    var edges = new THREE.EdgesGeometry(geo);
-    var edgeLines = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x1B1C1E }));
     var group = new THREE.Group();
-    group.add(mesh); group.add(edgeLines);
+    group.add(mesh);
+    if (box.structuralMaterial === 'metalao') {
+      // Esqueleto de perfis por cima da malha de faces (quase sempre
+      // invisível) — Product Owner: "vou criar uma estrutura tipo uma
+      // grade e depois vou adicionando o ACM por face dessa estrutura".
+      group.add(buildVolumeBoxMetalaoFrame(box));
+    } else {
+      var edges = new THREE.EdgesGeometry(geo);
+      var edgeLines = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x1B1C1E }));
+      group.add(edgeLines);
+    }
     return group;
   }
 

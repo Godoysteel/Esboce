@@ -283,34 +283,63 @@ test('colapsar uma ARESTA inteira (2 cantos) contra a aresta oposta vira uma cun
 // é só o esqueleto genérico; reforço específico por elementType (ex.:
 // escora de marquise em balanço) fica pra uma rodada futura, depois de
 // mapear mais casos reais (decisão explícita do Product Owner).
-test('buildVolumeBoxMesh: bloco com structuralMaterial "metalao" vira esqueleto de 12 perfis metálicos, não o bloco sólido de sempre', () => {
+test('buildVolumeBoxMesh: bloco com structuralMaterial "metalao" soma o esqueleto de perfis metálicos POR CIMA da malha de faces (não substitui mais)', () => {
   assert.match(rendererSource, /function buildVolumeBoxMetalaoFrame\(box: any\)/);
-  assert.match(rendererSource, /if \(box\.structuralMaterial === 'metalao'\) return buildVolumeBoxMetalaoFrame\(box\);/);
-  const start = rendererSource.indexOf('function buildVolumeBoxMetalaoFrame(box: any) {');
+  const start = rendererSource.indexOf('export function buildVolumeBoxMesh(box: any) {');
   const end = rendererSource.indexOf('\n  }', start);
   const body = rendererSource.slice(start, end);
-  assert.match(body, /Core\.volumeBoxCornerLocalPositions\(box\)/);
-  assert.match(body, /metalness: 0\.85/, 'perfil precisa ler como metal de verdade, não a cor lisa genérica');
-  assert.match(body, /new THREE\.BoxGeometry\(VOLUME_BOX_METALAO_PROFILE_M, len, VOLUME_BOX_METALAO_PROFILE_M\)/);
-  assert.match(body, /profileMesh\.quaternion\.setFromUnitVectors/);
+  assert.match(body, /if \(box\.structuralMaterial === 'metalao'\) \{/);
+  assert.match(body, /group\.add\(buildVolumeBoxMetalaoFrame\(box\)\);/);
+  // a malha de faces (mesh, com materials por face) entra pros dois
+  // casos, ANTES do if — no metalão ela vira o "vidro" invisível-até-
+  // pintar, não é mais pulada.
+  assert.match(body, /group\.add\(mesh\);\s*\n\s*if \(box\.structuralMaterial === 'metalao'\)/);
+
+  const frameStart = rendererSource.indexOf('function buildVolumeBoxMetalaoFrame(box: any) {');
+  const frameEnd = rendererSource.indexOf('\n  }', frameStart);
+  const frameBody = rendererSource.slice(frameStart, frameEnd);
+  assert.match(frameBody, /Core\.volumeBoxCornerLocalPositions\(box\)/);
+  assert.match(frameBody, /metalness: 0\.85/, 'perfil precisa ler como metal de verdade, não a cor lisa genérica');
+  assert.match(frameBody, /new THREE\.BoxGeometry\(VOLUME_BOX_METALAO_PROFILE_M, len, VOLUME_BOX_METALAO_PROFILE_M\)/);
+  assert.match(frameBody, /profileMesh\.quaternion\.setFromUnitVectors/);
+});
+
+// Product Owner: "a face dele deve ser invisível porém deve ser
+// clicável quando for adicionar a textura" — a malha de faces do
+// metalão (mesma buildVolumeBoxGeometry/materials por face de sempre)
+// continua existindo pro raycast de clique achar a face certa, mas
+// buildVolumeBoxMaterial devolve um material 100% transparente quando
+// aquela face não tem produto aplicado — só fica visível quando o
+// usuário pinta a face com um acabamento real (ex. ACM).
+test('buildVolumeBoxMaterial: face do metalão sem produto fica 100% invisível (transparent+opacity 0), mas com produto renderiza normal', () => {
+  const start = rendererSource.indexOf('function buildVolumeBoxMaterial(box: any, faceIndex: number) {');
+  const end = rendererSource.indexOf('\n  }', start);
+  const body = rendererSource.slice(start, end);
+  assert.match(body, /if \(box\.structuralMaterial === 'metalao' && !product\) \{/);
+  assert.match(body, /return new THREE\.MeshBasicMaterial\(\{ transparent: true, opacity: 0, depthWrite: false, side: THREE\.DoubleSide \}\);/);
 });
 
 // Product Owner: "a estrutura do metalão deve ir se repetindo os
-// perfís verticais a cada 1200 mm quando extrudado" — sem isso, um
-// bloco largo (parede/marquise esticada) ficava só com os 2 perfis de
-// canto, longe demais um do outro pra sustentar fachada de verdade.
-test('buildVolumeBoxMetalaoFrame: perfil vertical intermediário se repete a cada 1200mm (no máximo) quando o bloco é esticado na largura', () => {
+// perfís verticais a cada 1200 mm quando extrudado" + "os perfís
+// horisontais também devem se repetir quando extruda" — sem isso, um
+// bloco largo/alto (parede/marquise esticada) ficava só com os 2
+// perfis de canto por direção, longe demais um do outro pra sustentar
+// fachada de verdade.
+test('buildVolumeBoxMetalaoFrame: perfil vertical (largura) E horizontal (altura) se repetem a cada 1200mm (no máximo) quando o bloco é esticado', () => {
   const start = rendererSource.indexOf('function buildVolumeBoxMetalaoFrame(box: any) {');
   const end = rendererSource.indexOf('\n  }', start);
   const body = rendererSource.slice(start, end);
   assert.match(rendererSource, /var VOLUME_BOX_METALAO_STUD_SPACING_M = 1\.2;/);
+  // largura (montantes verticais)
   assert.match(body, /var localWidthM = Math\.abs\(corners\[1\]!\.x - corners\[0\]!\.x\);/);
-  assert.match(body, /var divisions = Math\.max\(1, Math\.ceil\(localWidthM \/ VOLUME_BOX_METALAO_STUD_SPACING_M\)\);/);
-  // Cada divisão intermediária adiciona um perfil na frente E outro no
-  // fundo (mesmo par que os cantos já têm), interpolando entre os
-  // cantos reais (respeita cornerOffsets de um bloco já moldado).
+  assert.match(body, /var widthDivisions = Math\.max\(1, Math\.ceil\(localWidthM \/ VOLUME_BOX_METALAO_STUD_SPACING_M\)\);/);
   assert.match(body, /addProfile\(lerpVec3\(corners\[0\]!, corners\[1\]!, t\), lerpVec3\(corners\[2\]!, corners\[3\]!, t\)\);/);
   assert.match(body, /addProfile\(lerpVec3\(corners\[4\]!, corners\[5\]!, t\), lerpVec3\(corners\[6\]!, corners\[7\]!, t\)\);/);
+  // altura (travessas horizontais)
+  assert.match(body, /var localHeightM = Math\.abs\(corners\[2\]!\.y - corners\[0\]!\.y\);/);
+  assert.match(body, /var heightDivisions = Math\.max\(1, Math\.ceil\(localHeightM \/ VOLUME_BOX_METALAO_STUD_SPACING_M\)\);/);
+  assert.match(body, /addProfile\(lerpVec3\(corners\[0\]!, corners\[2\]!, tj\), lerpVec3\(corners\[1\]!, corners\[3\]!, tj\)\);/);
+  assert.match(body, /addProfile\(lerpVec3\(corners\[4\]!, corners\[6\]!, tj\), lerpVec3\(corners\[5\]!, corners\[7\]!, tj\)\);/);
 });
 
 // Movimento livre do Cubo mágico (Product Owner: "deve ser possível
@@ -415,4 +444,19 @@ test('disposeObject3D e disposeObject3DTree descartam normalMap/roughnessMap/aoM
     assert.match(body, /mat\.aoMap\.dispose\(\)/, sig);
     assert.match(body, /mat\.metalnessMap\.dispose\(\)/, sig);
   });
+});
+
+// Bug real reportado (Product Owner: "não está funcionando com shift")
+// — o Shift+arraste vertical do Cubo mágico (DEC-184) nunca chegava a
+// rodar porque onPointerDown tinha um atalho de Shift GLOBAL (força
+// iniciar o desenho de parede/cômodo em cima de algo existente, pra
+// criar uma junção em T) que capturava QUALQUER clique com Shift
+// segurado, mesmo sem nenhuma ferramenta de desenho ativa, e retornava
+// antes do clique chegar no branch que inicia o arraste do volume.
+// Corrigido gateando esse atalho às duas únicas ferramentas que
+// finalizeDraw sabe confirmar.
+test('ViewportController: atalho de Shift pra forçar início de desenho só dispara com a ferramenta Parede/Cômodo ativa — não sequestra mais Shift+clique em outros contextos (ex. Shift+arraste do Cubo mágico)', () => {
+  const start = viewportSource.indexOf("if (e.shiftKey && (currentTool === 'wall' || currentTool === 'room')) {");
+  assert.ok(start !== -1);
+  assert.doesNotMatch(viewportSource, /if \(e\.shiftKey\) \{\s*\n\s*if \(currentTool === 'columnQuadrada'/);
 });

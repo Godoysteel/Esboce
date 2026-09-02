@@ -2680,9 +2680,15 @@ import {
 
     // Segure Shift pra forçar o início do desenho mesmo em cima de uma
     // parede/coluna existente — é assim que se cria uma junção em T
-    // (uma parede nova nascendo no meio de outra).
-    if (e.shiftKey) {
-      if (currentTool === 'columnQuadrada' || currentTool === 'columnRedonda') return;
+    // (uma parede nova nascendo no meio de outra). Só faz sentido com
+    // uma ferramenta de desenho ativa (Parede/Cômodo — as duas únicas
+    // que finalizeDraw sabe confirmar); GATED a isso porque, sem essa
+    // checagem, Shift sequestrava QUALQUER clique (inclusive fora de
+    // uma ferramenta de desenho), impedindo outros gestos de Shift+
+    // arraste — achado real: Shift+arraste vertical do Cubo mágico
+    // (DEC-184) nunca chegava a rodar, esse bloco sempre capturava o
+    // pointerdown primeiro e retornava antes.
+    if (e.shiftKey && (currentTool === 'wall' || currentTool === 'room')) {
       var gpShift = getGroundModelPoint(e.clientX, e.clientY);
       if (!gpShift) return;
       deselect();
