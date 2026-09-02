@@ -91,6 +91,13 @@ function handleVolumeBoxAction(volumeBoxId: string, action: string): void {
     Store.commands.rotateVolumeBox(volumeBoxId, action === 'rotateCw' ? 90 : -90);
     return;
   }
+  // Modo Edição (Product Owner: "acho que tem que haver um modo edição
+  // desse cubo, como do blender, de forma que as deformações são
+  // feitas somente no modo edição") — fora dele, as alças de puxar
+  // face nem entram na cena (Scene3DRenderer só as constrói quando
+  // viewState.volumeBoxEditMode está ligado), então arrastar o corpo
+  // nunca mais confunde com deformar uma face sem querer.
+  if (action === 'toggleEdit') { ViewportController.toggleVolumeBoxEditMode(volumeBoxId); return; }
 }
 
 // Escada: mesmo padrão do Bloco de Volumetria acima — girar (90° por

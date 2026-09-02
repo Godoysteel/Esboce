@@ -5325,7 +5325,7 @@ export function hashColorHex(key: string): number {
       scene.add(bottomHandle); registry.handleMeshes.push(bottomHandle);
     }
 
-    if (viewState.selectedVolumeBox) {
+    if (viewState.selectedVolumeBox && viewState.volumeBoxEditMode) {
       // Bloco de Volumetria — moldável só por push-pull de face (6
       // alças). As tentativas com alças de canto/aresta também
       // clicáveis (DEC-163/DEC-164) ficaram confusas nos testes do
@@ -5336,6 +5336,14 @@ export function hashColorHex(key: string): number {
       // Core.volumeBoxCornerLocalPositions ainda definem a topologia
       // fixa 8-12-6 (cornerOffsets continua sendo o dado bruto), só a
       // UI de canto/aresta que saiu.
+      //
+      // Modo Edição (Product Owner: "tem que haver um modo edição
+      // desse cubo, como do blender, de forma que as deformações são
+      // feitas somente no modo edição") — as alças só entram na cena
+      // quando viewState.volumeBoxEditMode está ligado (botão ✏️ no
+      // gizmo, ver ViewportController.toggleVolumeBoxEditMode); fora
+      // do modo edição não existe NADA aqui pra clicar sem querer, o
+      // arraste do corpo (dragMode 'volumeBoxBody') sempre move.
       var vbSel = viewState.selectedVolumeBox;
       var vbYOffset = viewState.editingYOffset;
       var vbSill = vbSel.sillHeightM || 0;

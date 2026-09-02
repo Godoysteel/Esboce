@@ -315,6 +315,7 @@
   .gizmo.visible { display: grid; grid-template-columns: repeat(3, 28px); grid-template-rows: repeat(3, 28px); }
   .gizmo button.gz { margin: 0; padding: 0; width: 28px; height: 28px; font-size: 13px; border-radius: 6px; line-height: 1; }
   .gizmo button.gz.danger:hover { background: #F6D9D6; border-color: #D98C86; }
+  .gizmo button.gz.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
   /* Gizmo de esquadria (porta/janela): só desliza ao longo da parede —
      não precisa da grade 3x3 cheia usada por parede/coluna/telhado. */
   .gizmo.opening-gizmo.visible { display: flex; gap: 4px; grid-template-columns: none; grid-template-rows: none; }
@@ -2258,6 +2259,7 @@
     <button class="gz" data-action="close" title="Fechar">✕</button>
   </div>
   <div id="volumeBoxGizmo" class="gizmo">
+    <button class="gz" data-action="toggleEdit" title="Editar forma — mostra as alças de puxar face. Sem isso ativo, arrastar o corpo só move o bloco.">✏️</button>
     <button class="gz" data-action="rotateCcw" title="Girar anti-horário">↺</button>
     <button class="gz" data-action="rotateCw" title="Girar horário">↻</button>
     <button class="gz danger" data-action="delete" title="Excluir">🗑</button>

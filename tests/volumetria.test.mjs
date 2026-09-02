@@ -109,7 +109,7 @@ test('Scene3DRenderer: só a alça de face existe (plano cobrindo a face real) �
   assert.doesNotMatch(rendererSource, /'volumeBoxWidthLeft'/);
   assert.doesNotMatch(rendererSource, /'volumeBoxDepthFront'/);
   assert.doesNotMatch(rendererSource, /'volumeBoxHeightTop'/);
-  const start = rendererSource.indexOf('if (viewState.selectedVolumeBox) {');
+  const start = rendererSource.indexOf('if (viewState.selectedVolumeBox && viewState.volumeBoxEditMode) {');
   assert.ok(start !== -1);
   const end = rendererSource.indexOf('\n    }', start);
   const body = rendererSource.slice(start, end);
@@ -489,4 +489,44 @@ test('buildVolumeBoxGeometry: malha de faces do metalão é deslocada pra fora a
   assert.match(body, /c\.x \+ face\.normal\.x \* faceOffsetM/);
   assert.match(body, /c\.y \+ face\.normal\.y \* faceOffsetM/);
   assert.match(body, /c\.z \+ face\.normal\.z \* faceOffsetM/);
+});
+
+// Modo Edição do Cubo mágico (Product Owner: "está confuso o sistema
+// de arraste está se confundindo com o sistema de movimentação... tem
+// que haver um modo edição desse cubo, como do blender, de forma que
+// as deformações são feitas somente no modo edição") — confirmado:
+// botão dedicado no painel do cubo, alças escondidas (não só
+// inativas) fora do modo edição.
+test('ViewportController: toggleVolumeBoxEditMode alterna volumeBoxEditModeId e está exportado', () => {
+  assert.match(viewportSource, /var volumeBoxEditModeId: any = null;/);
+  const start = viewportSource.indexOf('export function toggleVolumeBoxEditMode(volumeBoxId: any) {');
+  assert.ok(start !== -1);
+  const end = viewportSource.indexOf('\n  }', start) === -1 ? viewportSource.indexOf('\n', start) : start;
+  assert.match(viewportSource.slice(start, start + 200), /volumeBoxEditModeId = volumeBoxEditModeId === volumeBoxId \? null : volumeBoxId;/);
+  assert.match(viewportSource, /toggleVolumeBoxEditMode,/);
+});
+
+test('ViewportController: selecionar ou desmarcar um Cubo mágico sempre reseta o modo Edição pro modo Objeto (não é sticky entre seleções)', () => {
+  const selectStart = viewportSource.indexOf('function selectVolumeBox(volumeBoxId: any) {');
+  const selectEnd = viewportSource.indexOf('\n', selectStart);
+  assert.match(viewportSource.slice(selectStart, selectEnd), /volumeBoxEditModeId = null;/);
+
+  const deselectStart = viewportSource.indexOf('function deselect() {');
+  const deselectEnd = viewportSource.indexOf('\n  }', deselectStart);
+  assert.match(viewportSource.slice(deselectStart, deselectEnd), /volumeBoxEditModeId = null;/);
+});
+
+test('ViewportController: viewState.volumeBoxEditMode só é true quando o bloco em modo edição é EXATAMENTE o selecionado atual', () => {
+  assert.match(viewportSource, /volumeBoxEditMode: !!selectedVolumeBoxId && volumeBoxEditModeId === selectedVolumeBoxId,/);
+});
+
+test('index.html: gizmo do Cubo mágico tem o botão "Editar forma" (toggleEdit)', () => {
+  assert.match(html, /data-action="toggleEdit" title="Editar forma/);
+});
+
+test('GizmoController: action toggleEdit chama ViewportController.toggleVolumeBoxEditMode', () => {
+  const start = gizmoSource.indexOf('function handleVolumeBoxAction(');
+  const end = gizmoSource.indexOf('\n}', start);
+  const body = gizmoSource.slice(start, end);
+  assert.match(body, /if \(action === 'toggleEdit'\) \{ ViewportController\.toggleVolumeBoxEditMode\(volumeBoxId\); return; \}/);
 });

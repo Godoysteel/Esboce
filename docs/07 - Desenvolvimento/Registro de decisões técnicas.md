@@ -2362,3 +2362,26 @@ O core geométrico mais caro (`Core.detectRooms`/`Core.computeWallFootprints`, a
 **Limitação aceita (não corrigida):** como cada face desloca seus próprios 4 vértices ao longo da SUA PRÓPRIA normal, duas faces adjacentes (que compartilhavam a posição exata da aresta antes do deslocamento) deixam de coincidir exatamente na quina — um "furo" bem pequeno (da ordem do próprio deslocamento, ~2,7cm) pode aparecer no canto entre dois painéis vizinhos, mascarado na prática pelo perfil metálico que passa exatamente ali. Uma junção de canto "perfeita" entre dois painéis (chanfro/traspasse) fica pra uma rodada futura se incomodar visualmente.
 
 **Testado:** typecheck limpo + suíte completa (702 testes, 2 testes novos: Escape chamando `setTool(null)` guardado por `currentTool`, e o deslocamento de `buildVolumeBoxGeometry` por face/eixo). Verificação ao vivo: criei um Cubo mágico "Metalão" esticado, pintei a face de cima E a face da frente com ACM Bold — as duas renderizaram como painéis lisos e contínuos, sem nenhuma linha de perfil cortando por cima; testei Escape com a Lata de tinta armada (hint do rodapé mudou de "Face pintada..." pra vazio) e confirmei que o clique seguinte no bloco voltou a SELECIONAR em vez de pintar.
+
+---
+
+# DEC-190 — Cubo mágico ganha Modo Edição (Blender): alças de face só existem quando ativado
+
+**Data:** 01/09/2026
+**Status:** Implementado e verificado ao vivo.
+
+**Contexto:** Product Owner: "está confuso o sistema de arraste está se confundindo com o sistema de movimentação, as vezes eu quero movimentar o cubo e ele arrasta [a face], acho que tem que haver um modo edição desse cubo, como do blender, de forma que as deformações são feitas somente no modo edição". Antes desta DEC, as 6 alças de puxar face (DEC-176) ficavam sempre ativas junto com o corpo arrastável assim que o bloco era selecionado — um clique perto de uma borda/canto podia acertar a alça de face em vez do corpo, deformando o bloco sem querer em vez de só reposicioná-lo.
+
+**Decisão (confirmada com o Product Owner via pergunta direta):**
+- **Como entrar/sair:** botão dedicado (✏️) no painel de ações do bloco (mesmo painel de girar/excluir/fechar) — não teclado (Tab) nem duplo clique.
+- **Alças fora do modo Edição:** completamente ESCONDIDAS (nem entram na cena), não só desabilitadas — Product Owner escolheu essa opção "Recomendado" explicitamente.
+
+**Implementação:**
+- `ViewportController.ts`: novo estado `volumeBoxEditModeId` (guarda o id do bloco com as alças visíveis; não é um mapa por bloco — só um bloco pode estar em modo Edição por vez, o selecionado). `toggleVolumeBoxEditMode(volumeBoxId)` (exportada) alterna liga/desliga pro id passado. **Sempre reseta pro modo Objeto** ao (re)selecionar um bloco (`selectVolumeBox`) ou desmarcar a seleção (`deselect`) — não é "sticky" entre seleções, cada vez que você seleciona um Cubo mágico começa em modo Objeto. `render()` calcula `viewState.volumeBoxEditMode = volumeBoxEditModeId === selectedVolumeBoxId` (só true quando o bloco em modo Edição É EXATAMENTE o selecionado atual — troca de seleção invalida sozinho, sem precisar resetar em todo lugar que mexe em `selectedVolumeBoxId`).
+- `Scene3DRenderer.ts`: o bloco que constrói as 6 alças de face (`renderSelectionHandles`) passou de `if (viewState.selectedVolumeBox)` pra `if (viewState.selectedVolumeBox && viewState.volumeBoxEditMode)` — fora do modo Edição, literalmente NADA é adicionado à cena ali, então não existe nada pra um clique acertar sem querer.
+- `index.html`/`GizmoController.ts`: novo botão `data-action="toggleEdit"` (✏️) no `volumeBoxGizmo`, antes dos botões de girar — `handleVolumeBoxAction` chama `ViewportController.toggleVolumeBoxEditMode`. O botão ganha destaque visual (`.gz.active`, mesmo roxo `#534AB7` já usado em outros toggles do app) quando o modo Edição está ligado pro bloco selecionado, calculado em `positionGizmoAndShapePanel` junto da hora que o gizmo é posicionado.
+- Hint de criação do Cubo mágico atualizado pra explicar o novo fluxo: "arraste o corpo pra posicionar. Clique em ✏️ Editar forma pra puxar as faces e mudar o formato."
+
+**O que NÃO mudou:** arrastar o corpo (posição) continua disponível tanto dentro quanto fora do modo Edição — só as alças de face é que ficam condicionadas. Rotação (gizmo ↺/↻) e a Lata de tinta (pintura por face, DEC-182) também continuam funcionando nos dois modos, sem relação com este toggle.
+
+**Testado:** typecheck limpo + suíte completa (707 testes, 6 testes novos: `toggleVolumeBoxEditMode` exportada e alternando o id certo, reset em `selectVolumeBox`/`deselect`, cálculo de `viewState.volumeBoxEditMode`, botão no HTML, e o wiring em `GizmoController`). Verificação ao vivo passo a passo: criei um bloco, arrastei o corpo com sucesso (posição mudou, sem `cornerOffsets`); cliquei ✏️ (botão ficou roxo) e arrastei a MESMA região de tela onde antes ficava uma alça de face — dessa vez deformou de verdade (`cornerOffsets` populado, posição não mudou); cliquei ✏️ de novo pra sair e repeti o arraste na mesma região — voltou a só mover o corpo (posição mudou, `cornerOffsets` permaneceu EXATAMENTE igual ao valor anterior, confirmando que não há mais nada clicável ali fora do modo Edição).

@@ -65,6 +65,15 @@ import {
   var floorFinishScale = 1;
   var floorFinishRotation = 0;
   var selectedWallId: any = null, selectedColumnId: any = null, selectedRoofId: any = null, selectedOpeningId: any = null, selectedVarandaId: any = null, selectedLajeId: any = null, selectedFurnitureId: any = null, selectedGlazingPanelId: any = null, selectedBalconyRailingId: any = null, selectedVolumeBoxId: any = null, selectedStairId: any = null, selectedForroRoomKey: any = null, selectedHydraulicNodeId: any = null;
+  // Modo Edição do Cubo mágico (Product Owner: "tem que haver um modo
+  // edição desse cubo, como do blender, de forma que as deformações
+  // são feitas somente no modo edição") — guarda o id do bloco cujas
+  // alças de puxar face estão visíveis; fora do modo edição, arrastar
+  // o corpo só move o bloco (sem risco de confundir com deformar uma
+  // face sem querer, já que as alças nem entram na cena). Sempre
+  // recomeça em modo Objeto ao (re)selecionar (ver selectVolumeBox/
+  // deselect) — não é sticky entre seleções.
+  var volumeBoxEditModeId: any = null;
   var steelFrameSurfaceSelectionHandler: ((target: { kind: 'wall-face' | 'gable-face' | 'stepped-wall-face' | 'roof'; entityId: string; side?: 'a' | 'b' }) => boolean) | null = null;
   var facadeWallSelectionHandler: ((wallId: string) => void) | null = null;
   var facadeActiveWallHandler: ((wallId: string) => void) | null = null;
@@ -1001,7 +1010,8 @@ import {
   // Sacada de vidro: mesmo padrão do móvel — reaproveita o gizmo
   // genérico (girar/excluir), sem painel de material próprio nesta v1.
   function selectBalconyRailing(balconyRailingId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedBalconyRailingId = balconyRailingId; gizmoMenuOpen = false; render(); }
-  function selectVolumeBox(volumeBoxId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedVolumeBoxId = volumeBoxId; gizmoMenuOpen = false; render(); }
+  function selectVolumeBox(volumeBoxId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedVolumeBoxId = volumeBoxId; volumeBoxEditModeId = null; gizmoMenuOpen = false; render(); }
+  export function toggleVolumeBoxEditMode(volumeBoxId: any) { volumeBoxEditModeId = volumeBoxEditModeId === volumeBoxId ? null : volumeBoxId; render(); }
   function selectStair(stairId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedStairId = stairId; gizmoMenuOpen = false; render(); }
   // Forro de drywall: sem entidade/id próprio (derivado do cômodo pelo
   // botão "Gerar Forro", ver Scene3DRenderer) — a chave é o roomKey
@@ -1021,6 +1031,7 @@ import {
     var leavingRoof = selectedRoofId ? Store.findRoof(selectedRoofId) : null;
     if (leavingRoof && leavingRoof.atticMode === 'preview') pendingGenerateRoofId = leavingRoof.id;
     selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedHydraulicNodeId = null;
+    volumeBoxEditModeId = null;
     heightAdjustArmedWallId = null;
     if (generateAtticBtnEl) generateAtticBtnEl.classList.toggle('visible', !!pendingGenerateRoofId);
     gizmoMenuOpen = false; closeObjectPanel(); render();
@@ -1350,6 +1361,8 @@ import {
         if (volumeBoxGizmoEl) {
           positionFloatingPanel(volumeBoxGizmoEl, wpVb.x, topYVb, wpVb.z, 0);
           volumeBoxGizmoEl.classList.add('visible');
+          var vbEditBtn = volumeBoxGizmoEl.querySelector('[data-action="toggleEdit"]');
+          if (vbEditBtn) vbEditBtn.classList.toggle('active', volumeBoxEditModeId === selectedVolumeBoxId);
         }
         // Painel de elemento/material (Fase B da DEC-163, ver DEC-175) —
         // mesmo padrão de stairTypePanelEl: empilhado à esquerda do
@@ -1720,6 +1733,7 @@ import {
       selectedGlazingPanel: selectedGlazingPanelId ? Store.findGlazingPanel(selectedGlazingPanelId) : null,
       selectedBalconyRailing: selectedBalconyRailingId ? Store.findBalconyRailing(selectedBalconyRailingId) : null,
       selectedVolumeBox: selectedVolumeBoxId ? Store.findVolumeBox(selectedVolumeBoxId) : null,
+      volumeBoxEditMode: !!selectedVolumeBoxId && volumeBoxEditModeId === selectedVolumeBoxId,
       selectedStair: selectedStairId ? Store.findStair(selectedStairId) : null,
       selectedHydraulicNode: selectedHydraulicNodeId ? Store.findHydraulicNode(selectedHydraulicNodeId) : null,
       roomGroupWallIds: selectedRoomWallIds,
@@ -5468,7 +5482,7 @@ import {
         selectVolumeBox(newBox.id);
       }
       hintEl.textContent = newBox
-        ? 'Cubo mágico criado — arraste o corpo pra posicionar e puxe qualquer face pra esticar/encolher nessa direção. Pinte com a Lata de tinta, igual uma parede.'
+        ? 'Cubo mágico criado — arraste o corpo pra posicionar. Clique em ✏️ Editar forma pra puxar as faces e mudar o formato. Pinte com a Lata de tinta, igual uma parede.'
         : 'Não foi possível criar o cubo mágico.';
       return;
     }
@@ -5986,7 +6000,7 @@ import {
 // Scene3DRenderer.ts (chamadas ViewportController.xxx no código legado).
 export const ViewportController = {
   init, render, onModelChanged, deselect,
-  select, selectColumn, selectRoof, selectOpening, selectVaranda, selectFurniture, selectGlazingPanel, selectVolumeBox, selectStair, selectForro, selectPlanUnderlay, selectHydraulicNode, beginHydraulicRouteDraw,
+  select, selectColumn, selectRoof, selectOpening, selectVaranda, selectFurniture, selectGlazingPanel, selectVolumeBox, selectStair, selectForro, selectPlanUnderlay, selectHydraulicNode, beginHydraulicRouteDraw, toggleVolumeBoxEditMode,
   getSelectedWallId, getSelectedColumnId, getSelectedRoofId,
   getSelectedOpeningId, getSelectedVarandaId, getSelectedLajeId, getSelectedFurnitureId, getSelectedGlazingPanelId, getSelectedBalconyRailingId, getSelectedVolumeBoxId, getSelectedStairId, getSelectedForroRoomKey, getSelectedPlanUnderlay, getSelectedHydraulicNodeId, getSelectedRoomWallIds,
   setNextRoofAtticMode, setNextRoofType, activateRoofTool, cancelActiveTool, setSteelFrameSurfaceSelectionHandler, setSteelFrameRoofHidden, activateCatalogProduct, armHeightAdjust,

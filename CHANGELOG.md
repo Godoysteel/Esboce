@@ -18,6 +18,7 @@
 - Cubo mágico "Metalão": as faces agora ficam invisíveis até você pintar uma com um acabamento do catálogo (ex. ACM) — antes pintar uma face do metalão não tinha efeito visual nenhum. Dá pra montar a estrutura em grade e ir preenchendo painel por painel. Ver DEC-188.
 - Corrigido: apertar Escape agora cancela qualquer ferramenta armada (Lata de tinta, Porta, Janela, Telhado etc.) — antes só cancelava desenho de parede/cômodo em andamento.
 - Corrigido: o painel ACM aplicado numa face do Cubo mágico "Metalão" agora cobre totalmente a face, escondendo os perfis atrás dele — antes os montantes/travessas apareciam cortando por cima do painel. Ver DEC-189.
+- Cubo mágico ganhou um Modo Edição (botão ✏️ no painel do bloco, igual Blender): fora dele, arrastar o corpo só move o bloco — as alças de puxar face ficam completamente escondidas até você ativar o modo, então não dá mais pra deformar o bloco sem querer tentando só reposicioná-lo. Ver DEC-190.
 
 ## Alterado — 28/08/2026
 
