@@ -460,3 +460,33 @@ test('ViewportController: atalho de Shift pra forçar início de desenho só dis
   assert.ok(start !== -1);
   assert.doesNotMatch(viewportSource, /if \(e\.shiftKey\) \{\s*\n\s*if \(currentTool === 'columnQuadrada'/);
 });
+
+// Product Owner: "Quando apertar ESC qualquer ferramenta que esteja
+// selecionada deve sair da seleção" — antes, ESC só cancelava desenho
+// em andamento e percurso hidráulico; Lata de tinta/Porta/Janela/
+// Telhado etc. ficavam armados até o usuário clicar em outra coisa
+// (achado durante os próprios testes ao vivo desta sessão: Escape não
+// desarmava a Lata de tinta).
+test('ViewportController: Escape cancela qualquer ferramenta armada (setTool(null)), não só desenho/percurso hidráulico', () => {
+  const start = viewportSource.indexOf("window.addEventListener('keydown', function (e: any) {");
+  const end = viewportSource.indexOf('\n    });', start);
+  const body = viewportSource.slice(start, end);
+  assert.match(body, /if \(e\.key === 'Escape' && currentTool\) setTool\(null\);/);
+});
+
+// Product Owner: "o ACM é uma chapa de aluminio de 4mm que é
+// adicionada sobre a estrutura, ela deve cobrir totalmente a face que
+// foi aplicado" — os perfis do metalão são centrados no plano nominal
+// da face (metade da seção projeta pra fora), então a malha de faces
+// exatamente nesse plano ficava "atrás" da superfície externa dos
+// perfis, com os montantes/travessas parecendo furar o painel em vez
+// de ficar escondidos atrás dele.
+test('buildVolumeBoxGeometry: malha de faces do metalão é deslocada pra fora ao longo da normal de cada face, cobrindo a superfície externa dos perfis (bloco sólido continua sem deslocamento)', () => {
+  const start = rendererSource.indexOf('function buildVolumeBoxGeometry(box: any) {');
+  const end = rendererSource.indexOf('\n  }', start);
+  const body = rendererSource.slice(start, end);
+  assert.match(body, /var faceOffsetM = box\.structuralMaterial === 'metalao' \? VOLUME_BOX_METALAO_PROFILE_M \/ 2 \+ 0\.005 : 0;/);
+  assert.match(body, /c\.x \+ face\.normal\.x \* faceOffsetM/);
+  assert.match(body, /c\.y \+ face\.normal\.y \* faceOffsetM/);
+  assert.match(body, /c\.z \+ face\.normal\.z \* faceOffsetM/);
+});

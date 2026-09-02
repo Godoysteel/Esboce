@@ -5852,6 +5852,14 @@ import {
       if (e.key === 'Escape' && hydraulicRouteDrawState) cancelHydraulicRouteDraw();
       if (e.key === 'Enter' && hydraulicRouteDrawState) finishHydraulicRouteDraw();
       if (e.key === 'Escape') hideLayersMenu();
+      // Product Owner: "Quando apertar ESC qualquer ferramenta que
+      // esteja selecionada deve sair da seleção" — antes, ESC só
+      // cancelava os dois casos especiais acima (desenho em andamento,
+      // percurso hidráulico); uma ferramenta armada genérica (Lata de
+      // tinta, Porta, Janela, Telhado etc.) ficava presa até o usuário
+      // clicar em outra coisa. setTool(null) já cancela a ferramenta E
+      // desmarca a seleção atual (mesmo botão "x" do gizmo).
+      if (e.key === 'Escape' && currentTool) setTool(null);
     });
     container.addEventListener('pointerdown', onPointerDown);
     window.addEventListener('pointermove', onPointerMove);

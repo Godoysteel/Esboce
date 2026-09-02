@@ -16,6 +16,8 @@
 - Corrigido: segurar Shift pra mover o Cubo mágico na vertical não funcionava — um atalho de teclado sem relação nenhuma (Shift pra forçar início de parede em cima de outra) estava sequestrando qualquer clique com Shift antes de chegar no cubo. Corrigido.
 - Cubo mágico "Metalão": os perfis horizontais agora também se repetem a cada 1200mm quando o bloco é esticado na altura (antes só os verticais repetiam na largura), formando uma grade completa.
 - Cubo mágico "Metalão": as faces agora ficam invisíveis até você pintar uma com um acabamento do catálogo (ex. ACM) — antes pintar uma face do metalão não tinha efeito visual nenhum. Dá pra montar a estrutura em grade e ir preenchendo painel por painel. Ver DEC-188.
+- Corrigido: apertar Escape agora cancela qualquer ferramenta armada (Lata de tinta, Porta, Janela, Telhado etc.) — antes só cancelava desenho de parede/cômodo em andamento.
+- Corrigido: o painel ACM aplicado numa face do Cubo mágico "Metalão" agora cobre totalmente a face, escondendo os perfis atrás dele — antes os montantes/travessas apareciam cortando por cima do painel. Ver DEC-189.
 
 ## Alterado — 28/08/2026
 

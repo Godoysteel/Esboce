@@ -3703,11 +3703,27 @@ export function hashColorHex(key: string): number {
     var positions: number[] = [];
     var indices: number[] = [];
     var geo = new THREE.BufferGeometry();
+    // Metalão: os perfis (VOLUME_BOX_METALAO_PROFILE_M, ~5cm de seção)
+    // ficam CENTRADOS no plano nominal da face, então metade da seção
+    // (2,5cm) já se projeta pra fora desse plano — a malha de faces,
+    // se ficasse exatamente no plano nominal, renderizaria "atrás" da
+    // superfície externa dos perfis, deixando os montantes/travessas
+    // aparentemente "furando" o painel em vez de ficarem escondidos
+    // atrás dele. Product Owner: "o ACM é uma chapa de aluminio de 4mm
+    // que é adicionada sobre a estrutura, ela deve cobrir totalmente a
+    // face" — desloca a malha de faces pra fora (ao longo da normal de
+    // cada face) o suficiente pra cobrir a superfície externa do
+    // perfil, como uma chapa de verdade aparafusada por cima da grade.
+    var faceOffsetM = box.structuralMaterial === 'metalao' ? VOLUME_BOX_METALAO_PROFILE_M / 2 + 0.005 : 0;
     faces.forEach(function (face: any, faceIdx: number) {
       var base = positions.length / 3;
       face.cornerIndices.forEach(function (ci: number) {
         var c = corners[ci]!;
-        positions.push(c.x, c.y, c.z);
+        positions.push(
+          c.x + face.normal.x * faceOffsetM,
+          c.y + face.normal.y * faceOffsetM,
+          c.z + face.normal.z * faceOffsetM
+        );
       });
       var groupStart = indices.length;
       indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
