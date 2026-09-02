@@ -19,6 +19,7 @@
 - Corrigido: apertar Escape agora cancela qualquer ferramenta armada (Lata de tinta, Porta, Janela, Telhado etc.) — antes só cancelava desenho de parede/cômodo em andamento.
 - Corrigido: o painel ACM aplicado numa face do Cubo mágico "Metalão" agora cobre totalmente a face, escondendo os perfis atrás dele — antes os montantes/travessas apareciam cortando por cima do painel. Ver DEC-189.
 - Cubo mágico ganhou um Modo Edição (botão ✏️ no painel do bloco, igual Blender): fora dele, arrastar o corpo só move o bloco — as alças de puxar face ficam completamente escondidas até você ativar o modo, então não dá mais pra deformar o bloco sem querer tentando só reposicioná-lo. Ver DEC-190.
+- Corrigido (de novo): o painel ACM do Cubo mágico "Metalão" ainda deixava uma linha do perfil visível nas arestas compartilhadas entre duas faces pintadas — a primeira tentativa (DEC-189) deslocava cada face na própria direção, abrindo uma fresta bem fina exatamente na aresta. Agora o deslocamento é por CANTO (compartilhado pelas faces vizinhas), sem fresta. Ver DEC-191.
 
 ## Alterado — 28/08/2026
 

@@ -477,18 +477,28 @@ test('ViewportController: Escape cancela qualquer ferramenta armada (setTool(nul
 // Product Owner: "o ACM é uma chapa de aluminio de 4mm que é
 // adicionada sobre a estrutura, ela deve cobrir totalmente a face que
 // foi aplicado" — os perfis do metalão são centrados no plano nominal
-// da face (metade da seção projeta pra fora), então a malha de faces
-// exatamente nesse plano ficava "atrás" da superfície externa dos
-// perfis, com os montantes/travessas parecendo furar o painel em vez
-// de ficar escondidos atrás dele.
-test('buildVolumeBoxGeometry: malha de faces do metalão é deslocada pra fora ao longo da normal de cada face, cobrindo a superfície externa dos perfis (bloco sólido continua sem deslocamento)', () => {
+// da face, então a malha de faces exatamente nesse plano ficava
+// "atrás" da superfície externa dos perfis. Reportado de novo com
+// print depois de uma primeira tentativa (empurrar cada face na
+// própria normal): "ainda aparece uma parte do perfil" — a primeira
+// versão abria uma fresta fina em toda aresta compartilhada por duas
+// faces pintadas (cada painel empurrado numa direção diferente).
+// Corrigido empurrando cada CANTO (não cada vértice-por-face) uma vez
+// só, na diagonal a partir do centro — as faces que compartilham
+// aquele canto concordam na mesma posição final, sem fresta.
+test('buildVolumeBoxGeometry: metalão empurra cada CANTO (compartilhado pelas faces) na diagonal do centro, não cada face na própria normal — evita fresta na aresta entre duas faces pintadas', () => {
   const start = rendererSource.indexOf('function buildVolumeBoxGeometry(box: any) {');
   const end = rendererSource.indexOf('\n  }', start);
   const body = rendererSource.slice(start, end);
-  assert.match(body, /var faceOffsetM = box\.structuralMaterial === 'metalao' \? VOLUME_BOX_METALAO_PROFILE_M \/ 2 \+ 0\.005 : 0;/);
-  assert.match(body, /c\.x \+ face\.normal\.x \* faceOffsetM/);
-  assert.match(body, /c\.y \+ face\.normal\.y \* faceOffsetM/);
-  assert.match(body, /c\.z \+ face\.normal\.z \* faceOffsetM/);
+  assert.match(body, /var cornerPushM = \(VOLUME_BOX_METALAO_PROFILE_M \/ 2\) \* Math\.sqrt\(3\) \+ 0\.01;/);
+  assert.match(body, /pushedCorners = corners\.map\(function \(c: any\) \{/);
+  assert.match(body, /var len = Math\.hypot\(c\.x, c\.y, c\.z\) \|\| 1e-6;/);
+  assert.match(body, /return \{ x: c\.x \+ \(c\.x \/ len\) \* cornerPushM, y: c\.y \+ \(c\.y \/ len\) \* cornerPushM, z: c\.z \+ \(c\.z \/ len\) \* cornerPushM \};/);
+  // bloco sólido não é afetado — pushedCorners fica igual a corners (sem material metalão)
+  assert.match(body, /var pushedCorners = corners;/);
+  assert.match(body, /if \(box\.structuralMaterial === 'metalao'\) \{/);
+  // cada face usa pushedCorners, não mais corners direto nem face.normal
+  assert.match(body, /var c = pushedCorners\[ci\]!;/);
 });
 
 // Modo Edição do Cubo mágico (Product Owner: "está confuso o sistema

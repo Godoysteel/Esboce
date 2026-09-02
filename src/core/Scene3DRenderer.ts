@@ -3704,26 +3704,42 @@ export function hashColorHex(key: string): number {
     var indices: number[] = [];
     var geo = new THREE.BufferGeometry();
     // Metalão: os perfis (VOLUME_BOX_METALAO_PROFILE_M, ~5cm de seção)
-    // ficam CENTRADOS no plano nominal da face, então metade da seção
-    // (2,5cm) já se projeta pra fora desse plano — a malha de faces,
-    // se ficasse exatamente no plano nominal, renderizaria "atrás" da
-    // superfície externa dos perfis, deixando os montantes/travessas
-    // aparentemente "furando" o painel em vez de ficarem escondidos
-    // atrás dele. Product Owner: "o ACM é uma chapa de aluminio de 4mm
-    // que é adicionada sobre a estrutura, ela deve cobrir totalmente a
-    // face" — desloca a malha de faces pra fora (ao longo da normal de
-    // cada face) o suficiente pra cobrir a superfície externa do
-    // perfil, como uma chapa de verdade aparafusada por cima da grade.
-    var faceOffsetM = box.structuralMaterial === 'metalao' ? VOLUME_BOX_METALAO_PROFILE_M / 2 + 0.005 : 0;
+    // ficam CENTRADOS no plano nominal da face, então parte da seção já
+    // se projeta pra fora desse plano — a malha de faces, se ficasse
+    // exatamente no plano nominal, renderizaria "atrás" da superfície
+    // externa dos perfis. Product Owner: "o ACM é uma chapa de aluminio
+    // de 4mm que é adicionada sobre a estrutura, ela deve cobrir
+    // totalmente a face" — e, reportado depois com print: "ainda
+    // aparece uma parte do perfil" numa aresta compartilhada por duas
+    // faces PINTADAS.
+    //
+    // Achado real: a primeira versão empurrava cada VÉRTICE-POR-FACE na
+    // normal DAQUELA face — em toda aresta compartilhada por duas faces
+    // pintadas, os dois painéis (empurrados em direções diferentes,
+    // uma por normal) deixavam de se tocar ali, abrindo uma fresta fina
+    // ao longo da aresta inteira que expõe o perfil por trás. Corrigido
+    // empurrando cada CANTO (não cada vértice-por-face) uma vez só, na
+    // própria diagonal a partir do centro do bloco (Core.
+    // volumeBoxCornerLocalPositions já devolve posição local relativa
+    // ao centro, então o próprio vetor do canto já é essa diagonal) —
+    // as até 3 faces que compartilham aquele canto concordam na MESMA
+    // posição final, sem vão nenhum entre painéis vizinhos.
+    // cornerPushM cobre o pior caso (o próprio canto da seção quadrada
+    // do perfil, não só a face plana dela): meia-seção × √3 (canto de
+    // um cubinho de meia-seção) + folga.
+    var pushedCorners = corners;
+    if (box.structuralMaterial === 'metalao') {
+      var cornerPushM = (VOLUME_BOX_METALAO_PROFILE_M / 2) * Math.sqrt(3) + 0.01;
+      pushedCorners = corners.map(function (c: any) {
+        var len = Math.hypot(c.x, c.y, c.z) || 1e-6;
+        return { x: c.x + (c.x / len) * cornerPushM, y: c.y + (c.y / len) * cornerPushM, z: c.z + (c.z / len) * cornerPushM };
+      });
+    }
     faces.forEach(function (face: any, faceIdx: number) {
       var base = positions.length / 3;
       face.cornerIndices.forEach(function (ci: number) {
-        var c = corners[ci]!;
-        positions.push(
-          c.x + face.normal.x * faceOffsetM,
-          c.y + face.normal.y * faceOffsetM,
-          c.z + face.normal.z * faceOffsetM
-        );
+        var c = pushedCorners[ci]!;
+        positions.push(c.x, c.y, c.z);
       });
       var groupStart = indices.length;
       indices.push(base, base + 1, base + 2, base, base + 2, base + 3);

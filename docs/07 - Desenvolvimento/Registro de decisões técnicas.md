@@ -2385,3 +2385,18 @@ O core geométrico mais caro (`Core.detectRooms`/`Core.computeWallFootprints`, a
 **O que NÃO mudou:** arrastar o corpo (posição) continua disponível tanto dentro quanto fora do modo Edição — só as alças de face é que ficam condicionadas. Rotação (gizmo ↺/↻) e a Lata de tinta (pintura por face, DEC-182) também continuam funcionando nos dois modos, sem relação com este toggle.
 
 **Testado:** typecheck limpo + suíte completa (707 testes, 6 testes novos: `toggleVolumeBoxEditMode` exportada e alternando o id certo, reset em `selectVolumeBox`/`deselect`, cálculo de `viewState.volumeBoxEditMode`, botão no HTML, e o wiring em `GizmoController`). Verificação ao vivo passo a passo: criei um bloco, arrastei o corpo com sucesso (posição mudou, sem `cornerOffsets`); cliquei ✏️ (botão ficou roxo) e arrastei a MESMA região de tela onde antes ficava uma alça de face — dessa vez deformou de verdade (`cornerOffsets` populado, posição não mudou); cliquei ✏️ de novo pra sair e repeti o arraste na mesma região — voltou a só mover o corpo (posição mudou, `cornerOffsets` permaneceu EXATAMENTE igual ao valor anterior, confirmando que não há mais nada clicável ali fora do modo Edição).
+
+---
+
+# DEC-191 — Correção da DEC-189: painel ACM ainda mostrava o perfil na ARESTA entre duas faces pintadas
+
+**Data:** 01/09/2026
+**Status:** Implementado e verificado ao vivo.
+
+**Contexto:** Product Owner testou a correção da DEC-189 (deslocar a malha de faces do metalão pra fora, ao longo da normal de CADA face) e reportou com print: "ainda aparece uma parte do perfil" — um bloco com várias faces pintadas de vermelho ainda mostrava uma linha preta fina ao longo das arestas do topo e da lateral.
+
+**Causa raiz da correção incompleta:** a DEC-189 empurrava cada VÉRTICE-POR-FACE ao longo da normal DAQUELA face — como cada face tem sua própria cópia dos 4 cantos (nenhum vértice compartilhado entre faces, ver comentário de `buildVolumeBoxGeometry`), um canto que pertence a 3 faces diferentes acabava em 3 posições finais DIFERENTES depois do deslocamento (uma por normal). Numa aresta compartilhada por duas faces PINTADAS, os dois painéis (cada um empurrado numa direção), deixavam de se tocar exatamente ali — abrindo uma fresta fina ao longo de toda a aresta que expõe o perfil por trás. Só não aparecia numa face isolada (com as vizinhas invisíveis) porque não havia painel vizinho pra "brigar" de posição.
+
+**Correção:** em vez de empurrar cada vértice-por-face na normal da face, `buildVolumeBoxGeometry` agora empurra cada CANTO (índice 0-7, uma vez só) na própria diagonal a partir do CENTRO do bloco — `Core.volumeBoxCornerLocalPositions` já devolve a posição relativa ao centro, então o vetor do próprio canto já é essa diagonal (`pushDir = normalize(c.x, c.y, c.z)`). Como o deslocamento agora depende só do CANTO (não de qual face está perguntando), as até 3 faces que compartilham aquele canto concordam EXATAMENTE na mesma posição final — sem fresta nenhuma entre painéis vizinhos. `cornerPushM = (VOLUME_BOX_METALAO_PROFILE_M / 2) * √3 + 0,01` — cobre o pior caso geométrico (o próprio CANTO da seção quadrada do perfil, não só a face plana dela, já que a orientação da seção ao redor do eixo de cada perfil não é garantida alinhada com nenhuma face em particular).
+
+**Testado:** typecheck limpo + suíte completa (707 testes, teste da DEC-189 reescrito pra cobrir o novo cálculo por canto). Verificação ao vivo: criei um Cubo mágico "Metalão" e pintei as 6 faces com ACM Bold (via console, mais rápido que 6 cliques) — com zoom de até 211% na câmera, nenhuma linha preta aparece em nenhuma aresta (comparado ao print do Product Owner, que mostrava claramente as linhas do perfil no topo e na lateral).
