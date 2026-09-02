@@ -3734,34 +3734,56 @@ export function hashColorHex(key: string): number {
     //    perfil, mesmo a diagonal inteira sendo bem maior que a seção
     //    do perfil.
     //
-    // Solução final (sugerida pelo próprio Product Owner): FACE_OFFSET_M
-    // empurra cada vértice na normal DAQUELA face (meia-seção do perfil
-    // + 4mm de folga, mesma medida da chapa real) — sempre cobre o
-    // perfil na direção que importa, não importa a proporção do bloco.
-    // FACE_OUTSET_M alarga cada painel um pouco DENTRO do próprio plano
-    // (afastando cada vértice do centro da própria face) — como os dois
-    // painéis vizinhos de uma aresta agora se ESTENDEM além do contorno
-    // nominal, eles voltam a se sobrepor ali em vez de deixar vão,
-    // resolvendo o problema (1) sem reintroduzir o problema (2).
+    // 3) FACE_OFFSET_M na normal + FACE_OUTSET_M empurrando cada CANTO
+    //    na diagonal a partir do CENTRO DA PRÓPRIA FACE (não mais do
+    //    centro do bloco) — corrigia (2), mas com dados reais de um
+    //    bloco 1×1,7×1m (planta quase quadrada, esticado na altura) o
+    //    Product Owner reportou a MESMA fresta de novo numa aresta
+    //    vertical entre duas faces já pintadas. Causa: a diagonal
+    //    canto→centro de uma face 1m×1,7m NÃO fica a 45° — o eixo mais
+    //    comprido (altura) domina o vetor, sobrando pouco menos de
+    //    1,5cm de alcance no eixo estreito (largura/profundidade) pra
+    //    um FACE_OUTSET_M de 3cm inteiro — insuficiente pra cobrir o
+    //    raio de ~2,5cm do perfil na aresta. Normalizar o vetor
+    //    diagonal e escalar pro comprimento fixo FACE_OUTSET_M sempre
+    //    "rouba" alcance de um eixo pra dar ao outro em faces não
+    //    quadradas.
+    //
+    // Solução final: tratar os dois eixos do PLANO DA FACE
+    // (u = 1ª aresta, v = aresta adjacente) de forma INDEPENDENTE —
+    // cada canto anda FACE_OUTSET_M inteiro em u E FACE_OUTSET_M
+    // inteiro em v (não mais um vetor único de comprimento
+    // FACE_OUTSET_M repartido entre os dois eixos). Garante o alcance
+    // mínimo nos dois eixos ao mesmo tempo, não importa a proporção da
+    // face.
     var FACE_OFFSET_M = VOLUME_BOX_METALAO_PROFILE_M / 2 + 0.004;
     var FACE_OUTSET_M = 0.03;
     var isMetalao = box.structuralMaterial === 'metalao';
     faces.forEach(function (face: any, faceIdx: number) {
       var base = positions.length / 3;
       var faceCorners = face.cornerIndices.map(function (ci: number) { return corners[ci]!; });
-      var faceCenter = { x: 0, y: 0, z: 0 };
-      faceCorners.forEach(function (c: any) { faceCenter.x += c.x / 4; faceCenter.y += c.y / 4; faceCenter.z += c.z / 4; });
-      face.cornerIndices.forEach(function (ci: number) {
-        var c = corners[ci]!;
-        if (!isMetalao) { positions.push(c.x, c.y, c.z); return; }
-        var dx = c.x - faceCenter.x, dy = c.y - faceCenter.y, dz = c.z - faceCenter.z;
-        var inPlaneLen = Math.hypot(dx, dy, dz) || 1e-6;
-        positions.push(
-          c.x + face.normal.x * FACE_OFFSET_M + (dx / inPlaneLen) * FACE_OUTSET_M,
-          c.y + face.normal.y * FACE_OFFSET_M + (dy / inPlaneLen) * FACE_OUTSET_M,
-          c.z + face.normal.z * FACE_OFFSET_M + (dz / inPlaneLen) * FACE_OUTSET_M
-        );
-      });
+      if (!isMetalao) {
+        faceCorners.forEach(function (c: any) { positions.push(c.x, c.y, c.z); });
+      } else {
+        var c0 = faceCorners[0], c1 = faceCorners[1], c3 = faceCorners[3];
+        var uLen = Math.hypot(c1.x - c0.x, c1.y - c0.y, c1.z - c0.z) || 1e-6;
+        var vLen = Math.hypot(c3.x - c0.x, c3.y - c0.y, c3.z - c0.z) || 1e-6;
+        var u = { x: (c1.x - c0.x) / uLen, y: (c1.y - c0.y) / uLen, z: (c1.z - c0.z) / uLen };
+        var v = { x: (c3.x - c0.x) / vLen, y: (c3.y - c0.y) / vLen, z: (c3.z - c0.z) / vLen };
+        faceCorners.forEach(function (c: any, pos: number) {
+          // Posição 0/1/2/3 no laço da face (não o índice global do
+          // canto) — 0 e 3 ficam do lado "-u", 1 e 2 do lado "+u"; 0 e
+          // 1 do lado "-v", 2 e 3 do lado "+v" (mesma volta que define
+          // face.cornerIndices em Core.volumeBoxFaces).
+          var signU = (pos === 0 || pos === 3) ? -1 : 1;
+          var signV = (pos === 0 || pos === 1) ? -1 : 1;
+          positions.push(
+            c.x + face.normal.x * FACE_OFFSET_M + u.x * signU * FACE_OUTSET_M + v.x * signV * FACE_OUTSET_M,
+            c.y + face.normal.y * FACE_OFFSET_M + u.y * signU * FACE_OUTSET_M + v.y * signV * FACE_OUTSET_M,
+            c.z + face.normal.z * FACE_OFFSET_M + u.z * signU * FACE_OUTSET_M + v.z * signV * FACE_OUTSET_M
+          );
+        });
+      }
       var groupStart = indices.length;
       indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
       geo.addGroup(groupStart, indices.length - groupStart, faceIdx);
@@ -3830,6 +3852,19 @@ export function hashColorHex(key: string): number {
       addProfile(lerpVec3(corners[0]!, corners[1]!, t), lerpVec3(corners[2]!, corners[3]!, t));
       addProfile(lerpVec3(corners[4]!, corners[5]!, t), lerpVec3(corners[6]!, corners[7]!, t));
     }
+    // Montantes intermediários na PROFUNDIDADE (faces laterais X-/X+):
+    // as duas travessas acima só cobrem as faces de frente/fundo (Z) —
+    // um cubo com planta quadrada (base larga em X E em Z, ex. um
+    // "torreão"/pilar revestido) ficava com as faces laterais inteiras
+    // sem nenhum montante no meio, mesmo esticado. Mesmo raciocínio de
+    // localWidthM, mas ao longo de Z.
+    var localDepthM = Math.abs(corners[4]!.z - corners[0]!.z);
+    var depthDivisions = Math.max(1, Math.ceil(localDepthM / VOLUME_BOX_METALAO_STUD_SPACING_M));
+    for (var k = 1; k < depthDivisions; k++) {
+      var tk = k / depthDivisions;
+      addProfile(lerpVec3(corners[0]!, corners[4]!, tk), lerpVec3(corners[2]!, corners[6]!, tk));
+      addProfile(lerpVec3(corners[1]!, corners[5]!, tk), lerpVec3(corners[3]!, corners[7]!, tk));
+    }
     // Travessas horizontais intermediárias: mesma lógica dos montantes
     // verticais acima, mas subdividindo a ALTURA (Product Owner: "os
     // perfís horisontais também devem se repetir quando extruda") — sem
@@ -3844,6 +3879,15 @@ export function hashColorHex(key: string): number {
       var tj = j / heightDivisions;
       addProfile(lerpVec3(corners[0]!, corners[2]!, tj), lerpVec3(corners[1]!, corners[3]!, tj));
       addProfile(lerpVec3(corners[4]!, corners[6]!, tj), lerpVec3(corners[5]!, corners[7]!, tj));
+      // Travessas horizontais nas faces LATERAIS (X-/X+) — mesmo motivo
+      // dos montantes de profundidade acima: sem isso a face lateral de
+      // um bloco com planta quadrada não ganha travessa nenhuma no meio.
+      // Reaproveita os MESMOS pontos lerp(0,2,tj)/lerp(1,3,tj) das
+      // travessas de frente/fundo acima (mesmo ponto físico, no
+      // montante de canto compartilhado) — só troca o par oposto pro
+      // do fundo em vez do outro lado da frente.
+      addProfile(lerpVec3(corners[0]!, corners[2]!, tj), lerpVec3(corners[4]!, corners[6]!, tj));
+      addProfile(lerpVec3(corners[1]!, corners[3]!, tj), lerpVec3(corners[5]!, corners[7]!, tj));
     }
     return group;
   }

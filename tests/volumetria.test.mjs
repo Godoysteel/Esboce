@@ -342,6 +342,26 @@ test('buildVolumeBoxMetalaoFrame: perfil vertical (largura) E horizontal (altura
   assert.match(body, /addProfile\(lerpVec3\(corners\[4\]!, corners\[6\]!, tj\), lerpVec3\(corners\[5\]!, corners\[7\]!, tj\)\);/);
 });
 
+// DEC-194 (achado com print real do Product Owner: "veja que está
+// faltando perfis horizontais no meio" num cubo com planta quadrada,
+// ex. um pilar/torreão revestido) — os montantes/travessas acima só
+// cobriam as faces de FRENTE/FUNDO (Z); as faces LATERAIS (X-/X+)
+// ficavam sem nenhum perfil intermediário, mesmo esticadas na
+// profundidade ou na altura.
+test('buildVolumeBoxMetalaoFrame: montante (profundidade) E travessa horizontal também se repetem nas faces LATERAIS (X-/X+), não só frente/fundo', () => {
+  const start = rendererSource.indexOf('function buildVolumeBoxMetalaoFrame(box: any) {');
+  const end = rendererSource.indexOf('\n  }', start);
+  const body = rendererSource.slice(start, end);
+  // profundidade (montantes verticais nas faces laterais)
+  assert.match(body, /var localDepthM = Math\.abs\(corners\[4\]!\.z - corners\[0\]!\.z\);/);
+  assert.match(body, /var depthDivisions = Math\.max\(1, Math\.ceil\(localDepthM \/ VOLUME_BOX_METALAO_STUD_SPACING_M\)\);/);
+  assert.match(body, /addProfile\(lerpVec3\(corners\[0\]!, corners\[4\]!, tk\), lerpVec3\(corners\[2\]!, corners\[6\]!, tk\)\);/);
+  assert.match(body, /addProfile\(lerpVec3\(corners\[1\]!, corners\[5\]!, tk\), lerpVec3\(corners\[3\]!, corners\[7\]!, tk\)\);/);
+  // altura (travessas horizontais nas faces laterais)
+  assert.match(body, /addProfile\(lerpVec3\(corners\[0\]!, corners\[2\]!, tj\), lerpVec3\(corners\[4\]!, corners\[6\]!, tj\)\);/);
+  assert.match(body, /addProfile\(lerpVec3\(corners\[1\]!, corners\[3\]!, tj\), lerpVec3\(corners\[5\]!, corners\[7\]!, tj\)\);/);
+});
+
 // Movimento livre do Cubo mágico (Product Owner: "deve ser possível
 // movimentar o cubo mágico para todos os ângulos") — antes, arrastar o
 // corpo só movia no plano do chão (X/Y); não dava pra subir/descer o
@@ -476,38 +496,47 @@ test('ViewportController: Escape cancela qualquer ferramenta armada (setTool(nul
 
 // Product Owner: "o ACM é uma chapa de aluminio de 4mm que é
 // adicionada sobre a estrutura, ela deve cobrir totalmente a face que
-// foi aplicado" — 3 tentativas até acertar:
+// foi aplicado" — 4 tentativas até acertar:
 // 1) Empurrar cada vértice-por-face na normal da face — abria fresta
 //    fina em toda aresta compartilhada por duas faces pintadas.
-// 2) Empurrar cada CANTO (compartilhado) na diagonal do centro —
-//    fechava a fresta, mas Product Owner reportou "a face pintada fica
-//    dentro da estrutura": pra um bloco proporção parede (largo/alto,
-//    profundidade fina), a diagonal é dominada pelas dimensões
-//    largas, e a componente na normal da face de frente/fundo (a que
-//    recebe o ACM) ficava pequena demais.
-// 3) (Esta) FACE_OFFSET_M empurra cada vértice na normal DAQUELA
-//    face — sempre cobre o perfil na direção que importa, não importa
-//    a proporção do bloco (sugestão do próprio Product Owner: "essa
-//    estrutura criar uma face invisivel afastada dela uns 4mm
-//    externamente"). FACE_OUTSET_M alarga cada painel dentro do
-//    próprio plano (afasta cada vértice do centro da PRÓPRIA face) —
-//    os painéis vizinhos passam a se sobrepor na aresta em vez de
-//    deixar vão, sem reintroduzir o problema da tentativa 2.
-test('buildVolumeBoxGeometry: metalão empurra cada vértice na normal DAQUELA face (FACE_OFFSET_M) + alarga o painel no próprio plano (FACE_OUTSET_M) — cobre o perfil em qualquer proporção de bloco, sem fresta nas quinas', () => {
+// 2) Empurrar cada CANTO (compartilhado) na diagonal do centro DO
+//    BLOCO — fechava a fresta, mas Product Owner reportou "a face
+//    pintada fica dentro da estrutura": pra um bloco proporção parede
+//    (largo/alto, profundidade fina), a diagonal é dominada pelas
+//    dimensões largas.
+// 3) Empurrar na normal DAQUELA face (FACE_OFFSET_M) + alargar cada
+//    canto na diagonal a partir do centro DA PRÓPRIA FACE
+//    (FACE_OUTSET_M, um vetor só, comprimento fixo) — corrigia (2),
+//    mas com dados reais (bloco 1×1,7×1m) a MESMA fresta reapareceu
+//    numa aresta vertical: a diagonal canto→centro de uma face não
+//    quadrada não fica a 45°, e normalizar+escalar pro comprimento
+//    fixo FACE_OUTSET_M "rouba" alcance do eixo estreito pro eixo
+//    comprido — sobrava menos de 1,5cm no eixo estreito, insuficiente
+//    pra cobrir o raio de ~2,5cm do perfil.
+// 4) (Esta) Trata os dois eixos do PLANO DA FACE (u, v — arestas
+//    adjacentes ao canto 0 do laço) de forma INDEPENDENTE: cada canto
+//    anda FACE_OUTSET_M INTEIRO em u E FACE_OUTSET_M INTEIRO em v, não
+//    mais um vetor único repartido entre os dois. Garante o alcance
+//    mínimo nos dois eixos sempre, não importa a proporção da face.
+test('buildVolumeBoxGeometry: metalão empurra cada vértice na normal DAQUELA face (FACE_OFFSET_M) + alarga o painel INDEPENDENTEMENTE nos 2 eixos do próprio plano (FACE_OUTSET_M) — cobre o perfil em qualquer proporção de face, sem fresta nas quinas', () => {
   const start = rendererSource.indexOf('function buildVolumeBoxGeometry(box: any) {');
   const end = rendererSource.indexOf('\n  }', start);
   const body = rendererSource.slice(start, end);
   assert.match(body, /var FACE_OFFSET_M = VOLUME_BOX_METALAO_PROFILE_M \/ 2 \+ 0\.004;/);
   assert.match(body, /var FACE_OUTSET_M = 0\.03;/);
   assert.match(body, /var isMetalao = box\.structuralMaterial === 'metalao';/);
-  // centro da FACE (não do bloco) — base da direção de alargamento em plano
-  assert.match(body, /faceCorners\.forEach\(function \(c: any\) \{ faceCenter\.x \+= c\.x \/ 4; faceCenter\.y \+= c\.y \/ 4; faceCenter\.z \+= c\.z \/ 4; \}\);/);
   // bloco sólido não é afetado
-  assert.match(body, /if \(!isMetalao\) \{ positions\.push\(c\.x, c\.y, c\.z\); return; \}/);
-  // desloca na normal da face + alarga na direção do centro DA FACE pro vértice
-  assert.match(body, /c\.x \+ face\.normal\.x \* FACE_OFFSET_M \+ \(dx \/ inPlaneLen\) \* FACE_OUTSET_M/);
-  assert.match(body, /c\.y \+ face\.normal\.y \* FACE_OFFSET_M \+ \(dy \/ inPlaneLen\) \* FACE_OUTSET_M/);
-  assert.match(body, /c\.z \+ face\.normal\.z \* FACE_OFFSET_M \+ \(dz \/ inPlaneLen\) \* FACE_OUTSET_M/);
+  assert.match(body, /if \(!isMetalao\) \{\s*faceCorners\.forEach\(function \(c: any\) \{ positions\.push\(c\.x, c\.y, c\.z\); \}\);/);
+  // eixos u/v da PRÓPRIA face (arestas 0->1 e 0->3 do laço, não o centro)
+  assert.match(body, /var u = \{ x: \(c1\.x - c0\.x\) \/ uLen, y: \(c1\.y - c0\.y\) \/ uLen, z: \(c1\.z - c0\.z\) \/ uLen \};/);
+  assert.match(body, /var v = \{ x: \(c3\.x - c0\.x\) \/ vLen, y: \(c3\.y - c0\.y\) \/ vLen, z: \(c3\.z - c0\.z\) \/ vLen \};/);
+  // sinal por posição no laço da face (0/3 = lado "-", 1/2 = lado "+"), não mais 1 vetor único
+  assert.match(body, /var signU = \(pos === 0 \|\| pos === 3\) \? -1 : 1;/);
+  assert.match(body, /var signV = \(pos === 0 \|\| pos === 1\) \? -1 : 1;/);
+  // desloca na normal da face + FACE_OUTSET_M inteiro em u E em v
+  assert.match(body, /c\.x \+ face\.normal\.x \* FACE_OFFSET_M \+ u\.x \* signU \* FACE_OUTSET_M \+ v\.x \* signV \* FACE_OUTSET_M/);
+  assert.match(body, /c\.y \+ face\.normal\.y \* FACE_OFFSET_M \+ u\.y \* signU \* FACE_OUTSET_M \+ v\.y \* signV \* FACE_OUTSET_M/);
+  assert.match(body, /c\.z \+ face\.normal\.z \* FACE_OFFSET_M \+ u\.z \* signU \* FACE_OUTSET_M \+ v\.z \* signV \* FACE_OUTSET_M/);
 });
 
 // Modo Edição do Cubo mágico (Product Owner: "está confuso o sistema
