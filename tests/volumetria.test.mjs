@@ -476,29 +476,38 @@ test('ViewportController: Escape cancela qualquer ferramenta armada (setTool(nul
 
 // Product Owner: "o ACM é uma chapa de aluminio de 4mm que é
 // adicionada sobre a estrutura, ela deve cobrir totalmente a face que
-// foi aplicado" — os perfis do metalão são centrados no plano nominal
-// da face, então a malha de faces exatamente nesse plano ficava
-// "atrás" da superfície externa dos perfis. Reportado de novo com
-// print depois de uma primeira tentativa (empurrar cada face na
-// própria normal): "ainda aparece uma parte do perfil" — a primeira
-// versão abria uma fresta fina em toda aresta compartilhada por duas
-// faces pintadas (cada painel empurrado numa direção diferente).
-// Corrigido empurrando cada CANTO (não cada vértice-por-face) uma vez
-// só, na diagonal a partir do centro — as faces que compartilham
-// aquele canto concordam na mesma posição final, sem fresta.
-test('buildVolumeBoxGeometry: metalão empurra cada CANTO (compartilhado pelas faces) na diagonal do centro, não cada face na própria normal — evita fresta na aresta entre duas faces pintadas', () => {
+// foi aplicado" — 3 tentativas até acertar:
+// 1) Empurrar cada vértice-por-face na normal da face — abria fresta
+//    fina em toda aresta compartilhada por duas faces pintadas.
+// 2) Empurrar cada CANTO (compartilhado) na diagonal do centro —
+//    fechava a fresta, mas Product Owner reportou "a face pintada fica
+//    dentro da estrutura": pra um bloco proporção parede (largo/alto,
+//    profundidade fina), a diagonal é dominada pelas dimensões
+//    largas, e a componente na normal da face de frente/fundo (a que
+//    recebe o ACM) ficava pequena demais.
+// 3) (Esta) FACE_OFFSET_M empurra cada vértice na normal DAQUELA
+//    face — sempre cobre o perfil na direção que importa, não importa
+//    a proporção do bloco (sugestão do próprio Product Owner: "essa
+//    estrutura criar uma face invisivel afastada dela uns 4mm
+//    externamente"). FACE_OUTSET_M alarga cada painel dentro do
+//    próprio plano (afasta cada vértice do centro da PRÓPRIA face) —
+//    os painéis vizinhos passam a se sobrepor na aresta em vez de
+//    deixar vão, sem reintroduzir o problema da tentativa 2.
+test('buildVolumeBoxGeometry: metalão empurra cada vértice na normal DAQUELA face (FACE_OFFSET_M) + alarga o painel no próprio plano (FACE_OUTSET_M) — cobre o perfil em qualquer proporção de bloco, sem fresta nas quinas', () => {
   const start = rendererSource.indexOf('function buildVolumeBoxGeometry(box: any) {');
   const end = rendererSource.indexOf('\n  }', start);
   const body = rendererSource.slice(start, end);
-  assert.match(body, /var cornerPushM = \(VOLUME_BOX_METALAO_PROFILE_M \/ 2\) \* Math\.sqrt\(3\) \+ 0\.01;/);
-  assert.match(body, /pushedCorners = corners\.map\(function \(c: any\) \{/);
-  assert.match(body, /var len = Math\.hypot\(c\.x, c\.y, c\.z\) \|\| 1e-6;/);
-  assert.match(body, /return \{ x: c\.x \+ \(c\.x \/ len\) \* cornerPushM, y: c\.y \+ \(c\.y \/ len\) \* cornerPushM, z: c\.z \+ \(c\.z \/ len\) \* cornerPushM \};/);
-  // bloco sólido não é afetado — pushedCorners fica igual a corners (sem material metalão)
-  assert.match(body, /var pushedCorners = corners;/);
-  assert.match(body, /if \(box\.structuralMaterial === 'metalao'\) \{/);
-  // cada face usa pushedCorners, não mais corners direto nem face.normal
-  assert.match(body, /var c = pushedCorners\[ci\]!;/);
+  assert.match(body, /var FACE_OFFSET_M = VOLUME_BOX_METALAO_PROFILE_M \/ 2 \+ 0\.004;/);
+  assert.match(body, /var FACE_OUTSET_M = 0\.03;/);
+  assert.match(body, /var isMetalao = box\.structuralMaterial === 'metalao';/);
+  // centro da FACE (não do bloco) — base da direção de alargamento em plano
+  assert.match(body, /faceCorners\.forEach\(function \(c: any\) \{ faceCenter\.x \+= c\.x \/ 4; faceCenter\.y \+= c\.y \/ 4; faceCenter\.z \+= c\.z \/ 4; \}\);/);
+  // bloco sólido não é afetado
+  assert.match(body, /if \(!isMetalao\) \{ positions\.push\(c\.x, c\.y, c\.z\); return; \}/);
+  // desloca na normal da face + alarga na direção do centro DA FACE pro vértice
+  assert.match(body, /c\.x \+ face\.normal\.x \* FACE_OFFSET_M \+ \(dx \/ inPlaneLen\) \* FACE_OUTSET_M/);
+  assert.match(body, /c\.y \+ face\.normal\.y \* FACE_OFFSET_M \+ \(dy \/ inPlaneLen\) \* FACE_OUTSET_M/);
+  assert.match(body, /c\.z \+ face\.normal\.z \* FACE_OFFSET_M \+ \(dz \/ inPlaneLen\) \* FACE_OUTSET_M/);
 });
 
 // Modo Edição do Cubo mágico (Product Owner: "está confuso o sistema

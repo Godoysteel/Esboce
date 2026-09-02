@@ -3719,41 +3719,48 @@ export function hashColorHex(key: string): number {
     var geo = new THREE.BufferGeometry();
     // Metalão: os perfis (VOLUME_BOX_METALAO_PROFILE_M, ~5cm de seção)
     // ficam CENTRADOS no plano nominal da face, então parte da seção já
-    // se projeta pra fora desse plano — a malha de faces, se ficasse
-    // exatamente no plano nominal, renderizaria "atrás" da superfície
-    // externa dos perfis. Product Owner: "o ACM é uma chapa de aluminio
-    // de 4mm que é adicionada sobre a estrutura, ela deve cobrir
-    // totalmente a face" — e, reportado depois com print: "ainda
-    // aparece uma parte do perfil" numa aresta compartilhada por duas
-    // faces PINTADAS.
+    // se projeta pra fora desse plano. Histórico desta conta (2
+    // tentativas erradas antes desta):
+    // 1) Empurrar cada vértice-por-face na normal da face — abria
+    //    fresta fina em toda aresta compartilhada por duas faces
+    //    pintadas (cada painel empurrado numa direção diferente).
+    // 2) Empurrar cada CANTO (compartilhado) na diagonal a partir do
+    //    centro do bloco — fechava a fresta, mas Product Owner
+    //    reportou "a face pintada fica dentro da estrutura": pra um
+    //    bloco proporção parede (largo/alto, PROFUNDIDADE fina), a
+    //    diagonal do canto é dominada pelas dimensões largas — a
+    //    componente NA NORMAL da face de frente/fundo (a que
+    //    normalmente recebe o ACM) ficava pequena demais pra cobrir o
+    //    perfil, mesmo a diagonal inteira sendo bem maior que a seção
+    //    do perfil.
     //
-    // Achado real: a primeira versão empurrava cada VÉRTICE-POR-FACE na
-    // normal DAQUELA face — em toda aresta compartilhada por duas faces
-    // pintadas, os dois painéis (empurrados em direções diferentes,
-    // uma por normal) deixavam de se tocar ali, abrindo uma fresta fina
-    // ao longo da aresta inteira que expõe o perfil por trás. Corrigido
-    // empurrando cada CANTO (não cada vértice-por-face) uma vez só, na
-    // própria diagonal a partir do centro do bloco (Core.
-    // volumeBoxCornerLocalPositions já devolve posição local relativa
-    // ao centro, então o próprio vetor do canto já é essa diagonal) —
-    // as até 3 faces que compartilham aquele canto concordam na MESMA
-    // posição final, sem vão nenhum entre painéis vizinhos.
-    // cornerPushM cobre o pior caso (o próprio canto da seção quadrada
-    // do perfil, não só a face plana dela): meia-seção × √3 (canto de
-    // um cubinho de meia-seção) + folga.
-    var pushedCorners = corners;
-    if (box.structuralMaterial === 'metalao') {
-      var cornerPushM = (VOLUME_BOX_METALAO_PROFILE_M / 2) * Math.sqrt(3) + 0.01;
-      pushedCorners = corners.map(function (c: any) {
-        var len = Math.hypot(c.x, c.y, c.z) || 1e-6;
-        return { x: c.x + (c.x / len) * cornerPushM, y: c.y + (c.y / len) * cornerPushM, z: c.z + (c.z / len) * cornerPushM };
-      });
-    }
+    // Solução final (sugerida pelo próprio Product Owner): FACE_OFFSET_M
+    // empurra cada vértice na normal DAQUELA face (meia-seção do perfil
+    // + 4mm de folga, mesma medida da chapa real) — sempre cobre o
+    // perfil na direção que importa, não importa a proporção do bloco.
+    // FACE_OUTSET_M alarga cada painel um pouco DENTRO do próprio plano
+    // (afastando cada vértice do centro da própria face) — como os dois
+    // painéis vizinhos de uma aresta agora se ESTENDEM além do contorno
+    // nominal, eles voltam a se sobrepor ali em vez de deixar vão,
+    // resolvendo o problema (1) sem reintroduzir o problema (2).
+    var FACE_OFFSET_M = VOLUME_BOX_METALAO_PROFILE_M / 2 + 0.004;
+    var FACE_OUTSET_M = 0.03;
+    var isMetalao = box.structuralMaterial === 'metalao';
     faces.forEach(function (face: any, faceIdx: number) {
       var base = positions.length / 3;
+      var faceCorners = face.cornerIndices.map(function (ci: number) { return corners[ci]!; });
+      var faceCenter = { x: 0, y: 0, z: 0 };
+      faceCorners.forEach(function (c: any) { faceCenter.x += c.x / 4; faceCenter.y += c.y / 4; faceCenter.z += c.z / 4; });
       face.cornerIndices.forEach(function (ci: number) {
-        var c = pushedCorners[ci]!;
-        positions.push(c.x, c.y, c.z);
+        var c = corners[ci]!;
+        if (!isMetalao) { positions.push(c.x, c.y, c.z); return; }
+        var dx = c.x - faceCenter.x, dy = c.y - faceCenter.y, dz = c.z - faceCenter.z;
+        var inPlaneLen = Math.hypot(dx, dy, dz) || 1e-6;
+        positions.push(
+          c.x + face.normal.x * FACE_OFFSET_M + (dx / inPlaneLen) * FACE_OUTSET_M,
+          c.y + face.normal.y * FACE_OFFSET_M + (dy / inPlaneLen) * FACE_OUTSET_M,
+          c.z + face.normal.z * FACE_OFFSET_M + (dz / inPlaneLen) * FACE_OUTSET_M
+        );
       });
       var groupStart = indices.length;
       indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
