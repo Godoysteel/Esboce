@@ -2594,3 +2594,20 @@ O core geométrico mais caro (`Core.detectRooms`/`Core.computeWallFootprints`, a
 **Verificado ao vivo (reconstrução real da cena, sem WebGL, com os números exatos do print):** antes da correção, a malha da cumeeira central de `roof_14` media `x: [-0,25, 1,35]` (cortada); depois, `x: [-0,25, 3,25]` — o comprimento natural completo. Confirmado também por cálculo direto dos uniforms do shader que o sombreamento por pixel NUNCA esconderia essa cumeeira em nenhum ponto do trecho (a altura do vizinho só alcança a da cumeeira exatamente na borda, x=3,25m, nunca antes).
 
 **Testado:** suíte completa (724 testes) + novo teste em `tests/wall-geometry.test.mjs` com os números reais do projeto do Product Owner, incluindo o cálculo que prova que a comparação antiga (pico único) cortaria errado enquanto a nova (altura no ponto de entrada) não corta.
+
+---
+
+# DEC-205 — Espigão sem a peça de cumeeira (e fresta na água-furtada) ao encostar num telhado vizinho MENOR
+
+**Data:** 02/09/2026
+**Status:** Implementado e verificado (reconstrução real da cena, sem WebGL, com os números exatos do projeto do Product Owner).
+
+**Contexto:** Product Owner reportou, na mesma composição em L da DEC-204 (dois quatro-águas, um deles avançado além da própria parede pra se encaixar no outro): "gerou uma fresta na água furtada e esse espigão que desce sobre o telhado menor deve ter a peça de cumeeira". Dados reais extraídos do console: `roof_14` (x1:-40,y1:-30,x2:95,y2:30, quatroAguas, MENOR) + `roof_15` (x1:35,y1:-125,x2:165,y2:30, quatroAguas, MAIOR) — a mesma dupla, testada de novo depois de mover as coberturas.
+
+**Causa:** `hipCornerOnOtherRoofStraightEdge` (`Scene3DRenderer.ts`, DEC-167) — esconde o espigão de canto (a peça decorativa de cumeeira/cap, não a água em si) sempre que o canto do beiral cai em cima da ARESTA reta (não do canto) de outro telhado, "sem exceção" por design. Essa regra foi validada só contra o par ORIGINAL da DEC-167, onde os dois telhados têm o MESMO pico (picos idênticos — ali é seguro esconder incondicionalmente, porque as duas águas continuam na mesma altura dos dois lados, o espigão de verdade não existiria na forma combinada). Aqui os dois telhados têm tamanhos BEM diferentes: o canto `D` de `roof_15` (o telhado MAIOR) cai em cima da aresta reta de `roof_14` (o MENOR) — mas `roof_14`, sendo bem mais baixo, não chega nem perto de cobrir o espigão de `roof_15` ali. A regra escondia a peça de qualquer jeito, deixando a água-furtada sem a cumeeira que a fecha por cima (o "espigão... deve ter a peça de cumeeira" relatado) — e a ausência dessa peça, que normalmente cobre a transição entre as duas águas, também é a causa da "fresta" visível na junção.
+
+**Correção:** `hipCornerOnOtherRoofStraightEdge` ganhou a MESMA proteção de altura já usada em `ridgeCapPartialOverlapFootprints` (DEC-204): só esconde quando o vizinho não é claramente mais BAIXO que o próprio pico (`(b.baseY + b.peakAboveBase) >= ownPeakY - 1e-4`). No par original da DEC-167 (picos idênticos) essa condição continua batendo (`>=` com empate exato) — nenhuma regressão. No par novo (tamanhos bem diferentes), a condição só permite esconder o canto do telhado MENOR sobre a aresta do MAIOR (que de fato o cobre), e não mais o contrário.
+
+**Verificado ao vivo (reconstrução real da cena, sem WebGL):** antes da correção, `roof_15` tinha só 3 espigões de canto (A, B, C — faltava D); depois, os 4 aparecem (A, B, C, D). Confirmado também, varrendo uma grade fina de pontos por cima dos uniforms reais do shader na região do vale, que não sobra nenhum buraco genuíno de sombreamento por pixel ali (0 pontos escondidos pelos dois telhados ao mesmo tempo) — a fresta reportada era mesmo a ausência da peça de cumeeira, não um buraco de malha separado.
+
+**Testado:** suíte completa (725 testes) + `tests/wall-geometry.test.mjs`: teste original da DEC-167 atualizado (com a nova assinatura da função) e reforçado com a confirmação de que o par de picos idênticos continua escondendo; novo teste com os números reais deste bug, confirmando que o canto do telhado maior sobre o menor NÃO é mais escondido, e o do menor sobre o maior continua escondido.

@@ -6521,16 +6521,36 @@ export function hashColorHex(key: string): number {
           // é só uma peça sozinha que não devia existir ali, porque aquele
           // ponto não é uma quina externa de verdade da forma combinada em
           // L (a borda verdadeira do L continua reta ali, seguindo o
-          // contorno do OUTRO telhado). Por isso não tem desempate por id
-          // — esconde sempre, sem exceção.
+          // contorno do OUTRO telhado).
+          //
+          // Bug real (Product Owner, print "esse espigão... deve ter a
+          // peça de cumeeira" — mesmo mecanismo, telhados de tamanhos BEM
+          // diferentes formando L, um deles avançado além da própria
+          // parede pra se encaixar no outro): a regra acima "esconde
+          // sempre, sem exceção" foi validada só contra o par original
+          // (DEC-167, dois telhados com o MESMO pico) — ali é seguro
+          // esconder incondicionalmente porque as duas águas continuam
+          // exatamente na mesma altura dos dois lados (o espigão de
+          // verdade não existiria na forma combinada). Quando os picos são
+          // bem diferentes, o vizinho MENOR não alcança nem de longe a
+          // altura do espigão do MAIOR perto da própria borda dele — o
+          // espigão continua sendo uma feição real e visível, esconder
+          // incondicionalmente cria a "fresta"/aresta pelada reportada.
+          // Mesma lição da DEC-204 (`ridgeCapPartialOverlapFootprints`):
+          // só esconde quando o vizinho não é claramente mais BAIXO que o
+          // próprio pico — um proxy do mesmo nível de precisão já validado
+          // ali, e suficiente aqui porque a decisão é binária (a peça
+          // inteira do canto, não um corte parcial de malha).
           function hipCornerOnOtherRoofStraightEdge(pt: any) {
+            var ownPeakY = ownSurfaceBox ? ownSurfaceBox.baseY + ownSurfaceBox.peakAboveBase : -Infinity;
             return roofPeakBoxes.some(function (b: any) {
               if (b.id === roof.id) return false;
               var onXEdge = (Math.abs(pt.x - b.minX) < 1e-4 || Math.abs(pt.x - b.maxX) < 1e-4)
                 && pt.z > b.minZ + 1e-6 && pt.z < b.maxZ - 1e-6;
               var onZEdge = (Math.abs(pt.z - b.minZ) < 1e-4 || Math.abs(pt.z - b.maxZ) < 1e-4)
                 && pt.x > b.minX + 1e-6 && pt.x < b.maxX - 1e-6;
-              return onXEdge || onZEdge;
+              if (!(onXEdge || onZEdge)) return false;
+              return (b.baseY + b.peakAboveBase) >= ownPeakY - 1e-4;
             });
           }
           // Cumeeira central/contínua (duas-águas inteira, ou o trecho
