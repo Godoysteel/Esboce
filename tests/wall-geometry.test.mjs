@@ -2147,6 +2147,65 @@ test('Scene3DRenderer: espigão de canto é interrompido na CUMEEIRA (não na al
   assert.ok(Math.abs(ridgeCoord15 - (-0.5)) < 1e-6);
 });
 
+// DEC-208: primeiro bug real localizado com a ferramenta "Marcador"
+// (DEC-207) — Product Owner marcou início/fim de um trecho de espigão e
+// relatou "essa parte do espigão deveria existir e foi apagada... ou
+// seja, inverteu". Causa: o corte da DEC-206 usava um meio-plano
+// INFINITO além da cumeeira do vizinho — seguro só quando a cumeeira do
+// vizinho fica perto da BORDA da pegada dele (caso original da DEC-206).
+// Aqui a cumeeira de `roof_38` fica no MEIO da própria pegada (a água
+// tem 3,8m, a cumeeira divide ao meio) — o espigão de `roof_37` entra na
+// pegada de `roof_38`, cruza a cumeeira E DEPOIS SAI da pegada antes de
+// chegar no próprio pico. O meio-plano infinito apagava esse trecho
+// final também. Dados reais do console: `roof_37` (x1:35,y1:-30,
+// x2:195,y2:130, quatroAguas, GRANDE/quadrado — 4 cômodos 4×4m num 2×2)
+// + `roof_38` (x1:-40,y1:-30,x2:95,y2:30, quatroAguas, PEQUENO com
+// cumeeira de verdade, arrastado até encostar no canto de `roof_37`).
+test('Scene3DRenderer: corte de espigão na cumeeira do vizinho fica LIMITADO à pegada real dele — não apaga o trecho que já saiu da pegada antes de chegar no próprio pico; reprodução real (bug achado com a ferramenta Marcador)', () => {
+  const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
+  const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 38000);
+  assert.match(roofsBlock, /var rect = axisIsZ\s*\? \(beyondIsPositive \? \{ minX: match\.minX, maxX: match\.maxX, minZ: match\.ridgeCoord, maxZ: match\.maxZ \} : \{ minX: match\.minX, maxX: match\.maxX, minZ: match\.minZ, maxZ: match\.ridgeCoord \}\)\s*: \(beyondIsPositive \? \{ minX: match\.ridgeCoord, maxX: match\.maxX, minZ: match\.minZ, maxZ: match\.maxZ \} : \{ minX: match\.minX, maxX: match\.ridgeCoord, minZ: match\.minZ, maxZ: match\.maxZ \}\);/);
+  // Nenhum limite infinito (1e6) deve sobrar na construção do retângulo.
+  const rectBlockStart = roofsBlock.indexOf('var rect = axisIsZ');
+  const rectBlockEnd = roofsBlock.indexOf(';', rectBlockStart) + 1;
+  assert.doesNotMatch(roofsBlock.slice(rectBlockStart, rectBlockEnd), /1e6/);
+
+  const GRID = 20, ROOF_OVERHANG = 0.4;
+  function m(units) { return units / GRID; }
+  const tanPitch = Math.tan(28 * Math.PI / 180);
+
+  // roof_37 (grande, QUADRADO — 8x8m, sem cumeeira própria).
+  const r37 = { minX: m(35) - ROOF_OVERHANG, maxX: m(195) + ROOF_OVERHANG, minZ: m(-30) - ROOF_OVERHANG, maxZ: m(130) + ROOF_OVERHANG };
+  const halfSpan37 = Math.min(r37.maxX - r37.minX, r37.maxZ - r37.minZ) / 2;
+  assert.ok(Math.abs((r37.maxX - r37.minX) - (r37.maxZ - r37.minZ)) < 1e-6, 'roof_37 é quadrado (8x8m)');
+  const r1x37 = Math.min(r37.minX + halfSpan37, r37.maxX - halfSpan37);
+  // Espigão "A": do canto (minX,minZ) até o pico único de roof_37.
+  const cornerA = { x: r37.minX, z: r37.minZ };
+  const peakA = { x: r1x37, z: (m(-30) + m(130)) / 2 };
+
+  // roof_38 (pequeno, COM cumeeira de verdade) — cumeeira em z=ridgeCoord,
+  // no MEIO da própria pegada (não perto da borda, diferente da DEC-206).
+  const r38 = { minX: m(-40) - ROOF_OVERHANG, maxX: m(95) + ROOF_OVERHANG, minZ: m(-30) - ROOF_OVERHANG, maxZ: m(30) + ROOF_OVERHANG };
+  const ridgeCoord38 = (m(-30) + m(30)) / 2;
+  assert.ok(Math.abs(ridgeCoord38 - 0) < 1e-9, 'cumeeira de roof_38 fica em z=0 — bem no meio da própria pegada, não na borda');
+  assert.ok(ridgeCoord38 > r38.minZ + 1e-6 && ridgeCoord38 < r38.maxZ - 1e-6, 'confirma que a cumeeira NÃO fica na borda da pegada (motivo real do bug)');
+
+  // O espigão A cruza a cumeeira de roof_38 (z=0)...
+  const tCross = (ridgeCoord38 - cornerA.z) / (peakA.z - cornerA.z);
+  assert.ok(tCross > 0 && tCross < 1, 'o espigão A cruza a cumeeira de roof_38 entre o canto e o pico');
+  // ...mas o pico de roof_37 fica de FATO fora da pegada de roof_38 —
+  // ou seja, o espigão SAI da pegada do vizinho antes de terminar, e
+  // esse trecho final tem que sobreviver ao corte.
+  assert.ok(peakA.x > r38.maxX + 1e-6, 'o pico de roof_37 fica fora da pegada de roof_38 — o corte antigo (meio-plano infinito) apagava esse trecho por engano');
+
+  // O ponto onde o espigão SAI da pegada de roof_38 (voltando pro lado
+  // "além" da cumeeira, mas já fora do retângulo do vizinho) precisa
+  // ficar visível de novo — é exatamente o `match.maxZ` do retângulo
+  // limitado da correção.
+  const tExit = (r38.maxZ - cornerA.z) / (peakA.z - cornerA.z);
+  assert.ok(tExit > tCross && tExit < 1, 'existe um trecho real depois da cumeeira mas ainda dentro da pegada (cortado) e um trecho depois disso, já fora da pegada (deve sobreviver)');
+});
+
 // Bug real (Product Owner, com print): dois quatroAguas do mesmo grupo
 // composto (compoundGroupId, eixos de cumeeira diferentes — o par de
 // "asas" perpendiculares de uma Cumeeira em níveis/Extensão lateral)

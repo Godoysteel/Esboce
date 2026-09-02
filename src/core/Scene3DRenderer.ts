@@ -6662,10 +6662,22 @@ export function hashColorHex(key: string): number {
               var crossPerp = axisIsZ ? crossX : crossZ;
               if (crossPerp < ridgeLo - 1e-6 || crossPerp > ridgeHi + 1e-6) return;
               if (closest && t >= closest.t) return;
+              // Bug real (Product Owner, reprodução com números exatos do
+              // console — marcado com a própria ferramenta "Marcador",
+              // DEC-207): a cumeeira do vizinho pode ficar bem no MEIO da
+              // própria pegada dele (não perto da borda, como no caso
+              // original desta correção), então o corte não pode ser um
+              // meio-plano INFINITO além da cumeeira — isso também apaga o
+              // trecho do espigão que já SAIU da pegada do vizinho (voltou
+              // a ser terreno aberto, sem nada cobrindo) e devia continuar
+              // visível. O corte fica limitado ao retângulo REAL da pegada
+              // do vizinho (`match`), não ao plano infinito — do outro lado
+              // da pegada, o sombreamento por pixel (já comprovado sem
+              // buraco nenhum) resolve sozinho.
               var beyondIsPositive = peakCoord > cornerCoord;
               var rect = axisIsZ
-                ? (beyondIsPositive ? { minX: -1e6, maxX: 1e6, minZ: match.ridgeCoord, maxZ: 1e6 } : { minX: -1e6, maxX: 1e6, minZ: -1e6, maxZ: match.ridgeCoord })
-                : (beyondIsPositive ? { minX: match.ridgeCoord, maxX: 1e6, minZ: -1e6, maxZ: 1e6 } : { minX: -1e6, maxX: match.ridgeCoord, minZ: -1e6, maxZ: 1e6 });
+                ? (beyondIsPositive ? { minX: match.minX, maxX: match.maxX, minZ: match.ridgeCoord, maxZ: match.maxZ } : { minX: match.minX, maxX: match.maxX, minZ: match.minZ, maxZ: match.ridgeCoord })
+                : (beyondIsPositive ? { minX: match.ridgeCoord, maxX: match.maxX, minZ: match.minZ, maxZ: match.maxZ } : { minX: match.minX, maxX: match.ridgeCoord, minZ: match.minZ, maxZ: match.maxZ });
               closest = { t: t, rect: rect };
             });
             return closest ? [closest.rect] : [];
