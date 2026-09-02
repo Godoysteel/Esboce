@@ -434,7 +434,14 @@ test('volumeBoxHalfExtentsGrid: resolve largura/profundidade pelos passos de 90�
   assert.match(body, /var rotSteps = Math\.round\(\(box\.rotationDeg \|\| 0\) \/ 90\);/);
 });
 
-test('snapVolumeBoxToWalls: existe, só encosta em parede alinhada ao mundo (nunca gira o bloco), e também força quina-com-quina com a PONTA da parede no eixo que não está encostando', () => {
+// Product Owner (nova rodada): "não quero que a estrutura entre dentro
+// da parede, ela deve ficar faceada" — até aqui o encosto só era um ímã
+// de CONVENIÊNCIA (só corrigia dentro de VOLUME_BOX_WALL_SNAP_TOLERANCE_GRID,
+// 30cm); um bloco solto bem no meio da parede ficava sobreposto pra
+// sempre, sem correção nenhuma. Duas camadas agora: HARD (sobreposição
+// de verdade — SEMPRE corrige, não importa a distância) e SOFT (só
+// perto, ímã de conveniência de sempre, com tolerância).
+test('snapVolumeBoxToWalls: nunca gira o bloco; separa em duas camadas — HARD (sobreposição de verdade, corrige sempre) e SOFT (só perto, ímã com tolerância) — e HARD sempre encosta faceado, com quina-com-quina na ponta da parede', () => {
   const start = viewportSource.indexOf('function snapVolumeBoxToWalls(box: any, xGrid: number, yGrid: number)');
   assert.ok(start !== -1);
   const end = viewportSource.indexOf('\n  }', start);
@@ -443,9 +450,17 @@ test('snapVolumeBoxToWalls: existe, só encosta em parede alinhada ao mundo (nun
   assert.match(body, /var vertical = Math\.abs\(w\.x2 - w\.x1\) < Core\.GRID \* 0\.05;/);
   // nunca escreve em box.rotationDeg — só ajusta x/y
   assert.doesNotMatch(body, /rotationDeg\s*=/);
-  // quina com quina: a borda do bloco (não o centro) alinha com w.x1/w.x2 (parede horizontal) ou w.y1/w.y2 (vertical)
-  assert.match(body, /var snappedXWall = snapToNearest\(xGrid, \[\s*w\.x1 \+ halfExtentXGrid, w\.x1 - halfExtentXGrid,\s*w\.x2 \+ halfExtentXGrid, w\.x2 - halfExtentXGrid,\s*\], VOLUME_BOX_CORNER_SNAP_TOLERANCE_GRID\);/);
-  assert.match(body, /var snappedYVert = snapToNearest\(yGrid, \[\s*w\.y1 \+ halfExtentZGrid, w\.y1 - halfExtentZGrid,\s*w\.y2 \+ halfExtentZGrid, w\.y2 - halfExtentZGrid,\s*\], VOLUME_BOX_CORNER_SNAP_TOLERANCE_GRID\);/);
+  // HARD: sobrepondo a faixa de espessura da parede -> corrige sempre (sem checar tolerância)
+  assert.match(body, /if \(absGapY < touchDistY\) \{/);
+  assert.match(body, /if \(!hasHard \|\| penetrationY < hardPenetration\) \{ hasHard = true; hardPenetration = penetrationY; hardSnapped = \{ x: candXWall, y: candYWall \}; \}/);
+  assert.match(body, /if \(absGapX < touchDistX\) \{/);
+  assert.match(body, /if \(!hasHard \|\| penetrationX < hardPenetration\) \{ hasHard = true; hardPenetration = penetrationX; hardSnapped = \{ x: candXVert, y: candYVert \}; \}/);
+  // SOFT: só dentro da tolerância de sempre
+  assert.match(body, /if \(gapOutsideY < softBestGapGrid\) \{ softBestGapGrid = gapOutsideY; softSnapped = \{ x: candXWall, y: candYWall \}; \}/);
+  // quina com quina: a borda do bloco (não o centro) alinha com w.x1/w.x2 (parede horizontal) ou w.y1/w.y2 (vertical) — em AMBAS as camadas, reaproveitando o mesmo candXWall/candYVert
+  assert.match(body, /var candXWall = snapToNearest\(xGrid, \[\s*w\.x1 \+ halfExtentXGrid, w\.x1 - halfExtentXGrid,\s*w\.x2 \+ halfExtentXGrid, w\.x2 - halfExtentXGrid,\s*\], VOLUME_BOX_CORNER_SNAP_TOLERANCE_GRID\);/);
+  assert.match(body, /var candYVert = snapToNearest\(yGrid, \[\s*w\.y1 \+ halfExtentZGrid, w\.y1 - halfExtentZGrid,\s*w\.y2 \+ halfExtentZGrid, w\.y2 - halfExtentZGrid,\s*\], VOLUME_BOX_CORNER_SNAP_TOLERANCE_GRID\);/);
+  assert.match(body, /if \(hasHard\) return \{ x: hardSnapped\.x, y: hardSnapped\.y, hard: true \};/);
 });
 
 // Product Owner: "quero que melhore o snap na parede e o snap entre os
@@ -464,7 +479,12 @@ test('snapVolumeBoxToWalls: existe, só encosta em parede alinhada ao mundo (nun
 // SE SOBREPÕEM em cada eixo (negativo = vão) — quem sobrepõe mais é a
 // fileira/coluna em que os blocos já estão alinhados, então o encosto
 // de verdade é no OUTRO eixo.
-test('snapVolumeBoxToNeighborBoxes: existe, encosta o footprint (retângulo em planta) contra outro Cubo mágico do mesmo pavimento, decide lado-a-lado vs frente/fundo por SOBREPOSIÇÃO (não pelo gap bruto, enviesado pra blocos finos), e força quina-com-quina no eixo que não está encostando', () => {
+// Product Owner (nova rodada): "um box não pode entrar dentro do
+// outro" — mesma ideia da DEC-197 pra parede: HARD (sobrepondo de
+// verdade nos dois eixos — separa pelo eixo de MENOR sobreposição,
+// empurrão mínimo, sempre) vs SOFT (só perto, ímã de conveniência com
+// tolerância de sempre).
+test('snapVolumeBoxToNeighborBoxes: decide lado-a-lado vs frente/fundo por SOBREPOSIÇÃO (não pelo gap bruto, enviesado pra blocos finos); separa em HARD (sobrepondo de verdade nos 2 eixos, corrige sempre pelo eixo de menor sobreposição) e SOFT (só perto, com tolerância)', () => {
   const start = viewportSource.indexOf('function snapVolumeBoxToNeighborBoxes(box: any, xGrid: number, yGrid: number)');
   assert.ok(start !== -1);
   const end = viewportSource.indexOf('\n  }', start);
@@ -474,23 +494,31 @@ test('snapVolumeBoxToNeighborBoxes: existe, encosta o footprint (retângulo em p
   // decide o eixo de encosto por SOBREPOSIÇÃO real dos footprints, não pelo gap bruto
   assert.match(body, /var overlapX = Math\.min\(xGrid \+ halfExtentXGrid, ob\.x \+ obHalf\.x\) - Math\.max\(xGrid - halfExtentXGrid, ob\.x - obHalf\.x\);/);
   assert.match(body, /var overlapZ = Math\.min\(yGrid \+ halfExtentZGrid, ob\.y \+ obHalf\.z\) - Math\.max\(yGrid - halfExtentZGrid, ob\.y - obHalf\.z\);/);
-  // mais alinhados em Z (mesma fileira) -> fecha o vão em X e força Y igual ao vizinho — "quina com quina"
+  // sobrepondo de verdade nos DOIS eixos (não só alinhado em um) -> camada HARD
+  assert.match(body, /var overlapping = overlapX > 0 && overlapZ > 0;/);
+  // mais alinhados em Z (mesma fileira) -> fecha o vão em X e força Y igual ao vizinho — "quina com quina" (nas duas camadas)
   assert.match(body, /if \(overlapZ > overlapX\) \{/);
-  assert.match(body, /var snappedXBox = ob\.x \+ \(xGrid >= ob\.x \? 1 : -1\) \* combinedX;/);
-  assert.match(body, /var snappedYBox = snapToNearest\(yGrid, \[ob\.y\], VOLUME_BOX_CORNER_SNAP_TOLERANCE_GRID\);/);
+  assert.match(body, /if \(!hasHard \|\| overlapX < hardPenetration\) \{/);
+  assert.match(body, /hasHard = true; hardPenetration = overlapX;/);
   // mais alinhados em X (mesma coluna) -> fecha o vão em Z e força X igual ao vizinho
   assert.match(body, /\} else if \(overlapX > overlapZ\) \{/);
-  assert.match(body, /var snappedYBox2 = ob\.y \+ \(yGrid >= ob\.y \? 1 : -1\) \* combinedZ;/);
-  assert.match(body, /var snappedXBox2 = snapToNearest\(xGrid, \[ob\.x\], VOLUME_BOX_CORNER_SNAP_TOLERANCE_GRID\);/);
+  assert.match(body, /if \(!hasHard \|\| overlapZ < hardPenetration\) \{/);
+  assert.match(body, /hasHard = true; hardPenetration = overlapZ;/);
+  assert.match(body, /if \(hasHard\) return \{ x: hardSnapped\.x, y: hardSnapped\.y, hard: true \};/);
 });
 
-test('snapVolumeBoxPosition: roda o ímã de parede E o de bloco vizinho contra a mesma posição solta, e fica com o que pedir MENOS correção', () => {
+test('snapVolumeBoxPosition: roda o ímã de parede E o de bloco vizinho contra a mesma posição solta; HARD (sobreposição de verdade) sempre vence SOFT (ímã de conveniência), mesmo que o SOFT peça uma correção numericamente menor', () => {
   const start = viewportSource.indexOf('function snapVolumeBoxPosition(box: any, xGrid: number, yGrid: number)');
   assert.ok(start !== -1);
   const end = viewportSource.indexOf('\n  }', start);
   const body = viewportSource.slice(start, end);
   assert.match(body, /var wallSnap = snapVolumeBoxToWalls\(box, xGrid, yGrid\);/);
   assert.match(body, /var boxSnap = snapVolumeBoxToNeighborBoxes\(box, xGrid, yGrid\);/);
+  // HARD sempre vence SOFT, não importa a distância de correção
+  assert.match(body, /if \(wallSnap\.hard && boxSnap\.hard\) return wallDist <= boxDist \? wallSnap : boxSnap;/);
+  assert.match(body, /if \(wallSnap\.hard\) return wallSnap;/);
+  assert.match(body, /if \(boxSnap\.hard\) return boxSnap;/);
+  // só entre dois SOFT (nenhum hard) é que vence quem pede menos correção
   assert.match(body, /return wallDist <= boxDist \? wallSnap : boxSnap;/);
 });
 

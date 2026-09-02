@@ -3571,12 +3571,25 @@ import {
       z: ((swapped ? box.widthM : box.depthM) * Core.GRID) / 2,
     };
   }
-  function snapVolumeBoxToWalls(box: any, xGrid: number, yGrid: number): { x: number; y: number } {
+  // Retorno com `hard` (Product Owner: "não quero que a estrutura entre
+  // dentro da parede, ela deve ficar faceada" / "um box não pode entrar
+  // dentro do outro") — duas camadas SEPARADAS, não um único "gap":
+  // 1) HARD: o bloco já está fisicamente dentro da parede/do outro
+  //    bloco (sobrepondo de verdade) — SEMPRE corrige, não importa a
+  //    distância (mesmo um bloco jogado bem no meio da parede tem que
+  //    sair faceado). 2) SOFT: bloco só perto o bastante (dentro de
+  //    VOLUME_BOX_WALL_SNAP_TOLERANCE_GRID) sem sobrepor de verdade —
+  //    aí sim é o ímã de conveniência de sempre, com a mesma tolerância.
+  // hard sempre vence soft no combinador (snapVolumeBoxPosition) —
+  // nunca deixa uma sobreposição de verdade sem corrigir só porque tem
+  // outra coisa "mais perto" em algum sentido numérico.
+  function snapVolumeBoxToWalls(box: any, xGrid: number, yGrid: number): { x: number; y: number; hard: boolean } {
     var halfExtent = volumeBoxHalfExtentsGrid(box);
     var halfExtentXGrid = halfExtent.x, halfExtentZGrid = halfExtent.z;
     var wallHalfThickGrid = (Core.WALL_THICK * Core.GRID) / 2;
-    var bestGapGrid = VOLUME_BOX_WALL_SNAP_TOLERANCE_GRID;
-    var snapped = { x: xGrid, y: yGrid };
+    var hasHard = false, hardPenetration = Infinity, hardSnapped = { x: xGrid, y: yGrid };
+    var softBestGapGrid = VOLUME_BOX_WALL_SNAP_TOLERANCE_GRID;
+    var softSnapped = { x: xGrid, y: yGrid };
     Store.currentWalls().forEach(function (w: any) {
       var wallLenGrid = Math.hypot(w.x2 - w.x1, w.y2 - w.y1);
       if (wallLenGrid < Core.GRID * 0.3) return; // parede curta demais pra servir de encosto
@@ -3585,38 +3598,43 @@ import {
       if (horizontal) {
         var minX = Math.min(w.x1, w.x2) - halfExtentXGrid, maxX = Math.max(w.x1, w.x2) + halfExtentXGrid;
         if (xGrid < minX || xGrid > maxX) return;
-        // Valor com sinal: positivo = bloco ainda tem vão até a parede,
-        // negativo = bloco já passou da face da parede (encostou forte
-        // ou soltou meio sobreposto) — os dois casos contam como "perto
-        // o bastante" pelo módulo, senão soltar exatamente em cima da
-        // parede (gap negativo) nunca dispararia o snap.
-        var gapY = Math.abs(yGrid - w.y1) - halfExtentZGrid - wallHalfThickGrid;
-        if (Math.abs(gapY) >= bestGapGrid) return;
-        bestGapGrid = Math.abs(gapY);
-        var snappedYWall = w.y1 + (yGrid >= w.y1 ? 1 : -1) * (halfExtentZGrid + wallHalfThickGrid);
-        // Quina com quina: se a ponta da parede (w.x1 ou w.x2) está
-        // perto o bastante de alinhar com a BORDA do bloco (não o
-        // centro), encosta o bloco exatamente na ponta da parede.
-        var snappedXWall = snapToNearest(xGrid, [
+        var touchDistY = halfExtentZGrid + wallHalfThickGrid;
+        var rawGapY = yGrid - w.y1; // sinal decide de que lado a face encosta
+        var absGapY = Math.abs(rawGapY);
+        var candXWall = snapToNearest(xGrid, [
           w.x1 + halfExtentXGrid, w.x1 - halfExtentXGrid,
           w.x2 + halfExtentXGrid, w.x2 - halfExtentXGrid,
         ], VOLUME_BOX_CORNER_SNAP_TOLERANCE_GRID);
-        snapped = { x: snappedXWall, y: snappedYWall };
+        var candYWall = w.y1 + (rawGapY >= 0 ? 1 : -1) * touchDistY;
+        if (absGapY < touchDistY) {
+          var penetrationY = touchDistY - absGapY;
+          if (!hasHard || penetrationY < hardPenetration) { hasHard = true; hardPenetration = penetrationY; hardSnapped = { x: candXWall, y: candYWall }; }
+        } else {
+          var gapOutsideY = absGapY - touchDistY;
+          if (gapOutsideY < softBestGapGrid) { softBestGapGrid = gapOutsideY; softSnapped = { x: candXWall, y: candYWall }; }
+        }
       } else if (vertical) {
         var minY = Math.min(w.y1, w.y2) - halfExtentZGrid, maxY = Math.max(w.y1, w.y2) + halfExtentZGrid;
         if (yGrid < minY || yGrid > maxY) return;
-        var gapX = Math.abs(xGrid - w.x1) - halfExtentXGrid - wallHalfThickGrid;
-        if (Math.abs(gapX) >= bestGapGrid) return;
-        bestGapGrid = Math.abs(gapX);
-        var snappedXVert = w.x1 + (xGrid >= w.x1 ? 1 : -1) * (halfExtentXGrid + wallHalfThickGrid);
-        var snappedYVert = snapToNearest(yGrid, [
+        var touchDistX = halfExtentXGrid + wallHalfThickGrid;
+        var rawGapX = xGrid - w.x1;
+        var absGapX = Math.abs(rawGapX);
+        var candYVert = snapToNearest(yGrid, [
           w.y1 + halfExtentZGrid, w.y1 - halfExtentZGrid,
           w.y2 + halfExtentZGrid, w.y2 - halfExtentZGrid,
         ], VOLUME_BOX_CORNER_SNAP_TOLERANCE_GRID);
-        snapped = { x: snappedXVert, y: snappedYVert };
+        var candXVert = w.x1 + (rawGapX >= 0 ? 1 : -1) * touchDistX;
+        if (absGapX < touchDistX) {
+          var penetrationX = touchDistX - absGapX;
+          if (!hasHard || penetrationX < hardPenetration) { hasHard = true; hardPenetration = penetrationX; hardSnapped = { x: candXVert, y: candYVert }; }
+        } else {
+          var gapOutsideX = absGapX - touchDistX;
+          if (gapOutsideX < softBestGapGrid) { softBestGapGrid = gapOutsideX; softSnapped = { x: candXVert, y: candYVert }; }
+        }
       }
     });
-    return snapped;
+    if (hasHard) return { x: hardSnapped.x, y: hardSnapped.y, hard: true };
+    return { x: softSnapped.x, y: softSnapped.y, hard: false };
   }
 
   // Snap do Cubo mágico contra OUTRO Cubo mágico vizinho (Product
@@ -3632,11 +3650,12 @@ import {
   // de alguns centímetros faria a grade do metalão e as chapas de ACM
   // dos dois blocos ficarem em linhas diferentes, visivelmente
   // desalinhadas mesmo encostadas.
-  function snapVolumeBoxToNeighborBoxes(box: any, xGrid: number, yGrid: number): { x: number; y: number } {
+  function snapVolumeBoxToNeighborBoxes(box: any, xGrid: number, yGrid: number): { x: number; y: number; hard: boolean } {
     var halfExtent = volumeBoxHalfExtentsGrid(box);
     var halfExtentXGrid = halfExtent.x, halfExtentZGrid = halfExtent.z;
-    var bestGapGrid = VOLUME_BOX_WALL_SNAP_TOLERANCE_GRID;
-    var snapped = { x: xGrid, y: yGrid };
+    var hasHard = false, hardPenetration = Infinity, hardSnapped = { x: xGrid, y: yGrid };
+    var softBestGapGrid = VOLUME_BOX_WALL_SNAP_TOLERANCE_GRID;
+    var softSnapped = { x: xGrid, y: yGrid };
     Store.currentVolumeBoxes().forEach(function (ob: any) {
       if (ob.id === box.id) return;
       var obHalf = volumeBoxHalfExtentsGrid(ob);
@@ -3655,27 +3674,57 @@ import {
       // (mesma "fileira"), então o encosto de verdade é no OUTRO eixo.
       var overlapX = Math.min(xGrid + halfExtentXGrid, ob.x + obHalf.x) - Math.max(xGrid - halfExtentXGrid, ob.x - obHalf.x);
       var overlapZ = Math.min(yGrid + halfExtentZGrid, ob.y + obHalf.z) - Math.max(yGrid - halfExtentZGrid, ob.y - obHalf.z);
+      // Sobrepondo de VERDADE nos dois eixos (Product Owner: "um box
+      // não pode entrar dentro do outro") — separa pelo eixo de MENOR
+      // sobreposição (empurrão mínimo pra sair de dentro um do outro),
+      // sempre, não importa a distância. Já não-sobrepondo em algum
+      // eixo (só perto), cai no ímã de conveniência de sempre, com
+      // tolerância.
+      var overlapping = overlapX > 0 && overlapZ > 0;
       if (overlapZ > overlapX) {
         // Mais alinhados em Z (mesma fileira) — encosta lado a lado, fechando o vão em X.
-        var gapX = Math.abs(xGrid - ob.x) - combinedX;
-        if (Math.abs(gapX) < bestGapGrid) {
-          bestGapGrid = Math.abs(gapX);
-          var snappedXBox = ob.x + (xGrid >= ob.x ? 1 : -1) * combinedX;
-          var snappedYBox = snapToNearest(yGrid, [ob.y], VOLUME_BOX_CORNER_SNAP_TOLERANCE_GRID);
-          snapped = { x: snappedXBox, y: snappedYBox };
+        if (overlapping) {
+          if (!hasHard || overlapX < hardPenetration) {
+            hasHard = true; hardPenetration = overlapX;
+            hardSnapped = {
+              x: ob.x + (xGrid >= ob.x ? 1 : -1) * combinedX,
+              y: snapToNearest(yGrid, [ob.y], VOLUME_BOX_CORNER_SNAP_TOLERANCE_GRID),
+            };
+          }
+        } else {
+          var gapX = Math.abs(xGrid - ob.x) - combinedX;
+          if (Math.abs(gapX) < softBestGapGrid) {
+            softBestGapGrid = Math.abs(gapX);
+            softSnapped = {
+              x: ob.x + (xGrid >= ob.x ? 1 : -1) * combinedX,
+              y: snapToNearest(yGrid, [ob.y], VOLUME_BOX_CORNER_SNAP_TOLERANCE_GRID),
+            };
+          }
         }
       } else if (overlapX > overlapZ) {
         // Mais alinhados em X (mesma coluna) — encosta frente/fundo, fechando o vão em Z.
-        var gapZ = Math.abs(yGrid - ob.y) - combinedZ;
-        if (Math.abs(gapZ) < bestGapGrid) {
-          bestGapGrid = Math.abs(gapZ);
-          var snappedYBox2 = ob.y + (yGrid >= ob.y ? 1 : -1) * combinedZ;
-          var snappedXBox2 = snapToNearest(xGrid, [ob.x], VOLUME_BOX_CORNER_SNAP_TOLERANCE_GRID);
-          snapped = { x: snappedXBox2, y: snappedYBox2 };
+        if (overlapping) {
+          if (!hasHard || overlapZ < hardPenetration) {
+            hasHard = true; hardPenetration = overlapZ;
+            hardSnapped = {
+              x: snapToNearest(xGrid, [ob.x], VOLUME_BOX_CORNER_SNAP_TOLERANCE_GRID),
+              y: ob.y + (yGrid >= ob.y ? 1 : -1) * combinedZ,
+            };
+          }
+        } else {
+          var gapZ = Math.abs(yGrid - ob.y) - combinedZ;
+          if (Math.abs(gapZ) < softBestGapGrid) {
+            softBestGapGrid = Math.abs(gapZ);
+            softSnapped = {
+              x: snapToNearest(xGrid, [ob.x], VOLUME_BOX_CORNER_SNAP_TOLERANCE_GRID),
+              y: ob.y + (yGrid >= ob.y ? 1 : -1) * combinedZ,
+            };
+          }
         }
       }
     });
-    return snapped;
+    if (hasHard) return { x: hardSnapped.x, y: hardSnapped.y, hard: true };
+    return { x: softSnapped.x, y: softSnapped.y, hard: false };
   }
 
   // Ao soltar o arraste, roda os dois ímãs (parede e bloco vizinho)
@@ -3688,6 +3737,16 @@ import {
     var boxSnap = snapVolumeBoxToNeighborBoxes(box, xGrid, yGrid);
     var wallDist = Math.hypot(wallSnap.x - xGrid, wallSnap.y - yGrid);
     var boxDist = Math.hypot(boxSnap.x - xGrid, boxSnap.y - yGrid);
+    // HARD (sobreposição de verdade — "não pode entrar dentro")
+    // sempre vence SOFT (ímã de conveniência), mesmo que o soft peça
+    // uma correção numericamente menor — sair de dentro da parede/do
+    // outro bloco não é opcional. Entre dois HARD (bloco preso dentro
+    // dos dois ao mesmo tempo, caso raro), fica com o que pedir menos
+    // correção — não resolve as duas sobreposições de uma vez, mas
+    // evita piorar; soltar de novo resolve a que sobrou.
+    if (wallSnap.hard && boxSnap.hard) return wallDist <= boxDist ? wallSnap : boxSnap;
+    if (wallSnap.hard) return wallSnap;
+    if (boxSnap.hard) return boxSnap;
     if (wallDist < 1e-6 && boxDist < 1e-6) return { x: xGrid, y: yGrid };
     if (boxDist < 1e-6) return wallSnap;
     if (wallDist < 1e-6) return boxSnap;
