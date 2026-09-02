@@ -6,6 +6,7 @@
 - Cubo mágico "Metalão": o perfil passou de 5cm para 30x30mm, e ganhou uma textura de aço galvanizado (antes era uma cor cinza lisa). Ver DEC-195.
 - Melhorado o snap do Cubo mágico: além de encostar na parede, agora também encaixa "quina com quina" com a ponta dela quando solta perto o bastante. Novo: o Cubo mágico também gruda em OUTRO Cubo mágico vizinho (lado a lado ou frente/fundo), forçando o alinhamento exato no eixo que não está encostando — pra duas chapas de ACM lado a lado ficarem parelhas, sem desalinhamento de alguns centímetros. Ver DEC-196.
 - Corrigido: o Cubo mágico agora nunca fica sobrepondo uma parede nem outro Cubo mágico — antes o encosto contra parede/bloco vizinho era só um ímã de conveniência (só corrigia quando soltava perto o bastante); agora, sempre que o bloco é solto realmente atravessando uma parede ou enfiado dentro de outro bloco, a posição é corrigida pra sair faceado/encostado, não importa a distância. Ver DEC-197.
+- Cubo mágico: redimensionar (puxar face) e posicionar (mover e subir/descer) agora sempre em passos de 50mm, pros dois lados — deixa mais fácil unir dois blocos de cabeça, com medidas redondas. Novo: Shift+D duplica o Cubo mágico selecionado (mesmo atalho do Blender). Ver DEC-198.
 
 ## Alterado — 01/09/2026
 

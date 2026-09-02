@@ -3555,6 +3555,24 @@ import {
   // a ponta com o canto da parede, ou centro a centro com o vizinho,
   // força o alinhamento exato em vez de deixar a pequena folga.
   var VOLUME_BOX_CORNER_SNAP_TOLERANCE_GRID = 0.3 * Core.GRID; // 30cm
+  // Product Owner: "vamos fazer o redimensionamento do box ser em
+  // intervalos de 50mm para ambos os lados e o posicionamento também,
+  // tanto na horizontal quanto na vertical" — 1 unidade de grade JÁ é
+  // 50mm (Core.GRID=20 por metro), então arredondar posição/tamanho pro
+  // grid inteiro (em vez de deixar o valor cru do raycast/arraste) já
+  // dá o passo de 50mm pedido, nos dois sentidos (cresce/encolhe,
+  // positivo/negativo). Aplicado ANTES do ímã de parede/bloco vizinho
+  // (snapVolumeBoxPosition) — quando um vizinho está perto o bastante,
+  // o ímã (mais preciso) ainda vence; sem vizinho por perto, a posição
+  // cai limpa no grid de 5cm de qualquer jeito, facilitando alinhar
+  // blocos de cabeça mesmo sem soltar exatamente encostado.
+  var VOLUME_BOX_STEP_M = 0.05;
+  function snapVolumeBoxStepM(valueM: number): number {
+    return Math.round(valueM / VOLUME_BOX_STEP_M) * VOLUME_BOX_STEP_M;
+  }
+  function snapVolumeBoxStepGrid(valueGrid: number): number {
+    return Math.round(valueGrid); // 1 unidade de grade == 50mm
+  }
   function snapToNearest(value: number, candidates: number[], tolerance: number): number {
     var best = value, bestDist = tolerance;
     candidates.forEach(function (c) {
@@ -4688,7 +4706,7 @@ import {
       return;
     }
     if (dragMode && dragMode.indexOf('volumeBoxFace:') === 0) {
-      var finalVbFaceDelta = dragElementStart ? dragElementStart.lastDeltaAlongNormalM : 0;
+      var finalVbFaceDelta = dragElementStart ? snapVolumeBoxStepM(dragElementStart.lastDeltaAlongNormalM || 0) : 0;
       clearVolumeBoxResizePreview();
       if (selectedVolumeBoxId && finalVbFaceDelta) {
         Store.commands.updateVolumeBoxFaceLive(selectedVolumeBoxId, dragElementStart.faceIndex, finalVbFaceDelta);
@@ -4762,17 +4780,23 @@ import {
       // uma parede alinhada ao mundo OU de outro Cubo mágico, a posição
       // (só X/Y, nunca o ângulo — Product Owner: "Só posição") é
       // ajustada pra encostar nela, forçando quina com quina quando os
-      // dois já soltam quase alinhados (snapVolumeBoxPosition).
+      // dois já soltam quase alinhados (snapVolumeBoxPosition). Antes
+      // disso, X/Y (e a altura vertical do Shift+arraste) já caem no
+      // grid de 50mm (snapVolumeBoxStepM/Grid) — o ímã de vizinho, mais
+      // preciso, ainda vence quando tem alguém perto.
       var vbId = selectedVolumeBoxId;
       var vbEntUp = vbId ? Store.findVolumeBox(vbId) : null;
       if (vbId && vbEntUp && dragElementStart && dragGroundStart) {
         if (e.shiftKey) {
-          Store.commands.updateVolumeBoxBodyLive(vbId, dragElementStart.x, dragElementStart.y, dragElementStart.liveSillHeightM);
+          var vbSillStepped = snapVolumeBoxStepM(dragElementStart.liveSillHeightM);
+          Store.commands.updateVolumeBoxBodyLive(vbId, dragElementStart.x, dragElementStart.y, vbSillStepped);
         } else {
           var vbUp = getGroundModelPoint(e.clientX, e.clientY);
           if (vbUp) {
             var dxVbUp = vbUp.x - dragGroundStart.x, dyVbUp = vbUp.y - dragGroundStart.y;
-            var vbSnapped = snapVolumeBoxPosition(vbEntUp, dragElementStart.x + dxVbUp, dragElementStart.y + dyVbUp);
+            var vbSteppedX = snapVolumeBoxStepGrid(dragElementStart.x + dxVbUp);
+            var vbSteppedY = snapVolumeBoxStepGrid(dragElementStart.y + dyVbUp);
+            var vbSnapped = snapVolumeBoxPosition(vbEntUp, vbSteppedX, vbSteppedY);
             Store.commands.updateVolumeBoxBodyLive(vbId, vbSnapped.x, vbSnapped.y, dragElementStart.liveSillHeightM);
           }
         }
@@ -6044,6 +6068,14 @@ import {
       // clicar em outra coisa. setTool(null) já cancela a ferramenta E
       // desmarca a seleção atual (mesmo botão "x" do gizmo).
       if (e.key === 'Escape' && currentTool) setTool(null);
+      // Shift+D duplica o Cubo mágico selecionado (Product Owner:
+      // "quero que o box possa ser duplicado com shift+d também",
+      // mesmo atalho do Blender). selectVolumeBox já seleciona a cópia
+      // e chama render() sozinho.
+      if (e.shiftKey && (e.key === 'D' || e.key === 'd') && selectedVolumeBoxId) {
+        var duplicatedVb = Store.commands.duplicateVolumeBox(selectedVolumeBoxId);
+        if (duplicatedVb) selectVolumeBox(duplicatedVb.id);
+      }
     });
     container.addEventListener('pointerdown', onPointerDown);
     window.addEventListener('pointermove', onPointerMove);

@@ -2176,6 +2176,27 @@ export const commands = {
     emit({ type: 'VolumeBoxRotated', volumeBoxId });
   },
 
+  // Shift+D duplica o Cubo mágico selecionado (Product Owner: "quero
+  // que o box possa ser duplicado com shift+d também") — mesmo padrão
+  // de deslocamento de duplicateFurniture/duplicateColumn (Core.GRID
+  // nos dois eixos, pra não nascer exatamente em cima do original), mas
+  // com CÓPIA PROFUNDA de cornerOffsets/faceFinishProductId em vez de
+  // reaproveitar um construtor genérico como aquelas: um Cubo mágico
+  // carrega moldagem e pintura por face próprias, e cornerOffsets é
+  // mutado IN PLACE por addToVolumeBoxCornerOffset — copiar só a
+  // referência do array faria arrastar uma face do duplicado deformar
+  // o original junto.
+  duplicateVolumeBox(volumeBoxId: string): VolumeBox | null {
+    const b = findVolumeBox(volumeBoxId); if (!b) return null;
+    pushUndoSnapshot();
+    const copy: VolumeBox = { ...b, id: Core.nextId('volumebox'), x: b.x + Core.GRID, y: b.y + Core.GRID };
+    if (b.cornerOffsets) copy.cornerOffsets = b.cornerOffsets.map((c) => ({ ...c })) as NonNullable<VolumeBox['cornerOffsets']>;
+    if (b.faceFinishProductId) copy.faceFinishProductId = b.faceFinishProductId.slice();
+    currentVolumeBoxes().push(copy);
+    emit({ type: 'VolumeBoxCreated', floorIndex: project.currentFloorIndex, volumeBoxId: copy.id, duplicatedFrom: volumeBoxId });
+    return copy;
+  },
+
   // Cubo moldável — só push-pull de face (DEC-176: as alças de
   // canto/aresta da DEC-163/164 ficaram confusas em 3 rodadas de teste
   // do Product Owner e saíram). Empurrar a face "direita" JÁ é o

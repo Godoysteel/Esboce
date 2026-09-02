@@ -522,11 +522,71 @@ test('snapVolumeBoxPosition: roda o ímã de parede E o de bloco vizinho contra 
   assert.match(body, /return wallDist <= boxDist \? wallSnap : boxSnap;/);
 });
 
-test('ViewportController: soltar o arraste horizontal do Cubo mágico passa pelo snap combinado (parede + bloco vizinho) antes de commitar no Store', () => {
+// Product Owner: "vamos fazer o redimensionamento do box ser em
+// intervalos de 50mm para ambos os lados e o posicionamento também,
+// tanto na horizontal quanto na vertical" — 1 unidade de grade JÁ é
+// 50mm (Core.GRID=20/metro), então arredondar pro grid inteiro
+// (snapVolumeBoxStepGrid) já dá o passo pedido; snapVolumeBoxStepM
+// (arredonda em metros) cobre os campos que são armazenados em metros
+// (sillHeightM, delta de face). Aplicado ANTES do ímã de parede/bloco
+// vizinho — o ímã, mais preciso, ainda vence quando tem vizinho perto.
+test('ViewportController: soltar o arraste horizontal do Cubo mágico arredonda pro grid de 50mm ANTES do snap combinado (parede + bloco vizinho), e o Shift+arraste vertical arredonda a altura em metros', () => {
   const start = viewportSource.indexOf('dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;\n      volumeBoxDragMesh = null;');
   const before = viewportSource.slice(Math.max(0, start - 900), start);
-  assert.match(before, /var vbSnapped = snapVolumeBoxPosition\(vbEntUp, dragElementStart\.x \+ dxVbUp, dragElementStart\.y \+ dyVbUp\);/);
+  assert.match(before, /var vbSteppedX = snapVolumeBoxStepGrid\(dragElementStart\.x \+ dxVbUp\);/);
+  assert.match(before, /var vbSteppedY = snapVolumeBoxStepGrid\(dragElementStart\.y \+ dyVbUp\);/);
+  assert.match(before, /var vbSnapped = snapVolumeBoxPosition\(vbEntUp, vbSteppedX, vbSteppedY\);/);
   assert.match(before, /Store\.commands\.updateVolumeBoxBodyLive\(vbId, vbSnapped\.x, vbSnapped\.y, dragElementStart\.liveSillHeightM\);/);
+  assert.match(before, /var vbSillStepped = snapVolumeBoxStepM\(dragElementStart\.liveSillHeightM\);/);
+  assert.match(before, /Store\.commands\.updateVolumeBoxBodyLive\(vbId, dragElementStart\.x, dragElementStart\.y, vbSillStepped\);/);
+});
+
+test('snapVolumeBoxStepM/snapVolumeBoxStepGrid: existem e arredondam pro múltiplo de 50mm mais próximo (1 unidade de grade == 50mm)', () => {
+  assert.match(viewportSource, /var VOLUME_BOX_STEP_M = 0\.05;/);
+  assert.match(viewportSource, /function snapVolumeBoxStepM\(valueM: number\): number \{\s*return Math\.round\(valueM \/ VOLUME_BOX_STEP_M\) \* VOLUME_BOX_STEP_M;/);
+  assert.match(viewportSource, /function snapVolumeBoxStepGrid\(valueGrid: number\): number \{\s*return Math\.round\(valueGrid\); \/\/ 1 unidade de grade == 50mm/);
+});
+
+test('ViewportController: soltar o arraste de FACE do Cubo mágico (redimensionar) arredonda o delta pro múltiplo de 50mm antes de commitar', () => {
+  // duas ocorrências de "dragMode.indexOf('volumeBoxFace:')" no arquivo
+  // — a primeira é o pointermove (prévia ao vivo), a segunda é o
+  // pointerup (commit de verdade) — pega a SEGUNDA.
+  const firstOccurrence = viewportSource.indexOf("if (dragMode && dragMode.indexOf('volumeBoxFace:') === 0) {");
+  assert.ok(firstOccurrence !== -1);
+  const start = viewportSource.indexOf("if (dragMode && dragMode.indexOf('volumeBoxFace:') === 0) {", firstOccurrence + 1);
+  assert.ok(start !== -1, 'precisa achar a SEGUNDA ocorrência (pointerup)');
+  const end = viewportSource.indexOf('\n    }', start);
+  const body = viewportSource.slice(start, end);
+  assert.match(body, /var finalVbFaceDelta = dragElementStart \? snapVolumeBoxStepM\(dragElementStart\.lastDeltaAlongNormalM \|\| 0\) : 0;/);
+});
+
+// Product Owner: "quero que o box possa ser duplicado com shift+d
+// também" — mesmo atalho do Blender.
+test('ViewportController: Shift+D duplica o Cubo mágico selecionado (Store.commands.duplicateVolumeBox) e seleciona a cópia', () => {
+  const start = viewportSource.indexOf("window.addEventListener('keydown', function (e: any) {");
+  const end = viewportSource.indexOf('\n    });', start);
+  const body = viewportSource.slice(start, end);
+  assert.match(body, /if \(e\.shiftKey && \(e\.key === 'D' \|\| e\.key === 'd'\) && selectedVolumeBoxId\) \{/);
+  assert.match(body, /var duplicatedVb = Store\.commands\.duplicateVolumeBox\(selectedVolumeBoxId\);/);
+  assert.match(body, /if \(duplicatedVb\) selectVolumeBox\(duplicatedVb\.id\);/);
+});
+
+// Store.commands.duplicateVolumeBox precisa de CÓPIA PROFUNDA de
+// cornerOffsets/faceFinishProductId (não um spread raso): cornerOffsets
+// é mutado IN PLACE por addToVolumeBoxCornerOffset (c.x = ...), então
+// compartilhar a referência do array faria arrastar uma face do
+// duplicado deformar o original junto.
+test('Store.commands.duplicateVolumeBox: existe, gera id novo, desloca a posição (Core.GRID), e faz CÓPIA PROFUNDA de cornerOffsets/faceFinishProductId (nunca compartilha a referência do array)', () => {
+  const start = storeSource.indexOf('duplicateVolumeBox(volumeBoxId: string): VolumeBox | null {');
+  assert.ok(start !== -1);
+  const end = storeSource.indexOf('\n  },', start);
+  const body = storeSource.slice(start, end);
+  assert.match(body, /id: Core\.nextId\('volumebox'\)/);
+  assert.match(body, /x: b\.x \+ Core\.GRID, y: b\.y \+ Core\.GRID/);
+  assert.match(body, /copy\.cornerOffsets = b\.cornerOffsets\.map\(\(c\) => \(\{ \.\.\.c \}\)\)/, 'cada canto precisa ser um objeto NOVO, não o mesmo mutado in place no original');
+  assert.match(body, /copy\.faceFinishProductId = b\.faceFinishProductId\.slice\(\)/);
+  assert.match(body, /currentVolumeBoxes\(\)\.push\(copy\);/);
+  assert.match(body, /emit\(\{ type: 'VolumeBoxCreated', floorIndex: project\.currentFloorIndex, volumeBoxId: copy\.id, duplicatedFrom: volumeBoxId \}\);/);
 });
 
 // Vazamento de memória de GPU achado a partir de reclamação real de
