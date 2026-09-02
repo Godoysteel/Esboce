@@ -590,13 +590,22 @@ import {
     roofResizeHiddenObjects = [];
   }
 
-  function previewRoofResize(bounds: { x1: number; y1: number; x2: number; y2: number }) {
+  // `overrides` mescla por cima do telhado real pra montar o fantasma —
+  // começou só com {x1,y1,x2,y2} (redimensionar borda), reaproveitado
+  // também pra {pitchDeg}/{parapetHeight}/{baseHeightM} (cumeeira,
+  // parapeito, elevação individual — ver "Performance do arraste de
+  // telhado" no Registro de Decisões). floorTopY usa PREVIEW (não o
+  // `roof` original) porque, quando o override É baseHeightM (telhado
+  // ático/independente), a altura da base tem que refletir o valor
+  // sendo arrastado ao vivo — senão o fantasma flutua na altura antiga
+  // enquanto o número muda.
+  function previewRoofResize(overrides: any) {
     var roof = Store.findRoof(selectedRoofId);
     if (!roof) return;
     clearRoofResizePreview();
     beginRoofResizePreview(roof.id);
-    var previewRoof = Object.assign({}, roof, bounds);
-    var floorTopY = currentFloorYOffset() + ((roof.atticMode || roof.steppedWallVolume || roof.steppedLowerRoofId) ? (roof.baseHeightM || 1.2) : Scene3DRenderer.WALL_HEIGHT_GETTER());
+    var previewRoof = Object.assign({}, roof, overrides);
+    var floorTopY = currentFloorYOffset() + ((previewRoof.atticMode || previewRoof.steppedWallVolume || previewRoof.steppedLowerRoofId) ? (previewRoof.baseHeightM || 1.2) : Scene3DRenderer.WALL_HEIGHT_GETTER());
     roofResizePreviewMeshes = Scene3DRenderer.createRoofResizePreviewMeshes(previewRoof, scale, offsetX, offsetY, floorTopY);
     roofResizePreviewMeshes.forEach(function (object) { scene.add(object); });
   }
@@ -1746,6 +1755,26 @@ import {
     updateDimLabels();
   }
 
+  // Performance (Product Owner: "notei que ao gerar e movimentar o
+  // telhado ele fica travando") — o fantasma do telhado que segue o
+  // mouse ANTES do clique (ferramenta Telhado armada, ver mais abaixo)
+  // chamava render() direto a cada pointermove BRUTO, sem throttle
+  // nenhum. render() sempre chama Scene3DRenderer.rebuild() completo
+  // (reconstrói TODOS os telhados/paredes/cômodos do zero); o navegador
+  // dispara pointermove com frequência maior do que a tela consegue
+  // pintar, então cada pixel de movimento do mouse podia empilhar mais
+  // um rebuild completo antes do anterior nem ter sido exibido.
+  // scheduleRender() colapsa isso em no máximo 1 rebuild por frame
+  // (requestAnimationFrame) — como drawPreview já foi atualizado de
+  // forma síncrona e barata antes de chamar isto, o rebuild adiado
+  // sempre usa o estado mais recente do mouse quando finalmente roda.
+  var renderScheduled = false;
+  function scheduleRender() {
+    if (renderScheduled) return;
+    renderScheduled = true;
+    requestAnimationFrame(function () { renderScheduled = false; render(); });
+  }
+
   function onModelChanged() {
     if (selectedWallId && !Store.findWall(selectedWallId)) selectedWallId = null;
     if (selectedColumnId && !Store.findColumn(selectedColumnId)) selectedColumnId = null;
@@ -2732,15 +2761,20 @@ import {
         var rrT = Store.findRoof(selectedRoofId);
         if (handleT === 'roofRidge') {
           dragElementStart = { pitchDeg: rrT ? rrT.pitchDeg : 28, startScreenY: e.clientY };
+          if (rrT) beginRoofResizePreview(rrT.id);
         } else if (handleT === 'roofBaseHeight') {
           dragElementStart = { baseHeightM: rrT ? rrT.baseHeightM : 1.2, startScreenY: e.clientY };
-          // A cena é reconstruída enquanto a altura muda. Capturar o
-          // ponteiro no canvas mantém todos os movimentos e o pointerup
-          // ligados ao mesmo gesto, mesmo quando a esfera original deixa
-          // de existir no meio do arraste por causa desse rebuild.
+          if (rrT) beginRoofResizePreview(rrT.id);
+          // Capturar o ponteiro no canvas mantém todos os movimentos e o
+          // pointerup ligados ao mesmo gesto mesmo se ele sair do canvas
+          // no meio do arraste — não é mais por causa de rebuild
+          // destruindo a esfera (o arraste agora só mostra um fantasma
+          // translúcido via previewRoofResize, sem tocar o Store; a
+          // reconstrução de verdade só acontece uma vez, no pointerup).
           try { if (container.setPointerCapture) container.setPointerCapture(e.pointerId); } catch (_) {}
         } else if (handleT === 'roofParapetHeight') {
           dragElementStart = { parapetHeight: rrT ? rrT.parapetHeight : 0.5, startScreenY: e.clientY };
+          if (rrT) beginRoofResizePreview(rrT.id);
         } else if (rrT) {
           var regionForDrag = findGridRegionAt((rrT.x1 + rrT.x2) / 2, (rrT.y1 + rrT.y2) / 2);
           dragElementStart = { x1: rrT.x1, y1: rrT.y1, x2: rrT.x2, y2: rrT.y2, region: regionForDrag, lastBounds: null };
@@ -2817,9 +2851,11 @@ import {
       } else if (handle === 'roofRidge') {
         var rr = Store.findRoof(selectedRoofId);
         dragElementStart = { pitchDeg: rr ? rr.pitchDeg : 28, startScreenY: e.clientY };
+        if (rr) beginRoofResizePreview(rr.id);
       } else if (handle === 'roofParapetHeight') {
         var rrP = Store.findRoof(selectedRoofId);
         dragElementStart = { parapetHeight: rrP ? rrP.parapetHeight : 0.5, startScreenY: e.clientY };
+        if (rrP) beginRoofResizePreview(rrP.id);
       } else if (handle.indexOf('roofEdge') === 0) {
         // A borda do telhado precisa saber o retângulo de partida E a
         // região de grade que trava o arraste — isso valia antes só
@@ -4080,7 +4116,17 @@ import {
             }
           }
         }
-        Store.commands.updateRoofPitchLive(selectedRoofId, finalPitch);
+        // Performance (Product Owner: "notei que ao gerar e movimentar
+        // o telhado ele fica travando") — antes cada pointermove
+        // gravava direto no Store (updateRoofPitchLive), disparando um
+        // rebuild() COMPLETO da cena (todos os telhados reconstruídos
+        // do zero + recorte O(telhados²) entre eles) 1×/frame durante
+        // TODO o arraste. Agora só monta um fantasma translúcido leve
+        // (mesma técnica já usada em arrastar borda/mover o telhado
+        // inteiro, ver previewRoofResize) sem tocar o Store; o valor
+        // final só é gravado uma vez, no pointerup.
+        dragElementStart.lastPitchDeg = finalPitch;
+        previewRoofResize({ pitchDeg: finalPitch });
         if (rNow && roofPitchDragCotaEl) {
           var pitchMid = modelToWorld((rNow.x1 + rNow.x2) / 2, (rNow.y1 + rNow.y2) / 2);
           var pitchBaseM = rNow.baseHeightM || Scene3DRenderer.WALL_HEIGHT_GETTER();
@@ -4097,7 +4143,10 @@ import {
       if (dragElementStart) {
         var deltaScreenP = dragElementStart.startScreenY - e.clientY; // positivo = arrastou pra cima
         var candidateHeight = Math.max(0.2, Math.min(1.2, dragElementStart.parapetHeight + deltaScreenP * 0.01));
-        Store.commands.updateRoofParapetHeightLive(selectedRoofId, candidateHeight);
+        // Mesmo motivo de performance do roofRidge acima — fantasma
+        // leve durante o arraste, grava no Store só no pointerup.
+        dragElementStart.lastParapetHeight = candidateHeight;
+        previewRoofResize({ parapetHeight: candidateHeight });
       }
       return;
     }
@@ -4105,8 +4154,18 @@ import {
       if (dragElementStart) {
         var deltaBase = dragElementStart.startScreenY - e.clientY;
         var wholeRoofHeight = dragElementStart.baseHeightM + deltaBase * 0.01;
-        Store.commands.updateRoofBaseHeightLive(selectedRoofId, wholeRoofHeight);
-        hintEl.textContent = 'Telhado inteiro elevado individualmente — base em ' + Math.max(Core.WALL_HEIGHT, Math.min(8, wholeRoofHeight)).toFixed(2).replace('.', ',') + ' m.';
+        // Mesmo motivo de performance do roofRidge acima — fantasma leve
+        // durante o arraste, grava no Store só no pointerup. O clamp
+        // abaixo repete o mesmo cálculo de Store.commands.
+        // updateRoofBaseHeightLive (minimumHeightM/8 de teto) só pra o
+        // fantasma já nascer na altura que vai ser commitada, sem
+        // "pular" quando soltar o mouse num extremo.
+        var rBaseNow = Store.findRoof(selectedRoofId);
+        var minimumHeightM = rBaseNow && (rBaseNow.steppedWallVolume || rBaseNow.steppedLowerRoofId) ? Core.WALL_HEIGHT + 0.15 : 0.1;
+        var clampedBaseHeight = Math.max(minimumHeightM, Math.min(8, wholeRoofHeight));
+        dragElementStart.lastBaseHeightM = clampedBaseHeight;
+        previewRoofResize({ baseHeightM: clampedBaseHeight });
+        hintEl.textContent = 'Telhado inteiro elevado individualmente — base em ' + clampedBaseHeight.toFixed(2).replace('.', ',') + ' m.';
       }
       return;
     }
@@ -4429,7 +4488,7 @@ import {
       } else {
         drawPreview = null; // fora de qualquer grid — não mostra prévia, não dá pra colocar ali
       }
-      render();
+      scheduleRender();
       return;
     }
     // Colocando cômodo/parede: a seta corre livre (sem segurar botão),
@@ -4728,6 +4787,7 @@ import {
     // cobertura podia voltar ao topo das paredes e os fechamentos próprios
     // dela pareciam desaparecer. O gesto agora termina exatamente ao soltar.
     if (dragMode === 'roofBaseHeight') {
+      clearRoofResizePreview();
       if (selectedRoofId && dragElementStart && dragElementStart.startScreenY != null) {
         var finalWholeRoofHeight = dragElementStart.baseHeightM + (dragElementStart.startScreenY - e.clientY) * 0.01;
         Store.commands.updateRoofBaseHeightLive(selectedRoofId, finalWholeRoofHeight);
@@ -4742,6 +4802,17 @@ import {
     }
     if (dragMode === 'roofRidge' || dragMode === 'roofParapetHeight') {
       if (roofPitchDragCotaEl) roofPitchDragCotaEl.style.display = 'none';
+      // Commit único ao soltar (ver previewRoofResize/pointermove acima
+      // — durante o arraste só um fantasma era mostrado, sem gravar no
+      // Store) — usa o último valor calculado no pointermove.
+      clearRoofResizePreview();
+      if (selectedRoofId && dragElementStart) {
+        if (dragMode === 'roofRidge' && dragElementStart.lastPitchDeg != null) {
+          Store.commands.updateRoofPitchLive(selectedRoofId, dragElementStart.lastPitchDeg);
+        } else if (dragMode === 'roofParapetHeight' && dragElementStart.lastParapetHeight != null) {
+          Store.commands.updateRoofParapetHeightLive(selectedRoofId, dragElementStart.lastParapetHeight);
+        }
+      }
       if (selectedRoofId && fuseRoofsIfTouching(selectedRoofId)) {
         hintEl.textContent = 'Telhados fundidos — a cumeeira agora é uma só.';
         onModelChanged();

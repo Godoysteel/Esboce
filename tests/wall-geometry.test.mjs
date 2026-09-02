@@ -300,7 +300,7 @@ test('arraste de telhado move o conjunto 3D e confirma o Store somente ao soltar
 });
 
 test('redimensionar telhado usa uma previa transparente e confirma os limites ao soltar', () => {
-  assert.match(viewportControllerSource, /function previewRoofResize\(bounds:/);
+  assert.match(viewportControllerSource, /function previewRoofResize\(overrides:/);
   assert.match(viewportControllerSource, /createRoofResizePreviewMeshes\(previewRoof, scale, offsetX, offsetY, floorTopY\)/);
 
   const moveStart = viewportControllerSource.indexOf("if (dragMode && dragMode.indexOf('roofEdge') === 0) {");
