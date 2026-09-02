@@ -2317,3 +2317,48 @@ test('botão "Duplicar (geminado)" existe no HTML e chama duplicateEntireConstru
     /requireElement\("duplicateGeminadoBtn"\)\.addEventListener\("click", \(\) => \{[\s\S]{0,300}Store\.commands\.duplicateEntireConstructionMirrored\(\);/,
   );
 });
+
+// Product Owner: "quero que a fundação fique mais pra cima, saindo
+// para fora do chão, isso vai dar mais realismo" — depois "ela não
+// pode sobrepor as paredes e piso, tudo sobe igual". y=0 (piso do
+// térreo) é referência em centenas de lugares (arrasto, gizmo,
+// raycast, câmera) — erguer parede/piso de verdade seria arriscado
+// demais. Em vez disso, o CHÃO desce FOUNDATION_RISE_M e a fundação
+// estica pra baixo até alcançar o novo nível, com a calçada
+// acompanhando — visualmente idêntico a levantar a casa inteira, sem
+// tocar em nenhuma lógica de parede/piso.
+test('Scene3DRenderer: FOUNDATION_RISE_M existe e tem getter exportado (EsboceApplication usa pra abaixar o chão)', () => {
+  assert.match(scene3DRendererSource, /var FOUNDATION_RISE_M = 0\.2;/);
+  assert.match(scene3DRendererSource, /export function FOUNDATION_RISE_GETTER\(\) \{ return FOUNDATION_RISE_M; \}/);
+  assert.match(scene3DRendererSource, /\n  FOUNDATION_RISE_GETTER,/);
+});
+
+test('Scene3DRenderer.buildFoundationPiece: topo da fundação continua no MESMO lugar (-FOUNDATION_FLOOR_GAP, sem sobrepor parede/piso) — só a espessura cresce FOUNDATION_RISE_M pra baixo', () => {
+  const start = scene3DRendererSource.indexOf('function buildFoundationPiece(type: any, bounds: any, color: any) {');
+  const end = scene3DRendererSource.indexOf('\n  }', start);
+  const body = scene3DRendererSource.slice(start, end);
+  assert.match(body, /return makeSlabMesh\(shape, BALDRAME_THICKNESS \+ FOUNDATION_RISE_M, -FOUNDATION_FLOOR_GAP, color, 1\);/);
+  assert.match(body, /return makeSlabMesh\(radierShape, RADIER_THICKNESS \+ FOUNDATION_RISE_M, -FOUNDATION_FLOOR_GAP, color, 1\);/);
+});
+
+test('Scene3DRenderer.buildCalcada: acompanha o novo nível do chão (topo desce FOUNDATION_RISE_M), mesma espessura de sempre', () => {
+  const start = scene3DRendererSource.indexOf('function buildCalcada(rooms: any, groundBounds: any, scale: any, offsetX: any, offsetY: any, viewState: any) {');
+  const end = scene3DRendererSource.indexOf('\n  }', start);
+  const body = scene3DRendererSource.slice(start, end);
+  assert.match(body, /var calcadaTopY = 0\.03 - FOUNDATION_RISE_M;/);
+  assert.match(body, /makeSlabMesh\(shape, CALCADA_THICKNESS, calcadaTopY, color, 1\)/);
+  assert.match(body, /makeSlabMesh\(shape2, CALCADA_THICKNESS, calcadaTopY, color, 1\)/);
+});
+
+test('EsboceApplication: plano de grama desce Scene3DRenderer.FOUNDATION_RISE_GETTER() a partir do nível antigo (-0,01)', () => {
+  assert.match(esboceApplicationSource, /import \{ Scene3DRenderer \} from "\.\.\/core\/Scene3DRenderer\.js";/);
+  assert.match(esboceApplicationSource, /ground\.position\.y = -0\.01 - Scene3DRenderer\.FOUNDATION_RISE_GETTER\(\);/);
+});
+
+test('MaterialsPanel.computeFoundation: quantitativo de concreto soma FOUNDATION_RISE_GETTER() na espessura — acompanha a altura real construída, não só a espessura estrutural', () => {
+  const start = materialsPanelSource.indexOf('function computeFoundation(project: Project): Foundation {');
+  const end = materialsPanelSource.indexOf('\n}', start);
+  const body = materialsPanelSource.slice(start, end);
+  assert.match(body, /baldrameThickness: Scene3DRenderer\.BALDRAME_THICKNESS_GETTER\(\) \+ Scene3DRenderer\.FOUNDATION_RISE_GETTER\(\),/);
+  assert.match(body, /radierThickness: Scene3DRenderer\.RADIER_THICKNESS_GETTER\(\) \+ Scene3DRenderer\.FOUNDATION_RISE_GETTER\(\),/);
+});

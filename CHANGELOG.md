@@ -2,6 +2,8 @@
 
 ## Alterado — 01/09/2026
 
+- A fundação (baldrame ou radier) agora fica visível saindo pra fora do chão, mais realista — antes ficava quase toda enterrada, quase invisível de fora da casa. O topo continua exatamente no mesmo lugar (nunca sobrepõe parede nem piso); o chão ao redor da casa é que desce, e a calçada acompanha. O quantitativo de concreto foi atualizado pra refletir a fundação maior. Ver DEC-192.
+
 - O Bloco de Volumetria virou **Cubo mágico**: agora pode ser marcado com o elemento estrutural que representa (parede, marquise, pilar, cobertura) e o material que o compõe, entrando no quantitativo por esse material em vez de cair sempre no preço genérico. A escolha do material acontece já no clique do botão que cria o cubo, por uma lista. Ver DEC-175, DEC-179.
 - O Cubo mágico nasce com formato de cubo (1×1×1 m, antes era achatado) e cor amarelo-gema de destaque, pra ficar fácil de identificar na cena.
 - Simplificadas as alças de moldagem do Cubo mágico: só restou o puxar por FACE (empurra/estica aquela face na direção normal). As alças de canto e aresta, que ficavam confusas e se sobrepunham, foram removidas — e a correção revelou um bug real de escala que travava o arraste de face quando o cubo já tinha sido movido da origem. Ver DEC-176.

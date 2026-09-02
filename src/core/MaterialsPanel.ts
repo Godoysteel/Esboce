@@ -437,9 +437,14 @@ function computeFoundation(project: Project): Foundation {
     groundPerimeter,
     {
       baldrameWidth: Scene3DRenderer.BALDRAME_WIDTH_GETTER(),
-      baldrameThickness: Scene3DRenderer.BALDRAME_THICKNESS_GETTER(),
+      // + FOUNDATION_RISE_GETTER(): a fundação agora fica visualmente
+      // mais alta, saindo pra fora do chão (Product Owner, ver
+      // Scene3DRenderer.buildFoundationPiece) — o quantitativo de
+      // concreto acompanha a altura real construída, não só a espessura
+      // estrutural de baixo do piso.
+      baldrameThickness: Scene3DRenderer.BALDRAME_THICKNESS_GETTER() + Scene3DRenderer.FOUNDATION_RISE_GETTER(),
       radierMargin: Scene3DRenderer.RADIER_MARGIN_GETTER(),
-      radierThickness: Scene3DRenderer.RADIER_THICKNESS_GETTER(),
+      radierThickness: Scene3DRenderer.RADIER_THICKNESS_GETTER() + Scene3DRenderer.FOUNDATION_RISE_GETTER(),
       steelRateKgM3: STEEL_RATE_FOUNDATION_KG_M3,
     },
   );

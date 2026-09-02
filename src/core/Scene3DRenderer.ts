@@ -138,6 +138,20 @@ export function hashColorHex(key: string): number {
   // abaixo dele: fica integralmente sob as paredes e as faces nunca sao
   // coplanares, eliminando o z-fighting sem criar um vao visual relevante.
   var FOUNDATION_FLOOR_GAP = 0.005;
+  // Product Owner: "quero que a fundação fique mais pra cima, saindo
+  // para fora do chão, isso vai dar mais realismo" — e, depois de ver
+  // a primeira tentativa encostar na parede: "ela não pode sobrepor as
+  // paredes e piso, tudo sobe igual". y=0 (piso do térreo) é usado
+  // como referência em centenas de lugares — arrasto, gizmo, raycast,
+  // câmera — então erguer parede/piso de verdade seria arriscado
+  // demais pra um ajuste visual. Em vez disso, o CHÃO (grama, em
+  // EsboceApplication.ts via FOUNDATION_RISE_GETTER) desce esse tanto,
+  // e a fundação estica pra BAIXO até alcançar o novo nível (topo
+  // continua exatamente onde estava — nenhuma sobreposição nova com
+  // parede/piso), com a calçada acompanhando o chão pro mesmo nível.
+  // Visualmente idêntico a "levantar a casa inteira", sem tocar em
+  // nenhuma lógica de posicionamento de parede/piso.
+  var FOUNDATION_RISE_M = 0.2;
   var CALCADA_WIDTH = 0.6, CALCADA_THICKNESS = 0.05;
   var MARQUISE_DEPTH = 0.5, MARQUISE_THICKNESS = 0.06;
   var ROOF_PITCH_DEG = 28, ROOF_OVERHANG = 0.4, RAKE_OVERHANG = 0.4, ROOF_THICKNESS = 0.12;
@@ -4768,13 +4782,16 @@ export function hashColorHex(key: string): number {
         maxZ: bounds.maxZ + BALDRAME_OUTSET
       };
       var shape = buildInsetFrameShape(visibleBounds, BALDRAME_WIDTH + BALDRAME_OUTSET);
-      return makeSlabMesh(shape, BALDRAME_THICKNESS, -FOUNDATION_FLOOR_GAP, color, 1);
+      // Topo continua EXATAMENTE onde estava (-FOUNDATION_FLOOR_GAP, sem
+      // sobrepor parede/piso) — só a espessura cresce FOUNDATION_RISE_M
+      // pra baixo, até alcançar o novo nível do chão (ver FOUNDATION_RISE_M).
+      return makeSlabMesh(shape, BALDRAME_THICKNESS + FOUNDATION_RISE_M, -FOUNDATION_FLOOR_GAP, color, 1);
     }
     var radierShape = rectShape({
       minX: bounds.minX - RADIER_MARGIN, maxX: bounds.maxX + RADIER_MARGIN,
       minZ: bounds.minZ - RADIER_MARGIN, maxZ: bounds.maxZ + RADIER_MARGIN
     });
-    return makeSlabMesh(radierShape, RADIER_THICKNESS, -FOUNDATION_FLOOR_GAP, color, 1);
+    return makeSlabMesh(radierShape, RADIER_THICKNESS + FOUNDATION_RISE_M, -FOUNDATION_FLOOR_GAP, color, 1);
   }
 
   // Os pontos de um cômodo (Core.detectRooms) são cruzamentos do EIXO das
@@ -4815,16 +4832,20 @@ export function hashColorHex(key: string): number {
   function buildCalcada(rooms: any, groundBounds: any, scale: any, offsetX: any, offsetY: any, viewState: any) {
     var color = pickColor(0x9C9A92, 'calcada', viewState);
     var meshes: any[] = [];
+    // A calçada é chão pavimentado, não fundação — acompanha o novo
+    // nível do chão (FOUNDATION_RISE_M mais baixo que o piso do
+    // térreo), mesma espessura de sempre, só reposicionada.
+    var calcadaTopY = 0.03 - FOUNDATION_RISE_M;
     if (rooms && rooms.length) {
       rooms.forEach(function (room: any) {
         var roomBounds = computeRoomWorldBounds(room, scale, offsetX, offsetY);
         if (!roomBounds) return;
         var shape = buildPerimeterFrameShape(roomBounds, CALCADA_WIDTH);
-        meshes.push(makeSlabMesh(shape, CALCADA_THICKNESS, 0.03, color, 1));
+        meshes.push(makeSlabMesh(shape, CALCADA_THICKNESS, calcadaTopY, color, 1));
       });
     } else if (groundBounds) {
       var shape2 = buildPerimeterFrameShape(groundBounds, CALCADA_WIDTH);
-      meshes.push(makeSlabMesh(shape2, CALCADA_THICKNESS, 0.03, color, 1));
+      meshes.push(makeSlabMesh(shape2, CALCADA_THICKNESS, calcadaTopY, color, 1));
     }
     return meshes;
   }
@@ -7066,6 +7087,7 @@ export function hashColorHex(key: string): number {
   export function RADIER_MARGIN_GETTER() { return RADIER_MARGIN; }
   export function BALDRAME_WIDTH_GETTER() { return BALDRAME_WIDTH; }
   export function BALDRAME_THICKNESS_GETTER() { return BALDRAME_THICKNESS; }
+  export function FOUNDATION_RISE_GETTER() { return FOUNDATION_RISE_M; }
   // Espessura real da Laje (elemento independente, arrastável, ver
   // types.ts) — mesma ideia dos getters acima: o quantitativo de
   // materiais lê daqui em vez de guardar um segundo valor solto que
@@ -7103,6 +7125,7 @@ export const Scene3DRenderer = {
   RADIER_MARGIN_GETTER,
   BALDRAME_WIDTH_GETTER,
   BALDRAME_THICKNESS_GETTER,
+  FOUNDATION_RISE_GETTER,
   LAJE_THICKNESS_GETTER,
   PARAPET_HEIGHT_MIN_GETTER,
   PARAPET_HEIGHT_MAX_GETTER,

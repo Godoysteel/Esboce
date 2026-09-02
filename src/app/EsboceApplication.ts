@@ -7,6 +7,7 @@ import { LayersPanel } from "../core/LayersPanel.js";
 import { MaterialsPanel } from "../core/MaterialsPanel.js";
 import { MaterialsSheet } from "../core/MaterialsSheet.js";
 import { NavGizmo } from "../core/NavGizmo.js";
+import { Scene3DRenderer } from "../core/Scene3DRenderer.js";
 import { Store } from "../core/Store.js";
 import { ViewportController } from "../core/ViewportController.js";
 import { Viewport2DController } from "../core/Viewport2DController.js";
@@ -230,7 +231,15 @@ export class EsboceApplication {
       }),
     );
     ground.rotation.x = Math.PI / 2;
-    ground.position.y = -0.01;
+    // Product Owner: "quero que a fundação fique mais pra cima, saindo
+    // para fora do chão" — depois "ela não pode sobrepor as paredes e
+    // piso, tudo sobe igual". Em vez de erguer parede/piso de verdade
+    // (y=0 do térreo é referência em centenas de lugares — arriscado
+    // demais mexer), o CHÃO desce FOUNDATION_RISE_GETTER(); a fundação
+    // (Scene3DRenderer.buildFoundationPiece) estica pra baixo até
+    // alcançar esse novo nível, e a calçada acompanha — visualmente
+    // idêntico a levantar a casa inteira.
+    ground.position.y = -0.01 - Scene3DRenderer.FOUNDATION_RISE_GETTER();
     this.scene.add(ground);
 
     // Divisões calculadas a partir de Core.SNAP_UNIT (não um número fixo)
