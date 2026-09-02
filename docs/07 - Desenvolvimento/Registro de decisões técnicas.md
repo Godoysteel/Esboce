@@ -2628,3 +2628,23 @@ O core geométrico mais caro (`Core.detectRooms`/`Core.computeWallFootprints`, a
 **Verificado ao vivo (reconstrução real da cena, sem WebGL, com os números exatos do print):** antes da correção, o canto B de `roof_14` ia de `z=-2,4` até `z=1,714` (quase o próprio pico); depois, para exatamente em `z=-0,5` — a cumeeira de `roof_15`. Os outros 3 cantos de `roof_14` (A, C, D), que não cruzam a cumeeira do vizinho, continuam com o comprimento natural completo, sem regressão. Confirmado também, varrendo uma grade fina sobre os uniforms reais do shader, que a água (superfície de verdade) continua sem nenhum buraco — o corte novo afeta só a peça decorativa do espigão.
 
 **Testado:** suíte completa (726 testes) + novo teste em `tests/wall-geometry.test.mjs` com os números reais deste print, confirmando o ponto exato de cruzamento e que ele cai dentro do trecho real da cumeeira do vizinho.
+
+---
+
+# DEC-207 — Ferramenta nativa "Marcador de falha" (diagnóstico visual sem apagar nem ocultar)
+
+**Data:** 02/09/2026
+**Status:** Implementado e verificado ao vivo no navegador (clique real, sem WebGL nesta reprodução, mas testado na prática).
+
+**Contexto:** durante a investigação das DEC-204/205/206 (mesma sessão), o clique de diagnóstico genérico já existente na ferramenta "Apagar" (`ViewportController.ts`, bloco "Diagnóstico (não apaga)") mostrou uma limitação real: quando o clique cai numa peça de espigão/cumeeira NOMEADA (`ridgePieceId`), um bloco de código MAIS ESPECÍFICO (o toggle de ocultar peça, DEC-166) intercepta o clique antes do diagnóstico genérico rodar — na prática, tentar diagnosticar uma peça de espigão sempre a OCULTA, em vez de só reportar a posição. Isso aconteceu de verdade nesta sessão (Product Owner: "cliquei e apagou o espigão todo"), atrapalhando a localização precisa de um defeito reportado ("apagou a metade, a metade no sentido longitudinal da metade do espigão") que acabou ficando sem causa raiz confirmada. Perguntado sobre uma ferramenta de marcação (ideia inicial do Product Owner: "um lápis vermelho tingindo a peça ou o contorno de uma fresta"), a proposta final combinada foi: uma ferramenta separada, nativa (não embutida na "Apagar"/marreta), que marca posição INICIAL e FINAL de uma falha com um marcador visível na própria cena 3D (pra aparecer no print), sem nunca apagar/ocultar nada.
+
+**Implementação:** novo tool nativo `data-tool="marcador"` (botão "Marcador", em Mais → Ferramentas, `index.html`), sem nenhuma dependência do fluxo de "Apagar". Estado próprio em `ViewportController.ts` (`marcadorPoints`/`marcadorMarkers`/`marcadorLine`, mesmo princípio já usado pelos marcadores de percurso hidráulico guiado — soltos na cena, nunca dentro de `registry`, por isso sobrevivem a `Scene3DRenderer.rebuild()`):
+- 1º clique: `pickMeshHit` acha a malha real (mesmo se escondida por sombreamento de pixel — mesma técnica do diagnóstico de "Apagar", mas SEM o toggle de ocultar que aquele tem), com fallback pro plano do chão (`getGroundModelPoint`) se não acertar nada. Cria uma esfera VERMELHA no ponto exato e mostra categoria/ids (`roofId`/`wallId`/`ridgePieceId`/etc.) + coordenadas (x/y em metros, altura em metros) na dica.
+- 2º clique: esfera AZUL no ponto final, linha branca ligando os dois, dica com as duas coordenadas + distância 3D entre elas.
+- 3º clique (ferramenta ainda ativa): reinicia o par (limpa os dois marcadores antigos antes de criar um novo vermelho) — evita acumular marcadores de falhas antigas sem limite.
+- Os marcadores NÃO são limpos ao trocar de ferramenta (Orbit, por exemplo) — só ao REATIVAR o "Marcador" (clicar no botão de novo depois de tê-lo desativado), garantindo que continuem visíveis no print mesmo depois de reposicionar a câmera.
+- `addMarcadorPoint` nunca chama `Store.commands` — é puramente leitura/visualização, não muda o modelo em nenhuma hipótese.
+
+**Verificado ao vivo (navegador real, clique de verdade):** ativada a ferramenta, primeiro clique marcou esfera vermelha com a dica correta (categoria, coordenadas); segundo clique marcou esfera azul + linha + distância (3,28m no teste); trocar pra outra ferramenta/painel manteve os dois marcadores visíveis; reabrir "Marcador" limpou tudo e voltou ao estado inicial. Confirmado também, sem querer, que um terceiro clique (enquanto a ferramenta segue ativa) reinicia o par corretamente.
+
+**Testado:** suíte completa (732 testes) + novo `tests/marcador-tool.test.mjs` (botão no HTML, hint próprio, ausência de qualquer `Store.commands`/`hiddenRidgePieceIds` no fluxo da ferramenta, par de cores + linha + reinício no terceiro clique, limpeza só na reativação — nunca em `cancelPlacing`/`deselect`, que rodam em toda troca de ferramenta).

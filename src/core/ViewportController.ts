@@ -211,6 +211,22 @@ import {
   var wallDiagnosticsVisible = false;
   var wallDiagnosticsPanelEl: any;
   var wallDiagnosticsOutputEl: any;
+  // Ferramenta "Marcador de falha" — pedido explícito do Product Owner
+  // depois de uma sessão inteira tentando localizar defeitos visuais só
+  // por descrição/print. Diferente do diagnóstico genérico de "Apagar"
+  // (que aciona o toggle de ocultar se cair numa peça de espigão
+  // nomeada — foi isso que escondeu peças sem querer nesta mesma
+  // sessão), esta ferramenta NUNCA apaga nem oculta nada — só lê e
+  // marca. Dois cliques = início (vermelho) e fim (azul) da falha; um
+  // terceiro clique reinicia o par em vez de acumular sem limite. Os
+  // marcadores ficam soltos na cena (nunca em `registry`), então
+  // sobrevivem a qualquer rebuild/edição do modelo e continuam visíveis
+  // ao trocar pra Orbit e tirar um print — só somem quando a própria
+  // ferramenta é reativada (começando um par novo) ou quando o usuário
+  // marca um terceiro ponto.
+  var marcadorPoints: { point: any; mesh: any; modelPt: any }[] = [];
+  var marcadorMarkers: any[] = [];
+  var marcadorLine: any = null;
 
   var CATEGORY_LABELS: Record<string, string> = {
     fundacao: 'Fundação', calcada: 'Calçada', paredesTerreo: 'Paredes — térreo',
@@ -231,7 +247,8 @@ import {
     drywallPartition: 'Clique numa parede INTERNA (cômodo dos dois lados) pra marcar como divisória em drywall — clique de novo na mesma parede pra remover.',
     paintBucket: 'Material carregado do catálogo. Clique diretamente na face que deseja revestir.',
     terreno: 'Clique num lado destacado do retângulo pra adicionar ou remover o muro daquele lado.',
-    wholeConstruction: 'Clique em qualquer ponto e arraste pra mover a construção inteira (todos os pavimentos) dentro do terreno.'
+    wholeConstruction: 'Clique em qualquer ponto e arraste pra mover a construção inteira (todos os pavimentos) dentro do terreno.',
+    marcador: 'Clique no ponto INICIAL da falha (fica vermelho). Depois clique no ponto FINAL (fica azul) — não apaga nem oculta nada, só marca e mostra as coordenadas.'
   };
 
   function hydraulicFixtureKeyFromTool(tool: any): string | null {
@@ -2172,6 +2189,71 @@ import {
     render();
   }
 
+  // ---- Marcador de falha (diagnóstico visual, nunca apaga/oculta) ----
+  function clearMarcadorMarkers() {
+    marcadorMarkers.forEach(function (m: any) { scene.remove(m); });
+    marcadorMarkers = [];
+    if (marcadorLine) { scene.remove(marcadorLine); marcadorLine = null; }
+    marcadorPoints = [];
+  }
+
+  function marcadorPieceInfo(mesh: any) {
+    if (!mesh) return { category: 'nada (fora de qualquer superfície)', ids: '' };
+    var diagIdFields = ['roofId', 'wallId', 'gableSide', 'ridgePieceId', 'columnId', 'lajeId', 'furnitureId', 'openingId', 'varandaId', 'glazingPanelId', 'balconyRailingId', 'volumeBoxId', 'stairId', 'hydraulicNodeId', 'floorIndex'];
+    var ids = diagIdFields.filter(function (k) { return mesh.userData[k] !== undefined; }).map(function (k) { return k + '=' + mesh.userData[k]; }).join(', ');
+    return { category: mesh.userData.category || '?', ids: ids };
+  }
+
+  function marcadorPointHint(p: any, label: string) {
+    var info = marcadorPieceInfo(p.mesh);
+    return label + ' — categoria "' + info.category + '"' + (info.ids ? ', ' + info.ids : '')
+      + ', x=' + p.modelPt.x.toFixed(2) + ' y=' + p.modelPt.y.toFixed(2) + ' (altura mundo=' + p.point.y.toFixed(2) + 'm)';
+  }
+
+  // Mesmo princípio do diagnóstico genérico de "Apagar" (pickMeshHit
+  // acerta a malha real, mesmo se ela estiver escondida por
+  // sombreamento de pixel), mas SEM o toggle de ocultar espigão/cumeeira
+  // que aquela ferramenta aciona ao cair numa peça nomeada — aqui o
+  // clique nunca muda o modelo, só lê e marca.
+  function addMarcadorPoint(clientX: any, clientY: any) {
+    if (marcadorPoints.length >= 2) clearMarcadorMarkers();
+    var hit = pickMeshHit(clientX, clientY);
+    var point: any = null;
+    if (hit) {
+      point = { point: hit.point.clone(), mesh: hit.object, modelPt: worldToModel(hit.point.x, hit.point.z) };
+    } else {
+      var groundPt = getGroundModelPoint(clientX, clientY);
+      if (groundPt) {
+        var worldXZ = modelToWorld(groundPt.x, groundPt.y);
+        point = { point: new THREE.Vector3(worldXZ.x, currentFloorYOffset(), worldXZ.z), mesh: null, modelPt: groundPt };
+      }
+    }
+    if (!point) { hintEl.textContent = 'Marcador: esse clique não atingiu nenhuma superfície — tente de novo.'; return; }
+    var isFirst = marcadorPoints.length === 0;
+    var marker = new THREE.Mesh(
+      new THREE.SphereGeometry(0.09, 16, 12),
+      new THREE.MeshBasicMaterial({ color: isFirst ? 0xFF3B30 : 0x0A84FF, depthTest: false })
+    );
+    marker.renderOrder = 999;
+    marker.position.copy(point.point);
+    scene.add(marker);
+    marcadorMarkers.push(marker);
+    marcadorPoints.push(point);
+    if (marcadorPoints.length === 2) {
+      var pointA = marcadorPoints[0]!, pointB = marcadorPoints[1]!;
+      var lineGeo = new THREE.BufferGeometry().setFromPoints([pointA.point, pointB.point]);
+      marcadorLine = new THREE.Line(lineGeo, new THREE.LineBasicMaterial({ color: 0xFFFFFF, depthTest: false }));
+      marcadorLine.renderOrder = 998;
+      scene.add(marcadorLine);
+      var dist = pointA.point.distanceTo(pointB.point);
+      hintEl.textContent = marcadorPointHint(pointA, 'Início (vermelho)') + '. ' + marcadorPointHint(pointB, 'Fim (azul)')
+        + '. Distância entre os dois: ' + dist.toFixed(2) + 'm. Clique de novo pra marcar outra falha (substitui esses dois pontos).';
+    } else {
+      hintEl.textContent = marcadorPointHint(point, 'Início (vermelho) marcado') + '. Clique no ponto FINAL da falha.';
+    }
+    render();
+  }
+
   // ---- painel de piso 2D (ralos e outros pontos de piso) ----
   function closeHydraulicFloorPanel() {
     hydraulicFloorPanelState = null;
@@ -2323,6 +2405,11 @@ import {
     deselect();
     updateWallGridOverlay();
     if (tool === 'terreno') openTerrenoModal(); else closeTerrenoModal(false);
+    // Reativar a ferramenta sempre começa um par novo — os marcadores
+    // continuam visíveis (pra aparecer no print) mesmo depois de trocar
+    // pra outra ferramenta (Orbit, por exemplo); só somem ao reabrir o
+    // Marcador de novo ou ao marcar um terceiro ponto.
+    if (tool === 'marcador') clearMarcadorMarkers();
   }
 
   // Modal de tamanho do terreno — mesmo padrão de projectNameModalOverlay
@@ -2684,6 +2771,11 @@ import {
         var routeDrawGround = getGroundModelPoint(e.clientX, e.clientY);
         if (routeDrawGround) addHydraulicRouteDrawPoint(routeDrawGround.x, routeDrawGround.y);
       }
+      return;
+    }
+
+    if (currentTool === 'marcador') {
+      addMarcadorPoint(e.clientX, e.clientY);
       return;
     }
 
