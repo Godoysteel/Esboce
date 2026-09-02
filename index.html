@@ -353,10 +353,6 @@
   .shape-panel button.st.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
   .shape-panel button.ft { margin: 0; padding: 0; width: 30px; height: 30px; font-size: 12px; font-weight: 700; border-radius: 6px; line-height: 1; }
   .shape-panel button.ft.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
-  .volume-type-panel { grid-template-columns: repeat(4, 30px); }
-  .shape-panel button.vt { margin: 0; padding: 0; width: 30px; height: 30px; font-size: 11px; font-weight: 700; border-radius: 6px; line-height: 1; }
-  .shape-panel button.vt.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
-  .shape-panel .shape-panel-divider { grid-column: 1 / -1; height: 1px; background: #D3D1C7; margin: 3px 0; }
   .finish-panel { grid-template-columns: repeat(4, 26px); }
   .finish-panel button.fn { margin: 0; padding: 0; width: 26px; height: 26px; border-radius: 50%; border: 2px solid #FFFFFF; box-shadow: 0 0 0 1px #D3D1C7; cursor: pointer; }
   .finish-panel button.fn.active { box-shadow: 0 0 0 2px #534AB7; }
@@ -2297,19 +2293,6 @@
   <div id="columnShapePanel" class="shape-panel">
     <button class="sp" data-shape="quadrada" title="Coluna quadrada">▢</button>
     <button class="sp" data-shape="redonda" title="Coluna redonda">◯</button>
-  </div>
-  <div id="volumeBoxTypePanel" class="shape-panel volume-type-panel">
-    <button class="vt" data-vbelement="parede" title="Elemento: parede">Pd</button>
-    <button class="vt" data-vbelement="marquise" title="Elemento: marquise">Mq</button>
-    <button class="vt" data-vbelement="pilar" title="Elemento: pilar">Pl</button>
-    <button class="vt" data-vbelement="cobertura" title="Elemento: cobertura">Cb</button>
-    <div class="shape-panel-divider"></div>
-    <button class="vt" data-vbmaterial="madeira" title="Material: madeira">Md</button>
-    <button class="vt" data-vbmaterial="concreto" title="Material: concreto">Cc</button>
-    <button class="vt" data-vbmaterial="tijolo" title="Material: tijolo">Tj</button>
-    <button class="vt" data-vbmaterial="metalao" title="Material: metalão">Mt</button>
-    <button class="vt" data-vbmaterial="steelFrame" title="Material: Steel Frame">SF</button>
-    <button class="vt" data-vbmaterial="telhado" title="Material: telhado">Tl</button>
   </div>
   <div id="roofTypePanel" class="shape-panel roof-type-panel">
     <label class="roof-parameter roof-elevation" id="roofElevationControl"><span>Subir telhado inteiro</span><output id="roofElevationValue">3,15 m</output><input id="roofElevationInput" type="range" min="2.85" max="8" step="0.05" aria-label="Altura da base do telhado em metros"></label>

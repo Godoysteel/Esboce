@@ -441,7 +441,15 @@ test('volumeBoxHalfExtentsGrid: resolve largura/profundidade pelos passos de 90�
 // sempre, sem correção nenhuma. Duas camadas agora: HARD (sobreposição
 // de verdade — SEMPRE corrige, não importa a distância) e SOFT (só
 // perto, ímã de conveniência de sempre, com tolerância).
-test('snapVolumeBoxToWalls: nunca gira o bloco; separa em duas camadas — HARD (sobreposição de verdade, corrige sempre) e SOFT (só perto, ímã com tolerância) — e HARD sempre encosta faceado, com quina-com-quina na ponta da parede', () => {
+// Product Owner (2026-09-02): "quero que retire o snap do encontro com
+// a parede, aquela de quina com quina, não quero que o cubo atravesse
+// uma parede, ele deve sempre ficar encostado na face externa" — tirado
+// o ímã de quina no eixo AO LONGO da parede (candXWall/candYVert não
+// ajustam mais pra ponta da parede); a distância perpendicular que
+// nunca deixa atravessar/faceia na face externa continua igual. O
+// quina-com-quina contra OUTRO Cubo mágico (snapVolumeBoxToNeighborBoxes)
+// não mudou — ver teste abaixo.
+test('snapVolumeBoxToWalls: nunca gira o bloco; separa em duas camadas — HARD (sobreposição de verdade, corrige sempre) e SOFT (só perto, ímã com tolerância) — HARD sempre encosta faceado, sem ímã de quina no eixo ao longo da parede', () => {
   const start = viewportSource.indexOf('function snapVolumeBoxToWalls(box: any, xGrid: number, yGrid: number)');
   assert.ok(start !== -1);
   const end = viewportSource.indexOf('\n  }', start);
@@ -457,9 +465,11 @@ test('snapVolumeBoxToWalls: nunca gira o bloco; separa em duas camadas — HARD 
   assert.match(body, /if \(!hasHard \|\| penetrationX < hardPenetration\) \{ hasHard = true; hardPenetration = penetrationX; hardSnapped = \{ x: candXVert, y: candYVert \}; \}/);
   // SOFT: só dentro da tolerância de sempre
   assert.match(body, /if \(gapOutsideY < softBestGapGrid\) \{ softBestGapGrid = gapOutsideY; softSnapped = \{ x: candXWall, y: candYWall \}; \}/);
-  // quina com quina: a borda do bloco (não o centro) alinha com w.x1/w.x2 (parede horizontal) ou w.y1/w.y2 (vertical) — em AMBAS as camadas, reaproveitando o mesmo candXWall/candYVert
-  assert.match(body, /var candXWall = snapToNearest\(xGrid, \[\s*w\.x1 \+ halfExtentXGrid, w\.x1 - halfExtentXGrid,\s*w\.x2 \+ halfExtentXGrid, w\.x2 - halfExtentXGrid,\s*\], VOLUME_BOX_CORNER_SNAP_TOLERANCE_GRID\);/);
-  assert.match(body, /var candYVert = snapToNearest\(yGrid, \[\s*w\.y1 \+ halfExtentZGrid, w\.y1 - halfExtentZGrid,\s*w\.y2 \+ halfExtentZGrid, w\.y2 - halfExtentZGrid,\s*\], VOLUME_BOX_CORNER_SNAP_TOLERANCE_GRID\);/);
+  // SEM ímã de quina: o eixo ao longo da parede passa direto (candXWall/candYVert == xGrid/yGrid), só o eixo perpendicular (candYWall/candXVert) encosta na face
+  assert.match(body, /var candXWall = xGrid;/);
+  assert.match(body, /var candYVert = yGrid;/);
+  assert.doesNotMatch(body, /snapToNearest\(xGrid,\s*\[\s*w\.x1/, 'não deve mais existir ímã de quina contra parede no eixo X');
+  assert.doesNotMatch(body, /snapToNearest\(yGrid,\s*\[\s*w\.y1/, 'não deve mais existir ímã de quina contra parede no eixo Y');
   assert.match(body, /if \(hasHard\) return \{ x: hardSnapped\.x, y: hardSnapped\.y, hard: true \};/);
 });
 
