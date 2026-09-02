@@ -2610,7 +2610,7 @@ export function hashColorHex(key: string): number {
       [[A, R1, 'A'], [D, R1, 'D'], [B, R2, 'B'], [C, R2, 'C']].forEach(function (pair: any) {
         var cornerStart = extendBeyond(pair[0], pair[1], HIP_CORNER_OVERSHOOT);
         var cap = buildRidgeCapMesh(cornerStart, pair[1], roofColor, pitchRad);
-        if (cap) { cap.userData.hipCornerXZ = { x: pair[0]!.x, z: pair[0]!.z }; cap.userData.ridgePieceId = pair[2]; meshes.push(cap); }
+        if (cap) { cap.userData.hipCornerXZ = { x: pair[0]!.x, z: pair[0]!.z }; cap.userData.hipPeakXZ = { x: pair[1].x, z: pair[1].z }; cap.userData.ridgePieceId = pair[2]; meshes.push(cap); }
       });
     } else {
       var ridgeX = (topBounds.minX + topBounds.maxX) / 2;
@@ -2630,7 +2630,7 @@ export function hashColorHex(key: string): number {
       [[A, R1b, 'A'], [B, R1b, 'B'], [D, R2b, 'D'], [C, R2b, 'C']].forEach(function (pair: any) {
         var cornerStart = extendBeyond(pair[0], pair[1], HIP_CORNER_OVERSHOOT);
         var cap = buildRidgeCapMesh(cornerStart, pair[1], roofColor, pitchRad);
-        if (cap) { cap.userData.hipCornerXZ = { x: pair[0]!.x, z: pair[0]!.z }; cap.userData.ridgePieceId = pair[2]; meshes.push(cap); }
+        if (cap) { cap.userData.hipCornerXZ = { x: pair[0]!.x, z: pair[0]!.z }; cap.userData.hipPeakXZ = { x: pair[1].x, z: pair[1].z }; cap.userData.ridgePieceId = pair[2]; meshes.push(cap); }
       });
     }
     return meshes;
@@ -6630,6 +6630,46 @@ export function hashColorHex(key: string): number {
               return otherRoofHeightAtPoint(r, aInside ? ends.a : ends.b) > ownPeakY + 1e-4;
             });
           }
+          // Pedido explícito do Product Owner (print circulando o espigão,
+          // confirmado por pergunta direta): quando o espigão de canto de
+          // um telhado passa por CIMA da cumeeira de um vizinho mais baixo
+          // — não escondido pelas regras acima porque o próprio telhado
+          // continua mais alto depois do cruzamento (não é bug de altura,
+          // ver DEC-204/205) — ele deve INTERROMPER exatamente onde cruza
+          // essa cumeeira, em vez de atravessar por cima dela até o
+          // próprio pico. Acha o primeiro vizinho cuja cumeeira (a reta
+          // ridgeCoord/axisIsZ já calculada em roofSlopeSurfaceParams,
+          // limitada ao TRECHO real dela — r1/r2, não a reta infinita) o
+          // segmento canto→pico realmente atravessa, e devolve um corte de
+          // meio-plano (mesmo estilo dos infinitos de `gableClipRects`) que
+          // remove só a parte ALÉM do cruzamento.
+          function hipCornerRidgeCrossingRect(cornerPt: any, peakPt: any) {
+            var closest: any = null;
+            overlappingFootprintsForHipCorners.forEach(function (r: any) {
+              var match = roofPeakBoxes.find(function (b: any) { return b.minX === r.minX && b.maxX === r.maxX && b.minZ === r.minZ && b.maxZ === r.maxZ; });
+              if (!match || !(match.halfSpan > 1e-6)) return;
+              var axisIsZ = match.axisIsZ > 0.5;
+              var cornerCoord = axisIsZ ? cornerPt.z : cornerPt.x;
+              var peakCoord = axisIsZ ? peakPt.z : peakPt.x;
+              var span = peakCoord - cornerCoord;
+              if (Math.abs(span) < 1e-6) return;
+              var t = (match.ridgeCoord - cornerCoord) / span;
+              if (t <= 1e-6 || t >= 1 - 1e-6) return;
+              var crossX = cornerPt.x + t * (peakPt.x - cornerPt.x);
+              var crossZ = cornerPt.z + t * (peakPt.z - cornerPt.z);
+              var ridgeLo = axisIsZ ? Math.min(match.minX + match.halfSpan, match.maxX - match.halfSpan) : Math.min(match.minZ + match.halfSpan, match.maxZ - match.halfSpan);
+              var ridgeHi = axisIsZ ? Math.max(match.minX + match.halfSpan, match.maxX - match.halfSpan) : Math.max(match.minZ + match.halfSpan, match.maxZ - match.halfSpan);
+              var crossPerp = axisIsZ ? crossX : crossZ;
+              if (crossPerp < ridgeLo - 1e-6 || crossPerp > ridgeHi + 1e-6) return;
+              if (closest && t >= closest.t) return;
+              var beyondIsPositive = peakCoord > cornerCoord;
+              var rect = axisIsZ
+                ? (beyondIsPositive ? { minX: -1e6, maxX: 1e6, minZ: match.ridgeCoord, maxZ: 1e6 } : { minX: -1e6, maxX: 1e6, minZ: -1e6, maxZ: match.ridgeCoord })
+                : (beyondIsPositive ? { minX: match.ridgeCoord, maxX: 1e6, minZ: -1e6, maxZ: 1e6 } : { minX: -1e6, maxX: match.ridgeCoord, minZ: -1e6, maxZ: 1e6 });
+              closest = { t: t, rect: rect };
+            });
+            return closest ? [closest.rect] : [];
+          }
           // roofCutRegions só sabe calcular o plano inclinado de verdade
           // (a água-furtada real) pro tipo duasAguas — pra qualquer outro
           // tipo (quatroAguas incluso) ele cai num retângulo cru, SEM
@@ -6727,6 +6767,9 @@ export function hashColorHex(key: string): number {
             if (m.userData.ridgeCapEndsXZ) {
               if (ridgeCapFullyInsideOtherRoof(m.userData.ridgeCapEndsXZ)) return;
               ridgeCapPartialRects = ridgeCapPartialOverlapFootprints(m.userData.ridgeCapEndsXZ);
+            }
+            if (m.userData.hipCornerXZ && m.userData.hipPeakXZ) {
+              ridgeCapPartialRects = ridgeCapPartialRects.concat(hipCornerRidgeCrossingRect(m.userData.hipCornerXZ, m.userData.hipPeakXZ));
             }
             var steelFrameRoofConfigured = project.constructionSystem === 'light_steel_frame' && (
               m.userData.gableSide
