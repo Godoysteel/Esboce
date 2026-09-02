@@ -3373,8 +3373,8 @@ import {
           Store.commands.beginTransaction();
         } else if (mesh.userData.volumeBoxId) {
           // Bloco de Volumetria: sempre livre no plano do chão (sem ímã
-          // de parede na POSIÇÃO enquanto arrasta — o snap acontece só
-          // ao SOLTAR, ver snapVolumeBoxToWalls); Shift+arraste vertical
+          // de parede/vizinho na POSIÇÃO enquanto arrasta — o snap
+          // acontece só ao SOLTAR, ver snapVolumeBoxPosition); Shift+arraste vertical
           // sobe/desce o bloco (sillHeightM) — Product Owner: "deve ser
           // possível movimentar o cubo mágico para todos os ângulos e um
           // snap nas paredes".
@@ -3547,11 +3547,33 @@ import {
   // ficam sempre alinhados a X ou Y do modelo — swapped decide qual
   // dimensão (widthM/depthM) projeta em qual eixo do mundo.
   var VOLUME_BOX_WALL_SNAP_TOLERANCE_GRID = 0.3 * Core.GRID; // 30cm
-  function snapVolumeBoxToWalls(box: any, xGrid: number, yGrid: number): { x: number; y: number } {
+  // "Quina com quina" (Product Owner: "eles devem forçar quina com
+  // quina, para as chapas de acm ficarem parelhas quando estiver dois
+  // boxes lado a lado") — tolerância do ajuste SECUNDÁRIO, no eixo AO
+  // LONGO do encosto (não o da distância perpendicular que já fecha o
+  // vão): se o bloco já solta perto o bastante de ficar alinhado ponta
+  // a ponta com o canto da parede, ou centro a centro com o vizinho,
+  // força o alinhamento exato em vez de deixar a pequena folga.
+  var VOLUME_BOX_CORNER_SNAP_TOLERANCE_GRID = 0.3 * Core.GRID; // 30cm
+  function snapToNearest(value: number, candidates: number[], tolerance: number): number {
+    var best = value, bestDist = tolerance;
+    candidates.forEach(function (c) {
+      var d = Math.abs(value - c);
+      if (d < bestDist) { bestDist = d; best = c; }
+    });
+    return best;
+  }
+  function volumeBoxHalfExtentsGrid(box: any): { x: number; z: number } {
     var rotSteps = Math.round((box.rotationDeg || 0) / 90);
     var swapped = ((rotSteps % 2) + 2) % 2 === 1;
-    var halfExtentXGrid = ((swapped ? box.depthM : box.widthM) * Core.GRID) / 2;
-    var halfExtentZGrid = ((swapped ? box.widthM : box.depthM) * Core.GRID) / 2;
+    return {
+      x: ((swapped ? box.depthM : box.widthM) * Core.GRID) / 2,
+      z: ((swapped ? box.widthM : box.depthM) * Core.GRID) / 2,
+    };
+  }
+  function snapVolumeBoxToWalls(box: any, xGrid: number, yGrid: number): { x: number; y: number } {
+    var halfExtent = volumeBoxHalfExtentsGrid(box);
+    var halfExtentXGrid = halfExtent.x, halfExtentZGrid = halfExtent.z;
     var wallHalfThickGrid = (Core.WALL_THICK * Core.GRID) / 2;
     var bestGapGrid = VOLUME_BOX_WALL_SNAP_TOLERANCE_GRID;
     var snapped = { x: xGrid, y: yGrid };
@@ -3571,17 +3593,105 @@ import {
         var gapY = Math.abs(yGrid - w.y1) - halfExtentZGrid - wallHalfThickGrid;
         if (Math.abs(gapY) >= bestGapGrid) return;
         bestGapGrid = Math.abs(gapY);
-        snapped = { x: xGrid, y: w.y1 + (yGrid >= w.y1 ? 1 : -1) * (halfExtentZGrid + wallHalfThickGrid) };
+        var snappedYWall = w.y1 + (yGrid >= w.y1 ? 1 : -1) * (halfExtentZGrid + wallHalfThickGrid);
+        // Quina com quina: se a ponta da parede (w.x1 ou w.x2) está
+        // perto o bastante de alinhar com a BORDA do bloco (não o
+        // centro), encosta o bloco exatamente na ponta da parede.
+        var snappedXWall = snapToNearest(xGrid, [
+          w.x1 + halfExtentXGrid, w.x1 - halfExtentXGrid,
+          w.x2 + halfExtentXGrid, w.x2 - halfExtentXGrid,
+        ], VOLUME_BOX_CORNER_SNAP_TOLERANCE_GRID);
+        snapped = { x: snappedXWall, y: snappedYWall };
       } else if (vertical) {
         var minY = Math.min(w.y1, w.y2) - halfExtentZGrid, maxY = Math.max(w.y1, w.y2) + halfExtentZGrid;
         if (yGrid < minY || yGrid > maxY) return;
         var gapX = Math.abs(xGrid - w.x1) - halfExtentXGrid - wallHalfThickGrid;
         if (Math.abs(gapX) >= bestGapGrid) return;
         bestGapGrid = Math.abs(gapX);
-        snapped = { x: w.x1 + (xGrid >= w.x1 ? 1 : -1) * (halfExtentXGrid + wallHalfThickGrid), y: yGrid };
+        var snappedXVert = w.x1 + (xGrid >= w.x1 ? 1 : -1) * (halfExtentXGrid + wallHalfThickGrid);
+        var snappedYVert = snapToNearest(yGrid, [
+          w.y1 + halfExtentZGrid, w.y1 - halfExtentZGrid,
+          w.y2 + halfExtentZGrid, w.y2 - halfExtentZGrid,
+        ], VOLUME_BOX_CORNER_SNAP_TOLERANCE_GRID);
+        snapped = { x: snappedXVert, y: snappedYVert };
       }
     });
     return snapped;
+  }
+
+  // Snap do Cubo mágico contra OUTRO Cubo mágico vizinho (Product
+  // Owner: "o snap entre os boxes, eles devem forçar quina com quina,
+  // para as chapas de acm ficarem parelhas quando estiver dois boxes
+  // lado a lado") — mesmo princípio do snap de parede acima (fecha o
+  // vão perpendicular até encostar), mas contra o retângulo (footprint
+  // em planta, já considerando rotationDeg em passos de 90°) de outro
+  // bloco do mesmo pavimento. Além de encostar, força "quina com
+  // quina" de verdade: quando os dois blocos já soltam quase alinhados
+  // no eixo QUE NÃO está encostando, trava esse eixo pra ficar
+  // EXATAMENTE igual ao do vizinho — sem isso, uma pequena diferença
+  // de alguns centímetros faria a grade do metalão e as chapas de ACM
+  // dos dois blocos ficarem em linhas diferentes, visivelmente
+  // desalinhadas mesmo encostadas.
+  function snapVolumeBoxToNeighborBoxes(box: any, xGrid: number, yGrid: number): { x: number; y: number } {
+    var halfExtent = volumeBoxHalfExtentsGrid(box);
+    var halfExtentXGrid = halfExtent.x, halfExtentZGrid = halfExtent.z;
+    var bestGapGrid = VOLUME_BOX_WALL_SNAP_TOLERANCE_GRID;
+    var snapped = { x: xGrid, y: yGrid };
+    Store.currentVolumeBoxes().forEach(function (ob: any) {
+      if (ob.id === box.id) return;
+      var obHalf = volumeBoxHalfExtentsGrid(ob);
+      var combinedX = halfExtentXGrid + obHalf.x;
+      var combinedZ = halfExtentZGrid + obHalf.z;
+      // Qual das duas relações faz sentido — lado a lado (encosta em X)
+      // ou frente/fundo (encosta em Z)? Não dá pra decidir só pelo
+      // GAP em cada eixo isoladamente: um bloco fino (ex. 0,2m de
+      // profundidade) tem um "vão em Z" sempre pequeno em valor
+      // absoluto, mesmo quando a intenção é claramente lado a lado —
+      // comparar os gaps brutos entre si tendia (errado) a escolher
+      // sempre o eixo mais estreito do bloco. Em vez disso, mede o
+      // quanto os dois retângulos (footprint em planta) já SE
+      // SOBREPÕEM em cada eixo (negativo = ainda têm vão): quem
+      // sobrepõe mais é o eixo em que os blocos já estão alinhados
+      // (mesma "fileira"), então o encosto de verdade é no OUTRO eixo.
+      var overlapX = Math.min(xGrid + halfExtentXGrid, ob.x + obHalf.x) - Math.max(xGrid - halfExtentXGrid, ob.x - obHalf.x);
+      var overlapZ = Math.min(yGrid + halfExtentZGrid, ob.y + obHalf.z) - Math.max(yGrid - halfExtentZGrid, ob.y - obHalf.z);
+      if (overlapZ > overlapX) {
+        // Mais alinhados em Z (mesma fileira) — encosta lado a lado, fechando o vão em X.
+        var gapX = Math.abs(xGrid - ob.x) - combinedX;
+        if (Math.abs(gapX) < bestGapGrid) {
+          bestGapGrid = Math.abs(gapX);
+          var snappedXBox = ob.x + (xGrid >= ob.x ? 1 : -1) * combinedX;
+          var snappedYBox = snapToNearest(yGrid, [ob.y], VOLUME_BOX_CORNER_SNAP_TOLERANCE_GRID);
+          snapped = { x: snappedXBox, y: snappedYBox };
+        }
+      } else if (overlapX > overlapZ) {
+        // Mais alinhados em X (mesma coluna) — encosta frente/fundo, fechando o vão em Z.
+        var gapZ = Math.abs(yGrid - ob.y) - combinedZ;
+        if (Math.abs(gapZ) < bestGapGrid) {
+          bestGapGrid = Math.abs(gapZ);
+          var snappedYBox2 = ob.y + (yGrid >= ob.y ? 1 : -1) * combinedZ;
+          var snappedXBox2 = snapToNearest(xGrid, [ob.x], VOLUME_BOX_CORNER_SNAP_TOLERANCE_GRID);
+          snapped = { x: snappedXBox2, y: snappedYBox2 };
+        }
+      }
+    });
+    return snapped;
+  }
+
+  // Ao soltar o arraste, roda os dois ímãs (parede e bloco vizinho)
+  // contra a MESMA posição solta e fica com o que pedir menos correção
+  // — o candidato mais perto de onde o Product Owner realmente soltou
+  // o bloco é o que ele mais provavelmente quis dizer (mesmo raciocínio
+  // do bestGapGrid dentro de cada função, agora entre as duas).
+  function snapVolumeBoxPosition(box: any, xGrid: number, yGrid: number): { x: number; y: number } {
+    var wallSnap = snapVolumeBoxToWalls(box, xGrid, yGrid);
+    var boxSnap = snapVolumeBoxToNeighborBoxes(box, xGrid, yGrid);
+    var wallDist = Math.hypot(wallSnap.x - xGrid, wallSnap.y - yGrid);
+    var boxDist = Math.hypot(boxSnap.x - xGrid, boxSnap.y - yGrid);
+    if (wallDist < 1e-6 && boxDist < 1e-6) return { x: xGrid, y: yGrid };
+    if (boxDist < 1e-6) return wallSnap;
+    if (wallDist < 1e-6) return boxSnap;
+    return wallDist <= boxDist ? wallSnap : boxSnap;
   }
 
   // Ímã de encosto do painel de Envidraçamento (DEC-56) — ao soltar o
@@ -4590,9 +4700,10 @@ import {
       // Store no fim do arraste. Sem ímã de parede na POSIÇÃO durante o
       // arraste (bloco continua livre pra posicionar em qualquer
       // lugar) — mas ao SOLTAR, se uma face ficar perto o bastante de
-      // uma parede alinhada ao mundo, a posição (só X/Y, nunca o
-      // ângulo — Product Owner: "Só posição") é ajustada pra encostar
-      // nela (snapVolumeBoxToWalls).
+      // uma parede alinhada ao mundo OU de outro Cubo mágico, a posição
+      // (só X/Y, nunca o ângulo — Product Owner: "Só posição") é
+      // ajustada pra encostar nela, forçando quina com quina quando os
+      // dois já soltam quase alinhados (snapVolumeBoxPosition).
       var vbId = selectedVolumeBoxId;
       var vbEntUp = vbId ? Store.findVolumeBox(vbId) : null;
       if (vbId && vbEntUp && dragElementStart && dragGroundStart) {
@@ -4602,7 +4713,7 @@ import {
           var vbUp = getGroundModelPoint(e.clientX, e.clientY);
           if (vbUp) {
             var dxVbUp = vbUp.x - dragGroundStart.x, dyVbUp = vbUp.y - dragGroundStart.y;
-            var vbSnapped = snapVolumeBoxToWalls(vbEntUp, dragElementStart.x + dxVbUp, dragElementStart.y + dyVbUp);
+            var vbSnapped = snapVolumeBoxPosition(vbEntUp, dragElementStart.x + dxVbUp, dragElementStart.y + dyVbUp);
             Store.commands.updateVolumeBoxBodyLive(vbId, vbSnapped.x, vbSnapped.y, dragElementStart.liveSillHeightM);
           }
         }

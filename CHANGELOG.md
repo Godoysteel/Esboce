@@ -4,6 +4,7 @@
 
 - Cubo mágico "Metalão": os montantes/travessas intermediários agora também se repetem nas faces de CIMA e BAIXO — antes só apareciam nas 4 faces laterais, deixando um bloco comprido/raso (tipo viga ou faixa de fachada deitada) com os trilhos do topo e da base soltos, sem nada os amarrando fora das pontas. Ver DEC-195.
 - Cubo mágico "Metalão": o perfil passou de 5cm para 30x30mm, e ganhou uma textura de aço galvanizado (antes era uma cor cinza lisa). Ver DEC-195.
+- Melhorado o snap do Cubo mágico: além de encostar na parede, agora também encaixa "quina com quina" com a ponta dela quando solta perto o bastante. Novo: o Cubo mágico também gruda em OUTRO Cubo mágico vizinho (lado a lado ou frente/fundo), forçando o alinhamento exato no eixo que não está encostando — pra duas chapas de ACM lado a lado ficarem parelhas, sem desalinhamento de alguns centímetros. Ver DEC-196.
 
 ## Alterado — 01/09/2026
 
