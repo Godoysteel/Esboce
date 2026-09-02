@@ -3602,13 +3602,25 @@ import {
   // hard sempre vence soft no combinador (snapVolumeBoxPosition) —
   // nunca deixa uma sobreposição de verdade sem corrigir só porque tem
   // outra coisa "mais perto" em algum sentido numérico.
+  // Product Owner (2026-09-02, achado testando a DEC-199 ao vivo): "o
+  // cubo ainda está entrando na parede" — perto de um CANTO do cômodo o
+  // bloco sobrepõe DUAS paredes perpendiculares ao mesmo tempo (uma
+  // horizontal, uma vertical). A versão antiga guardava um único
+  // "vencedor" global (hardSnapped/hardPenetration comparando
+  // penetração em X contra penetração em Y como se fossem a mesma
+  // escala) — corrigia só o eixo da parede com MENOR penetração e
+  // deixava o bloco cravado atravessando a outra. Agora X e Y são
+  // resolvidos em acumuladores INDEPENDENTES (hardX/hardY, softX/softY)
+  // — uma parede horizontal só concorre por Y, uma vertical só por X —
+  // então as duas correções (se as duas houver) sempre saem juntas.
   function snapVolumeBoxToWalls(box: any, xGrid: number, yGrid: number): { x: number; y: number; hard: boolean } {
     var halfExtent = volumeBoxHalfExtentsGrid(box);
     var halfExtentXGrid = halfExtent.x, halfExtentZGrid = halfExtent.z;
     var wallHalfThickGrid = (Core.WALL_THICK * Core.GRID) / 2;
-    var hasHard = false, hardPenetration = Infinity, hardSnapped = { x: xGrid, y: yGrid };
-    var softBestGapGrid = VOLUME_BOX_WALL_SNAP_TOLERANCE_GRID;
-    var softSnapped = { x: xGrid, y: yGrid };
+    var hasHardX = false, hardPenetrationX = Infinity, hardX = xGrid;
+    var hasHardY = false, hardPenetrationY = Infinity, hardY = yGrid;
+    var hasSoftX = false, softBestGapX = VOLUME_BOX_WALL_SNAP_TOLERANCE_GRID, softX = xGrid;
+    var hasSoftY = false, softBestGapY = VOLUME_BOX_WALL_SNAP_TOLERANCE_GRID, softY = yGrid;
     Store.currentWalls().forEach(function (w: any) {
       var wallLenGrid = Math.hypot(w.x2 - w.x1, w.y2 - w.y1);
       if (wallLenGrid < Core.GRID * 0.3) return; // parede curta demais pra servir de encosto
@@ -3620,14 +3632,13 @@ import {
         var touchDistY = halfExtentZGrid + wallHalfThickGrid;
         var rawGapY = yGrid - w.y1; // sinal decide de que lado a face encosta
         var absGapY = Math.abs(rawGapY);
-        var candXWall = xGrid; // sem ímã de quina — só a distância perpendicular encosta
         var candYWall = w.y1 + (rawGapY >= 0 ? 1 : -1) * touchDistY;
         if (absGapY < touchDistY) {
           var penetrationY = touchDistY - absGapY;
-          if (!hasHard || penetrationY < hardPenetration) { hasHard = true; hardPenetration = penetrationY; hardSnapped = { x: candXWall, y: candYWall }; }
+          if (!hasHardY || penetrationY < hardPenetrationY) { hasHardY = true; hardPenetrationY = penetrationY; hardY = candYWall; }
         } else {
           var gapOutsideY = absGapY - touchDistY;
-          if (gapOutsideY < softBestGapGrid) { softBestGapGrid = gapOutsideY; softSnapped = { x: candXWall, y: candYWall }; }
+          if (gapOutsideY < softBestGapY) { hasSoftY = true; softBestGapY = gapOutsideY; softY = candYWall; }
         }
       } else if (vertical) {
         var minY = Math.min(w.y1, w.y2) - halfExtentZGrid, maxY = Math.max(w.y1, w.y2) + halfExtentZGrid;
@@ -3635,19 +3646,21 @@ import {
         var touchDistX = halfExtentXGrid + wallHalfThickGrid;
         var rawGapX = xGrid - w.x1;
         var absGapX = Math.abs(rawGapX);
-        var candYVert = yGrid; // sem ímã de quina — só a distância perpendicular encosta
         var candXVert = w.x1 + (rawGapX >= 0 ? 1 : -1) * touchDistX;
         if (absGapX < touchDistX) {
           var penetrationX = touchDistX - absGapX;
-          if (!hasHard || penetrationX < hardPenetration) { hasHard = true; hardPenetration = penetrationX; hardSnapped = { x: candXVert, y: candYVert }; }
+          if (!hasHardX || penetrationX < hardPenetrationX) { hasHardX = true; hardPenetrationX = penetrationX; hardX = candXVert; }
         } else {
           var gapOutsideX = absGapX - touchDistX;
-          if (gapOutsideX < softBestGapGrid) { softBestGapGrid = gapOutsideX; softSnapped = { x: candXVert, y: candYVert }; }
+          if (gapOutsideX < softBestGapX) { hasSoftX = true; softBestGapX = gapOutsideX; softX = candXVert; }
         }
       }
     });
-    if (hasHard) return { x: hardSnapped.x, y: hardSnapped.y, hard: true };
-    return { x: softSnapped.x, y: softSnapped.y, hard: false };
+    return {
+      x: hasHardX ? hardX : (hasSoftX ? softX : xGrid),
+      y: hasHardY ? hardY : (hasSoftY ? softY : yGrid),
+      hard: hasHardX || hasHardY,
+    };
   }
 
   // Snap do Cubo mágico contra OUTRO Cubo mágico vizinho (Product

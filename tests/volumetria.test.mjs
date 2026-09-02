@@ -444,12 +444,20 @@ test('volumeBoxHalfExtentsGrid: resolve largura/profundidade pelos passos de 90�
 // Product Owner (2026-09-02): "quero que retire o snap do encontro com
 // a parede, aquela de quina com quina, não quero que o cubo atravesse
 // uma parede, ele deve sempre ficar encostado na face externa" — tirado
-// o ímã de quina no eixo AO LONGO da parede (candXWall/candYVert não
-// ajustam mais pra ponta da parede); a distância perpendicular que
-// nunca deixa atravessar/faceia na face externa continua igual. O
+// o ímã de quina no eixo AO LONGO da parede; a distância perpendicular
+// que nunca deixa atravessar/faceia na face externa continua igual. O
 // quina-com-quina contra OUTRO Cubo mágico (snapVolumeBoxToNeighborBoxes)
 // não mudou — ver teste abaixo.
-test('snapVolumeBoxToWalls: nunca gira o bloco; separa em duas camadas — HARD (sobreposição de verdade, corrige sempre) e SOFT (só perto, ímã com tolerância) — HARD sempre encosta faceado, sem ímã de quina no eixo ao longo da parede', () => {
+// Achado testando a mudança acima ao vivo (Product Owner: "o cubo ainda
+// está entrando na parede"): perto de um CANTO do cômodo o bloco
+// sobrepõe DUAS paredes perpendiculares ao mesmo tempo. A versão
+// anterior guardava um único "vencedor" global comparando penetração em
+// X contra penetração em Y como se fossem a mesma escala — corrigia só
+// o eixo de MENOR penetração e deixava o bloco cravado atravessando a
+// outra parede. Reescrito pra resolver X e Y em acumuladores
+// INDEPENDENTES (hardX/hardY, softX/softY) — as duas correções, quando
+// as duas existem, sempre saem juntas.
+test('snapVolumeBoxToWalls: nunca gira o bloco; HARD/SOFT em X e Y são acumuladores INDEPENDENTES (uma parede horizontal só concorre por Y, vertical só por X) — sem ímã de quina no eixo ao longo da parede, e as duas paredes de um canto corrigem ao mesmo tempo', () => {
   const start = viewportSource.indexOf('function snapVolumeBoxToWalls(box: any, xGrid: number, yGrid: number)');
   assert.ok(start !== -1);
   const end = viewportSource.indexOf('\n  }', start);
@@ -458,19 +466,25 @@ test('snapVolumeBoxToWalls: nunca gira o bloco; separa em duas camadas — HARD 
   assert.match(body, /var vertical = Math\.abs\(w\.x2 - w\.x1\) < Core\.GRID \* 0\.05;/);
   // nunca escreve em box.rotationDeg — só ajusta x/y
   assert.doesNotMatch(body, /rotationDeg\s*=/);
-  // HARD: sobrepondo a faixa de espessura da parede -> corrige sempre (sem checar tolerância)
+  // acumuladores INDEPENDENTES por eixo (não um único hasHard/hardSnapped global)
+  assert.match(body, /var hasHardX = false, hardPenetrationX = Infinity, hardX = xGrid;/);
+  assert.match(body, /var hasHardY = false, hardPenetrationY = Infinity, hardY = yGrid;/);
+  // HARD em Y (parede horizontal): sobrepondo a faixa de espessura -> corrige sempre (sem checar tolerância), só concorre com outras paredes horizontais
   assert.match(body, /if \(absGapY < touchDistY\) \{/);
-  assert.match(body, /if \(!hasHard \|\| penetrationY < hardPenetration\) \{ hasHard = true; hardPenetration = penetrationY; hardSnapped = \{ x: candXWall, y: candYWall \}; \}/);
+  assert.match(body, /if \(!hasHardY \|\| penetrationY < hardPenetrationY\) \{ hasHardY = true; hardPenetrationY = penetrationY; hardY = candYWall; \}/);
+  // HARD em X (parede vertical): idem, só concorre com outras paredes verticais
   assert.match(body, /if \(absGapX < touchDistX\) \{/);
-  assert.match(body, /if \(!hasHard \|\| penetrationX < hardPenetration\) \{ hasHard = true; hardPenetration = penetrationX; hardSnapped = \{ x: candXVert, y: candYVert \}; \}/);
-  // SOFT: só dentro da tolerância de sempre
-  assert.match(body, /if \(gapOutsideY < softBestGapGrid\) \{ softBestGapGrid = gapOutsideY; softSnapped = \{ x: candXWall, y: candYWall \}; \}/);
-  // SEM ímã de quina: o eixo ao longo da parede passa direto (candXWall/candYVert == xGrid/yGrid), só o eixo perpendicular (candYWall/candXVert) encosta na face
-  assert.match(body, /var candXWall = xGrid;/);
-  assert.match(body, /var candYVert = yGrid;/);
+  assert.match(body, /if \(!hasHardX \|\| penetrationX < hardPenetrationX\) \{ hasHardX = true; hardPenetrationX = penetrationX; hardX = candXVert; \}/);
+  // SOFT: só dentro da tolerância de sempre, também por eixo independente
+  assert.match(body, /if \(gapOutsideY < softBestGapY\) \{ hasSoftY = true; softBestGapY = gapOutsideY; softY = candYWall; \}/);
+  assert.match(body, /if \(gapOutsideX < softBestGapX\) \{ hasSoftX = true; softBestGapX = gapOutsideX; softX = candXVert; \}/);
+  // SEM ímã de quina: os candidatos vêm só da distância perpendicular (candYWall/candXVert), nunca de snapToNearest contra a ponta da parede
   assert.doesNotMatch(body, /snapToNearest\(xGrid,\s*\[\s*w\.x1/, 'não deve mais existir ímã de quina contra parede no eixo X');
   assert.doesNotMatch(body, /snapToNearest\(yGrid,\s*\[\s*w\.y1/, 'não deve mais existir ímã de quina contra parede no eixo Y');
-  assert.match(body, /if \(hasHard\) return \{ x: hardSnapped\.x, y: hardSnapped\.y, hard: true \};/);
+  // retorno combina os dois eixos de forma independente (hard vence soft, cada eixo por si)
+  assert.match(body, /x: hasHardX \? hardX : \(hasSoftX \? softX : xGrid\),/);
+  assert.match(body, /y: hasHardY \? hardY : \(hasSoftY \? softY : yGrid\),/);
+  assert.match(body, /hard: hasHardX \|\| hasHardY,/);
 });
 
 // Product Owner: "quero que melhore o snap na parede e o snap entre os

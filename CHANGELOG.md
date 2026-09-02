@@ -9,6 +9,7 @@
 - Cubo mágico: redimensionar (puxar face) e posicionar (mover e subir/descer) agora sempre em passos de 50mm, pros dois lados — deixa mais fácil unir dois blocos de cabeça, com medidas redondas. Novo: Shift+D duplica o Cubo mágico selecionado (mesmo atalho do Blender). Ver DEC-198.
 - Removido o ímã "quina com quina" do Cubo mágico contra PAREDE — ele nunca mais atravessa uma parede (isso continua garantido, sempre fica encostado na face externa), mas o eixo ao longo da parede não é mais puxado pra ponta dela. O quina-com-quina contra OUTRO Cubo mágico vizinho continua igual. Ver DEC-199.
 - Removido o painel flutuante de trocar elemento/material do Cubo mágico depois de criado — ele ficava tampando a visão durante edição/arraste. O material agora só se escolhe uma vez, no momento de criar o cubo (como já era). Ver DEC-200.
+- Corrigido (de novo): perto de um CANTO do cômodo, o Cubo mágico ainda ficava atravessando uma das duas paredes — a proteção "nunca sobrepõe parede" (DEC-197) só corrigia o eixo de UMA das paredes quando o bloco sobrepunha duas ao mesmo tempo (uma horizontal, uma vertical), deixando a outra intocada. Agora as duas paredes de um canto são corrigidas juntas, na mesma soltada. Ver DEC-201.
 
 ## Alterado — 01/09/2026
 
