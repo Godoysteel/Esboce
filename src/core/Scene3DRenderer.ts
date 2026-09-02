@@ -3804,10 +3804,40 @@ export function hashColorHex(key: string): number {
     [2, 3], [3, 7], [7, 6], [6, 2],
     [0, 2], [1, 3], [5, 7], [4, 6],
   ];
-  var VOLUME_BOX_METALAO_PROFILE_M = 0.05; // seção quadrada do perfil, ~5cm — leitura visual de metalon comum
+  var VOLUME_BOX_METALAO_PROFILE_M = 0.03; // seção quadrada do perfil, 30x30mm (Product Owner) — era 5cm
   var VOLUME_BOX_METALAO_STUD_SPACING_M = 1.2; // Product Owner: "a estrutura do metalão deve ir se repetindo os perfís verticais a cada 1200 mm quando extrudado"
   function lerpVec3(a: any, b: any, t: number) {
     return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t };
+  }
+  // Textura procedural de aço galvanizado (Product Owner: "textura de
+  // aço natural galvanizado") — manchas irregulares de tom claro
+  // variável sobre um cinza-azulado base, lembrando a "flor de zinco"
+  // da imersão a quente, sem depender de nenhum asset de imagem
+  // externo (mesmo princípio de buildCeramicTexture/
+  // buildSteelFrameInsulationHatchMaterial acima, canvas 2D gerado em
+  // memória). Cacheada — construída uma única vez por sessão, todos os
+  // perfis do metalão (de qualquer bloco) compartilham a mesma
+  // textura, só o `repeat` varia por malha se precisar.
+  var volumeBoxGalvanizedTextureCache: any = null;
+  function buildGalvanizedSteelTexture() {
+    if (volumeBoxGalvanizedTextureCache) return volumeBoxGalvanizedTextureCache;
+    var canvas = document.createElement('canvas');
+    canvas.width = 128; canvas.height = 128;
+    var ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#B7BCC1';
+    ctx.fillRect(0, 0, 128, 128);
+    for (var i = 0; i < 160; i++) {
+      var x = Math.random() * 128, y = Math.random() * 128, r = 2 + Math.random() * 5;
+      var shade = 150 + Math.floor(Math.random() * 55);
+      ctx.fillStyle = 'rgba(' + shade + ',' + (shade + 3) + ',' + (shade + 7) + ',' + (0.22 + Math.random() * 0.35) + ')';
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+    }
+    var texture = new THREE.CanvasTexture(canvas);
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    texture.repeat.set(1, 4);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    volumeBoxGalvanizedTextureCache = texture;
+    return texture;
   }
   // Material "metalão" (DEC-180, Product Owner: "estrutura para o ACM
   // seria perfis de alumínio ou metalon") — em vez de um bloco sólido
@@ -3831,7 +3861,9 @@ export function hashColorHex(key: string): number {
   // têm.
   function buildVolumeBoxMetalaoFrame(box: any) {
     var corners = Core.volumeBoxCornerLocalPositions(box);
-    var profileMat = new THREE.MeshStandardMaterial({ color: 0x9AA0A6, metalness: 0.85, roughness: 0.35 });
+    var profileMat = new THREE.MeshStandardMaterial({
+      map: buildGalvanizedSteelTexture(), color: 0xffffff, metalness: 0.85, roughness: 0.4,
+    });
     var group = new THREE.Group();
     function addProfile(a: any, b: any) {
       var dir = new THREE.Vector3(b.x - a.x, b.y - a.y, b.z - a.z);
@@ -3851,6 +3883,15 @@ export function hashColorHex(key: string): number {
       var t = i / widthDivisions;
       addProfile(lerpVec3(corners[0]!, corners[1]!, t), lerpVec3(corners[2]!, corners[3]!, t));
       addProfile(lerpVec3(corners[4]!, corners[5]!, t), lerpVec3(corners[6]!, corners[7]!, t));
+      // Travessas nas faces de CIMA/BAIXO (Y-/Y+), ligando o trilho da
+      // frente ao trilho do fundo em cada divisão de largura — Product
+      // Owner: "está faltando os perfis horizontais superiores e
+      // inferiores no meio da estrutura" (bloco comprido/raso, tipo
+      // viga/laje, onde topo e base são as faces grandes). Sem isso, os
+      // dois trilhos longitudinais (topo-frente e topo-fundo) ficavam
+      // soltos entre si, sem nada os amarrando fora das pontas.
+      addProfile(lerpVec3(corners[2]!, corners[3]!, t), lerpVec3(corners[6]!, corners[7]!, t));
+      addProfile(lerpVec3(corners[0]!, corners[1]!, t), lerpVec3(corners[4]!, corners[5]!, t));
     }
     // Montantes intermediários na PROFUNDIDADE (faces laterais X-/X+):
     // as duas travessas acima só cobrem as faces de frente/fundo (Z) —
@@ -3864,6 +3905,11 @@ export function hashColorHex(key: string): number {
       var tk = k / depthDivisions;
       addProfile(lerpVec3(corners[0]!, corners[4]!, tk), lerpVec3(corners[2]!, corners[6]!, tk));
       addProfile(lerpVec3(corners[1]!, corners[5]!, tk), lerpVec3(corners[3]!, corners[7]!, tk));
+      // Travessas nas faces de CIMA/BAIXO (Y-/Y+), mesmo motivo das do
+      // laço de largura acima, mas ligando o trilho ESQUERDA ao trilho
+      // DIREITA em cada divisão de profundidade.
+      addProfile(lerpVec3(corners[2]!, corners[6]!, tk), lerpVec3(corners[3]!, corners[7]!, tk));
+      addProfile(lerpVec3(corners[0]!, corners[4]!, tk), lerpVec3(corners[1]!, corners[5]!, tk));
     }
     // Travessas horizontais intermediárias: mesma lógica dos montantes
     // verticais acima, mas subdividindo a ALTURA (Product Owner: "os

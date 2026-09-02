@@ -300,8 +300,26 @@ test('buildVolumeBoxMesh: bloco com structuralMaterial "metalao" soma o esquelet
   const frameBody = rendererSource.slice(frameStart, frameEnd);
   assert.match(frameBody, /Core\.volumeBoxCornerLocalPositions\(box\)/);
   assert.match(frameBody, /metalness: 0\.85/, 'perfil precisa ler como metal de verdade, não a cor lisa genérica');
+  assert.match(frameBody, /map: buildGalvanizedSteelTexture\(\)/, 'Product Owner: "textura de aço natural galvanizado", não cor lisa');
   assert.match(frameBody, /new THREE\.BoxGeometry\(VOLUME_BOX_METALAO_PROFILE_M, len, VOLUME_BOX_METALAO_PROFILE_M\)/);
   assert.match(frameBody, /profileMesh\.quaternion\.setFromUnitVectors/);
+});
+
+// Product Owner: "gostaria também que os perfis fossem 30x30mm com
+// textura de aço natural galvanizado" — perfil era 5cm de seção
+// (leitura genérica de metalon), textura era cor lisa MeshStandardMaterial
+// sem nenhum mapa. Textura procedural (canvas 2D gerado em memória,
+// mesmo princípio de buildCeramicTexture) evita depender de asset de
+// imagem externo.
+test('buildVolumeBoxMetalaoFrame: perfil 30x30mm (VOLUME_BOX_METALAO_PROFILE_M) com textura procedural de aço galvanizado (buildGalvanizedSteelTexture, cacheada)', () => {
+  assert.match(rendererSource, /var VOLUME_BOX_METALAO_PROFILE_M = 0\.03;/);
+  assert.match(rendererSource, /function buildGalvanizedSteelTexture\(\) \{/);
+  const start = rendererSource.indexOf('function buildGalvanizedSteelTexture() {');
+  const end = rendererSource.indexOf('\n  }', start);
+  const body = rendererSource.slice(start, end);
+  assert.match(body, /if \(volumeBoxGalvanizedTextureCache\) return volumeBoxGalvanizedTextureCache;/, 'cacheada — não gera canvas novo por perfil');
+  assert.match(body, /new THREE\.CanvasTexture\(canvas\)/);
+  assert.match(body, /volumeBoxGalvanizedTextureCache = texture;/);
 });
 
 // Product Owner: "a face dele deve ser invisível porém deve ser
@@ -360,6 +378,26 @@ test('buildVolumeBoxMetalaoFrame: montante (profundidade) E travessa horizontal 
   // altura (travessas horizontais nas faces laterais)
   assert.match(body, /addProfile\(lerpVec3\(corners\[0\]!, corners\[2\]!, tj\), lerpVec3\(corners\[4\]!, corners\[6\]!, tj\)\);/);
   assert.match(body, /addProfile\(lerpVec3\(corners\[1\]!, corners\[3\]!, tj\), lerpVec3\(corners\[5\]!, corners\[7\]!, tj\)\);/);
+});
+
+// DEC-195 (print real do Product Owner num bloco comprido/raso, tipo
+// viga/laje: "está faltando os perfis horizontais superiores e
+// inferiores no meio da estrutura") — os laços de largura/profundidade
+// acima cobrem as 4 faces LATERAIS (frente/fundo/esquerda/direita),
+// mas nunca as faces de CIMA/BAIXO (Y-/Y+) — pra um bloco onde topo e
+// base SÃO as faces grandes (comprido e raso, deitado), os dois trilhos
+// longitudinais do topo (e da base) ficavam sem nada os amarrando
+// entre as pontas.
+test('buildVolumeBoxMetalaoFrame: travessas de CIMA/BAIXO (Y-/Y+) também se repetem a cada 1200mm, tanto na largura quanto na profundidade', () => {
+  const start = rendererSource.indexOf('function buildVolumeBoxMetalaoFrame(box: any) {');
+  const end = rendererSource.indexOf('\n  }', start);
+  const body = rendererSource.slice(start, end);
+  // no laço de largura (liga trilho frente↔fundo, no topo e na base, em cada divisão de X)
+  assert.match(body, /addProfile\(lerpVec3\(corners\[2\]!, corners\[3\]!, t\), lerpVec3\(corners\[6\]!, corners\[7\]!, t\)\);/);
+  assert.match(body, /addProfile\(lerpVec3\(corners\[0\]!, corners\[1\]!, t\), lerpVec3\(corners\[4\]!, corners\[5\]!, t\)\);/);
+  // no laço de profundidade (liga trilho esquerda↔direita, no topo e na base, em cada divisão de Z)
+  assert.match(body, /addProfile\(lerpVec3\(corners\[2\]!, corners\[6\]!, tk\), lerpVec3\(corners\[3\]!, corners\[7\]!, tk\)\);/);
+  assert.match(body, /addProfile\(lerpVec3\(corners\[0\]!, corners\[4\]!, tk\), lerpVec3\(corners\[1\]!, corners\[5\]!, tk\)\);/);
 });
 
 // Movimento livre do Cubo mágico (Product Owner: "deve ser possível

@@ -1,5 +1,10 @@
 # Changelog
 
+## Alterado — 02/09/2026
+
+- Cubo mágico "Metalão": os montantes/travessas intermediários agora também se repetem nas faces de CIMA e BAIXO — antes só apareciam nas 4 faces laterais, deixando um bloco comprido/raso (tipo viga ou faixa de fachada deitada) com os trilhos do topo e da base soltos, sem nada os amarrando fora das pontas. Ver DEC-195.
+- Cubo mágico "Metalão": o perfil passou de 5cm para 30x30mm, e ganhou uma textura de aço galvanizado (antes era uma cor cinza lisa). Ver DEC-195.
+
 ## Alterado — 01/09/2026
 
 - A fundação (baldrame ou radier) agora fica visível saindo pra fora do chão, mais realista — antes ficava quase toda enterrada, quase invisível de fora da casa. O topo continua exatamente no mesmo lugar (nunca sobrepõe parede nem piso); o chão ao redor da casa é que desce, e a calçada acompanha. O quantitativo de concreto foi atualizado pra refletir a fundação maior. Ver DEC-192.
