@@ -2654,7 +2654,7 @@ O core geométrico mais caro (`Core.detectRooms`/`Core.computeWallFootprints`, a
 # DEC-208 — Corte de espigão na cumeeira do vizinho (DEC-206) apagava trecho que já tinha SAÍDO da pegada dele
 
 **Data:** 02/09/2026
-**Status:** Implementado e verificado (reconstrução real da cena, sem WebGL, primeiro bug real localizado com a ferramenta "Marcador" da DEC-207).
+**Status:** REVERTIDA pela DEC-209 (a seguir) — o diagnóstico desta entrada estava errado. Mantida no histórico pra registrar o caminho até a causa real.
 
 **Contexto:** primeiro uso real da ferramenta "Marcador" (DEC-207) pelo Product Owner — marcou início (vermelho) e fim (azul) de um trecho de espigão, relatando: "essa parte do espigão deveria existir e foi apagada, a parte de baixo deveria ter sido aparada mas ainda existe, ou seja, inverteu". Dados do console confirmados pela própria dica da ferramenta: os dois pontos caíram em `roof_37` (telhado GRANDE, 8×8m, quadrado/sem cumeeira própria — quatro cômodos 4×4m num 2×2), pontas A e B de espigões DIFERENTES (convergem no mesmo pico, por isso pareciam uma linha só no print). Dados completos do console: `roof_37` (x1:35,y1:-30,x2:195,y2:130) + `roof_38` (x1:-40,y1:-30,x2:95,y2:30, telhado PEQUENO com cumeeira de verdade, arrastado até encostar no canto de `roof_37`).
 
@@ -2665,3 +2665,20 @@ O core geométrico mais caro (`Core.detectRooms`/`Core.computeWallFootprints`, a
 **Verificado ao vivo (reconstrução real da cena, sem WebGL):** antes da correção, o espigão A de `roof_37` tinha `z: [-1.985, 0]` (cortado logo depois da cumeeira do vizinho, perdendo o trecho até o próprio pico). Depois: `z: [-1.985, 2.589]` — o comprimento natural completo de novo, mas agora com um vão real SEM vértices entre `z≈0` e `z≈1,75` (o trecho genuinamente dentro da pegada de `roof_38`, corretamente ausente) — dois segmentos sólidos separados por um corte, não mais um corte único até o fim. Confirmado por varredura fina dos uniforms reais do shader: 0 pontos sem cobertura (nem buraco, nem sobreposição) em toda a região dos dois telhados.
 
 **Testado:** suíte completa (732 testes, sem regressão — os testes da DEC-206 verificam a matemática do CRUZAMENTO, que não mudou; só o retângulo resultante do corte mudou, não coberto por regex antiga).
+
+---
+
+# DEC-209 — Reverte a DEC-208: espigão cortado na cumeeira do vizinho fica cortado PRA SEMPRE, não reaparece
+
+**Data:** 02/09/2026
+**Status:** Implementado e verificado (reconstrução real da cena, sem WebGL) + confirmado explicitamente pelo Product Owner via pergunta direta antes de reverter.
+
+**Contexto:** Product Owner testou a DEC-208 ao vivo (mesma composição em L de antes) e relatou o resultado oposto do esperado: "agora ficou uma parte visível perto do topo, sumiu a parte do meio do espigão e a partir da cumeeira do telhado pequeno para baixo está visível o espigão" — ou seja, exatamente os DOIS segmentos que a DEC-208 criou de propósito (um antes da cumeeira do vizinho, outro depois que ele sai da pegada dela, perto do próprio pico), com o vão real no meio. Antes de reverter às cegas, perguntei diretamente se esse era o comportamento esperado ou se o espigão devia ficar cortado pra sempre depois da cumeeira, sem reaparecer — Product Owner confirmou explicitamente a segunda opção.
+
+**Causa raiz real (agora identificada):** a DEC-208 foi uma correção equivocada. O diagnóstico original dela interpretou mal a reprodução: os dois pontos marcados pelo Product Owner com a ferramenta "Marcador" (DEC-207) para relatar o bug da DEC-208 caíram em DOIS ESPIGÕES DIFERENTES (`ridgePieceId` "A" e "B" de `roof_37`) que convergem no mesmo pico (telhado quadrado, sem cumeeira própria — todo espigão de canto termina no mesmo ponto único) e por isso pareciam uma linha só no print. O comportamento da DEC-206 original (meio-plano infinito, corte permanente após a cumeeira) já estava certo desde o início; não havia bug ali.
+
+**Correção:** revertido `hipCornerRidgeCrossingRect` pro meio-plano infinito original da DEC-206 (`{minX:-1e6, maxX:1e6, ...}` em vez do retângulo limitado à pegada do vizinho introduzido pela DEC-208). Uma vez que o espigão cruza a cumeeira de um vizinho, a malha fica cortada dali pra frente até o próprio pico, sem exceção — mesmo que, mais adiante, o espigão já tenha saído da pegada do vizinho.
+
+**Verificado ao vivo (reconstrução real da cena, sem WebGL, mesmos dados `roof_37`/`roof_38` da DEC-208):** o espigão A de `roof_37` volta a medir `z: [-1.985, 0]` — cortado logo após a cumeeira de `roof_38`, sem o segundo segmento perto do pico que a DEC-208 reintroduzia por engano.
+
+**Testado:** suíte completa (733 testes) — o teste específico da DEC-208 foi substituído por um teste que verifica a reversão pro meio-plano infinito; os testes da DEC-206 (matemática do cruzamento, inalterada) continuam passando sem modificação.
