@@ -2783,7 +2783,7 @@ Achado ao investigar: o volume real do telhado vizinho (como já modelado em `ro
 # DEC-215 — sombreamento por pixel (applyRoomBoxClipping) não escondia fragmento EXATAMENTE na borda da caixa de recorte do vizinho — teste de caixa estrito (`<`/`>`) excluía o próprio limite, deixando a tabeira flutuando sem ser testada
 
 **Data:** 22/09/2026
-**Status:** Implementado e testado (738 testes, typecheck limpo, build de produção). Verificado por rastreamento numérico direto da fórmula do shader com os dados reais do Product Owner (não por captura de tela — ver Verificado).
+**Status:** Implementado, testado e CONFIRMADO ao vivo pelo Product Owner em produção ("resolveu e ficou muito bom"). Verificação inicial foi por rastreamento numérico direto da fórmula do shader com os dados reais (não captura de tela — ver Verificado); confirmação visual real veio depois, do próprio Product Owner.
 
 **Contexto:** depois da DEC-214 (fresta perto da cumeeira resolvida), Product Owner reportou um problema novo, com print + dados reais do console (`floor_1`, `roof_25`/`roof_26`, dois duas-águas perpendiculares do mesmo `compoundGroupId`, pegadas sobrepostas — exatamente o par que a DEC-214 passou a confiar 100% no sombreamento por pixel): a tabeira de `roof_26` avançava por cima do oitão de `roof_25` (o telhado "transversal"), quando devia parar no início do encontro.
 
@@ -2799,6 +2799,6 @@ Não é um caso raro: QUALQUER par de telhados que compartilha uma parede (a sit
 - Altura própria de `roof_26` no ponto (fórmula canônica, `useOwnSurface`): `base + 1,063 − 0,5317×|6,4−4| = base − 0,213m`.
 - Altura de `roof_25` no mesmo ponto, nas duas pontas do segmento marcado: em `z=-2,1765m` → `base − 0,094m`; em `z=-0,1465m` → `base + 0,985m`. Nos dois pontos (e em todo o trecho entre eles, por continuidade), `roof_25` é mais alto que a altura própria de `roof_26` ali (`base-0,094 > base-0,213`; `base+0,985 > base-0,213`) → `testY < surfaceY` → `discard` dispara → tabeira escondida corretamente em todo o trecho reportado.
 
-Não foi possível confirmar por captura de tela automatizada nesta sessão (dificuldade real de orbitar a câmera 3D remotamente — mesmo problema já registrado em [[project_esboce_navigation_onboarding]]); a confirmação acima é por rastreamento direto da fórmula do shader com os números exatos do bug reportado, não por inspeção visual. Pendente: Product Owner confirmar visualmente em produção.
+Não foi possível confirmar por captura de tela automatizada nesta sessão (dificuldade real de orbitar a câmera 3D remotamente — mesmo problema já registrado em [[project_esboce_navigation_onboarding]]); a confirmação acima é por rastreamento direto da fórmula do shader com os números exatos do bug reportado, não por inspeção visual. **Confirmado depois, ao vivo, pelo Product Owner em produção: "resolveu e ficou muito bom".**
 
 **Referências:** DEC-214 · `src/core/Scene3DRenderer.ts` (`applyRoomBoxClipping`, teste de caixa no fragment shader).
