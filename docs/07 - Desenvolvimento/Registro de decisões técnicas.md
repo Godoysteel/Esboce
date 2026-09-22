@@ -2779,3 +2779,26 @@ Achado ao investigar: o volume real do telhado vizinho (como já modelado em `ro
 **Verificado:** reprodução local (`Store.setProject`, dois duas-águas 8×5m e 5×8m em L com sobreposição genuína de ~3×3m, mesmo `compoundGroupId`, `ridgeAxis` perpendiculares) — build de produção (`vite build` + `vite preview`, contorna o bug de MIME do `.wasm` no `vite dev`), inspecionado visualmente: água contínua na região de sobreposição, sem buraco nem fresta.
 
 **Referências:** DEC-170 (`5f46f31`, premissa original), DEC-210, DEC-211, DEC-212, DEC-213 · `src/core/Scene3DRenderer.ts` (`gableClipRects`, `trimRects` — mesmo gate `valleyPartnerIds`).
+
+# DEC-215 — sombreamento por pixel (applyRoomBoxClipping) não escondia fragmento EXATAMENTE na borda da caixa de recorte do vizinho — teste de caixa estrito (`<`/`>`) excluía o próprio limite, deixando a tabeira flutuando sem ser testada
+
+**Data:** 22/09/2026
+**Status:** Implementado e testado (738 testes, typecheck limpo, build de produção). Verificado por rastreamento numérico direto da fórmula do shader com os dados reais do Product Owner (não por captura de tela — ver Verificado).
+
+**Contexto:** depois da DEC-214 (fresta perto da cumeeira resolvida), Product Owner reportou um problema novo, com print + dados reais do console (`floor_1`, `roof_25`/`roof_26`, dois duas-águas perpendiculares do mesmo `compoundGroupId`, pegadas sobrepostas — exatamente o par que a DEC-214 passou a confiar 100% no sombreamento por pixel): a tabeira de `roof_26` avançava por cima do oitão de `roof_25` (o telhado "transversal"), quando devia parar no início do encontro.
+
+**Causa raiz:** `roof_25` e `roof_26` compartilham a MESMA parede (ambos com `x2=120`) e o MESMO `ROOF_OVERHANG` (0,4m) — então a borda leste de cada um cai no EXATO mesmo `x` mundo: `120*0,05 + 0,4 = 6,4m`, dos dois lados. A tabeira de `roof_26` (uma tira vertical na borda do beiral, toda ela em `x≈6,4`) cai bem EM CIMA do limite (`uRoomClipMax.x`) da caixa de recorte de `roof_25`. O teste de caixa no shader (`applyRoomBoxClipping`, região `#include <clipping_planes_fragment>`) usava comparação ESTRITA (`vRoomClipWorldPos.x < uRoomClipMax[i].x`) — em `x` exatamente igual a `uRoomClipMax.x`, `6.4 < 6.4` é falso, então o fragmento nunca entra no teste de altura daquele candidato. Sem entrar no teste, não há como `roof_25` (que é realmente mais alto ali — conferido abaixo) esconder a tabeira de `roof_26`, mesmo o sombreamento por pixel estando correto e já rodando.
+
+Não é um caso raro: QUALQUER par de telhados que compartilha uma parede (a situação mais comum de telhados compostos, não a exceção) tem esse mesmo empate exato de borda.
+
+**Correção:** margem de 1mm (`0.001`) nos dois lados de cada eixo do teste de caixa em `applyRoomBoxClipping` (`vRoomClipWorldPos.x > uRoomClipMin[i].x - 0.001 && ... < uRoomClipMax[i].x + 0.001`, idem em Z) — imperceptível visualmente, mas garante que o fragmento exatamente na borda entra no teste de altura em vez de escapar dele. Não afeta o teste de altura em si (`testY < surfaceY - tieBias`, inalterado) nem o invariante "nunca esconde os dois lados ao mesmo tempo" — só decide quem ENTRA no teste, não quem vence.
+
+**Verificado (rastreamento numérico, dados reais do console do Product Owner):** `roof_25` (`x1=-40,y1=-40,x2=120,y2=40`, `ridgeAxis=x`) e `roof_26` (`x1=40,y1=-115,x2=120,y2=-10`, `ridgeAxis=y`), `pitchDeg=28` nos dois, mesmo `compoundGroupId`. Segmento marcado pelo Marcador do Product Owner: `x=128` (raw) `=6,4m`, `y` de `-43,53` a `-2,93` (raw) `= -2,1765m` a `-0,1465m` — exatamente a borda leste (`maxX`) da caixa de `roof_25` (`6,4m`, calculada por `roofWorldFootprint`), confirmando o diagnóstico antes de mexer em código.
+- Teste de caixa ANTES (estrito): `6,4 < 6,4` → falso → `roof_25` nunca competia ali → tabeira de `roof_26` sempre visível (bug reproduzido matematicamente).
+- Teste de caixa DEPOIS (±1mm): `6,4 < 6,4001` → verdadeiro → entra no teste de altura.
+- Altura própria de `roof_26` no ponto (fórmula canônica, `useOwnSurface`): `base + 1,063 − 0,5317×|6,4−4| = base − 0,213m`.
+- Altura de `roof_25` no mesmo ponto, nas duas pontas do segmento marcado: em `z=-2,1765m` → `base − 0,094m`; em `z=-0,1465m` → `base + 0,985m`. Nos dois pontos (e em todo o trecho entre eles, por continuidade), `roof_25` é mais alto que a altura própria de `roof_26` ali (`base-0,094 > base-0,213`; `base+0,985 > base-0,213`) → `testY < surfaceY` → `discard` dispara → tabeira escondida corretamente em todo o trecho reportado.
+
+Não foi possível confirmar por captura de tela automatizada nesta sessão (dificuldade real de orbitar a câmera 3D remotamente — mesmo problema já registrado em [[project_esboce_navigation_onboarding]]); a confirmação acima é por rastreamento direto da fórmula do shader com os números exatos do bug reportado, não por inspeção visual. Pendente: Product Owner confirmar visualmente em produção.
+
+**Referências:** DEC-214 · `src/core/Scene3DRenderer.ts` (`applyRoomBoxClipping`, teste de caixa no fragment shader).

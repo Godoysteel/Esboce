@@ -1193,6 +1193,22 @@ export function hashColorHex(key: string): number {
   };
   var VALLEY_CUT_LIMIT = 4;
   type ValleyCut = { cornerX: number; cornerZ: number; dirX: number; dirZ: number; hideSign: number };
+  // Bug real (Product Owner, DEC-215): a tabeira de um duas-águas ficava
+  // flutuando por cima da parede de oitão de um vizinho perpendicular do
+  // mesmo compoundGroupId, mesmo já com o corte da DEC-214 desativado ali
+  // de propósito (o par sobrepõe de verdade, não é valleyPartnerIds — o
+  // sombreamento por pixel abaixo devia estar cobrindo isso sozinho).
+  // Causa: os dois telhados compartilham a MESMA parede/mesmo
+  // ROOF_OVERHANG, então a borda da tabeira de um cai EXATAMENTE em cima
+  // do limite da caixa de recorte do outro (`uRoomClipMax.x`, por
+  // exemplo) — e o teste de caixa abaixo usava `<`/`>` estritos, que
+  // excluem esse pixel exatamente na borda (nem entra no teste de altura,
+  // então nunca é escondido ali, não importa quem seja mais alto).
+  // Comum, não um caso raro: qualquer par de telhados que compartilha
+  // parede tem esse mesmo empate exato de borda. Corrigido com uma
+  // margem de 1mm nos dois lados da caixa (imperceptível, bem menor que
+  // qualquer detalhe real de acabamento) — garante que o pixel exatamente
+  // na borda entra no teste de altura em vez de escapar dele.
   function applyRoomBoxClipping(material: any, boxes: RoomClipBox[], valleyCuts?: ValleyCut[], ownSurface?: RoomClipBox) {
     var cuts = valleyCuts || [];
     if (!material || (!boxes.length && !cuts.length)) return;
@@ -1252,7 +1268,7 @@ export function hashColorHex(key: string): number {
         )
         .replace(
           '#include <clipping_planes_fragment>',
-          '#include <clipping_planes_fragment>\n  float ownSurfaceY = vRoomClipWorldPos.y;\n  if ( uHasOwnSurface > 0 ) {\n    if ( uOwnIsHip > 0.5 ) {\n      float odX = min( vRoomClipWorldPos.x - uOwnMin.x, uOwnMax.x - vRoomClipWorldPos.x );\n      float odZ = min( vRoomClipWorldPos.z - uOwnMin.y, uOwnMax.y - vRoomClipWorldPos.z );\n      ownSurfaceY = uOwnBaseY + uOwnTanPitch * min( odX, odZ );\n    } else {\n      float ownCoord = uOwnAxisIsZ > 0.5 ? vRoomClipWorldPos.z : vRoomClipWorldPos.x;\n      ownSurfaceY = uOwnBaseY + uOwnPeak - uOwnTanPitch * abs( ownCoord - uOwnRidgeCoord );\n    }\n  }\n  for ( int i = 0; i < ' + ROOM_CLIP_BOX_LIMIT + '; i ++ ) {\n    if ( i >= uRoomClipCount ) break;\n    if ( vRoomClipWorldPos.x > uRoomClipMin[ i ].x && vRoomClipWorldPos.x < uRoomClipMax[ i ].x && vRoomClipWorldPos.z > uRoomClipMin[ i ].y && vRoomClipWorldPos.z < uRoomClipMax[ i ].y ) {\n      float surfaceY;\n      if ( uRoomClipIsHip[ i ] > 0.5 ) {\n        float distX = min( vRoomClipWorldPos.x - uRoomClipMin[ i ].x, uRoomClipMax[ i ].x - vRoomClipWorldPos.x );\n        float distZ = min( vRoomClipWorldPos.z - uRoomClipMin[ i ].y, uRoomClipMax[ i ].y - vRoomClipWorldPos.z );\n        surfaceY = uRoomClipBaseY[ i ] + uRoomClipTanPitch[ i ] * min( distX, distZ );\n      } else {\n        float coord = uRoomClipAxisIsZ[ i ] > 0.5 ? vRoomClipWorldPos.z : vRoomClipWorldPos.x;\n        surfaceY = uRoomClipBaseY[ i ] + uRoomClipPeak[ i ] - uRoomClipTanPitch[ i ] * abs( coord - uRoomClipRidgeCoord[ i ] );\n      }\n      float testY = uRoomClipUseOwn[ i ] > 0.5 ? ownSurfaceY : vRoomClipWorldPos.y;\n      if ( testY < surfaceY - uRoomClipTieBias[ i ] ) discard;\n    }\n  }\n  for ( int j = 0; j < ' + VALLEY_CUT_LIMIT + '; j ++ ) {\n    if ( j >= uValleyCutCount ) break;\n    float pastX = ( vRoomClipWorldPos.x - uValleyCorner[ j ].x ) * uValleyDir[ j ].x;\n    float pastZ = ( vRoomClipWorldPos.z - uValleyCorner[ j ].y ) * uValleyDir[ j ].y;\n    if ( pastX >= 0.0 && pastZ >= 0.0 ) {\n      float cross = ( vRoomClipWorldPos.x - uValleyCorner[ j ].x ) * uValleyDir[ j ].y - ( vRoomClipWorldPos.z - uValleyCorner[ j ].y ) * uValleyDir[ j ].x;\n      if ( sign( cross ) == uValleyHideSign[ j ] ) discard;\n    }\n  }'
+          '#include <clipping_planes_fragment>\n  float ownSurfaceY = vRoomClipWorldPos.y;\n  if ( uHasOwnSurface > 0 ) {\n    if ( uOwnIsHip > 0.5 ) {\n      float odX = min( vRoomClipWorldPos.x - uOwnMin.x, uOwnMax.x - vRoomClipWorldPos.x );\n      float odZ = min( vRoomClipWorldPos.z - uOwnMin.y, uOwnMax.y - vRoomClipWorldPos.z );\n      ownSurfaceY = uOwnBaseY + uOwnTanPitch * min( odX, odZ );\n    } else {\n      float ownCoord = uOwnAxisIsZ > 0.5 ? vRoomClipWorldPos.z : vRoomClipWorldPos.x;\n      ownSurfaceY = uOwnBaseY + uOwnPeak - uOwnTanPitch * abs( ownCoord - uOwnRidgeCoord );\n    }\n  }\n  for ( int i = 0; i < ' + ROOM_CLIP_BOX_LIMIT + '; i ++ ) {\n    if ( i >= uRoomClipCount ) break;\n    if ( vRoomClipWorldPos.x > uRoomClipMin[ i ].x - 0.001 && vRoomClipWorldPos.x < uRoomClipMax[ i ].x + 0.001 && vRoomClipWorldPos.z > uRoomClipMin[ i ].y - 0.001 && vRoomClipWorldPos.z < uRoomClipMax[ i ].y + 0.001 ) {\n      float surfaceY;\n      if ( uRoomClipIsHip[ i ] > 0.5 ) {\n        float distX = min( vRoomClipWorldPos.x - uRoomClipMin[ i ].x, uRoomClipMax[ i ].x - vRoomClipWorldPos.x );\n        float distZ = min( vRoomClipWorldPos.z - uRoomClipMin[ i ].y, uRoomClipMax[ i ].y - vRoomClipWorldPos.z );\n        surfaceY = uRoomClipBaseY[ i ] + uRoomClipTanPitch[ i ] * min( distX, distZ );\n      } else {\n        float coord = uRoomClipAxisIsZ[ i ] > 0.5 ? vRoomClipWorldPos.z : vRoomClipWorldPos.x;\n        surfaceY = uRoomClipBaseY[ i ] + uRoomClipPeak[ i ] - uRoomClipTanPitch[ i ] * abs( coord - uRoomClipRidgeCoord[ i ] );\n      }\n      float testY = uRoomClipUseOwn[ i ] > 0.5 ? ownSurfaceY : vRoomClipWorldPos.y;\n      if ( testY < surfaceY - uRoomClipTieBias[ i ] ) discard;\n    }\n  }\n  for ( int j = 0; j < ' + VALLEY_CUT_LIMIT + '; j ++ ) {\n    if ( j >= uValleyCutCount ) break;\n    float pastX = ( vRoomClipWorldPos.x - uValleyCorner[ j ].x ) * uValleyDir[ j ].x;\n    float pastZ = ( vRoomClipWorldPos.z - uValleyCorner[ j ].y ) * uValleyDir[ j ].y;\n    if ( pastX >= 0.0 && pastZ >= 0.0 ) {\n      float cross = ( vRoomClipWorldPos.x - uValleyCorner[ j ].x ) * uValleyDir[ j ].y - ( vRoomClipWorldPos.z - uValleyCorner[ j ].y ) * uValleyDir[ j ].x;\n      if ( sign( cross ) == uValleyHideSign[ j ] ) discard;\n    }\n  }'
         );
     };
     material.needsUpdate = true;
