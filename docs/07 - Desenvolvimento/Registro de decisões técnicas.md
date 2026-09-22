@@ -2708,6 +2708,8 @@ Novo módulo puro `src/core/roofSolidGeometry.ts` (sem Three.js), inicializado u
 
 **Segunda confirmação, mesma data — encontro em T (três telhados quatro-águas):** Product Owner testou uma composição mais complexa, um T formado por três coberturas quatro-águas (`compoundGroupId` compartilhado, dois vales reentrantes ao mesmo tempo), e confirmou: "telhado quatro águas em T perfeito" — print mostrando os três encontros sem espigão duplicado nem fresta em nenhum dos dois vales. Primeira validação real de um caso com mais de dois telhados sobrepondo o mesmo compoundGroupId simultaneamente (a união real generaliza pra N vizinhos por construção, não só o caso de dois testado nos testes automatizados).
 
+**Terceira confirmação, mesma data — encontro em cruz/+ (quatro telhados quatro-águas):** Product Owner testou o caso ainda mais complexo, quatro coberturas quatro-águas formando uma planta em cruz (quatro vales reentrantes simultâneos ao redor do mesmo ponto central), e confirmou: "ficou muito bom" — print mostrando os quatro encontros limpos, sem espigão duplicado nem fresta em nenhum dos quatro vales. Generalização de N vizinhos simultâneos (já validada em T, três telhados) agora confirmada também para quatro telhados ao redor do mesmo ponto.
+
 ---
 
 # DEC-211 — gableClipRects apagava a própria água quando o vizinho perpendicular sobrepõe boa parte da pegada (não só toca numa quina)
