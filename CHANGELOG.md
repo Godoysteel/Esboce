@@ -1,5 +1,9 @@
 # Changelog
 
+## Alterado — 22/09/2026
+
+- Telhados `quatroAguas`/`duasAguas` que se encontram (mesmo `compoundGroupId`) agora decidem o corte do espigão/cumeeira por interseção real de sólidos 3D (novo módulo `roofSolidGeometry.ts`, biblioteca `manifold-3d`), em vez de só pela pilha de regras de posição acumulada desde a DEC-152 — cobre automaticamente "vizinho mais alto" e "picos empatados" com uma única conta, sem depender de desempate por id nem se limitar a um único vizinho mais próximo. Escopo desta primeira etapa: só a peça de espigão/cumeeira; oitão, água e tabeira continuam iguais. Ver DEC-210.
+
 ## Alterado — 02/09/2026
 
 - Cubo mágico "Metalão": os montantes/travessas intermediários agora também se repetem nas faces de CIMA e BAIXO — antes só apareciam nas 4 faces laterais, deixando um bloco comprido/raso (tipo viga ou faixa de fachada deitada) com os trilhos do topo e da base soltos, sem nada os amarrando fora das pontas. Ver DEC-195.

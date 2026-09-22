@@ -25,6 +25,7 @@ import { RAILING_FRAME_DEPTH_M, RAILING_POST_WIDTH_M, RAILING_TOP_RAIL_HEIGHT_M,
 import type { Project, Wall, Column, Roof, Varanda, Laje, Opening } from './types.js';
 import { floorWallHeight } from './Attic.js';
 import { hydraulicFixtureVisualPosition } from './Hydraulics.js';
+import { buildHipSolidFromWorldBox, buildGableSolidFromWorldBox, composeRoofPair, survivingSegments, type Point3 } from './roofSolidGeometry.js';
 import { steelFrameAssemblyColorHex } from './SteelFrameAssemblies.js';
 
 export interface ViewState {
@@ -6343,6 +6344,23 @@ export function hashColorHex(key: string): number {
             isHip: r.type === 'quatroAguas' ? 1 : 0,
           };
         });
+        // Sólido real (interseção de semi-espaços, técnica documentada no
+        // BRABIM DEC-0008/OCCT) por telhado elegível — construído uma vez
+        // por floor/rebuild a partir dos mesmos números de roofPeakBoxes
+        // (já em espaço de mundo), reaproveitado tanto como "dono" quanto
+        // como "vizinho" ao compor pares. Fase 1: só quatroAguas/duasAguas
+        // (ver plano) — platibanda/umaAgua continuam na pilha de regras
+        // antiga, sem risco pra eles.
+        var realRoofSolidById: Record<string, any> = {};
+        floorData.roofs.forEach(function (r) {
+          if (r.type !== 'quatroAguas' && r.type !== 'duasAguas') return;
+          var box = roofPeakBoxes.find(function (b: any) { return b.id === r.id; });
+          if (!box) return;
+          var worldBox = { minX: box.minX, maxX: box.maxX, minZ: box.minZ, maxZ: box.maxZ, baseY: box.baseY, tanTheta: box.tanPitch };
+          realRoofSolidById[r.id] = box.isHip
+            ? buildHipSolidFromWorldBox(worldBox)
+            : buildGableSolidFromWorldBox(worldBox, box.axisIsZ > 0.5);
+        });
         floorData.roofs.forEach(function (roof) {
           // Acompanha a altura PRÓPRIA do cômodo embaixo do centro do
           // telhado (Core.roofHeightAtRect, mesma regra da laje/DEC-88) —
@@ -6465,7 +6483,7 @@ export function hashColorHex(key: string): number {
           // só o espigão que fica de verdade sobre a quina externa
           // (Product Owner, com print marcando o espigão que devia
           // sumir).
-          var overlappingFootprintsForHipCorners = floorData.roofs.filter(function (other) {
+          var overlappingRoofsForHipCorners = floorData.roofs.filter(function (other) {
             if (other.id === roof.id || valleyPartnerIds[other.id]) return false;
             // Cumeeira em níveis (mesmo compoundGroupId, mesmo ridgeAxis,
             // ligados por steppedLowerRoofId/atticMode): a pegada do trecho
@@ -6483,7 +6501,50 @@ export function hashColorHex(key: string): number {
             if (steppedRidgePair) return false;
             var otherFootprint = roofWorldFootprint(other, scale, offsetX, offsetY);
             return rectsOverlapArea(ownFootprint, otherFootprint) > 1e-6;
-          }).map(function (other) { return roofWorldFootprint(other, scale, offsetX, offsetY); });
+          });
+          var overlappingFootprintsForHipCorners = overlappingRoofsForHipCorners.map(function (other) { return roofWorldFootprint(other, scale, offsetX, offsetY); });
+          // Composição real (união booleana) do telhado com todos os
+          // vizinhos elegíveis de uma vez — generaliza sozinha pra N
+          // vizinhos em sequência (o bug que a hipCornerRidgeCrossingRect
+          // não cobria, por só considerar o vizinho mais próximo com um
+          // meio-plano infinito). null quando o próprio telhado não é
+          // elegível (fase 1: só quatroAguas/duasAguas) ou não há vizinho
+          // elegível sobrepondo — nesses casos o código abaixo cai de
+          // volta pra pilha de regras antiga, sem mudança de comportamento.
+          var ownRealSolid = realRoofSolidById[roof.id];
+          var realUnionWithNeighbors: any = null;
+          if (ownRealSolid) {
+            overlappingRoofsForHipCorners.forEach(function (other) {
+              var otherSolid = realRoofSolidById[other.id];
+              if (!otherSolid) return;
+              realUnionWithNeighbors = realUnionWithNeighbors ? realUnionWithNeighbors.add(otherSolid) : otherSolid;
+            });
+          }
+          var realComposedRoof: any = realUnionWithNeighbors ? composeRoofPair(ownRealSolid, realUnionWithNeighbors) : null;
+          // Converte o(s) trecho(s) sobreviventes de survivingSegments (uma
+          // fração 0..1 ao longo do segmento 3D original) pro mesmo formato
+          // de retângulo que clipMeshOutsideRects já entende (remove o que
+          // cai DENTRO do retângulo) — mantém só o maior trecho contínuo
+          // sobrevivente, igual ao espírito de hipCornerRidgeCrossingRect
+          // (um único ponto de corte por peça, não fragmentos múltiplos).
+          function realRidgeClip(a: Point3, b: Point3): { hideEntirely: boolean; rects: any[] } {
+            var segments = survivingSegments(a, b, realComposedRoof);
+            if (!segments.length) return { hideEntirely: true, rects: [] };
+            var best = segments.reduce(function (m: any, s: any) { return (s.t1 - s.t0) > (m.t1 - m.t0) ? s : m; });
+            var dx = b.x - a.x, dz = b.z - a.z;
+            var axisIsX = Math.abs(dx) >= Math.abs(dz);
+            function coordAt(t: number) { return axisIsX ? a.x + t * dx : a.z + t * dz; }
+            var increasing = coordAt(1) >= coordAt(0);
+            var rects: any[] = [];
+            function halfPlane(removeBelowOrEqual: boolean, cut: number) {
+              return axisIsX
+                ? (removeBelowOrEqual ? { minX: -1e6, maxX: cut, minZ: -1e6, maxZ: 1e6 } : { minX: cut, maxX: 1e6, minZ: -1e6, maxZ: 1e6 })
+                : (removeBelowOrEqual ? { minX: -1e6, maxX: 1e6, minZ: -1e6, maxZ: cut } : { minX: -1e6, maxX: 1e6, minZ: cut, maxZ: 1e6 });
+            }
+            if (best.t0 > 1e-6) rects.push(halfPlane(increasing, coordAt(best.t0)));
+            if (best.t1 < 1 - 1e-6) rects.push(halfPlane(!increasing, coordAt(best.t1)));
+            return { hideEntirely: false, rects: rects };
+          }
           function pointInsideRect(pt: any, r: any) {
             return pt.x > r.minX + 1e-6 && pt.x < r.maxX - 1e-6 && pt.z > r.minZ + 1e-6 && pt.z < r.maxZ - 1e-6;
           }
@@ -6773,16 +6834,36 @@ export function hashColorHex(key: string): number {
             // específica que sobrou errada na tela dele, direto na peça,
             // sem esperar uma nova rodada de ajuste de regra geral.
             if (m.userData.ridgePieceId && roof.hiddenRidgePieceIds && roof.hiddenRidgePieceIds.indexOf(m.userData.ridgePieceId) !== -1) return;
-            if (m.userData.hipCornerXZ && hipCornerInsideOtherRoof(m.userData.hipCornerXZ)) return;
-            if (m.userData.hipCornerXZ && hipCornerCoincidesWithLowerIdRoof(m.userData.hipCornerXZ)) return;
-            if (m.userData.hipCornerXZ && hipCornerOnOtherRoofStraightEdge(m.userData.hipCornerXZ)) return;
             var ridgeCapPartialRects: any[] = [];
-            if (m.userData.ridgeCapEndsXZ) {
-              if (ridgeCapFullyInsideOtherRoof(m.userData.ridgeCapEndsXZ)) return;
-              ridgeCapPartialRects = ridgeCapPartialOverlapFootprints(m.userData.ridgeCapEndsXZ);
+            var ownPeakY = ownSurfaceBox ? ownSurfaceBox.baseY + ownSurfaceBox.peakAboveBase : -Infinity;
+            // Composição real (interseção de sólidos, ver realComposedRoof
+            // acima) substitui hipCornerInsideOtherRoof/
+            // hipCornerCoincidesWithLowerIdRoof/hipCornerOnOtherRoofStraightEdge/
+            // hipCornerRidgeCrossingRect pra pares elegíveis (fase 1:
+            // quatroAguas/duasAguas). Fora do escopo desta fase (outros
+            // tipos, ou sem vizinho elegível), cai pra pilha de regras
+            // antiga sem nenhuma mudança de comportamento.
+            if (m.userData.hipCornerXZ && m.userData.hipPeakXZ && realComposedRoof && ownSurfaceBox) {
+              var cornerPt3: Point3 = { x: m.userData.hipCornerXZ.x, y: ownSurfaceBox.baseY, z: m.userData.hipCornerXZ.z };
+              var peakPt3: Point3 = { x: m.userData.hipPeakXZ.x, y: ownPeakY, z: m.userData.hipPeakXZ.z };
+              var hipClip = realRidgeClip(cornerPt3, peakPt3);
+              if (hipClip.hideEntirely) return;
+              ridgeCapPartialRects = ridgeCapPartialRects.concat(hipClip.rects);
+            } else if (m.userData.hipCornerXZ) {
+              if (hipCornerInsideOtherRoof(m.userData.hipCornerXZ)) return;
+              if (hipCornerCoincidesWithLowerIdRoof(m.userData.hipCornerXZ)) return;
+              if (hipCornerOnOtherRoofStraightEdge(m.userData.hipCornerXZ)) return;
+              if (m.userData.hipPeakXZ) ridgeCapPartialRects = ridgeCapPartialRects.concat(hipCornerRidgeCrossingRect(m.userData.hipCornerXZ, m.userData.hipPeakXZ));
             }
-            if (m.userData.hipCornerXZ && m.userData.hipPeakXZ) {
-              ridgeCapPartialRects = ridgeCapPartialRects.concat(hipCornerRidgeCrossingRect(m.userData.hipCornerXZ, m.userData.hipPeakXZ));
+            if (m.userData.ridgeCapEndsXZ && realComposedRoof) {
+              var ridgeA3: Point3 = { x: m.userData.ridgeCapEndsXZ.a.x, y: ownPeakY, z: m.userData.ridgeCapEndsXZ.a.z };
+              var ridgeB3: Point3 = { x: m.userData.ridgeCapEndsXZ.b.x, y: ownPeakY, z: m.userData.ridgeCapEndsXZ.b.z };
+              var ridgeClip = realRidgeClip(ridgeA3, ridgeB3);
+              if (ridgeClip.hideEntirely) return;
+              ridgeCapPartialRects = ridgeCapPartialRects.concat(ridgeClip.rects);
+            } else if (m.userData.ridgeCapEndsXZ) {
+              if (ridgeCapFullyInsideOtherRoof(m.userData.ridgeCapEndsXZ)) return;
+              ridgeCapPartialRects = ridgeCapPartialRects.concat(ridgeCapPartialOverlapFootprints(m.userData.ridgeCapEndsXZ));
             }
             var steelFrameRoofConfigured = project.constructionSystem === 'light_steel_frame' && (
               m.userData.gableSide

@@ -16,6 +16,7 @@ import { Catalog } from "../core/Catalog.js";
 import { createSharedProject, loadSharedProject, updateSharedProject, deleteProject, signUpWithProfile, signIn, signOut, sendPasswordRecovery, updatePassword, onPasswordRecovery, reauthenticate, deleteCurrentAccount, getCurrentUser, listMyProjects, ensureProfileExists, hasCurrentLegalAcceptance, recordCurrentLegalAcceptance, listDepartments, listManufacturers, listCatalogProducts, listCatalogOffers, type ProfileFields, type CatalogDepartment, type CatalogManufacturer, type CatalogProductWithDepartment, type CatalogOffer } from "../core/SupabaseClient.js";
 import { renderCaptcha, requireCaptchaToken, resetCaptcha } from "../core/Turnstile.js";
 import { CURRENT_LEGAL_ACCEPTANCE } from "../core/LegalAcceptance.js";
+import { ensureRoofSolidGeometryReady } from "../core/roofSolidGeometry.js";
 import {
   ProjectFormatError,
   decodeProjectDocument,
@@ -78,6 +79,12 @@ export class EsboceApplication {
   private pendingConstructionSystemSelection: ((system: ConstructionSystem) => void) | null = null;
 
   public async start(): Promise<void> {
+    // Carrega o WASM da geometria sólida real de telhado (manifold-3d) em
+    // paralelo com o resto da inicialização — só aguardamos logo antes do
+    // primeiro render(), pra não atrasar o boot em série. Depois de pronta,
+    // toda chamada da API é síncrona (ver roofSolidGeometry.ts), então o
+    // rebuild() em si continua síncrono como sempre foi.
+    const roofSolidGeometryReady = ensureRoofSolidGeometryReady();
     onPasswordRecovery(() => {
       this.passwordRecoveryReady = true;
       if (this.authUiReady) this.openPasswordReset(true);
@@ -163,6 +170,7 @@ export class EsboceApplication {
     // vazia, sem nenhum cômodo pré-criado; o método continua disponível
     // abaixo caso essa decisão mude no futuro.
 
+    await roofSolidGeometryReady;
     ViewportController.render();
     FloorTabsController.refresh();
     ViewportStats.refresh();
