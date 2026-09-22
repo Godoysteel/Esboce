@@ -260,8 +260,9 @@
   }
 
   /* Casinha de orientação — canto superior direito, mostra pra qual
-     lado da casa a câmera está olhando. Só decorativa por enquanto
-     (não intercepta clique). */
+     lado da casa a câmera está olhando. Arrastável (ver NavGizmo.ts):
+     gira a câmera, vale em qualquer esquema de navegação, mas é a
+     ÚNICA forma de girar no modo Fácil (ver NavigationSchemes.ts). */
   #navGizmoCanvas {
     position: absolute;
     top: calc(var(--top-overlay-h) + 10px);
@@ -270,9 +271,12 @@
     height: 58px;
     border-radius: 10px;
     background: rgba(255,255,255,0.55);
-    pointer-events: none;
+    cursor: grab;
+    touch-action: none;
+    pointer-events: auto;
     z-index: 5;
   }
+  #navGizmoCanvas:active { cursor: grabbing; }
 
   /* Menu de camadas — some por padrão, só aparece no clique direito em
      área vazia (Lei 2: tela limpa por padrão, controle avançado fica
@@ -299,6 +303,8 @@
   .ctx-menu-btn.ts-disabled { color: #ABA89E; cursor: default; }
   .ctx-menu-btn.ts-disabled:hover { background: none; }
   .ctx-menu-btn .ts-badge-soon { font-size: 10px; color: #ABA89E; }
+  .ctx-menu-btn.active { color: #534AB7; font-weight: 600; }
+  .ctx-menu-btn.active::after { content: "✓"; }
 
   .gizmo {
     position: absolute;
@@ -1496,9 +1502,16 @@
     <button class="tb-viewmode-btn active" id="viewMode3DBtn" title="Visualização 3D — modo atual">3D</button>
     <button class="tb-viewmode-btn" id="viewMode2DBtn" title="Abrir planta técnica em 2D">2D</button>
     <button class="tb-viewmode-btn" id="viewModeFacadeBtn" title="Abrir o Estúdio de Fachadas">Fach.</button>
-    <button class="tb-viewmode-btn" id="viewModeOrbitBtn" title="Recentralizar a câmera (o arraste com botão direito já orbita a qualquer momento)">Orbit</button>
+    <button class="tb-viewmode-btn" id="viewModeOrbitBtn" title="Recentralizar a câmera">Orbit</button>
+    <button class="tb-viewmode-btn" id="viewModeNavBtn" title="Escolher como navegar no 3D (Fácil, Blender ou Revit)">Nav</button>
     <button class="tb-viewmode-btn" id="hydraulicsBtn" title="Gerar ou ocultar o protótipo de instalações hidráulicas">Hid.</button>
     <button class="tb-viewmode-btn" id="viewModeMedirBtn" disabled title="Ferramenta de medir — ainda não disponível">Medir</button>
+  </div>
+  <div id="navigationModeMenu" class="ctx-menu">
+    <div class="ctx-menu-title">Navegação</div>
+    <button class="ctx-menu-btn" data-navigation-mode="facil">Fácil</button>
+    <button class="ctx-menu-btn" data-navigation-mode="blender">Blender</button>
+    <button class="ctx-menu-btn" data-navigation-mode="revit">Revit</button>
   </div>
 
   <div class="facade-overlay" id="facadeStartOverlay" aria-hidden="true">

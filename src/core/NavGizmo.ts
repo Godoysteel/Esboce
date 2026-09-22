@@ -8,6 +8,7 @@ import * as THREE from 'three';
 let navRenderer: THREE.WebGLRenderer | undefined;
 let navScene: THREE.Scene | undefined;
 let navCamera: THREE.PerspectiveCamera | undefined;
+let onDragCb: ((dAngle: number, dElev: number) => void) | null = null;
 
 function makeFaceMaterial(label: string | null, bgHex: string, fontSize?: number): THREE.MeshBasicMaterial {
   const size = 128;
@@ -101,6 +102,35 @@ export function init(): void {
   );
   roof.position.y = bodyH / 2;
   navScene.add(roof);
+
+  // Arrastar a casinha gira a câmera — motor de rotação do modo de
+  // navegação Fácil (a única forma de orbitar nesse modo, ver
+  // NavigationSchemes.ts/ViewportController.setNavigationMode), e um
+  // bônus disponível em qualquer esquema. Só dispara o callback
+  // (ViewportController decide o que fazer com o delta, inclusive
+  // clamps de elevação) — este módulo não conhece câmera nenhuma além
+  // da própria (navCamera, só pra desenhar a casinha).
+  let dragFrom: { x: number; y: number } | null = null;
+  canvasEl.addEventListener('pointerdown', (e) => {
+    dragFrom = { x: e.clientX, y: e.clientY };
+    canvasEl.setPointerCapture(e.pointerId);
+  });
+  canvasEl.addEventListener('pointermove', (e) => {
+    if (!dragFrom || !onDragCb) return;
+    var dx = e.clientX - dragFrom.x, dy = e.clientY - dragFrom.y;
+    dragFrom = { x: e.clientX, y: e.clientY };
+    onDragCb(dx * 0.01, dy * 0.01);
+  });
+  const endDrag = () => { dragFrom = null; };
+  canvasEl.addEventListener('pointerup', endDrag);
+  canvasEl.addEventListener('pointercancel', endDrag);
+}
+
+// ViewportController registra aqui o que fazer com o delta de arraste
+// (girar camAngle/camElev, com os mesmos clamps do orbit por arraste
+// normal) — chamado uma vez no boot, junto com NavGizmo.init().
+export function setOnDrag(cb: (dAngle: number, dElev: number) => void): void {
+  onDragCb = cb;
 }
 
 // Chamado toda vez que a câmera principal gira (ver
@@ -119,4 +149,4 @@ export function update(camAngle: number, camElev: number): void {
 }
 
 // Namespace de compatibilidade — mesma razão dos demais módulos.
-export const NavGizmo = { init, update };
+export const NavGizmo = { init, update, setOnDrag };

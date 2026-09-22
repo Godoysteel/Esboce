@@ -10,6 +10,7 @@ import { NavGizmo } from "../core/NavGizmo.js";
 import { Scene3DRenderer } from "../core/Scene3DRenderer.js";
 import { Store } from "../core/Store.js";
 import { ViewportController } from "../core/ViewportController.js";
+import { NAVIGATION_MODE_LABELS, isNavigationMode, type NavigationMode } from "../core/NavigationSchemes.js";
 import { Viewport2DController } from "../core/Viewport2DController.js";
 import { ViewportStats } from "../core/ViewportStats.js";
 import { Catalog } from "../core/Catalog.js";
@@ -150,6 +151,7 @@ export class EsboceApplication {
 
     this.buildEnvironment();
     this.initializeControllers();
+    this.setupNavigationModePreference();
     this.bindApplicationEvents();
     this.setupAuthModal();
     this.setupConstructionSystemSelector();
@@ -287,6 +289,9 @@ export class EsboceApplication {
       scene: this.scene,
       renderer: this.renderer!,
     });
+    // Arrastar a casinha de orientação gira a câmera — motor de rotação
+    // do modo de navegação Fácil (ver ViewportController.applyGizmoDrag).
+    NavGizmo.setOnDrag(ViewportController.applyGizmoDrag);
     this.viewport2D = new Viewport2DController(
       this.requireElement("viewport2D"),
       this.requireElement("scene2D") as unknown as SVGSVGElement,
@@ -427,6 +432,8 @@ export class EsboceApplication {
     // já nascem com `disabled` no HTML, então nem chegam a disparar
     // clique — ver DEC (fase 2) no Registro de Decisões Técnicas.
     const orbitBtn = this.requireElement("viewModeOrbitBtn");
+    const navModeBtn = this.requireElement("viewModeNavBtn");
+    const navModeMenu = this.requireElement("navigationModeMenu");
     const view3DBtn = this.requireElement("viewMode3DBtn");
     const view2DBtn = this.requireElement("viewMode2DBtn");
     const viewFacadeBtn = this.requireElement("viewModeFacadeBtn");
@@ -713,6 +720,45 @@ export class EsboceApplication {
         return;
       }
       orbitBtn.classList.toggle("active", ViewportController.toggleTouchCameraMode());
+    });
+
+    // Menu "Nav" (Fácil/Blender/Revit) — mesmo padrão do menu de
+    // categorias do "Quantitativo" (MaterialsPanel.init): posiciona
+    // abaixo do botão, fecha ao escolher uma opção ou ao clicar fora.
+    navModeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (navModeMenu.classList.contains("visible")) {
+        navModeMenu.classList.remove("visible");
+        return;
+      }
+      // Ancorado pela DIREITA (não pela esquerda como o menu de
+      // categorias do Quantitativo) — o botão "Nav" mora na coluna
+      // colada na borda direita da tela (.tb-viewmode-panel), então
+      // crescer pra direita a partir de rect.left estourava a viewport.
+      const rect = navModeBtn.getBoundingClientRect();
+      navModeMenu.style.left = "";
+      navModeMenu.style.right = (window.innerWidth - rect.right) + "px";
+      navModeMenu.style.top = (rect.bottom + 6) + "px";
+      navModeMenu.classList.add("visible");
+    });
+    navModeMenu.addEventListener("pointerdown", (e) => e.stopPropagation());
+    navModeMenu.addEventListener("click", (e: any) => {
+      const btn = e.target.closest("[data-navigation-mode]");
+      if (!btn) return;
+      navModeMenu.classList.remove("visible");
+      const mode = btn.dataset.navigationMode as NavigationMode;
+      ViewportController.setNavigationMode(mode);
+      this.applyNavigationModeToUI(mode);
+      try {
+        localStorage.setItem(EsboceApplication.NAVIGATION_MODE_KEY, mode);
+      } catch (err) {
+        console.warn("Não deu pra gravar localStorage — a navegação escolhida não vai ser lembrada na próxima carga:", err);
+      }
+    });
+    document.addEventListener("click", (e: any) => {
+      if (!navModeMenu.classList.contains("visible")) return;
+      if (navModeMenu.contains(e.target) || e.target === navModeBtn || navModeBtn.contains(e.target)) return;
+      navModeMenu.classList.remove("visible");
     });
 
     // Barra inferior: zoom (− / % / +), tela cheia e "Visualização"
@@ -1110,6 +1156,37 @@ export class EsboceApplication {
   // (modo privado restrito, por exemplo) não impede o app de
   // funcionar — só faz o aviso aparecer de novo na próxima carga.
   private static readonly DISCLAIMER_DISMISSED_KEY = "esboce_disclaimer_dismissed_v1";
+
+  // Esquema de navegação do viewport 3D (Fácil/Blender/Revit — ver
+  // NavigationSchemes.ts e ViewportController.setNavigationMode) — mesmo
+  // padrão do aviso de responsabilidade acima: preferência por
+  // navegador/perfil (não viaja dentro do arquivo do projeto, diferente
+  // de `layers`), com fallback silencioso pro padrão ("facil") se o
+  // localStorage estiver bloqueado/indisponível ou tiver um valor
+  // inválido (ex.: versão antiga do app com outro conjunto de modos).
+  private static readonly NAVIGATION_MODE_KEY = "esboce_navigation_mode_v1";
+
+  private setupNavigationModePreference(): void {
+    let stored: string | null = null;
+    try {
+      stored = localStorage.getItem(EsboceApplication.NAVIGATION_MODE_KEY);
+    } catch (err) {
+      console.warn("Não deu pra ler localStorage — navegação volta pro padrão (Fácil) a cada carga:", err);
+    }
+    const mode: NavigationMode = isNavigationMode(stored) ? stored : "facil";
+    ViewportController.setNavigationMode(mode);
+    this.applyNavigationModeToUI(mode);
+  }
+
+  private applyNavigationModeToUI(mode: NavigationMode): void {
+    const navBtn = document.getElementById("viewModeNavBtn");
+    if (navBtn) navBtn.textContent = "Nav: " + NAVIGATION_MODE_LABELS[mode];
+    const menu = document.getElementById("navigationModeMenu");
+    if (!menu) return;
+    menu.querySelectorAll<HTMLButtonElement>("[data-navigation-mode]").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.navigationMode === mode);
+    });
+  }
 
   private setupDisclaimerOverlay(): void {
     const overlay = this.requireElement("disclaimerOverlay");

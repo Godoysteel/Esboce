@@ -19,6 +19,7 @@ import { Store } from './Store.js';
 import { Scene2DRenderer } from './Scene2DRenderer.js';
 import { Scene3DRenderer, DEBUG_COLOR_MODE } from './Scene3DRenderer.js';
 import { NavGizmo } from './NavGizmo.js';
+import { resolveDragAction, type NavigationMode } from './NavigationSchemes.js';
 import { touchCameraAnchor, updateTouchCamera, type TouchCameraAnchor } from './TouchCamera.js';
 import { DEFAULT_GLAZING_GLASS_MATERIAL } from './Glazing.js';
 import { hydraulicFixtureTemplate, hydraulicFixtureVisualPosition, hydraulicNodeWallOffsetsMeters, hydraulicPositionFromWallOffset, resolveHydraulicFixturePosition } from './Hydraulics.js';
@@ -188,6 +189,11 @@ import {
   var camTarget = { x: 0, y: 0, z: 0 }; // pra onde a câmera olha e orbita — Shift+scroll desloca isso
   var MIN_DIST = 3, MAX_DIST = 35;
   var touchCameraMode = false;
+  // Esquema de navegação ativo (Fácil/Blender/Revit — ver
+  // NavigationSchemes.ts e DEC correspondente). EsboceApplication lê a
+  // preferência salva (localStorage) no boot e chama setNavigationMode;
+  // 'facil' é o padrão de fábrica quando não há nada salvo ainda.
+  var navigationMode: NavigationMode = 'facil';
 
   var gizmoEl: any, gzSwapBtnEl: any, openingGizmoEl: any, roomGizmoEl: any, volumeBoxGizmoEl: any, stairGizmoEl: any, stairTypePanelEl: any, forroTypePanelEl: any, planUnderlayGizmoEl: any, columnShapePanelEl: any, roofTypePanelEl: any, roofElevationControlEl: any, roofElevationInputEl: any, roofElevationValueEl: any, roofPitchDragCotaEl: any, varandaTypePanelEl: any, varandaWidthInputEl: any, varandaHeightInputEl: any, varandaPitchInputEl: any, paintPickerPanelEl: any, openingPickerPanelEl: any, volumeBoxMaterialPickerPanelEl: any, objectPanelEl: any, objectPanelTitleEl: any, objectPanelBodyEl: any, hintEl: any, layersContextMenuEl: any, hydraulicWallPromptEl: any, hydraulicWallElevationPanelEl: any, hydraulicWallElevationTitleEl: any, hydraulicWallElevationSvgEl: any, hydraulicRouteDrawBarEl: any, hydraulicRouteDrawCountEl: any;
   // Estado do desenho de percurso guiado (H2): fixtureId sendo roteada e os
@@ -834,6 +840,33 @@ import {
     render();
   }
 
+  // Esquema de navegação (ver NavigationSchemes.ts) — troca só a
+  // INTERPRETAÇÃO dos gestos (qual botão/tecla faz o quê); o código que
+  // de fato move a câmera (updateCam, orbit/pan/zoom) é o mesmo pros
+  // três modos.
+  export function getNavigationMode(): NavigationMode {
+    return navigationMode;
+  }
+  export function setNavigationMode(mode: NavigationMode): void {
+    navigationMode = mode;
+    dragMode = null; // um arraste em andamento não deveria trocar de significado no meio do gesto
+  }
+
+  // Chamado pelo NavGizmo (a casinha arrastável, ver NavGizmo.setOnDrag)
+  // a cada movimento de arraste sobre ela — mesmos clamps de elevação do
+  // orbit por arraste no viewport (0.15-1.4), pra nunca "virar de
+  // cabeça pra baixo" também por esse caminho.
+  export function applyGizmoDrag(dAngle: number, dElev: number): void {
+    // Mesmo sentido do arraste no viewport (camAngle -=): arrastar a
+    // casinha pra direita gira a câmera do mesmo jeito que arrastar o
+    // viewport pra direita giraria — um único "sentido de girar" em
+    // todo o app, não dois comportamentos opostos dependendo de ONDE
+    // você arrasta.
+    camAngle -= dAngle;
+    camElev = Math.max(0.15, Math.min(1.4, camElev + dElev));
+    updateCam();
+  }
+
   var onZoomChangedCb: ((percent: number) => void) | null = null;
 
   function updateCam() {
@@ -866,6 +899,27 @@ import {
     camDist = Math.min(MAX_DIST, camDist * 1.15);
     updateCam();
   }
+
+  // Zoom da roda do mouse — sempre mira o ponto do MUNDO sob o cursor,
+  // não um alvo fixo (DEC navegação: antes disso, `camDist` só encolhia
+  // em direção a `camTarget`, então dar zoom longe do centro da tela
+  // fazia a cena "escorregar" pro lado — o mesmo truque de "dolly em
+  // direção ao ponto" usado por Google Maps/Blender de verdade). Vale
+  // pros três esquemas de navegação, sem exceção — não é uma escolha de
+  // estilo, é a correção de uma lacuna.
+  function zoomAtCursor(clientX: any, clientY: any, deltaY: number): void {
+    var factor = 1 + (deltaY > 0 ? 0.1 : -0.1);
+    var newDist = Math.max(MIN_DIST, Math.min(MAX_DIST, camDist * factor));
+    var appliedFactor = newDist / camDist;
+    var cursorWorld = raycastGroundWorldPoint(clientX, clientY);
+    if (cursorWorld) {
+      camTarget.x += (cursorWorld.x - camTarget.x) * (1 - appliedFactor);
+      camTarget.y += (cursorWorld.y - camTarget.y) * (1 - appliedFactor);
+      camTarget.z += (cursorWorld.z - camTarget.z) * (1 - appliedFactor);
+    }
+    camDist = newDist;
+    updateCam();
+  }
   export function setOnZoomChanged(cb: (percent: number) => void): void {
     onZoomChangedCb = cb;
     cb(getZoomPercent());
@@ -889,15 +943,25 @@ import {
     return idx * Scene3DRenderer.FLOOR_STACK_HEIGHT_GETTER();
   }
 
-  // Raycast contra o plano do pavimento sendo editado -> ponto no modelo
-  function getGroundModelPoint(clientX: any, clientY: any) {
+  // Raycast contra o plano do pavimento sendo editado -> ponto do MUNDO
+  // (sem converter pra coordenada de modelo) — extraído de
+  // getGroundModelPoint pra ser reaproveitado também pelo zoom-no-cursor
+  // (zoomAtCursor), que precisa do ponto em espaço de mundo, não de
+  // modelo.
+  function raycastGroundWorldPoint(clientX: any, clientY: any): THREE.Vector3 | null {
     var rect = container.getBoundingClientRect();
     var mouse = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
     raycaster.setFromCamera(mouse, camera);
     groundPlane.constant = -currentFloorYOffset();
     var pt = new THREE.Vector3();
     var hit = raycaster.ray.intersectPlane(groundPlane, pt);
-    if (!hit) return null;
+    return hit ? pt : null;
+  }
+
+  // Raycast contra o plano do pavimento sendo editado -> ponto no modelo
+  function getGroundModelPoint(clientX: any, clientY: any) {
+    var pt = raycastGroundWorldPoint(clientX, clientY);
+    if (!pt) return null;
     return worldToModel(pt.x, pt.z);
   }
 
@@ -3940,12 +4004,15 @@ import {
     if (downButton === 1 || downButton === 2) {
       if (!downPos) return;
       var movedR = Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y);
-      // Shift + arrastar (mesmo botão que já gira a câmera) desloca a
-      // câmera livremente, em vez de girar — igual ao Blender
-      // (Shift+arraste do botão do meio faz "pan"; sem Shift, o mesmo
-      // arraste gira). O deslocamento segue a mão: puxa a cena pro lado
-      // que o mouse anda, em qualquer direção, inclusive pra cima/baixo.
-      if (e.shiftKey) {
+      // O que esse botão/Shift fazem depende do esquema de navegação
+      // ativo (Fácil/Blender/Revit — ver NavigationSchemes.ts e DEC
+      // correspondente); o CÁLCULO de orbit/pan em si é o mesmo sempre,
+      // só a decisão de QUAL dos dois (ou nenhum) muda por modo.
+      var action = resolveDragAction(navigationMode, downButton, !!e.shiftKey);
+      if (action === 'pan') {
+        // Desloca a câmera livremente, seguindo a mão: puxa a cena pro
+        // lado que o mouse anda, em qualquer direção, inclusive pra
+        // cima/baixo.
         if (dragMode !== 'pan' && movedR > 4) dragMode = 'pan';
         if (dragMode === 'pan') {
           camera.updateMatrixWorld();
@@ -3961,13 +4028,21 @@ import {
         }
         return;
       }
-      if (dragMode !== 'orbit' && movedR > 4) dragMode = 'orbit';
-      if (dragMode === 'orbit') {
-        camAngle -= (e.clientX - downPos.x) * 0.006;
-        camElev = Math.max(0.15, Math.min(1.4, camElev + (e.clientY - downPos.y) * 0.006));
-        downPos = { x: e.clientX, y: e.clientY };
-        updateCam();
+      if (action === 'orbit') {
+        if (dragMode !== 'orbit' && movedR > 4) dragMode = 'orbit';
+        if (dragMode === 'orbit') {
+          camAngle -= (e.clientX - downPos.x) * 0.006;
+          camElev = Math.max(0.15, Math.min(1.4, camElev + (e.clientY - downPos.y) * 0.006));
+          downPos = { x: e.clientX, y: e.clientY };
+          updateCam();
+        }
+        return;
       }
+      // action === null: esse botão/combinação não é câmera neste modo
+      // (ex.: botão direito no Revit) — não faz nada aqui; o botão
+      // continua interceptado (nunca cai no fluxo de edição/seleção,
+      // ver onPointerDown) e onPointerUp decide se abre o menu de
+      // contexto.
       return;
     }
 
@@ -5346,9 +5421,7 @@ import {
       updateCam();
       return;
     }
-    var factor = 1 + (e.deltaY > 0 ? 0.1 : -0.1);
-    camDist = Math.max(MIN_DIST, Math.min(MAX_DIST, camDist * factor));
-    updateCam();
+    zoomAtCursor(e.clientX, e.clientY, e.deltaY);
   }
 
   var touchCameraGesture: TouchCameraAnchor | null = null;
@@ -6359,6 +6432,7 @@ export const ViewportController = {
   setNextRoofAtticMode, setNextRoofType, activateRoofTool, cancelActiveTool, setSteelFrameSurfaceSelectionHandler, setSteelFrameRoofHidden, activateCatalogProduct, armHeightAdjust,
   toggleWallDiagnostics,
   resetCamera,
+  getNavigationMode, setNavigationMode, applyGizmoDrag,
   focusFacade,
   setFacadeNightMode,
   beginFacadeWallSelection, isolateFacadeWalls, clearFacadeIsolation,
