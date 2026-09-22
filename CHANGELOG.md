@@ -6,6 +6,7 @@
 - Corrigido: um L de dois telhados duas-águas perpendiculares podia abrir um buraco real na água (não só cosmético) quando um telhado sobrepõe de verdade boa parte da pegada do outro (não só toca numa quina) — o corte que apara o beiral flutuando na frente do oitão do vizinho (DEC-170) não tinha limite de alcance e apagava água legítima bem longe dali. Ver DEC-211.
 - Melhorado (parcial, superado pela entrada seguinte): quando a parede de oitão do vizinho fica muito perto da própria cumeeira, o corte acima (mesmo já limitado pela DEC-211) ainda podia apagar quase toda a água que sobrava — nunca remove mais que metade da distância restante até a cumeeira. Ver DEC-212.
 - Corrigido de vez (espera-se): o corte que apara a água/tabeira perto do oitão do vizinho (DEC-170/211/212) agora decide por interseção de sólidos reais, igual já era feito pra cumeeira — em vez de qualquer distância fixa ou fração chutada, busca o ponto exato onde a água deixa de estar coberta pelo volume real do vizinho. Ver DEC-213.
+- Corrigido de verdade: o corte que apara a água/tabeira perto do oitão do vizinho (DEC-170/211/212/213) só valia quando os telhados só se TOCAM numa quina — quando as pegadas sobrepõem de verdade, esse corte apagava água legítima do próprio telhado, não importa a distância/fórmula usada (por isso as três tentativas anteriores não resolviam). Agora só se aplica ao caso original (pegadas que só se tocam); quando sobrepõem, o sombreamento por pixel que já resolve o quatro-águas cuida sozinho, sem corte de malha nenhum. Ver DEC-214.
 
 ## Alterado — 02/09/2026
 

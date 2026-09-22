@@ -2247,10 +2247,17 @@ test('Scene3DRenderer: parede do oitão (gableSide) nunca passa pelo corte de ma
 // `GABLE_WALL_EXTEND` (a posição real da PAREDE), não `roofWorldFootprint`
 // (a pegada do TELHADO, que desde a DEC-168 já bate com a do vizinho —
 // por isso a primeira tentativa não fazia nada).
-test('Scene3DRenderer: gableClipRects usa a posição real da PAREDE do oitão vizinho (nominalWallRect + GABLE_WALL_EXTEND), não a pegada do telhado — beiral não fica flutuando além da parede alheia', () => {
+//
+// DEC-214: esse corte só é válido quando os telhados apenas SE TOCAM numa
+// quina (valleyPartnerIds) — pra pares que SOBREPÕEM de verdade, além do
+// plano da parede do vizinho ainda existe território real do próprio
+// telhado, e o sombreamento por pixel já resolve a disputa sozinho. A
+// versão original (sem esse gate) causava a "fresta" que DEC-211/212/213
+// tentaram (sem sucesso) resolver ajustando a DISTÂNCIA do corte.
+test('Scene3DRenderer: gableClipRects usa a posição real da PAREDE do oitão vizinho (nominalWallRect + GABLE_WALL_EXTEND), não a pegada do telhado — beiral não fica flutuando além da parede alheia, e só se aplica a pares que apenas se TOCAM (valleyPartnerIds), nunca a pares que sobrepõem de verdade', () => {
   const roofsStart = scene3DRendererSource.indexOf('if (layers.telhado && floorData.roofs) {');
   const roofsBlock = scene3DRendererSource.slice(roofsStart, roofsStart + 51000);
-  assert.match(roofsBlock, /var gableClipRects = roof\.type !== 'duasAguas' \? \[\] : floorData\.roofs\.filter\(function \(other\) \{\s*return !!\(roof\.compoundGroupId && other\.compoundGroupId === roof\.compoundGroupId && other\.id !== roof\.id && other\.ridgeAxis !== roof\.ridgeAxis && other\.type === 'duasAguas'\);\s*\}\)\.reduce\(function \(regions: any\[\], other\) \{\s*var otherNominal = nominalWallRect\(other\);/);
+  assert.match(roofsBlock, /var gableClipRects = roof\.type !== 'duasAguas' \? \[\] : floorData\.roofs\.filter\(function \(other\) \{\s*return !!\(roof\.compoundGroupId && other\.compoundGroupId === roof\.compoundGroupId && other\.id !== roof\.id && other\.ridgeAxis !== roof\.ridgeAxis && other\.type === 'duasAguas' && valleyPartnerIds\[other\.id\]\);\s*\}\)\.reduce\(function \(regions: any\[\], other\) \{\s*var otherNominal = nominalWallRect\(other\);/);
   assert.match(roofsBlock, /var gMinX = otherNominal\.minX - GABLE_WALL_EXTEND, gMaxX = otherNominal\.maxX \+ GABLE_WALL_EXTEND;/);
   assert.match(roofsBlock, /var gMinZ = otherNominal\.minZ - GABLE_WALL_EXTEND, gMaxZ = otherNominal\.maxZ \+ GABLE_WALL_EXTEND;/);
 
