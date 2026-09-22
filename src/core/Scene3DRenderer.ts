@@ -6807,6 +6807,23 @@ export function hashColorHex(key: string): number {
           // dentro, mantém tudo por fora) — certo aqui porque não estamos
           // seguindo inclinação nenhuma, só dizendo "nada passa desse
           // plano".
+          // Bug real encontrado nesta sessão (Product Owner: "telhado duas
+          // águas em L abriu um buraco enorme", reproduzido com dados
+          // reais roof_23/roof_24 onde a pegada de roof_24 se sobrepõe de
+          // verdade a boa parte da pegada de roof_23, não só toca numa
+          // quina): os dois retângulos abaixo eram ABERTOS até ±1e6 no
+          // lado "além do plano da parede do oitão vizinho" — pensado só
+          // pra aparar a pontinha do beiral (no máximo ROOF_OVERHANG=0,4m
+          // de saliência) que flutua na frente de um oitão vizinho quando
+          // os telhados só se TOCAM numa quina (o caso original da
+          // DEC-170). Quando o vizinho na verdade SOBREPÕE boa parte da
+          // própria pegada (este caso), "além do plano" alcança bem longe
+          // dentro do território LEGÍTIMO do próprio telhado (aqui, quase
+          // metade da água de roof_23) e apaga uma água inteira por
+          // engano. Limitado a uma faixa de ROOF_OVERHANG de largura — a
+          // saliência máxima possível de qualquer beiral — preserva o
+          // corte original (a pontinha que flutua) sem alcançar território
+          // que não tem nada a ver com o vizinho.
           var gableClipRects = roof.type !== 'duasAguas' ? [] : floorData.roofs.filter(function (other) {
             return !!(roof.compoundGroupId && other.compoundGroupId === roof.compoundGroupId && other.id !== roof.id && other.ridgeAxis !== roof.ridgeAxis && other.type === 'duasAguas');
           }).reduce(function (regions: any[], other) {
@@ -6815,15 +6832,15 @@ export function hashColorHex(key: string): number {
               var gMinX = otherNominal.minX - GABLE_WALL_EXTEND, gMaxX = otherNominal.maxX + GABLE_WALL_EXTEND;
               var gSpanMinZ = otherNominal.minZ - GABLE_WALL_EXTEND, gSpanMaxZ = otherNominal.maxZ + GABLE_WALL_EXTEND;
               return regions.concat([
-                { minX: -1e6, maxX: gMinX, minZ: gSpanMinZ, maxZ: gSpanMaxZ },
-                { minX: gMaxX, maxX: 1e6, minZ: gSpanMinZ, maxZ: gSpanMaxZ }
+                { minX: gMinX - ROOF_OVERHANG, maxX: gMinX, minZ: gSpanMinZ, maxZ: gSpanMaxZ },
+                { minX: gMaxX, maxX: gMaxX + ROOF_OVERHANG, minZ: gSpanMinZ, maxZ: gSpanMaxZ }
               ]);
             }
             var gMinZ = otherNominal.minZ - GABLE_WALL_EXTEND, gMaxZ = otherNominal.maxZ + GABLE_WALL_EXTEND;
             var gSpanMinX = otherNominal.minX - GABLE_WALL_EXTEND, gSpanMaxX = otherNominal.maxX + GABLE_WALL_EXTEND;
             return regions.concat([
-              { minX: gSpanMinX, maxX: gSpanMaxX, minZ: -1e6, maxZ: gMinZ },
-              { minX: gSpanMinX, maxX: gSpanMaxX, minZ: gMaxZ, maxZ: 1e6 }
+              { minX: gSpanMinX, maxX: gSpanMaxX, minZ: gMinZ - ROOF_OVERHANG, maxZ: gMinZ },
+              { minX: gSpanMinX, maxX: gSpanMaxX, minZ: gMaxZ, maxZ: gMaxZ + ROOF_OVERHANG }
             ]);
           }, []);
           pieces.forEach(function (m) {

@@ -2707,3 +2707,22 @@ Novo módulo puro `src/core/roofSolidGeometry.ts` (sem Three.js), inicializado u
 **Atualização mesma data — confirmado ao vivo no site publicado:** Product Owner testou um encontro em L de dois telhados quatro-águas (mesmo cenário de composição da DEC-165/167) no `esboce.com.br` publicado e confirmou: "o primeiro teste em L do telhado quatro águas foi perfeito" — print mostrando as duas coberturas encontrando-se sem espigão duplicado, sem fresta e sem cumeeira cortada/faltando. Primeira confirmação visual real da composição por sólidos em produção. A pendência de reconciliação da DEC-206/209 (parágrafo acima) continua em aberto — este teste cobriu o caso de picos/composição sem essa divergência.
 
 **Segunda confirmação, mesma data — encontro em T (três telhados quatro-águas):** Product Owner testou uma composição mais complexa, um T formado por três coberturas quatro-águas (`compoundGroupId` compartilhado, dois vales reentrantes ao mesmo tempo), e confirmou: "telhado quatro águas em T perfeito" — print mostrando os três encontros sem espigão duplicado nem fresta em nenhum dos dois vales. Primeira validação real de um caso com mais de dois telhados sobrepondo o mesmo compoundGroupId simultaneamente (a união real generaliza pra N vizinhos por construção, não só o caso de dois testado nos testes automatizados).
+
+---
+
+# DEC-211 — gableClipRects apagava a própria água quando o vizinho perpendicular sobrepõe boa parte da pegada (não só toca numa quina)
+
+**Data:** 22/09/2026
+**Status:** Corrigido e verificado ao vivo (build de produção local, `vite preview`, mesmos dados reais do Product Owner) + suíte completa (738 testes).
+
+**Contexto:** Product Owner reportou, testando um L de dois telhados duas-águas perpendiculares (`roof_23`/`roof_24`, mesmo `compoundGroupId`) com uma composição de 3 cômodos reais (duas salas sob `roof_23`, divididas por `wall_12`, mais uma sob `roof_24`): "telhado duas águas em L abriu um buraco enorme" — depois confirmado como persistente, não um estado transitório de arraste.
+
+**Investigação:** reproduzido ao vivo (site publicado, `Store.setProject` com os dados reais do console) e diagnosticado com a ferramenta "Marcador": a peça de cumeeira (`roof_24.ridge`) e a parede de oitão (`roof_24.gableSide=b`) renderizavam corretas — clicáveis, nas posições certas. O buraco em si não registrava clique em NENHUMA peça (`categoria "nada"`, raio passando direto até o chão) — ou seja, ausência real de malha, não um `discard` de shader.
+
+**Causa raiz:** `gableClipRects` (DEC-170) — pensada pra aparar só a pontinha do beiral (no máximo `ROOF_OVERHANG`=0,4m de saliência) que flutua na frente do oitão de um vizinho quando os dois telhados apenas se TOCAM numa quina — usava um retângulo de corte ABERTO até `±1e6` no lado "além do plano da parede do oitão vizinho". Isso é seguro quando o vizinho só toca numa ponta, mas aqui `roof_24` sobrepõe de verdade boa parte da pegada de `roof_23` (não é `valleyPartnerIds`, é sobreposição real — mesmo diagnóstico já validado pela DEC-169 pra este tipo de par). O retângulo aberto alcançava bem longe dentro do território LEGÍTIMO da própria água de `roof_23` (quase toda a sala sob `roof_23` do lado de `roof_24`) e apagava a malha por engano.
+
+**Correção:** as duas regiões de corte (`gableClipRects`, ambos os ramos `ridgeAxis`) passam a ter largura limitada a `ROOF_OVERHANG` a partir do plano do oitão vizinho, em vez de estender até `±1e6`. Preserva o corte original da DEC-170 (a saliência máxima possível de qualquer beiral é `ROOF_OVERHANG`) sem alcançar território que não tem nada a ver com o vizinho.
+
+**Verificado ao vivo:** reproduzindo os dados reais completos (10 paredes, 2 telhados) num build de produção local (`vite preview` — o `vite dev` tem um problema à parte de MIME do `.wasm`, não relacionado a esta correção), o Marcador confirma malha real de `roof_23` exatamente no ponto que antes caía no chão (x=75,98 y=17,62 — antes "categoria nada", agora "categoria telhado, roofId=roof_23"). Suíte completa (738 testes, 2 delas re-verificadas por causa do deslocamento de texto-fonte, não de comportamento) sem regressão.
+
+**Referências:** [DEC-169](#) · [DEC-170](#) · `src/core/Scene3DRenderer.ts` (`gableClipRects`).
