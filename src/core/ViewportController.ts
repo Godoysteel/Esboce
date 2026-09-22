@@ -56,7 +56,7 @@ import {
   var offsetX = 0, offsetY = 0;
   var scale = 1 / Core.GRID;
 
-  var currentTool: any = null; // null (nenhuma) | 'room' | 'wall' | 'columnQuadrada' | 'columnRedonda' | 'telhado' | 'door' | 'window' | 'demolish' | 'paintBucket' — cômodos com nome nascem instantâneos pelos botões visuais (ver placeRoomPreset); clique no chão vazio só desenha se uma ferramenta acima foi escolhida explicitamente
+  var currentTool: any = null; // null (nenhuma) | 'room' | 'columnQuadrada' | 'columnRedonda' | 'telhado' | 'door' | 'window' | 'demolish' | 'paintBucket' — cômodos com nome nascem instantâneos pelos botões visuais (ver placeRoomPreset); clique no chão vazio só desenha se uma ferramenta acima foi escolhida explicitamente
   // Produto escolhido no catálogo e carregado para aplicação direta na
   // próxima face clicada. Não existe mais bandeja intermediária.
   var currentPaintProductId = Catalog.getProductsByCategory('paint')[0] ? Catalog.getProductsByCategory('paint')[0]!.id : null;
@@ -245,7 +245,6 @@ import {
   };
   var TOOL_HINTS: Record<string, string> = {
     room: 'Clique pra marcar o início do cômodo. Mova o mouse e clique de novo pra confirmar o tamanho. Esc cancela. Clique direito + arraste pra girar a câmera.',
-    wall: 'Clique pra começar a parede, clique de novo pra terminar. Termine em cima de outra pra formar uma divisória. Segure Shift pra começar em cima de uma parede existente.',
     columnQuadrada: 'Clique no chão pra posicionar uma coluna quadrada.',
     columnRedonda: 'Clique no chão pra posicionar uma coluna redonda.',
     telhado: 'Passe o mouse sobre um cômodo fechado pra ver a prévia, clique pra colocar. Selecione um telhado colocado e arraste a alça da cumeeira pra ajustar a inclinação.',
@@ -1730,9 +1729,8 @@ import {
       // "parede oposta" nenhuma e volta vazio. Sem esse fallback a cota
       // simplesmente não aparecia nesses casos (reportado: "tem
       // momentos que eu arrasto a parede e a cota não aparece"). Mostra
-      // o comprimento da PRÓPRIA parede — mesmo formato usado pra
-      // desenhar parede nova (p.tool === 'wall' mais abaixo) — garante
-      // que arrastar qualquer parede sempre mostra alguma cota.
+      // o comprimento da PRÓPRIA parede — garante que arrastar qualquer
+      // parede sempre mostra alguma cota.
       if (liveWall) {
         var wallLenM = Math.hypot(liveWall.x2 - liveWall.x1, liveWall.y2 - liveWall.y1) / Core.GRID;
         if (wallLenM >= 0.01) {
@@ -1776,14 +1774,6 @@ import {
       dimLabelBEl.textContent = depthM.toFixed(2).replace('.', ',') + ' m';
       positionFloatingPanel(dimLabelBEl, midDepth.x, labelY, midDepth.z, 0);
       dimLabelBEl.classList.add('visible');
-    } else if (p.tool === 'wall') {
-      var lenM = Math.hypot(p.x2 - p.x1, p.y2 - p.y1) / Core.GRID;
-      if (lenM < 0.01) { dimLabelAEl.classList.remove('visible'); dimLabelBEl.classList.remove('visible'); return; }
-      var mid = modelToWorld((p.x1 + p.x2) / 2, (p.y1 + p.y2) / 2);
-      dimLabelAEl.textContent = lenM.toFixed(2).replace('.', ',') + ' m';
-      positionFloatingPanel(dimLabelAEl, mid.x, labelY, mid.z, 0);
-      dimLabelAEl.classList.add('visible');
-      dimLabelBEl.classList.remove('visible');
     } else {
       dimLabelAEl.classList.remove('visible');
       dimLabelBEl.classList.remove('visible');
@@ -2800,14 +2790,6 @@ import {
         fuseAllOverlaps(newRoomWalls.map(function (w: any) { return w.id; }));
       }
       Store.commands.splitWallsAtTJunctions();
-    } else if (currentTool === 'wall') {
-      // gruda no corpo de outra parede se estiver perto — fecha uma
-      // junção em T sem precisar de nenhuma tecla extra, já que o clique
-      // de confirmar nunca é interpretado como "selecionar aquela parede"
-      var snapPt = findWallPointNear(p.x2, p.y2);
-      var endX = snapPt ? snapPt.x : p.x2, endY = snapPt ? snapPt.y : p.y2;
-      Store.commands.createWall(p.x1, p.y1, endX, endY);
-      Store.commands.splitWallsAtTJunctions();
     }
     placingDraw = false;
     drawStart = null; drawPreview = null;
@@ -2905,7 +2887,7 @@ import {
     // arraste — achado real: Shift+arraste vertical do Cubo mágico
     // (DEC-184) nunca chegava a rodar, esse bloco sempre capturava o
     // pointerdown primeiro e retornava antes.
-    if (e.shiftKey && (currentTool === 'wall' || currentTool === 'room')) {
+    if (e.shiftKey && currentTool === 'room') {
       var gpShift = getGroundModelPoint(e.clientX, e.clientY);
       if (!gpShift) return;
       deselect();
@@ -3655,7 +3637,7 @@ import {
     // vazio só desmarca o que estava selecionado, não desenha nada. Só
     // desenha depois que a pessoa escolher "Parede" ou "Cômodo livre" em
     // Avançado (ou "Telhado"), de propósito.
-    if (currentTool !== 'wall' && currentTool !== 'room' && currentTool !== 'telhado') return;
+    if (currentTool !== 'room' && currentTool !== 'telhado') return;
 
     // Cômodo/Parede: primeiro clique só marca o início — o cômodo/parede
     // nasce de verdade no SEGUNDO clique (finalizeDraw).
@@ -6287,7 +6269,7 @@ import {
         // Parede e cômodo (mas não porta/janela/coluna/telhado/etc.)
         // exigem a laje do pavimento de baixo já colocada — ver
         // requireLajeBelowOrHint / DEC-35.
-        if ((btn.dataset.tool === 'wall' || btn.dataset.tool === 'room') && !requireLajeBelowOrHint()) return;
+        if (btn.dataset.tool === 'room' && !requireLajeBelowOrHint()) return;
         // Clicar na ferramenta já ativa desativa ela (volta pro modo
         // seleção, sem ferramenta nenhuma) — em vez de ficar preso nela
         // até escolher outra.

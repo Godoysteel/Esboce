@@ -679,10 +679,11 @@ test('disposeObject3D e disposeObject3DTree descartam normalMap/roughnessMap/aoM
 // criar uma junção em T) que capturava QUALQUER clique com Shift
 // segurado, mesmo sem nenhuma ferramenta de desenho ativa, e retornava
 // antes do clique chegar no branch que inicia o arraste do volume.
-// Corrigido gateando esse atalho às duas únicas ferramentas que
-// finalizeDraw sabe confirmar.
-test('ViewportController: atalho de Shift pra forçar início de desenho só dispara com a ferramenta Parede/Cômodo ativa — não sequestra mais Shift+clique em outros contextos (ex. Shift+arraste do Cubo mágico)', () => {
-  const start = viewportSource.indexOf("if (e.shiftKey && (currentTool === 'wall' || currentTool === 'room')) {");
+// Corrigido gateando esse atalho à(s) ferramenta(s) que finalizeDraw
+// sabe confirmar (a de Parede foi removida depois, ver DEC — a de
+// Cômodo continua).
+test('ViewportController: atalho de Shift pra forçar início de desenho só dispara com a ferramenta Cômodo ativa — não sequestra mais Shift+clique em outros contextos (ex. Shift+arraste do Cubo mágico)', () => {
+  const start = viewportSource.indexOf("if (e.shiftKey && currentTool === 'room') {");
   assert.ok(start !== -1);
   assert.doesNotMatch(viewportSource, /if \(e\.shiftKey\) \{\s*\n\s*if \(currentTool === 'columnQuadrada'/);
 });

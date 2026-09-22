@@ -5200,15 +5200,6 @@ export function hashColorHex(key: string): number {
       lines.rotation.copy(mesh.rotation); lines.position.copy(mesh.position);
       scene.add(lines);
       registry.previewMeshes.push(lines);
-    } else if (p.tool === 'wall') {
-      var x1 = (p.x1 - offsetX) * scale, z1 = (p.y1 - offsetY) * scale;
-      var x2 = (p.x2 - offsetX) * scale, z2 = (p.y2 - offsetY) * scale;
-      var geo = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(x1, p.yOffset + 0.05, z1), new THREE.Vector3(x2, p.yOffset + 0.05, z2)
-      ]);
-      var line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: color, linewidth: 2 }));
-      scene.add(line);
-      registry.previewMeshes.push(line);
     } else if (p.tool === 'telhado') {
       // grade plana na altura do topo da parede, mostrando exatamente o
       // contorno do cômodo que vai virar telhado — referência de escala
