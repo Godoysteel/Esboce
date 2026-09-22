@@ -100,6 +100,10 @@ import {
 
   var downButton: any = null, downPos: any = null;
   var dragMode: any = null; // 'orbit' | 'endpoint1' | 'endpoint2' | 'wallBody' | 'columnBody' | 'roofRidge' | 'openingSlide'
+  // Fácil (ver NavigationSchemes.ts): true quando o botão esquerdo atual
+  // começou um arraste-orbit (área vazia, sem ferramenta ativa) em vez
+  // de uma edição — ver o gate correspondente em onPointerDown/Move/Up.
+  var leftDragOrbitsCamera = false;
   var placingDraw = false; // true entre o 1º e o 2º clique de Cômodo/Parede
   var drawStart: any = null, drawPreview: any = null;
   var dragElementStart: any = null, dragGroundStart: any = null;
@@ -850,6 +854,7 @@ import {
   export function setNavigationMode(mode: NavigationMode): void {
     navigationMode = mode;
     dragMode = null; // um arraste em andamento não deveria trocar de significado no meio do gesto
+    leftDragOrbitsCamera = false;
   }
 
   // Chamado pelo NavGizmo (a casinha arrastável, ver NavGizmo.setOnDrag)
@@ -2826,6 +2831,22 @@ import {
     // girar acontece no pointerup/pointermove.
     if (downButton === 1 || downButton === 2) { e.preventDefault(); return; }
 
+    // Fácil (ver NavigationSchemes.ts): botão ESQUERDO em área vazia
+    // (sem ferramenta de desenho ativa, sem alça nem objeto embaixo do
+    // cursor) também gira a câmera — reduz a dependência da bússola
+    // pra quem prefere arrastar direto na tela. Só entra aqui quando o
+    // clique não faria NADA além de desmarcar a seleção de qualquer
+    // jeito (confirmado antes de implementar: sem isso, um arraste
+    // nessas condições já não movia nem editava nada) — se tiver algo
+    // clicável embaixo do cursor ou uma ferramenta armada, o fluxo
+    // normal de seleção/edição/desenho abaixo continua intocado.
+    if (downButton === 0 && navigationMode === 'facil' && currentTool === null && !pickHandle(e.clientX, e.clientY) && !pickMesh(e.clientX, e.clientY)) {
+      deselect();
+      leftDragOrbitsCamera = true;
+      e.preventDefault();
+      return;
+    }
+
     if (hydraulicRouteDrawState) {
       // Modo de desenho de percurso (H2): todo clique esquerdo em área
       // livre vira um ponto-guia novo; clicar num objeto existente não faz
@@ -4001,14 +4022,18 @@ import {
     // o gesto de dois dedos, somente onTouchMove controla a câmera;
     // impedir o fluxo normal evita mover parede/mÃ³vel por acidente.
     if (multiTouchCameraActive && e.pointerType === 'touch') return;
-    if (downButton === 1 || downButton === 2) {
+    if (downButton === 1 || downButton === 2 || (downButton === 0 && leftDragOrbitsCamera)) {
       if (!downPos) return;
       var movedR = Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y);
       // O que esse botão/Shift fazem depende do esquema de navegação
       // ativo (Fácil/Blender/Revit — ver NavigationSchemes.ts e DEC
       // correspondente); o CÁLCULO de orbit/pan em si é o mesmo sempre,
-      // só a decisão de QUAL dos dois (ou nenhum) muda por modo.
-      var action = resolveDragAction(navigationMode, downButton, !!e.shiftKey);
+      // só a decisão de QUAL dos dois (ou nenhum) muda por modo. Botão
+      // esquerdo em área vazia (Fácil, ver onPointerDown) sempre orbita
+      // — não passa por resolveDragAction porque não é um gesto de
+      // botão fixo por modo, é o caso especial "clique não faria nada
+      // de qualquer forma".
+      var action = downButton === 0 ? 'orbit' : resolveDragAction(navigationMode, downButton, !!e.shiftKey);
       if (action === 'pan') {
         // Desloca a câmera livremente, seguindo a mão: puxa a cena pro
         // lado que o mouse anda, em qualquer direção, inclusive pra
@@ -4673,6 +4698,15 @@ import {
   }
 
   function onPointerUp(e: any) {
+    if (downButton === 0 && leftDragOrbitsCamera) {
+      // Fácil, botão esquerdo em área vazia (ver onPointerDown) — só
+      // orbita, nunca abre menu nenhum (diferente do botão direito
+      // logo abaixo); um clique sem arraste aqui já desmarcou a seleção
+      // no pointerdown, não precisa fazer mais nada ao soltar.
+      leftDragOrbitsCamera = false;
+      downButton = null; dragMode = null; downPos = null;
+      return;
+    }
     if (downButton === 1 || downButton === 2) {
       if (downButton === 2 && dragMode !== 'orbit' && dragMode !== 'pan') {
         // Clique direito sem arraste: se caiu em cima do elemento já

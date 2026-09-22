@@ -83,9 +83,27 @@ test('ViewportController.onPointerMove: orbit/pan por arraste (botão 1/2) decid
   const moveStart = viewportControllerSource.indexOf('function onPointerMove(');
   assert.notEqual(moveStart, -1);
   const moveBlock = viewportControllerSource.slice(moveStart, moveStart + 3000);
-  assert.match(moveBlock, /var action = resolveDragAction\(navigationMode, downButton, !!e\.shiftKey\);/);
+  assert.match(moveBlock, /var action = downButton === 0 \? 'orbit' : resolveDragAction\(navigationMode, downButton, !!e\.shiftKey\);/);
   assert.match(moveBlock, /if \(action === 'pan'\) \{/);
   assert.match(moveBlock, /if \(action === 'orbit'\) \{/);
+});
+
+test('ViewportController: Fácil — botão ESQUERDO em área vazia (sem ferramenta, sem alça/objeto embaixo) também orbita, sem roubar clique de seleção/edição/desenho', () => {
+  const downStart = viewportControllerSource.indexOf('function onPointerDown(');
+  assert.notEqual(downStart, -1);
+  const downBlock = viewportControllerSource.slice(downStart, downStart + 1600);
+  assert.match(downBlock, /if \(downButton === 0 && navigationMode === 'facil' && currentTool === null && !pickHandle\(e\.clientX, e\.clientY\) && !pickMesh\(e\.clientX, e\.clientY\)\) \{/);
+  assert.match(downBlock, /leftDragOrbitsCamera = true;/);
+
+  const moveStart = viewportControllerSource.indexOf('function onPointerMove(');
+  const moveBlock = viewportControllerSource.slice(moveStart, moveStart + 500);
+  assert.match(moveBlock, /downButton === 1 \|\| downButton === 2 \|\| \(downButton === 0 && leftDragOrbitsCamera\)/);
+
+  const upStart = viewportControllerSource.indexOf('function onPointerUp(');
+  assert.notEqual(upStart, -1);
+  const upBlock = viewportControllerSource.slice(upStart, upStart + 500);
+  assert.match(upBlock, /if \(downButton === 0 && leftDragOrbitsCamera\) \{/);
+  assert.match(upBlock, /leftDragOrbitsCamera = false;/);
 });
 
 test('ViewportController: getNavigationMode/setNavigationMode existem e ficam expostos no namespace público', () => {
