@@ -2743,3 +2743,22 @@ Novo módulo puro `src/core/roofSolidGeometry.ts` (sem Three.js), inicializado u
 **Pendência explícita — correção definitiva não implementada:** decidir esse corte por interseção de sólidos reais (mesma técnica da DEC-210, já usada pra cumeeira) resolveria isso de vez, mas exige subdividir a malha da água/tabeira antes de testar (hoje só 2 triângulos por água — grosseiro demais pra um corte preciso por ponto). Escopo maior que este ajuste; ver como próximo passo se a fresta continuar visível depois desta correção.
 
 **Referências:** DEC-210, DEC-211 · `src/core/Scene3DRenderer.ts` (`gableClipRects`, `safeOverhangExtent`).
+
+---
+
+# DEC-213 — gableClipRects passa a decidir o corte por interseção de sólidos reais, não mais por distância chutada
+
+**Data:** 22/09/2026
+**Status:** Implementado e testado (738 testes, typecheck limpo). Verificação visual ao vivo do Product Owner ainda pendente — não consegui confirmar remotamente por dificuldade de navegação da câmera neste ambiente (mesma limitação relatada pelo Product Owner separadamente).
+
+**Contexto:** a DEC-212 (remendo aritmético, nunca cortar mais que metade da distância restante até a cumeeira) reduziu mas não eliminou a fresta reportada — Product Owner confirmou "ainda não resolveu". Ficou claro que nenhuma fórmula de distância fixa resolve isso de forma geral: a pergunta certa não é "quantos metros cortar", é "esse pedaço da água está mesmo coberto pelo volume real do vizinho".
+
+**Correção:** `gableClipRects` agora usa `realComposedRoof` (a mesma união de sólidos reais já calculada pra cumeeira, DEC-210) — busca por bisseção, ao longo do eixo de corte, o ponto exato onde a água do próprio telhado deixa de estar coberta pelo sólido unido (`survivesOnUnion`, agora exportada de `roofSolidGeometry.ts`). Não precisa subdividir a malha da água: a altura da água em qualquer ponto já segue a fórmula analítica conhecida (`baseY + peakAboveBase - tanPitch*|coord-ridgeCoord|`, mesma de `otherRoofHeightAtPoint`), então a bisseção testa só alguns pontos ao longo do eixo, não a malha inteira.
+
+Achado ao investigar: o volume real do telhado vizinho (como já modelado em `roofSolidGeometry.ts`) simplesmente **não existe** além da própria pegada dele — só a PAREDE de oitão (um plano vertical separado, `buildGableMesh`, não incluído no sólido) ocupava esse papel na regra antiga. Isso sugere que, pra este par específico (`roof_23`/`roof_24`), talvez nem precisasse de corte nenhum além do necessário pra não passar da parede — a bisseção deve confirmar isso automaticamente, sem precisar presumir.
+
+**Rede de segurança preservada:** quando não há composição real disponível (telhado fora do escopo — platibanda/umaAgua — ou sem sobreposição detectada), cai pro remendo aritmético da DEC-212 (`safeOverhangExtent`), sem mudar o comportamento desses casos.
+
+**Pendência explícita:** este teste real não modela a PAREDE de oitão em si (só o volume do telhado) — se o problema original da DEC-170 (beiral flutuando na frente da parede, na quina EXTERNA do L) reaparecer depois desta mudança, a parede precisa entrar como um sólido também, não só o telhado.
+
+**Referências:** DEC-170, DEC-210, DEC-211, DEC-212 · `src/core/Scene3DRenderer.ts` (`gableClipRects`, `realOverhangExtent`) · `src/core/roofSolidGeometry.ts` (`survivesOnUnion`, agora exportada).

@@ -25,7 +25,7 @@ import { RAILING_FRAME_DEPTH_M, RAILING_POST_WIDTH_M, RAILING_TOP_RAIL_HEIGHT_M,
 import type { Project, Wall, Column, Roof, Varanda, Laje, Opening } from './types.js';
 import { floorWallHeight } from './Attic.js';
 import { hydraulicFixtureVisualPosition } from './Hydraulics.js';
-import { buildHipSolidFromWorldBox, buildGableSolidFromWorldBox, composeRoofPair, survivingSegments, type Point3 } from './roofSolidGeometry.js';
+import { buildHipSolidFromWorldBox, buildGableSolidFromWorldBox, composeRoofPair, survivingSegments, survivesOnUnion, type Point3 } from './roofSolidGeometry.js';
 import { steelFrameAssemblyColorHex } from './SteelFrameAssemblies.js';
 
 export interface ViewState {
@@ -6825,25 +6825,60 @@ export function hashColorHex(key: string): number {
           // corte original (a pontinha que flutua) sem alcançar território
           // que não tem nada a ver com o vizinho.
           // Bug real #2 (mesma sessão, mesmo par roof_23/roof_24): mesmo
-          // limitado a ROOF_OVERHANG, o corte ainda pode engolir quase toda
-          // a água que sobra quando a parede do oitão do vizinho cai bem
-          // perto da PRÓPRIA cumeeira do telhado (aqui, ~0,42m — bem menor
-          // que os 0,4m do corte). Não existe uma largura fixa seguramente
-          // pequena pra qualquer geometria: ROOF_OVERHANG inteiro só é
-          // "fino" quando sobra bastante água depois dele. Trava adicional:
-          // nunca corta mais que METADE da distância restante até a
-          // própria cumeeira — garante que sempre sobra alguma água real
-          // perto do topo, não importa o quão perto o vizinho esteja.
-          // Correção definitiva (fase 2, ainda não feita): decidir isso por
-          // interseção de sólidos reais, igual já feito pra cumeeira/DEC-210
-          // — exige subdividir a malha da água (hoje só 2 triângulos por
-          // água) antes de testar, escopo maior que este ajuste.
+          // limitado a ROOF_OVERHANG (DEC-211), o corte ainda engolia quase
+          // toda a água que sobra quando a parede do oitão do vizinho cai
+          // bem perto da PRÓPRIA cumeeira do telhado — nenhuma largura fixa
+          // é seguramente pequena pra qualquer geometria. DEC-212 tentou um
+          // remendo aritmético (nunca cortar mais que metade da distância
+          // restante) — reduziu o problema mas Product Owner confirmou que
+          // não resolveu.
+          //
+          // Correção de verdade: perguntar ao SÓLIDO REAL (mesma técnica da
+          // cumeeira, DEC-210) em vez de adivinhar uma distância. O volume
+          // real do vizinho simplesmente NÃO EXISTE além da própria pegada
+          // dele — então em vez de decidir "corta até X metros do plano",
+          // busca por bisseção o ponto exato onde a água do PRÓPRIO telhado
+          // deixa de estar coberta pelo sólido unido (composeRoofPair, já
+          // calculado acima em realComposedRoof). Não precisa subdividir a
+          // malha da água pra isso: a altura da água em qualquer ponto já
+          // segue uma fórmula analítica conhecida (mesma de
+          // otherRoofHeightAtPoint), então a bisseção testa só alguns
+          // pontos ao longo do eixo de corte, não a malha inteira.
+          //
+          // Quando não há composição real disponível (telhado fora do
+          // escopo desta técnica — platibanda/umaAgua, ou vizinho sem
+          // sobreposição real detectada), cai pro remendo da DEC-212 como
+          // rede de segurança, sem mudar o comportamento desses casos.
           function safeOverhangExtent(edge: number, sign: 1 | -1, ridgeCoord: number | null) {
             if (ridgeCoord == null) return ROOF_OVERHANG;
             var remaining = sign > 0 ? ridgeCoord - edge : edge - ridgeCoord;
             return remaining > 0 ? Math.min(ROOF_OVERHANG, remaining / 2) : ROOF_OVERHANG;
           }
           var ownRidgeCoordForGableClip = ownSurfaceBox ? ownSurfaceBox.ridgeCoord : null;
+          function realOverhangExtent(edge: number, sign: 1 | -1, fixedCoord: number, varyIsZ: boolean, fallback: number): number {
+            if (!realComposedRoof || !ownSurfaceBox) return fallback;
+            var box = ownSurfaceBox;
+            var maxExtent = Math.max(fallback, ROOF_OVERHANG) * 3;
+            function heightAt(coord: number) {
+              return box.baseY + box.peakAboveBase - box.tanPitch * Math.abs(coord - box.ridgeCoord);
+            }
+            function survivesAt(coord: number) {
+              var x = varyIsZ ? fixedCoord : coord;
+              var z = varyIsZ ? coord : fixedCoord;
+              return survivesOnUnion(realComposedRoof, x, heightAt(coord), z);
+            }
+            // No próprio plano do vizinho a água normalmente já está
+            // coberta (por isso o corte existe); se por acaso já sobrevive
+            // ali, não há nada a cortar.
+            if (survivesAt(edge)) return 0;
+            if (!survivesAt(edge + sign * maxExtent)) return fallback; // nem no limite testado sobrevive — mantém a rede de segurança
+            var lo = 0, hi = maxExtent;
+            for (var i = 0; i < 24; i++) {
+              var mid = (lo + hi) / 2;
+              if (survivesAt(edge + sign * mid)) hi = mid; else lo = mid;
+            }
+            return hi;
+          }
           var gableClipRects = roof.type !== 'duasAguas' ? [] : floorData.roofs.filter(function (other) {
             return !!(roof.compoundGroupId && other.compoundGroupId === roof.compoundGroupId && other.id !== roof.id && other.ridgeAxis !== roof.ridgeAxis && other.type === 'duasAguas');
           }).reduce(function (regions: any[], other) {
@@ -6851,8 +6886,11 @@ export function hashColorHex(key: string): number {
             if (other.ridgeAxis === 'x') {
               var gMinX = otherNominal.minX - GABLE_WALL_EXTEND, gMaxX = otherNominal.maxX + GABLE_WALL_EXTEND;
               var gSpanMinZ = otherNominal.minZ - GABLE_WALL_EXTEND, gSpanMaxZ = otherNominal.maxZ + GABLE_WALL_EXTEND;
-              var extentMinX = safeOverhangExtent(gMinX, -1, ownRidgeCoordForGableClip);
-              var extentMaxX = safeOverhangExtent(gMaxX, 1, ownRidgeCoordForGableClip);
+              var fallbackMinX = safeOverhangExtent(gMinX, -1, ownRidgeCoordForGableClip);
+              var fallbackMaxX = safeOverhangExtent(gMaxX, 1, ownRidgeCoordForGableClip);
+              var spanMidZ = (gSpanMinZ + gSpanMaxZ) / 2;
+              var extentMinX = realOverhangExtent(gMinX, -1, spanMidZ, false, fallbackMinX);
+              var extentMaxX = realOverhangExtent(gMaxX, 1, spanMidZ, false, fallbackMaxX);
               return regions.concat([
                 { minX: gMinX - extentMinX, maxX: gMinX, minZ: gSpanMinZ, maxZ: gSpanMaxZ },
                 { minX: gMaxX, maxX: gMaxX + extentMaxX, minZ: gSpanMinZ, maxZ: gSpanMaxZ }
@@ -6860,8 +6898,11 @@ export function hashColorHex(key: string): number {
             }
             var gMinZ = otherNominal.minZ - GABLE_WALL_EXTEND, gMaxZ = otherNominal.maxZ + GABLE_WALL_EXTEND;
             var gSpanMinX = otherNominal.minX - GABLE_WALL_EXTEND, gSpanMaxX = otherNominal.maxX + GABLE_WALL_EXTEND;
-            var extentMinZ = safeOverhangExtent(gMinZ, -1, ownRidgeCoordForGableClip);
-            var extentMaxZ = safeOverhangExtent(gMaxZ, 1, ownRidgeCoordForGableClip);
+            var fallbackMinZ = safeOverhangExtent(gMinZ, -1, ownRidgeCoordForGableClip);
+            var fallbackMaxZ = safeOverhangExtent(gMaxZ, 1, ownRidgeCoordForGableClip);
+            var spanMidX = (gSpanMinX + gSpanMaxX) / 2;
+            var extentMinZ = realOverhangExtent(gMinZ, -1, spanMidX, true, fallbackMinZ);
+            var extentMaxZ = realOverhangExtent(gMaxZ, 1, spanMidX, true, fallbackMaxZ);
             return regions.concat([
               { minX: gSpanMinX, maxX: gSpanMaxX, minZ: gMinZ - extentMinZ, maxZ: gMinZ },
               { minX: gSpanMinX, maxX: gSpanMaxX, minZ: gMaxZ, maxZ: gMaxZ + extentMaxZ }

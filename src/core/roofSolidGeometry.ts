@@ -241,7 +241,7 @@ export function composeRoofPair(ownSolid: ManifoldInstance, neighborSolid: Manif
  * alto ali, o ponto fica ENTERRADO dentro do sólido unido (coberto por
  * cima), não mais na fronteira — é exatamente esse teste que decide
  * "esconder" sem precisar de nenhuma regra de posição escrita à mão. */
-function survivesOnUnion(union: ManifoldInstance, x: number, y: number, z: number, eps = 1e-3): boolean {
+export function survivesOnUnion(union: ManifoldInstance, x: number, y: number, z: number, eps = 1e-3): boolean {
   return !pointInsideSolid(union, x, y + eps, z);
 }
 
