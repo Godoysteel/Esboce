@@ -6824,6 +6824,26 @@ export function hashColorHex(key: string): number {
           // saliência máxima possível de qualquer beiral — preserva o
           // corte original (a pontinha que flutua) sem alcançar território
           // que não tem nada a ver com o vizinho.
+          // Bug real #2 (mesma sessão, mesmo par roof_23/roof_24): mesmo
+          // limitado a ROOF_OVERHANG, o corte ainda pode engolir quase toda
+          // a água que sobra quando a parede do oitão do vizinho cai bem
+          // perto da PRÓPRIA cumeeira do telhado (aqui, ~0,42m — bem menor
+          // que os 0,4m do corte). Não existe uma largura fixa seguramente
+          // pequena pra qualquer geometria: ROOF_OVERHANG inteiro só é
+          // "fino" quando sobra bastante água depois dele. Trava adicional:
+          // nunca corta mais que METADE da distância restante até a
+          // própria cumeeira — garante que sempre sobra alguma água real
+          // perto do topo, não importa o quão perto o vizinho esteja.
+          // Correção definitiva (fase 2, ainda não feita): decidir isso por
+          // interseção de sólidos reais, igual já feito pra cumeeira/DEC-210
+          // — exige subdividir a malha da água (hoje só 2 triângulos por
+          // água) antes de testar, escopo maior que este ajuste.
+          function safeOverhangExtent(edge: number, sign: 1 | -1, ridgeCoord: number | null) {
+            if (ridgeCoord == null) return ROOF_OVERHANG;
+            var remaining = sign > 0 ? ridgeCoord - edge : edge - ridgeCoord;
+            return remaining > 0 ? Math.min(ROOF_OVERHANG, remaining / 2) : ROOF_OVERHANG;
+          }
+          var ownRidgeCoordForGableClip = ownSurfaceBox ? ownSurfaceBox.ridgeCoord : null;
           var gableClipRects = roof.type !== 'duasAguas' ? [] : floorData.roofs.filter(function (other) {
             return !!(roof.compoundGroupId && other.compoundGroupId === roof.compoundGroupId && other.id !== roof.id && other.ridgeAxis !== roof.ridgeAxis && other.type === 'duasAguas');
           }).reduce(function (regions: any[], other) {
@@ -6831,16 +6851,20 @@ export function hashColorHex(key: string): number {
             if (other.ridgeAxis === 'x') {
               var gMinX = otherNominal.minX - GABLE_WALL_EXTEND, gMaxX = otherNominal.maxX + GABLE_WALL_EXTEND;
               var gSpanMinZ = otherNominal.minZ - GABLE_WALL_EXTEND, gSpanMaxZ = otherNominal.maxZ + GABLE_WALL_EXTEND;
+              var extentMinX = safeOverhangExtent(gMinX, -1, ownRidgeCoordForGableClip);
+              var extentMaxX = safeOverhangExtent(gMaxX, 1, ownRidgeCoordForGableClip);
               return regions.concat([
-                { minX: gMinX - ROOF_OVERHANG, maxX: gMinX, minZ: gSpanMinZ, maxZ: gSpanMaxZ },
-                { minX: gMaxX, maxX: gMaxX + ROOF_OVERHANG, minZ: gSpanMinZ, maxZ: gSpanMaxZ }
+                { minX: gMinX - extentMinX, maxX: gMinX, minZ: gSpanMinZ, maxZ: gSpanMaxZ },
+                { minX: gMaxX, maxX: gMaxX + extentMaxX, minZ: gSpanMinZ, maxZ: gSpanMaxZ }
               ]);
             }
             var gMinZ = otherNominal.minZ - GABLE_WALL_EXTEND, gMaxZ = otherNominal.maxZ + GABLE_WALL_EXTEND;
             var gSpanMinX = otherNominal.minX - GABLE_WALL_EXTEND, gSpanMaxX = otherNominal.maxX + GABLE_WALL_EXTEND;
+            var extentMinZ = safeOverhangExtent(gMinZ, -1, ownRidgeCoordForGableClip);
+            var extentMaxZ = safeOverhangExtent(gMaxZ, 1, ownRidgeCoordForGableClip);
             return regions.concat([
-              { minX: gSpanMinX, maxX: gSpanMaxX, minZ: gMinZ - ROOF_OVERHANG, maxZ: gMinZ },
-              { minX: gSpanMinX, maxX: gSpanMaxX, minZ: gMaxZ, maxZ: gMaxZ + ROOF_OVERHANG }
+              { minX: gSpanMinX, maxX: gSpanMaxX, minZ: gMinZ - extentMinZ, maxZ: gMinZ },
+              { minX: gSpanMinX, maxX: gSpanMaxX, minZ: gMaxZ, maxZ: gMaxZ + extentMaxZ }
             ]);
           }, []);
           pieces.forEach(function (m) {

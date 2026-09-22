@@ -2726,3 +2726,20 @@ Novo módulo puro `src/core/roofSolidGeometry.ts` (sem Three.js), inicializado u
 **Verificado ao vivo:** reproduzindo os dados reais completos (10 paredes, 2 telhados) num build de produção local (`vite preview` — o `vite dev` tem um problema à parte de MIME do `.wasm`, não relacionado a esta correção), o Marcador confirma malha real de `roof_23` exatamente no ponto que antes caía no chão (x=75,98 y=17,62 — antes "categoria nada", agora "categoria telhado, roofId=roof_23"). Suíte completa (738 testes, 2 delas re-verificadas por causa do deslocamento de texto-fonte, não de comportamento) sem regressão.
 
 **Referências:** [DEC-169](#) · [DEC-170](#) · `src/core/Scene3DRenderer.ts` (`gableClipRects`).
+
+---
+
+# DEC-212 — gableClipRects ainda apagava água legítima perto da própria cumeeira quando o oitão do vizinho fica muito próximo dela
+
+**Data:** 22/09/2026
+**Status:** Melhoria implementada e testada (738 testes); reduz o corte pela metade nesse caso apertado — NÃO garantidamente elimina a fresta por completo (ver Pendência). Verificação visual do Product Owner ainda pendente.
+
+**Contexto:** depois da DEC-211 (que limitou o corte a uma faixa de `ROOF_OVERHANG`=0,4m), Product Owner reportou que a fresta "não se limita à cumeeira, ela atinge parte do telhado" — confirmado com Marcador: os pontos marcados (categoria "telhado", `roofId=roof_23`, sem `gableSide`) caíam na ÁGUA, não só na peça decorativa da cumeeira.
+
+**Causa raiz:** no par `roof_23`/`roof_24` deste teste, a parede de oitão do `roof_24` fica a só ~0,42m da própria cumeeira de `roof_23` — MENOR que os 0,4m de largura do corte da DEC-211. Uma largura fixa "seguramente fina" não existe: 0,4m é fino quando sobra bastante água depois dele, mas quase tudo quando a distância restante até a cumeeira é parecida com esse valor.
+
+**Correção:** trava adicional — o corte nunca remove mais que METADE da distância restante entre o plano do oitão vizinho e a própria cumeeira (`safeOverhangExtent`, `Scene3DRenderer.ts`). Continua puramente aritmético (sem sólidos reais), então não resolve a causa de fundo, só reduz o dano.
+
+**Pendência explícita — correção definitiva não implementada:** decidir esse corte por interseção de sólidos reais (mesma técnica da DEC-210, já usada pra cumeeira) resolveria isso de vez, mas exige subdividir a malha da água/tabeira antes de testar (hoje só 2 triângulos por água — grosseiro demais pra um corte preciso por ponto). Escopo maior que este ajuste; ver como próximo passo se a fresta continuar visível depois desta correção.
+
+**Referências:** DEC-210, DEC-211 · `src/core/Scene3DRenderer.ts` (`gableClipRects`, `safeOverhangExtent`).
