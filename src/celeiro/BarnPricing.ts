@@ -25,7 +25,6 @@ export interface BarnConfig {
   gateType: BarnGateType;
   gateWidthM: number;
   gateHeightM: number;
-  silo: boolean;
 }
 
 export interface BarnContact {
@@ -63,7 +62,7 @@ export const BARN_LIMITS = {
 export const BARN_MODELS: { id: BarnModel; label: string; description: string }[] = [
   { id: 'fechado', label: 'Galpão Fechado', description: 'Fechado nas laterais e no fundo, com portão e porta de acesso.' },
   { id: 'aberto', label: 'Galpão Aberto', description: 'Aberto por todos os lados: só colunas e cobertura, ideal para veículos, máquinas e feno.' },
-  { id: 'celeiro', label: 'Celeiro', description: 'Nave central elevada com janelas, telhado verde, portão em X, cúpula e silo opcional. Estilo americano.' },
+  { id: 'celeiro', label: 'Celeiro', description: 'Nave central elevada com janelas, telhado verde, portão em X e cúpula. Estilo americano.' },
 ];
 
 export const BARN_ROOFS: { id: BarnRoof; label: string }[] = [
@@ -99,7 +98,6 @@ export const BARN_PRICES = {
   window: 650,
   door: 1200,
   gatePerM2: { correr: 900, 'duas-folhas': 700, enrolar: 1100, sanfonado: 800 } as Record<BarnGateType, number>,
-  silo: 18000,
   rangeLow: 0.9,
   rangeHigh: 1.1,
 };
@@ -112,7 +110,7 @@ export function clamp(value: number, min: number, max: number): number {
 export function defaultBarnConfig(): BarnConfig {
   return {
     model: 'fechado', widthM: 12, lengthM: 24, eaveHeightM: 5, roof: 'metalica', colorId: 'branco',
-    windows: 4, doors: 1, gates: 1, gateType: 'correr', gateWidthM: 4, gateHeightM: 4, silo: false,
+    windows: 4, doors: 1, gates: 1, gateType: 'correr', gateWidthM: 4, gateHeightM: 4,
   };
 }
 
@@ -134,8 +132,6 @@ export function normalizeBarnConfig(config: BarnConfig): BarnConfig {
   const windows = isOpen ? 0 : Math.min(maxSide - doors, Math.round(clamp(config.windows, L.openings.min, L.openings.max)));
   return {
     ...config, widthM, lengthM, eaveHeightM, gateWidthM, gateHeightM, gates, doors, windows,
-    // Silo só existe no Celeiro.
-    silo: config.model === 'celeiro' ? config.silo : false,
   };
 }
 
@@ -158,7 +154,6 @@ export function computeQuote(input: BarnConfig): Quote {
   add(`Portas (${c.doors})`, c.doors * P.door);
   const gateType = BARN_GATE_TYPES.find((g) => g.id === c.gateType)!;
   add(`Portões ${gateType.label.toLowerCase()} (${c.gates} × ${c.gateWidthM}×${c.gateHeightM} m)`, c.gates * c.gateWidthM * c.gateHeightM * P.gatePerM2[c.gateType]);
-  if (c.silo) add('Silo decorativo', P.silo);
 
   let total = lines.reduce((sum, line) => sum + line.amount, 0);
   if (findBarnColor(c.colorId).premium) {
@@ -185,7 +180,6 @@ export function buildWhatsappMessage(config: BarnConfig, quote: Quote, contact: 
     `Cor: ${findBarnColor(c.colorId).label}`,
     `Janelas: ${c.windows} | Portas: ${c.doors} | Portões: ${c.gates} (${BARN_GATE_TYPES.find((g) => g.id === c.gateType)!.label}, ${c.gateWidthM}×${c.gateHeightM} m)`,
   ];
-  if (c.silo) parts.push('Silo: sim');
   parts.push('', `Estimativa: ${formatBRL(quote.low)} a ${formatBRL(quote.high)} (valor sujeito a confirmação)`);
   parts.push('', `Nome: ${contact.name || '-'}`, `Contato: ${contact.phone || '-'}`, `Local da obra: ${contact.city || '-'}`);
   if (contact.notes) parts.push(`Observações: ${contact.notes}`);

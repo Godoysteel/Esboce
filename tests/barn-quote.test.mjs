@@ -10,7 +10,7 @@ import {
 // DEC-230 — configurador de celeiro/galpão metálico. BarnPricing.ts é puro
 // (só `import type`), então é testado direto; HTML/Vite/cena por regex.
 
-const contact = { name: 'Ana', phone: '47 99999-0000', city: 'Joinville', notes: 'Com silo' };
+const contact = { name: 'Ana', phone: '47 99999-0000', city: 'Joinville', notes: 'Com escritório' };
 
 test('há exatamente 3 modelos: fechado, aberto e celeiro', () => {
   assert.deepEqual(BARN_MODELS.map((m) => m.id), ['fechado', 'aberto', 'celeiro']);
@@ -23,12 +23,11 @@ test('cotação soma as linhas e a faixa envolve o total', () => {
   assert.ok(q.low < q.total && q.total < q.high);
 });
 
-test('mais área, mais aberturas e silo aumentam o valor', () => {
+test('mais área e mais aberturas aumentam o valor', () => {
   const base = defaultBarnConfig();
   const t = (c) => computeQuote(c).total;
   assert.ok(t({ ...base, lengthM: 40 }) > t(base));
   assert.ok(t({ ...base, windows: 8 }) > t(base));
-  assert.ok(t({ ...base, model: 'celeiro', silo: true }) > t({ ...base, model: 'celeiro', silo: false }));
 });
 
 test('cor premium acrescenta uma linha', () => {
@@ -37,11 +36,9 @@ test('cor premium acrescenta uma linha', () => {
 });
 
 test('normalização respeita limites e regras por modelo', () => {
-  const n = normalizeBarnConfig({ ...defaultBarnConfig(), widthM: 500, lengthM: 1, eaveHeightM: 99, model: 'aberto', gates: 5, silo: true });
+  const n = normalizeBarnConfig({ ...defaultBarnConfig(), widthM: 500, lengthM: 1, eaveHeightM: 99, model: 'aberto', gates: 5 });
   assert.equal(n.widthM, 30); assert.equal(n.lengthM, 6); assert.equal(n.eaveHeightM, 10);
-  assert.equal(n.gates, 0); assert.equal(n.silo, false);
-  const s = normalizeBarnConfig({ ...defaultBarnConfig(), model: 'fechado', silo: true });
-  assert.equal(s.silo, false);
+  assert.equal(n.gates, 0);
 });
 
 test('aberturas laterais e portões cabem no espaço disponível', () => {
@@ -102,12 +99,13 @@ test('parede sob o vão da janela é gerada (quad do peitoril com altura real, n
   assert.match(scene, /quad\(xa, da, lo, c\.y0, xb, db, lo, c\.y0\)/);
 });
 
-test('ACM foi removido do configurador (config, cotação, página e cena)', () => {
+test('ACM e silo foram removidos do configurador (config, cotação, página e cena)', () => {
   const read = (f) => readFileSync(new URL(f, import.meta.url), 'utf8');
   for (const f of ['../src/celeiro/BarnPricing.ts', '../src/celeiro/BarnScene.ts', '../src/celeiro/main.ts', '../celeiro/index.html']) {
-    assert.doesNotMatch(read(f), /acm/i, f);
+    assert.doesNotMatch(read(f), /acm|silo/i, f);
   }
   assert.equal('acm' in defaultBarnConfig(), false);
+  assert.equal('silo' in defaultBarnConfig(), false);
 });
 
 test('celeiro ganha portão deslizante de duas folhas na frente (trilho + folhas em X)', () => {

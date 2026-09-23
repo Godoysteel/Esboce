@@ -4,7 +4,7 @@
 // vãos cortados de verdade, telhado nervurado), materiais PBR, reflexos por
 // ambiente (PMREM), sombras suaves, tone mapping ACES, estrutura metálica
 // visível no galpão aberto, calhas, rufos, portões/portas/janelas com
-// caixilho e vidro, silo, fardos de feno, gramado, cascalho e árvores.
+// caixilho e vidro, fardos de feno, gramado, cascalho e árvores.
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -512,21 +512,6 @@ export function createBarnViewer(container: HTMLElement): BarnViewer {
           const f = box(len, 0.3, 0.06, trimMat, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2 - 0.1, sz * (L / 2 + OVZ), g); f.rotation.z = ang;
         }
       }
-    }
-
-    // ---------- silo (celeiro) ----------
-    if (c.silo) {
-      const R = Math.min(2.2, 1.2 + W / 14), H = ridgeY + 2.5;
-      const silo = new THREE.Group(); silo.position.set(half + R + 1.2, 0, -L / 2 + R + 1);
-      const rings = Math.floor(H / 0.35);
-      for (let k = 0; k < rings; k++) {
-        const ring = new THREE.Mesh(new THREE.CylinderGeometry(R + (k % 2 ? 0.02 : 0), R + (k % 2 ? 0.02 : 0), H / rings, 48, 1, true), metal(new THREE.Color('#b9bcbe'), 0.35, 0.85));
-        ring.position.y = BASE_Y + (k + 0.5) * (H / rings); ring.castShadow = true; ring.receiveShadow = true; silo.add(ring);
-      }
-      const dome = new THREE.Mesh(new THREE.SphereGeometry(R * 1.02, 48, 16, 0, Math.PI * 2, 0, Math.PI / 2), metal(new THREE.Color('#a9acae'), 0.35, 0.85));
-      dome.position.y = BASE_Y + H; dome.castShadow = true; silo.add(dome);
-      const base = new THREE.Mesh(new THREE.CylinderGeometry(R + 0.15, R + 0.15, 0.25, 48), concreteMat); base.position.y = 0.125; silo.add(base);
-      g.add(silo);
     }
 
     // ---------- fardos de feno (galpão aberto) ----------
