@@ -339,23 +339,6 @@ export class EsboceApplication {
     this.requireElement("toolTelhado1Agua").addEventListener("click", () => armRoofTool("umaAgua"));
     this.requireElement("toolTelhado4Aguas").addEventListener("click", () => armRoofTool("quatroAguas"));
     this.requireElement("toolTelhadoPlatibanda").addEventListener("click", () => armRoofTool("platibanda"));
-    this.requireElement("roofPresetExtension").addEventListener("click", () => {
-      const count = Store.commands.createRoofCompositePreset('extensaoLateral');
-      this.requireElement('viewportHint').textContent = count ? 'Modelo com extensão lateral criado. Selecione cada cobertura para ajustar.' : 'Crie ao menos um cômodo fechado antes de inserir o modelo.';
-    });
-    this.requireElement("roofPresetParallel").addEventListener("click", () => {
-      const count = Store.commands.createRoofCompositePreset('cumeeirasParalelas');
-      this.requireElement('viewportHint').textContent = count ? 'Telhado em dois níveis criado. Selecione qualquer parte do conjunto e use “Subir telhado inteiro” para ajustar a cobertura elevada.' : 'Crie ao menos um cômodo fechado antes de inserir o modelo.';
-    });
-    document.querySelectorAll<HTMLElement>('.contour-varanda-btn').forEach((button) => {
-      button.addEventListener('click', () => {
-        const material = button.dataset.postMaterial as 'madeira' | 'concreto' | 'tijolo';
-        const varanda = Store.commands.createContourVaranda(material);
-        this.requireElement('viewportHint').textContent = varanda
-          ? 'Módulo de varanda criado ao lado da casa. Arraste-o até uma parede para encaixar; depois estenda pela alça roxa.'
-          : 'Não foi possível criar o módulo de varanda.';
-      });
-    });
     this.requireElement("roofStyleClose").addEventListener("click", () => {
       ViewportController.cancelActiveTool();
       this.requireElement("roofStyleOverlay").style.display = "none";
@@ -396,8 +379,8 @@ export class EsboceApplication {
         'Segunda unidade criada, espelhada — reveja a hidráulica dela antes de finalizar.';
     });
     // Rail de categorias (Ambientes/Paredes/Aberturas/Cobertura/
-    // Materiais/Mobiliário/Instalações/Mais) — um painel visível por
-    // vez, puramente de UI (não é estado de Store/ViewportController).
+    // Instalações/Mais) — um painel visível por vez, puramente de UI
+    // (não é estado de Store/ViewportController).
     // "Ambientes" já nasce marcado .active/.visible no HTML, batendo
     // com o estado inicial daqui.
     const categoryRailButtons = Array.from(document.querySelectorAll<HTMLElement>(".cat-rail-btn"));
@@ -438,24 +421,12 @@ export class EsboceApplication {
     const navModeMenu = this.requireElement("navigationModeMenu");
     const view3DBtn = this.requireElement("viewMode3DBtn");
     const view2DBtn = this.requireElement("viewMode2DBtn");
-    const viewFacadeBtn = this.requireElement("viewModeFacadeBtn");
-    const facadeStartOverlay = this.requireElement("facadeStartOverlay");
-    const facadeWorkspace = this.requireElement("facadeWorkspace");
-    const facadeWorkspaceSubtitle = this.requireElement("facadeWorkspaceSubtitle");
-    const facadeSignForm = this.requireElement("facadeSignForm");
-    const facadeWallPicker = this.requireElement("facadeWallPicker");
-    const facadeWallPickerCount = this.requireElement("facadeWallPickerCount");
-    const facadeWallPickerConfirm = this.requireElement("facadeWallPickerConfirm") as HTMLButtonElement;
-    const selectedFacadeWallIds = new Set<string>();
-    let activeFacadeWallId: string | null = null;
-    let editingFacadeSignId: string | null = null;
-    let facadeNightMode = false;
     // Importar Planta Baixa — botão dispara o <input type="file"> oculto;
     // aceita imagem direto ou PDF (primeira página, rasterizada via
     // pdfjs-dist em PlanImport.ts). Nasce centrada na caixa delimitadora
     // das paredes já existentes no pavimento atual (ou na origem, se o
     // pavimento ainda estiver vazio) — mesmo espírito de "gap perto do
-    // que já existe" usado pelos presets de cômodo/Fachada.
+    // que já existe" usado pelos presets de cômodo.
     //
     // Esse MESMO botão também é a única forma de RESELECIONAR uma planta
     // já importada (o plano no chão de propósito não é clicável — ver
@@ -539,158 +510,13 @@ export class EsboceApplication {
       this.viewMode = mode;
       view3DBtn.classList.toggle('active', mode === '3d');
       view2DBtn.classList.toggle('active', mode === '2d');
-      viewFacadeBtn.classList.remove('active');
-      facadeWorkspace.classList.remove('visible');
-      facadeWorkspace.setAttribute('aria-hidden', 'true');
-      facadeSignForm.classList.remove('visible');
-      facadeWallPicker.classList.remove('visible');
-      ViewportController.clearFacadeIsolation();
       if (mode === '2d') this.viewport2D?.show();
       else this.viewport2D?.hide();
       this.requireElement("navGizmoCanvas").style.visibility = mode === '3d' ? 'visible' : 'hidden';
       orbitBtn.style.display = mode === '3d' ? '' : 'none';
     };
-    const setFacadeOverlayVisible = (visible: boolean) => {
-      facadeStartOverlay.classList.toggle('visible', visible);
-      facadeStartOverlay.setAttribute('aria-hidden', String(!visible));
-    };
-    const enterFacadeStudio = (wallId: string | undefined, sourceLabel: string, isolatedWallIds?: string[]) => {
-      this.viewMode = '3d';
-      this.viewport2D?.hide();
-      view3DBtn.classList.remove('active');
-      view2DBtn.classList.remove('active');
-      viewFacadeBtn.classList.add('active');
-      this.requireElement("navGizmoCanvas").style.visibility = 'visible';
-      orbitBtn.style.display = '';
-      facadeWorkspace.classList.add('visible');
-      facadeWorkspace.setAttribute('aria-hidden', 'false');
-      facadeWorkspaceSubtitle.textContent = sourceLabel;
-      setFacadeOverlayVisible(false);
-      showCategory(undefined);
-      if (isolatedWallIds?.length) {
-        ViewportController.isolateFacadeWalls(isolatedWallIds);
-        ViewportController.setFacadeActiveWallHandler((selectedWallId) => {
-          activeFacadeWallId = selectedWallId;
-          editingFacadeSignId = null;
-          facadeWorkspaceSubtitle.textContent = `Parede ativa selecionada · ${isolatedWallIds.length} ${isolatedWallIds.length === 1 ? 'parede isolada' : 'paredes em paralelo'}`;
-        });
-      } else ViewportController.clearFacadeIsolation();
-      const focusedWallId = isolatedWallIds?.[0] || ViewportController.focusFacade(wallId);
-      activeFacadeWallId = focusedWallId;
-      this.requireElement('viewportHint').textContent = focusedWallId
-        ? 'Vista de fachada ativa — a pele de vidro já edita o mesmo modelo 3D. Novos elementos serão adicionados por etapas.'
-        : 'Crie uma parede para iniciar a composição da fachada.';
-    };
     view3DBtn.addEventListener('click', () => setViewMode('3d'));
     view2DBtn.addEventListener('click', () => setViewMode('2d'));
-    viewFacadeBtn.addEventListener('click', () => setFacadeOverlayVisible(true));
-    this.requireElement('facadeStartClose').addEventListener('click', () => setFacadeOverlayVisible(false));
-    facadeStartOverlay.addEventListener('click', (event) => {
-      if (event.target === facadeStartOverlay) setFacadeOverlayVisible(false);
-    });
-    this.requireElement('facadeUseProjectBtn').addEventListener('click', () => {
-      setFacadeOverlayVisible(false);
-      selectedFacadeWallIds.clear();
-      facadeWallPickerCount.textContent = 'Nenhuma parede selecionada';
-      facadeWallPickerConfirm.disabled = true;
-      facadeWallPicker.classList.add('visible');
-      facadeWallPicker.setAttribute('aria-hidden', 'false');
-      ViewportController.beginFacadeWallSelection((wallId) => {
-        if (selectedFacadeWallIds.has(wallId)) selectedFacadeWallIds.delete(wallId); else selectedFacadeWallIds.add(wallId);
-        const count = selectedFacadeWallIds.size;
-        facadeWallPickerCount.textContent = count ? `${count} ${count === 1 ? 'parede selecionada' : 'paredes selecionadas'}` : 'Nenhuma parede selecionada';
-        facadeWallPickerConfirm.disabled = count === 0;
-      });
-    });
-    this.requireElement('facadeWallPickerCancel').addEventListener('click', () => {
-      facadeWallPicker.classList.remove('visible');
-      facadeWallPicker.setAttribute('aria-hidden', 'true');
-      ViewportController.beginFacadeWallSelection(null);
-      setFacadeOverlayVisible(true);
-    });
-    facadeWallPickerConfirm.addEventListener('click', () => {
-      const ids = Array.from(selectedFacadeWallIds);
-      if (!ids.length) return;
-      facadeWallPicker.classList.remove('visible');
-      facadeWallPicker.setAttribute('aria-hidden', 'true');
-      enterFacadeStudio(ids[0], `Construção atual · ${ids.length} ${ids.length === 1 ? 'parede isolada' : 'paredes isoladas em paralelo'}`, ids);
-    });
-    this.requireElement('facadeBlankBtn').addEventListener('click', () => {
-      const walls = Store.currentWalls();
-      let centerX = 0;
-      if (walls.length) {
-        const maxX = Math.max(...walls.flatMap((wall) => [wall.x1, wall.x2]));
-        centerX = maxX + 7 * Core.GRID;
-      }
-      const wall = Store.commands.createWall(centerX - 5 * Core.GRID, 0, centerX + 5 * Core.GRID, 0);
-      enterFacadeStudio(wall?.id, 'Fachada vazia · plano inicial de 10 metros');
-    });
-    this.requireElement('facadeExitBtn').addEventListener('click', () => setViewMode('3d'));
-    this.requireElement('facadeGlazingBtn').addEventListener('click', () => {
-      showCategory('aberturas');
-      this.requireElement('addGlazingPanelBtn').click();
-    });
-    this.requireElement('facadeParallelViewBtn').addEventListener('click', () => {
-      ViewportController.resetFacadeParallelView();
-      this.requireElement('viewportHint').textContent = 'Câmera restaurada para a vista paralela das paredes isoladas.';
-    });
-    const signText = this.requireElement('facadeSignText') as HTMLInputElement;
-    const signWidth = this.requireElement('facadeSignWidth') as HTMLInputElement;
-    const signHeight = this.requireElement('facadeSignHeight') as HTMLInputElement;
-    const signElevation = this.requireElement('facadeSignElevation') as HTMLInputElement;
-    const signLighting = this.requireElement('facadeSignLighting') as HTMLSelectElement;
-    const signFaceColor = this.requireElement('facadeSignFaceColor') as HTMLInputElement;
-    const signLightColor = this.requireElement('facadeSignLightColor') as HTMLInputElement;
-    const signDeleteBtn = this.requireElement('facadeSignDeleteBtn') as HTMLButtonElement;
-    const signSaveBtn = this.requireElement('facadeSignSaveBtn');
-    const setSignFormVisible = (visible: boolean) => {
-      facadeSignForm.classList.toggle('visible', visible);
-      facadeSignForm.setAttribute('aria-hidden', String(!visible));
-    };
-    this.requireElement('facadeSignBtn').addEventListener('click', () => {
-      const existing = activeFacadeWallId
-        ? Store.currentFacadeSigns().filter((sign) => sign.wallId === activeFacadeWallId).at(-1)
-        : undefined;
-      editingFacadeSignId = existing?.id || null;
-      signText.value = existing?.text || 'SUA MARCA';
-      signWidth.value = String(existing?.widthM || 3);
-      signHeight.value = String(existing?.heightM || 0.7);
-      signElevation.value = String(existing?.elevationM || 2.05);
-      signLighting.value = existing?.lighting || 'halo';
-      signFaceColor.value = existing?.faceColorHex || '#f4f1e8';
-      signLightColor.value = existing?.lightColorHex || '#ffd27a';
-      signDeleteBtn.hidden = !existing;
-      signSaveBtn.textContent = existing ? 'Atualizar letreiro' : 'Adicionar letreiro';
-      setSignFormVisible(true);
-    });
-    this.requireElement('facadeSignCancelBtn').addEventListener('click', () => setSignFormVisible(false));
-    signSaveBtn.addEventListener('click', () => {
-      if (!activeFacadeWallId) return;
-      const values = {
-        text: signText.value,
-        widthM: Number(signWidth.value) || 3,
-        heightM: Number(signHeight.value) || 0.7,
-        elevationM: Number(signElevation.value) || 2.05,
-        lighting: signLighting.value as 'front' | 'halo' | 'internal',
-        faceColorHex: signFaceColor.value,
-        lightColorHex: signLightColor.value,
-      };
-      if (editingFacadeSignId) Store.commands.updateFacadeSign(editingFacadeSignId, values);
-      else editingFacadeSignId = Store.commands.createFacadeSign(activeFacadeWallId, values)?.id || null;
-      signDeleteBtn.hidden = !editingFacadeSignId;
-      signSaveBtn.textContent = 'Atualizar letreiro';
-      this.requireElement('viewportHint').textContent = 'Letreiro aplicado à fachada — alterne para a noite para conferir a iluminação.';
-    });
-    signDeleteBtn.addEventListener('click', () => {
-      if (editingFacadeSignId) Store.commands.deleteFacadeSign(editingFacadeSignId);
-      editingFacadeSignId = null; setSignFormVisible(false);
-    });
-    this.requireElement('facadeDayNightBtn').addEventListener('click', (event) => {
-      facadeNightMode = !facadeNightMode;
-      ViewportController.setFacadeNightMode(facadeNightMode);
-      (event.currentTarget as HTMLButtonElement).textContent = facadeNightMode ? 'Ver de dia' : 'Ver à noite';
-      this.requireElement('viewportHint').textContent = facadeNightMode ? 'Prévia noturna ativa — iluminação do letreiro intensificada.' : 'Prévia diurna ativa.';
-    });
     const refreshHydraulicsButton = () => {
       const project = Store.getProject();
       const hasNetwork = project.hydraulics.nodes.length > 0;

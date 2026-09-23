@@ -1,5 +1,10 @@
 # Changelog
 
+## Alterado — 23/09/2026
+
+- Removido da interface: os presets de telhado "Extensão lateral" e "Cumeeira em níveis" (painel Cobertura → Modelos compostos), o Módulo de varanda (Madeira/Concreto/Tijolo) e as categorias Materiais e Mobiliário do menu lateral (ambas só tinham botões "em breve", nada funcionando). Também saiu o Estúdio de Fachadas (botão "Fach." e todo o workspace de letreiro/vidro/isolamento de paredes) — decisão de produto, não bug. Em todos os casos só a interface saiu; projetos já salvos com esses elementos continuam carregando e aparecendo normalmente. Ver DEC-221.
+- Corrigido: o parapeito da platibanda (e, junto, o painel de trás do telhado uma-água e o forro do beiral de qualquer telhado) também ficava mais escuro/acinzentado que a parede idêntica quando nenhuma parede tinha acabamento escolhido — mesma causa raiz do oitão (DEC-220), agora corrigida nos três. Ver DEC-222.
+
 ## Alterado — 22/09/2026
 
 - Telhados `quatroAguas`/`duasAguas` que se encontram (mesmo `compoundGroupId`) agora decidem o corte do espigão/cumeeira por interseção real de sólidos 3D (novo módulo `roofSolidGeometry.ts`, biblioteca `manifold-3d`), em vez de só pela pilha de regras de posição acumulada desde a DEC-152 — cobre automaticamente "vizinho mais alto" e "picos empatados" com uma única conta, sem depender de desempate por id nem se limitar a um único vizinho mais próximo. Escopo desta primeira etapa: só a peça de espigão/cumeeira; oitão, água e tabeira continuam iguais. Ver DEC-210.

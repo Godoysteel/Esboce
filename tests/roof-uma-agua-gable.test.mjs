@@ -47,8 +47,40 @@ test('buildRoofUmaAgua também fecha o painel de trás (lado alto), com a cor da
 });
 
 test('a chamada de buildRoofUmaAgua passa gableColors e backWallColor (cor da parede real, mesma técnica do parapeito)', () => {
-  assert.match(source, /var backWallColor = pickColor\(wallMatchColor != null \? wallMatchColor : GABLE_COLOR, 'telhado', viewState\);/);
+  assert.match(source, /var backWallColor = buildWallMatchMaterial\(wallMatchColor != null \? wallMatchColor : GABLE_COLOR, wallMatchIsPlain, viewState\);/);
   assert.match(source, /buildRoofUmaAgua\(bounds, floorTopY, roofColor, gableColors, backWallColor, pitchDeg, ridgeAxis, tabeiraColor, soffitColor\)/);
+});
+
+// DEC-220 corrigiu o oitão mas deixou de fora (mesma causa raiz, hex puro
+// em vez de THREE.Material) o painel de trás do uma-água, o parapeito da
+// platibanda e o forro do beiral — todos derivados de computeWallMatchColor.
+// Fechado nesta sessão: isWallMatchColorPlain identifica "nenhuma parede
+// pintada" e buildWallMatchMaterial/buildParapetSegmentMaterial aplicam o
+// mesmo reforço emissivo condicional do oitão.
+test('painel de trás (uma-água) e forro do beiral usam buildWallMatchMaterial com o mesmo reforço emissivo condicional do oitão', () => {
+  const start = source.indexOf('function buildWallMatchMaterial(');
+  const end = source.indexOf('\n  }', start);
+  const body = source.slice(start, end);
+  assert.match(body, /emissive: isPlain \? 0xFFFFFF : 0x000000,/);
+  assert.match(body, /emissiveIntensity: isPlain \? 0\.15 : 0,/);
+  assert.match(source, /var soffitColor = buildWallMatchMaterial\(wallMatchColor != null \? wallMatchColor : GABLE_COLOR, wallMatchIsPlain, viewState\);/);
+});
+
+test('isWallMatchColorPlain só é true quando nenhuma parede do pavimento tem acabamento escolhido', () => {
+  const start = source.indexOf('function isWallMatchColorPlain(');
+  const end = source.indexOf('\n  }', start);
+  const body = source.slice(start, end);
+  assert.match(body, /if \(product && product\.assets && product\.assets\.colorHex\) found = true;/);
+  assert.match(body, /return !found;/);
+});
+
+test('parapeito da platibanda propaga wallMatchIsPlain até buildParapetSegmentMaterial (mesmo reforço emissivo do oitão)', () => {
+  const start = source.indexOf('function buildParapetSegmentMaterial(');
+  const end = source.indexOf('\n  }', start);
+  const body = source.slice(start, end);
+  assert.match(body, /emissive: isPlain \? 0xFFFFFF : 0x000000,/);
+  assert.match(body, /emissiveIntensity: isPlain \? 0\.15 : 0,/);
+  assert.match(source, /return buildRoofPlatibanda\(bounds, floorTopY, roofColor, ridgeAxis, roof\.parapetHeight, parapetColor, !!roof\.parapetMolding, wallMatchIsPlain\);/);
 });
 
 test('wallSupportsRoofGable também reconhece uma-água (suprime contorno duplicado igual já fazia pro duas-águas)', () => {

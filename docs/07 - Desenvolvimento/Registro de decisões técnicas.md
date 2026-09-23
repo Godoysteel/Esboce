@@ -2931,3 +2931,46 @@ Passos porta/janela/telhado usam uma flag `armsViewportOnClick`: o alvo inicial 
 **Teste novo:** `tests/roof-uma-agua-gable.test.mjs` — confirma que `buildGableWallMaterial` define `isPlainGable`/`emissive`/`emissiveIntensity` do mesmo jeito que a parede.
 
 **Referências:** `src/core/Scene3DRenderer.ts` (`buildGableWallMaterial`, `faceMat`/`isPlainWallFace`, `computeWallMatchColor`) · `tests/roof-uma-agua-gable.test.mjs`.
+
+# DEC-221 — Removidos da interface: presets de telhado composto, módulo de varanda, categorias Materiais/Mobiliário e Estúdio de Fachadas
+
+**Data:** 23/09/2026
+**Status:** Implementado e testado (776 testes, typecheck limpo).
+
+**Contexto:** Rogério pediu, em sequência, pra tirar da interface um conjunto de telhados/módulos/categorias que ou eram presets específicos que não queria mais oferecer, ou eram só placeholders "em breve" sem nada funcionando por trás, ou (Estúdio de Fachadas) uma funcionalidade grande e real que decidiu descontinuar mesmo assim:
+1. Os dois presets de "Modelos compostos" do painel Cobertura: **Extensão lateral** (`roofPresetExtension`) e **Cumeeira em níveis** (`roofPresetParallel`).
+2. O **Módulo de varanda** (Madeira/Concreto/Tijolo, `.contour-varanda-btn`), mesmo painel Cobertura.
+3. As categorias inteiras **Materiais** (`panelMateriais`) e **Mobiliário** (`panelMobiliario`) do rail lateral — as duas eram só grades de botões "em breve", nada clicável de verdade.
+4. O **Estúdio de Fachadas** (botão "Fach.", overlay de entrada, workspace, formulário de letreiro ACM, seletor de paredes) — diferente dos itens acima, essa é uma funcionalidade real e grande (ver ADR-010), com integração com o catálogo ACM da Bold. Confirmado explicitamente com Rogério antes de mexer, por causa disso.
+
+**Decisão de escopo (perguntada e confirmada com Rogério pro primeiro item, aplicada de forma consistente aos demais):** em todos os casos, a remoção foi **só da interface** — botão, painel, overlay e o código de `EsboceApplication.ts` que os conecta a `Store.commands`/`ViewportController`. O motor por trás (`Store.commands.createRoofCompositePreset`, `createContourVaranda`, `createFacadeSign`/`updateFacadeSign`/`deleteFacadeSign`, `ViewportController.focusFacade`/`isolateFacadeWalls`/`clearFacadeIsolation`/`setFacadeNightMode`, a renderização em `Scene3DRenderer.ts`) continua no código, intocado — só não tem mais como chegar nele clicando em nada. Isso evita quebrar projetos já salvos que tinham esses telhados/varanda/letreiros de fachada: eles continuam carregando e renderizando exatamente como antes, só não dá mais pra CRIAR um novo a partir de agora.
+
+**O que saiu de cada arquivo:**
+- `index.html`: os botões/painéis dos 4 itens acima, incluindo os blocos CSS dedicados ao Estúdio de Fachadas (`.facade-*`) e ao grid de 3 colunas da varanda (`.varanda-visual-grid`), que ficaram órfãos.
+- `src/app/EsboceApplication.ts`: os `addEventListener` dos botões removidos; `setViewMode()` (3D/2D) perdeu toda a lógica de fachada que estava emaranhada nela, voltando a só alternar 3D/2D.
+- Nada mudou em `Store.ts`, `ViewportController.ts` ou `Scene3DRenderer.ts` — só os testes que liam esses arquivos por busca de texto, ajustados pra continuar cobrindo o motor mantido em vez da UI removida.
+
+**Testes:** `tests/roof-auto-generation.test.mjs`, `tests/contour-varanda.test.mjs`, `tests/facade-sign.test.mjs`, `tests/facade-studio.test.mjs` (reescrito), `tests/facade-wall-selection.test.mjs` (reescrito) — cada um passou a confirmar "sumiu da UI" + "continua no motor", em vez de testar os botões que não existem mais.
+
+**Referências:** `index.html`, `src/app/EsboceApplication.ts` · `tests/roof-auto-generation.test.mjs`, `tests/contour-varanda.test.mjs`, `tests/facade-sign.test.mjs`, `tests/facade-studio.test.mjs`, `tests/facade-wall-selection.test.mjs` · ADR-010 (Estúdio de Fachadas).
+
+# DEC-222 — Parapeito da platibanda (e painel de trás do uma-água, e forro do beiral) também ficavam mais escuros que a parede sem acabamento — mesma causa raiz do DEC-220, fechando o "fora de escopo" daquela correção
+
+**Data:** 23/09/2026
+**Status:** Implementado e testado (776 testes, 3 novos; typecheck limpo). Verificado ao vivo (`npm run build` + `vite preview`): casa simples com telhado Platibanda sem nenhuma parede pintada, parapeito e parede abaixo dele com a mesma cor.
+
+**Contexto:** Rogério: "Lembra da cor do oitão que estava diferente do restante das paredes, o sistema de platibanda também está com a cor diferente e temos que ajustar." — exatamente o caso que o DEC-220 tinha deixado registrado como "fora de escopo, área suspeita da mesma causa raiz": `backWallColor` (painel de trás do uma-água), `parapetColor` (platibanda) e `soffitColor` (forro do beiral, todos os tipos de telhado) vêm de `computeWallMatchColor()`, que devolve um hex puro (não um `THREE.Material`), então não dava pra somar o mesmo reforço emissivo do oitão sem passar por cada um.
+
+**Causa raiz:** idêntica ao DEC-220 — sem acabamento de Catálogo escolhido em nenhuma parede, esses três caem no `GABLE_COLOR` (0xFFFFFF) sem nenhum reforço de luz, então a cena (hemisfério céu/chão + preenchimento frio) tinge o branco puro pra um cinza-azulado, destoando da parede logo abaixo (que já tem o reforço desde antes do DEC-220).
+
+**Correção:** revisitado o "não dá pra saber ali que é sempre cor crua" do DEC-220 — na verdade dava, só que exigia saber se a parede tem ou não produto pintado, não só o hex resultante:
+- `isWallMatchColorPlain(walls)` (nova, ao lado de `computeWallMatchColor`): percorre as mesmas paredes e devolve `true` só quando NENHUMA tem `finishA`/`finishB` com produto de Catálogo válido — mesmo critério de "cru" que `isPlainWallFace`/`isPlainGable` já usavam.
+- `buildWallMatchMaterial(colorHex, isPlain, viewState)` (nova): constrói um `THREE.MeshStandardMaterial` com o mesmo `side`/`flatShading` que `resolveFaceMaterial` já usava pra um hex puro, mais o reforço `emissive: isPlain ? 0xFFFFFF : 0x000000` condicional. `backWallColor` e `soffitColor` passaram a usar essa função em vez de `pickColor(...)` puro — ambos já eram consumidos por `buildGableMesh`/`buildEaveSoffitPanel`, que chamam `resolveFaceMaterial` e já aceitavam um `THREE.Material` no lugar de um hex (é assim que `gableColors.a/b` sempre funcionaram).
+- `parapetColor` não passa por `resolveFaceMaterial` (o parapeito monta o próprio material em `buildParapetSegmentMaterial`, direto) — em vez de trocar pra um Material pronto, `wallMatchIsPlain` foi encanado como parâmetro extra até `buildParapetSegmentMaterial`, que ganhou o mesmo `emissive` condicional direto na construção.
+- `wallMatchIsPlain` é calculado uma vez em `rebuild()` (ao lado de `wallMatchColor = computeWallMatchColor(...)`) e passado pra `buildRoofPiece(..., wallMatchColor, wallMatchIsPlain)`, que repassa pros três pontos de uso.
+
+**Fora de escopo (comportamento inalterado):** o material da laje automática (`buildAutoLajePiece`, que reaproveita `buildParapetSegmentMaterial` pra outro fim) não recebeu o reforço — `isPlain` é opcional nessa função e essa chamada continua sem passar nada, então laje continua exatamente como antes. Não foi reportado problema de cor na laje.
+
+**Teste novo:** `tests/roof-uma-agua-gable.test.mjs` ganhou 3 testes — `buildWallMatchMaterial`/`isWallMatchColorPlain`/`buildParapetSegmentMaterial` aplicam o `emissive` condicional, e a chamada de `buildRoofPlatibanda` propaga `wallMatchIsPlain`. `tests/roof-eave-soffit-and-molding.test.mjs` atualizado pra cobrir as novas assinaturas (`buildWallMatchMaterial` em vez de `pickColor` puro pra `soffitColor`, parâmetro extra em `buildRoofPlatibanda`/`buildParapetWalls`).
+
+**Referências:** `src/core/Scene3DRenderer.ts` (`isWallMatchColorPlain`, `buildWallMatchMaterial`, `buildParapetSegmentMaterial`, `buildRoofPiece`, `buildRoofPlatibanda`) · `tests/roof-uma-agua-gable.test.mjs`, `tests/roof-eave-soffit-and-molding.test.mjs` · DEC-220.

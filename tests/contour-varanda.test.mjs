@@ -27,10 +27,10 @@ test('varanda de contorno preserva percurso, largura e material ao salvar', () =
   assert.equal(decoded.contourSegments.length, 1);
 });
 
-test('interface e renderizador oferecem postes e cobertura acompanhando o contorno', () => {
+test('renderizador oferece postes e cobertura acompanhando o contorno (motor mantido para projetos salvos, sem botão de criação na UI)', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const renderer = readFileSync(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
-  ['madeira', 'concreto', 'tijolo'].forEach((material) => assert.match(html, new RegExp(`data-post-material="${material}"`)));
+  ['madeira', 'concreto', 'tijolo'].forEach((material) => assert.doesNotMatch(html, new RegExp(`data-post-material="${material}"`)));
   assert.match(renderer, /varanda\.contourSegments/);
   assert.match(renderer, /buildRoofPiece\(roof/);
   assert.match(renderer, /postCount/);

@@ -91,7 +91,7 @@ test('uma-água fecha o forro só no beiral baixo — lado alto (sem avanço) e 
 });
 
 test('buildRoofPiece calcula soffitColor a partir da cor da parede da casa e repassa pra cada tipo de telhado', () => {
-  assert.match(source, /var soffitColor = pickColor\(wallMatchColor != null \? wallMatchColor : GABLE_COLOR, 'telhado', viewState\);/);
+  assert.match(source, /var soffitColor = buildWallMatchMaterial\(wallMatchColor != null \? wallMatchColor : GABLE_COLOR, wallMatchIsPlain, viewState\);/);
   assert.match(source, /buildRoofQuatroAguas\(bounds, floorTopY, roofColor, pitchDeg, ridgeAxis, tabeiraColor, soffitColor\)/);
   assert.match(source, /buildRoofUmaAgua\(bounds, floorTopY, roofColor, gableColors, backWallColor, pitchDeg, ridgeAxis, tabeiraColor, soffitColor\)/);
   assert.match(source, /buildRoofDuasAguas\(bounds, floorTopY, roofColor, gableColors, pitchDeg, ridgeAxis, tabeiraColor, soffitColor\)/);
@@ -115,10 +115,10 @@ test('buildRoofPlatibanda constrói um segundo anel (moldura), mais largo e mais
   const start = source.indexOf('function buildRoofPlatibanda(');
   const end = source.indexOf('\n  }', start);
   const body = source.slice(start, end);
-  assert.match(body, /function buildRoofPlatibanda\([^)]*hasMolding: any\)/);
+  assert.match(body, /function buildRoofPlatibanda\([^)]*hasMolding: any, parapetColorIsPlain: any\)/);
   assert.match(body, /if \(hasMolding\) \{/);
   assert.match(body, /var moldingThickness = PARAPET_THICK \+ MOLDING_PROJECTION \* 2;/);
   assert.match(body, /var moldingTopY = topY \+ Math\.max\(height - MOLDING_HEIGHT, 0\);/);
-  assert.match(body, /buildParapetWalls\(topBounds, moldingTopY, MOLDING_HEIGHT, moldingThickness, parapetColorResolved\)/);
-  assert.match(source, /buildRoofPlatibanda\(bounds, floorTopY, roofColor, ridgeAxis, roof\.parapetHeight, parapetColor, !!roof\.parapetMolding\)/);
+  assert.match(body, /buildParapetWalls\(topBounds, moldingTopY, MOLDING_HEIGHT, moldingThickness, parapetColorResolved, parapetColorIsPlain\)/);
+  assert.match(source, /buildRoofPlatibanda\(bounds, floorTopY, roofColor, ridgeAxis, roof\.parapetHeight, parapetColor, !!roof\.parapetMolding, wallMatchIsPlain\)/);
 });

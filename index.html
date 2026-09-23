@@ -880,62 +880,6 @@
   .tb-viewmode-btn:disabled { opacity: .4; cursor: not-allowed; }
   .tb-viewmode-btn:disabled:hover { background: #FFFFFF; }
 
-  /* Estúdio de Fachadas — entrada dedicada sem criar um segundo modelo.
-     O painel trabalha sobre o mesmo Project/Store usado por 2D e 3D. */
-  .facade-overlay {
-    position: fixed; inset: 0; z-index: 40; display: none;
-    align-items: center; justify-content: center; padding: 24px;
-    background: rgba(26,24,21,.58); backdrop-filter: blur(4px);
-  }
-  .facade-overlay.visible { display: flex; }
-  .facade-start {
-    width: min(760px, 100%); padding: 26px; border-radius: 18px;
-    background: #F8F6F0; box-shadow: 0 24px 70px rgba(20,18,16,.3);
-  }
-  .facade-start-header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
-  .facade-kicker { color:#C1673F; font-size:11px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; }
-  .facade-start h2 { margin:5px 0 6px; font-size:28px; color:#2C2C2A; }
-  .facade-start p { margin:0; color:#6B6861; line-height:1.5; }
-  .facade-start-close { border:0; background:transparent; font-size:24px; cursor:pointer; color:#77736B; }
-  .facade-paths { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:22px; }
-  .facade-path {
-    min-height:170px; padding:20px; border:1px solid #D8D4C9; border-radius:14px;
-    background:#FFF; text-align:left; cursor:pointer; color:#2C2C2A;
-  }
-  .facade-path:hover { border-color:#534AB7; box-shadow:0 8px 24px rgba(83,74,183,.12); }
-  .facade-path strong { display:block; margin:12px 0 7px; font-size:17px; }
-  .facade-path span { display:block; color:#77736B; font-size:13px; line-height:1.45; }
-  .facade-path-icon { font-size:28px; color:#534AB7; }
-  .facade-workspace {
-    position:fixed; left:50%; top:calc(var(--top-overlay-h) + 12px); z-index:12;
-    display:none; width:min(620px, calc(100vw - 220px)); padding:12px 14px;
-    transform:translateX(-50%); border:1px solid #D3D1C7; border-radius:14px;
-    background:rgba(255,255,255,.97); box-shadow:0 10px 28px rgba(33,31,27,.16);
-  }
-  .facade-workspace.visible { display:block; }
-  .facade-workspace-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
-  .facade-workspace-title { font-size:13px; font-weight:800; }
-  .facade-workspace-subtitle { font-size:10px; color:#858179; }
-  .facade-workspace-actions { display:flex; gap:7px; margin-top:10px; overflow-x:auto; }
-  .facade-tool {
-    flex:0 0 auto; padding:8px 11px; border:1px solid #D3D1C7; border-radius:9px;
-    background:#FFF; color:#2C2C2A; font-size:11px; font-weight:700; cursor:pointer;
-  }
-  .facade-tool:hover { border-color:#534AB7; color:#534AB7; }
-  .facade-tool:disabled { opacity:.48; cursor:not-allowed; }
-  .facade-sign-form { display:none; margin-top:10px; padding:12px; border:1px solid #D3D1C7; border-radius:10px; background:#fff; }
-  .facade-sign-form.visible { display:grid; grid-template-columns:2fr repeat(3,1fr); gap:8px; }
-  .facade-sign-form label { display:grid; gap:4px; font-size:10px; font-weight:700; color:#55524C; }
-  .facade-sign-form input,.facade-sign-form select { min-width:0; border:1px solid #C8C5BB; border-radius:7px; padding:7px; font:inherit; }
-  .facade-sign-form-actions { grid-column:1/-1; display:flex; gap:7px; justify-content:flex-end; }
-  .facade-sign-primary { background:#534AB7; border-color:#534AB7!important; color:#fff!important; }
-  .facade-wall-picker { display:none; position:absolute; z-index:31; top:86px; left:50%; transform:translateX(-50%); width:min(560px,calc(100% - 28px)); padding:12px 14px; border:1px solid #D3D1C7; border-radius:12px; background:rgba(255,255,255,.96); box-shadow:0 8px 30px rgba(0,0,0,.2); }
-  .facade-wall-picker.visible { display:flex; align-items:center; gap:12px; }
-  .facade-wall-picker-copy { flex:1; font-size:12px; }
-  .facade-wall-picker-copy strong { display:block; margin-bottom:3px; }
-  .facade-wall-picker-actions { display:flex; gap:7px; }
-  .facade-exit { border:0; background:transparent; color:#6B6861; cursor:pointer; font-size:18px; }
-
   @media (max-width: 700px) {
     :root { --top-overlay-h: 54px; }
     .top-overlay { flex-wrap: nowrap; gap: 6px; padding: 8px; }
@@ -951,13 +895,6 @@
     .tb-viewmode-panel #viewMode2DBtn,
     .tb-viewmode-panel #viewModeMedirBtn { display: none; }
     .tb-viewmode-btn { width: 42px; height: 38px; }
-    .facade-overlay { padding:12px; }
-    .facade-start { padding:20px; }
-    .facade-start h2 { font-size:23px; }
-    .facade-paths { grid-template-columns:1fr; }
-    .facade-path { min-height:130px; }
-    .facade-workspace { left:84px; right:58px; width:auto; transform:none; }
-    .facade-sign-form.visible { grid-template-columns:1fr 1fr; }
 
     .ts-btn { padding: 7px 3px 5px; font-size: 9.5px; }
     .ts-icon { width: 26px; height: 26px; }
@@ -1138,14 +1075,11 @@
   }
   .category-panel .cp-group-grid .ts-btn .ts-icon { width: 21px; height: 21px; }
   .category-panel .coverage-visual-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; }
-  .category-panel .coverage-visual-grid.varanda-visual-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
   .category-panel .coverage-card { padding:4px 4px 6px; gap:3px; overflow:hidden; min-height:94px; justify-content:flex-start; }
   .category-panel .coverage-card .coverage-thumb {
     display:block; width:100%; height:70px; object-fit:contain; border-radius:7px;
     background:linear-gradient(145deg,#f7f5ef,#ebe8df); pointer-events:none;
   }
-  .category-panel .varanda-visual-grid .coverage-card { min-height:88px; font-size:8.5px; }
-  .category-panel .varanda-visual-grid .coverage-thumb { height:62px; }
   .category-panel .coverage-card:hover .coverage-thumb,
   .category-panel .coverage-card.active .coverage-thumb { background:linear-gradient(145deg,#fff,#eeeaff); }
   .category-panel .ts-group-label { margin-top: 1px; }
@@ -1577,7 +1511,6 @@
   <div class="tb-viewmode-panel">
     <button class="tb-viewmode-btn active" id="viewMode3DBtn" title="Visualização 3D — modo atual">3D</button>
     <button class="tb-viewmode-btn" id="viewMode2DBtn" title="Abrir planta técnica em 2D">2D</button>
-    <button class="tb-viewmode-btn" id="viewModeFacadeBtn" title="Abrir o Estúdio de Fachadas">Fach.</button>
     <button class="tb-viewmode-btn" id="viewModeOrbitBtn" title="Recentralizar a câmera">Orbit</button>
     <button class="tb-viewmode-btn" id="viewModeNavBtn" title="Escolher como navegar no 3D (Fácil, Blender ou Revit)">Nav</button>
     <button class="tb-viewmode-btn" id="hydraulicsBtn" title="Gerar ou ocultar o protótipo de instalações hidráulicas">Hid.</button>
@@ -1589,62 +1522,6 @@
     <button class="ctx-menu-btn" data-navigation-mode="blender">Blender</button>
     <button class="ctx-menu-btn" data-navigation-mode="revit">Revit</button>
   </div>
-
-  <div class="facade-overlay" id="facadeStartOverlay" aria-hidden="true">
-    <section class="facade-start" role="dialog" aria-modal="true" aria-labelledby="facadeStartTitle">
-      <div class="facade-start-header">
-        <div>
-          <div class="facade-kicker">Novo espaço de criação</div>
-          <h2 id="facadeStartTitle">Estúdio de Fachadas</h2>
-          <p>Crie a frente de uma casa, loja ou empresa com uma vista dedicada e o mesmo modelo 3D do projeto.</p>
-        </div>
-        <button class="facade-start-close" id="facadeStartClose" aria-label="Fechar">×</button>
-      </div>
-      <div class="facade-paths">
-        <button class="facade-path" id="facadeUseProjectBtn">
-          <span class="facade-path-icon" aria-hidden="true">⌂</span>
-          <strong>Usar a construção atual</strong>
-          <span>Escolhe automaticamente uma parede principal e abre uma vista frontal para trabalhar sobre a casa já modelada.</span>
-        </button>
-        <button class="facade-path" id="facadeBlankBtn">
-          <span class="facade-path-icon" aria-hidden="true">＋</span>
-          <strong>Começar com fachada vazia</strong>
-          <span>Cria um plano inicial de 10 metros no projeto, pronto para receber vitrine, letreiro e composição arquitetônica.</span>
-        </button>
-      </div>
-    </section>
-  </div>
-
-  <section class="facade-workspace" id="facadeWorkspace" aria-hidden="true">
-    <div class="facade-workspace-head">
-      <div><div class="facade-workspace-title">Estúdio de Fachadas</div><div class="facade-workspace-subtitle" id="facadeWorkspaceSubtitle">Vista frontal vinculada ao projeto</div></div>
-      <button class="facade-exit" id="facadeExitBtn" title="Voltar ao modo 3D" aria-label="Sair do Estúdio de Fachadas">×</button>
-    </div>
-    <div class="facade-workspace-actions" aria-label="Elementos de fachada">
-      <button class="facade-tool" id="facadeParallelViewBtn">Vista paralela</button>
-      <button class="facade-tool" id="facadeGlazingBtn">Pele de vidro</button>
-      <button class="facade-tool" id="facadeSignBtn">Letreiro iluminado</button>
-      <button class="facade-tool" disabled title="Próxima etapa">Marquise</button>
-      <button class="facade-tool" disabled title="Próxima etapa">Brises</button>
-      <button class="facade-tool" disabled title="Próxima etapa">Ripados e vazados</button>
-      <button class="facade-tool" id="facadeDayNightBtn">Ver à noite</button>
-    </div>
-    <div class="facade-sign-form" id="facadeSignForm" aria-hidden="true">
-      <label>Texto<input id="facadeSignText" maxlength="32" value="SUA MARCA"></label>
-      <label>Largura (m)<input id="facadeSignWidth" type="number" min="0.8" max="12" step="0.1" value="3"></label>
-      <label>Altura (m)<input id="facadeSignHeight" type="number" min="0.25" max="2" step="0.05" value="0.7"></label>
-      <label>Elevação (m)<input id="facadeSignElevation" type="number" min="0.3" max="8" step="0.05" value="2.05"></label>
-      <label>Tipo de luz<select id="facadeSignLighting"><option value="halo">Halo (contraluz)</option><option value="front">Frontal</option><option value="internal">Interna</option></select></label>
-      <label>Cor da letra<input id="facadeSignFaceColor" type="color" value="#f4f1e8"></label>
-      <label>Cor da luz<input id="facadeSignLightColor" type="color" value="#ffd27a"></label>
-      <div class="facade-sign-form-actions"><button class="facade-tool" id="facadeSignDeleteBtn" hidden>Excluir</button><button class="facade-tool" id="facadeSignCancelBtn">Cancelar</button><button class="facade-tool facade-sign-primary" id="facadeSignSaveBtn">Adicionar letreiro</button></div>
-    </div>
-  </section>
-
-  <section class="facade-wall-picker" id="facadeWallPicker" aria-hidden="true">
-    <div class="facade-wall-picker-copy"><strong>Selecione as paredes da fachada</strong><span id="facadeWallPickerCount">Nenhuma parede selecionada</span></div>
-    <div class="facade-wall-picker-actions"><button id="facadeWallPickerCancel">Cancelar</button><button class="facade-sign-primary" id="facadeWallPickerConfirm" disabled>Isolar paredes</button></div>
-  </section>
 
   <div id="layersContextMenu" class="ctx-menu">
     <div class="ctx-menu-title">Camadas visíveis</div>
@@ -1755,24 +1632,6 @@
       </svg>
       <span>Cobertura</span>
       <span class="cat-rail-desc">Telhados e lajes</span>
-    </button>
-    <button class="cat-rail-btn" data-category="materiais" title="Materiais — pisos e revestimentos">
-      <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="6" y="6" width="12" height="12" rx="2"/>
-        <rect x="22" y="6" width="12" height="12" rx="2"/>
-        <rect x="6" y="22" width="12" height="12" rx="2"/>
-        <rect x="22" y="22" width="12" height="12" rx="2"/>
-      </svg>
-      <span>Materiais</span>
-      <span class="cat-rail-desc">Pisos e revestimentos</span>
-    </button>
-    <button class="cat-rail-btn" data-category="mobiliario" title="Mobiliário — móveis e objetos">
-      <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M7 22a3 3 0 0 1 3-3h20a3 3 0 0 1 3 3v4H7v-4z"/>
-        <path d="M8 26v6M32 26v6"/>
-      </svg>
-      <span>Mobiliário</span>
-      <span class="cat-rail-desc">Móveis e objetos</span>
     </button>
     <button class="cat-rail-btn" data-category="instalacoes" title="Instalações — elétrica e hidráulica">
       <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2029,21 +1888,6 @@
         <img class="coverage-thumb" src="/ui/coberturas/telhado-platibanda.png" alt="" aria-hidden="true"><span>Platibanda</span>
       </button>
     </div>
-    <div class="ts-group-label">Modelos compostos</div>
-    <div class="coverage-visual-grid" style="margin-bottom:10px;">
-      <button class="ts-btn coverage-card" id="roofPresetExtension" title="Duas águas assimétricas com uma lateral prolongada">
-        <img class="coverage-thumb" src="/ui/coberturas/telhado-extensao-lateral.png" alt="" aria-hidden="true"><span>Extensão lateral</span>
-      </button>
-      <button class="ts-btn coverage-card" id="roofPresetParallel" title="Cumeeira interrompida em dois trechos com alturas ajustáveis">
-        <img class="coverage-thumb" src="/ui/coberturas/telhado-cumeeiras-paralelas.png" alt="" aria-hidden="true"><span>Cumeeira em níveis</span>
-      </button>
-    </div>
-    <div class="ts-group-label">Módulo de varanda</div>
-    <div class="coverage-visual-grid varanda-visual-grid" style="margin-bottom:10px;">
-      <button class="ts-btn contour-varanda-btn coverage-card" data-post-material="madeira"><img class="coverage-thumb" src="/ui/coberturas/varanda-madeira.png" alt="" aria-hidden="true"><span>Madeira</span></button>
-      <button class="ts-btn contour-varanda-btn coverage-card" data-post-material="concreto"><img class="coverage-thumb" src="/ui/coberturas/varanda-concreto.png" alt="" aria-hidden="true"><span>Concreto</span></button>
-      <button class="ts-btn contour-varanda-btn coverage-card" data-post-material="tijolo"><img class="coverage-thumb" src="/ui/coberturas/varanda-tijolo.png" alt="" aria-hidden="true"><span>Tijolo</span></button>
-    </div>
     <div class="cp-group-grid">
       <button class="ts-btn ts-disabled" data-disabled-label="3 Águas" title="3 Águas — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>3 Águas</span><span class="ts-badge-soon">em breve</span></button>
       <button class="ts-btn ts-disabled" data-disabled-label="Meia Água" title="Meia Água — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Meia Água</span><span class="ts-badge-soon">em breve</span></button>
@@ -2088,77 +1932,6 @@
     <div class="cp-action-row ts-disabled" data-disabled-label="Editar inclinação e beiral">
       <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg>
       Editar inclinação e beiral — em breve
-    </div>
-  </div>
-
-  <div class="category-panel" id="panelMateriais" data-panel="materiais">
-    <div class="cp-header">
-      <div><div class="cp-title">Materiais</div><div class="cp-desc">Pisos, revestimentos e acabamentos</div></div>
-      <button class="cp-close" data-close-panel title="Fechar">×</button>
-    </div>
-    <!-- Categoria inteira travada por enquanto (decisão do Product
-         Owner): nenhuma tela de "clique pra aplicar material numa
-         superfície" existe hoje — o painel Materiais atual é só um
-         relatório de quantitativo, não um seletor. -->
-    <div class="ts-group-label">Pisos</div>
-    <div class="cp-group-grid">
-      <button class="ts-btn ts-disabled" data-disabled-label="Porcelanato" title="Porcelanato — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Porcelanato</span><span class="ts-badge-soon">em breve</span></button>
-      <button class="ts-btn ts-disabled" data-disabled-label="Cerâmica" title="Cerâmica — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Cerâmica</span><span class="ts-badge-soon">em breve</span></button>
-      <button class="ts-btn ts-disabled" data-disabled-label="Madeira" title="Madeira — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Madeira</span><span class="ts-badge-soon">em breve</span></button>
-      <button class="ts-btn ts-disabled" data-disabled-label="Concreto" title="Concreto — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Concreto</span><span class="ts-badge-soon">em breve</span></button>
-    </div>
-    <div class="ts-group-label">Revestimentos</div>
-    <div class="cp-group-grid">
-      <button class="ts-btn ts-disabled" data-disabled-label="Pintura" title="Pintura — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Pintura</span><span class="ts-badge-soon">em breve</span></button>
-      <button class="ts-btn ts-disabled" data-disabled-label="Pedra" title="Pedra — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Pedra</span><span class="ts-badge-soon">em breve</span></button>
-      <button class="ts-btn ts-disabled" data-disabled-label="Tijolinho" title="Tijolinho — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Tijolinho</span><span class="ts-badge-soon">em breve</span></button>
-      <button class="ts-btn ts-disabled" data-disabled-label="Porcelanato (parede)" title="Porcelanato — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Porcelanato</span><span class="ts-badge-soon">em breve</span></button>
-    </div>
-    <div class="ts-group-label">Acabamentos</div>
-    <div class="cp-group-grid">
-      <button class="ts-btn ts-disabled" data-disabled-label="Rodapé" title="Rodapé — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Rodapé</span><span class="ts-badge-soon">em breve</span></button>
-      <button class="ts-btn ts-disabled" data-disabled-label="Soleira" title="Soleira — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Soleira</span><span class="ts-badge-soon">em breve</span></button>
-      <button class="ts-btn ts-disabled" data-disabled-label="Peitoril" title="Peitoril — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Peitoril</span><span class="ts-badge-soon">em breve</span></button>
-      <button class="ts-btn ts-disabled" data-disabled-label="Moldura" title="Moldura — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Moldura</span><span class="ts-badge-soon">em breve</span></button>
-    </div>
-    <div class="cp-action-row ts-disabled" data-disabled-label="Mais materiais">
-      <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg>
-      Mais materiais — em breve
-    </div>
-  </div>
-
-  <div class="category-panel" id="panelMobiliario" data-panel="mobiliario">
-    <div class="cp-header">
-      <div><div class="cp-title">Mobiliário</div><div class="cp-desc">Móveis e objetos para sua casa</div></div>
-      <button class="cp-close" data-close-panel title="Fechar">×</button>
-    </div>
-    <!-- Categoria inteira travada por enquanto (decisão do Product
-         Owner): não existe seletor manual de móvel hoje, só mobília
-         automática por preset de cômodo (Ambientes). -->
-    <div class="ts-group-label">Sala</div>
-    <div class="cp-group-grid">
-      <button class="ts-btn ts-disabled" data-disabled-label="Sofá" title="Sofá — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Sofá</span><span class="ts-badge-soon">em breve</span></button>
-      <button class="ts-btn ts-disabled" data-disabled-label="Mesa" title="Mesa — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Mesa</span><span class="ts-badge-soon">em breve</span></button>
-      <button class="ts-btn ts-disabled" data-disabled-label="TV" title="TV — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>TV</span><span class="ts-badge-soon">em breve</span></button>
-      <button class="ts-btn ts-disabled" data-disabled-label="Estante" title="Estante — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Estante</span><span class="ts-badge-soon">em breve</span></button>
-    </div>
-    <div class="ts-group-label">Quarto</div>
-    <div class="cp-group-grid">
-      <button class="ts-btn ts-disabled" data-disabled-label="Cama" title="Cama — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Cama</span><span class="ts-badge-soon">em breve</span></button>
-      <button class="ts-btn ts-disabled" data-disabled-label="Guarda-roupa" title="Guarda-roupa — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Guarda-roupa</span><span class="ts-badge-soon">em breve</span></button>
-      <button class="ts-btn ts-disabled" data-disabled-label="Criado" title="Criado — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Criado</span><span class="ts-badge-soon">em breve</span></button>
-      <button class="ts-btn ts-disabled" data-disabled-label="Cômoda" title="Cômoda — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Cômoda</span><span class="ts-badge-soon">em breve</span></button>
-    </div>
-    <div class="ts-group-label">Cozinha</div>
-    <div class="cp-group-grid">
-      <button class="ts-btn ts-disabled" data-disabled-label="Balcão" title="Balcão — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Balcão</span><span class="ts-badge-soon">em breve</span></button>
-      <button class="ts-btn ts-disabled" data-disabled-label="Geladeira" title="Geladeira — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Geladeira</span><span class="ts-badge-soon">em breve</span></button>
-      <button class="ts-btn ts-disabled" data-disabled-label="Fogão" title="Fogão — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Fogão</span><span class="ts-badge-soon">em breve</span></button>
-      <button class="ts-btn ts-disabled" data-disabled-label="Pia" title="Pia — em breve"><svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg><span>Pia</span><span class="ts-badge-soon">em breve</span></button>
-    </div>
-    <div class="cp-action-row ts-disabled" data-disabled-label="Ver todos os móveis">
-      <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="24" height="24" rx="4" stroke-dasharray="4 3"/><circle cx="20" cy="20" r="3"/></svg>
-      Ver todos os móveis — em breve
     </div>
   </div>
 

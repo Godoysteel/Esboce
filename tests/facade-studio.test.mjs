@@ -6,34 +6,20 @@ const index = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 const app = await readFile(new URL('../src/app/EsboceApplication.ts', import.meta.url), 'utf8');
 const viewport = await readFile(new URL('../src/core/ViewportController.ts', import.meta.url), 'utf8');
 
-test('Estúdio de Fachadas oferece construção atual e fachada vazia', () => {
-  assert.match(index, /id="viewModeFacadeBtn"/);
-  assert.match(index, /id="facadeUseProjectBtn"/);
-  assert.match(index, /id="facadeBlankBtn"/);
-  assert.match(index, /Usar a construção atual/);
-  assert.match(index, /Começar com fachada vazia/);
+// O Estúdio de Fachadas (botão "Fach.", overlay de entrada, workspace,
+// formulário de letreiro e seletor de paredes) saiu da interface — decisão
+// de produto, não bug. O motor por trás (ViewportController.focusFacade,
+// isolamento de paredes, letreiro, dia/noite) continua no código pra não
+// quebrar projetos salvos que já tinham fachada composta.
+test('Estúdio de Fachadas saiu da interface por completo', () => {
+  for (const id of ['viewModeFacadeBtn', 'facadeStartOverlay', 'facadeWorkspace', 'facadeUseProjectBtn', 'facadeBlankBtn', 'facadeSignForm', 'facadeWallPicker']) {
+    assert.doesNotMatch(index, new RegExp(`id="${id}"`));
+  }
+  assert.doesNotMatch(app, /facadeBlankBtn|facadeUseProjectBtn|facadeExitBtn|enterFacadeStudio/);
 });
 
-test('fachada vazia cria plano de 10 m sem substituir o projeto', () => {
-  const start = app.indexOf("this.requireElement('facadeBlankBtn')");
-  const end = app.indexOf("this.requireElement('facadeExitBtn')", start);
-  const flow = app.slice(start, end);
-  assert.match(flow, /Store\.currentWalls\(\)/);
-  assert.match(flow, /Store\.commands\.createWall\(centerX - 5 \* Core\.GRID, 0, centerX \+ 5 \* Core\.GRID, 0\)/);
-  assert.doesNotMatch(flow, /createProject|setProject|reset/);
-});
-
-test('modo Fachadas enquadra uma parede real e reaproveita Pele de vidro', () => {
-  assert.match(app, /ViewportController\.focusFacade\(wallId\)/);
-  assert.match(app, /showCategory\('aberturas'\)/);
-  assert.match(app, /requireElement\('addGlazingPanelBtn'\)\.click\(\)/);
+test('motor de fachada continua disponível em ViewportController (compatibilidade com projetos salvos)', () => {
   assert.match(viewport, /export function focusFacade\(wallId\?: string\): string \| null/);
   assert.match(viewport, /Store\.currentWalls\(\)/);
   assert.match(viewport, /Core\.wallLengthMeters/);
-});
-
-test('ferramentas futuras não fingem estar prontas', () => {
-  for (const label of ['Marquise', 'Brises', 'Ripados e vazados']) {
-    assert.match(index, new RegExp(`<button class="facade-tool" disabled[^>]*>${label.replace('/', '\\/')}</button>`));
-  }
 });

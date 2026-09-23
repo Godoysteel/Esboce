@@ -7,6 +7,8 @@ const index = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 const app = await readFile(new URL('../src/app/EsboceApplication.ts', import.meta.url), 'utf8');
 const renderer = await readFile(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
 const persistence = await readFile(new URL('../src/core/ProjectPersistence.ts', import.meta.url), 'utf8');
+const store = await readFile(new URL('../src/core/Store.ts', import.meta.url), 'utf8');
+const viewport = await readFile(new URL('../src/core/ViewportController.ts', import.meta.url), 'utf8');
 
 test('letreiro nasce centralizado e limitado à parede', () => {
   const wall = createWallEntity(0, 0, 200, 0, 'wall-sign');
@@ -18,19 +20,21 @@ test('letreiro nasce centralizado e limitado à parede', () => {
   assert.equal(sign.lighting, 'halo');
 });
 
-test('formulário oferece controles essenciais e edição', () => {
+test('Estúdio de Fachadas saiu da interface, mas Store.commands ainda cria/edita/apaga letreiro (compatibilidade com projetos salvos)', () => {
   for (const id of ['facadeSignText', 'facadeSignWidth', 'facadeSignHeight', 'facadeSignElevation', 'facadeSignLighting', 'facadeSignFaceColor', 'facadeSignLightColor']) {
-    assert.match(index, new RegExp(`id="${id}"`));
+    assert.doesNotMatch(index, new RegExp(`id="${id}"`));
   }
-  assert.match(app, /createFacadeSign\(activeFacadeWallId, values\)/);
-  assert.match(app, /updateFacadeSign\(editingFacadeSignId, values\)/);
-  assert.match(app, /deleteFacadeSign\(editingFacadeSignId\)/);
+  assert.doesNotMatch(app, /createFacadeSign\(activeFacadeWallId, values\)/);
+  assert.match(store, /createFacadeSign\(wallId: string/);
+  assert.match(store, /updateFacadeSign\(facadeSignId: string/);
+  assert.match(store, /deleteFacadeSign\(facadeSignId: string/);
 });
 
-test('renderização usa textura emissiva e alternância dia/noite', () => {
+test('renderização usa textura emissiva e alternância dia/noite (motor mantido, sem botão na UI)', () => {
   assert.match(renderer, /new THREE\.CanvasTexture\(canvas\)/);
   assert.match(renderer, /emissiveIntensity: facadeNightMode/);
-  assert.match(app, /ViewportController\.setFacadeNightMode\(facadeNightMode\)/);
+  assert.match(viewport, /export function setFacadeNightMode\(enabled: boolean\): void/);
+  assert.doesNotMatch(app, /ViewportController\.setFacadeNightMode\(facadeNightMode\)/);
 });
 
 test('letreiro participa da persistência versionada', () => {

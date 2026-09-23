@@ -7,18 +7,20 @@ const app = await readFile(new URL('../src/app/EsboceApplication.ts', import.met
 const viewport = await readFile(new URL('../src/core/ViewportController.ts', import.meta.url), 'utf8');
 const renderer = await readFile(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
 
-test('construção existente abre seleção múltipla de paredes antes do Estúdio', () => {
-  assert.match(index, /id="facadeWallPicker"/);
-  assert.match(index, /id="facadeWallPickerConfirm" disabled/);
-  assert.match(app, /selectedFacadeWallIds = new Set<string>\(\)/);
-  assert.match(app, /beginFacadeWallSelection\(\(wallId\)/);
-  assert.match(app, /Array\.from\(selectedFacadeWallIds\)/);
+// A seleção múltipla de paredes que antecedia o Estúdio de Fachadas saiu da
+// interface junto com o resto do estúdio — decisão de produto, não bug.
+test('seleção de paredes do Estúdio de Fachadas saiu da interface', () => {
+  assert.doesNotMatch(index, /id="facadeWallPicker"/);
+  assert.doesNotMatch(index, /id="facadeWallPickerConfirm"/);
+  assert.doesNotMatch(app, /selectedFacadeWallIds|beginFacadeWallSelection|enterFacadeStudio/);
 });
 
-test('confirmação isola somente as paredes escolhidas', () => {
-  assert.match(app, /ViewportController\.isolateFacadeWalls\(isolatedWallIds\)/);
+test('isolamento/vista paralela/restauração de fachada continuam no motor (compatibilidade com projetos salvos)', () => {
+  assert.match(viewport, /export function isolateFacadeWalls/);
   assert.match(viewport, /facadeIsolatedWallIds = wallIds\.slice\(\)/);
   assert.match(viewport, /facadeIsolatedWallIds: facadeIsolatedWallIds/);
+  assert.match(viewport, /export function clearFacadeIsolation/);
+  assert.match(viewport, /facadeIsolatedWallIds = null; render\(\)/);
 });
 
 test('renderizador deriva vista paralela sem alterar o Store', () => {
@@ -28,9 +30,4 @@ test('renderizador deriva vista paralela sem alterar o Store', () => {
   assert.match(renderer, /openings: sourceFloor\.openings\.filter/);
   assert.match(renderer, /facadeSigns: \(sourceFloor\.facadeSigns \|\| \[\]\)\.filter/);
   assert.doesNotMatch(renderer, /Store\.setProject/);
-});
-
-test('sair do Estúdio restaura a cena completa', () => {
-  assert.match(app, /ViewportController\.clearFacadeIsolation\(\)/);
-  assert.match(viewport, /facadeIsolatedWallIds = null; render\(\)/);
 });

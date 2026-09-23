@@ -17,13 +17,14 @@ test('gerador ignora divisória interna e cria um volume retangular coeso', () =
   assert.ok(rects[0].x1 < 0 && rects[0].x2 > 200 && rects[0].y1 < 0 && rects[0].y2 > 100);
 });
 
-test('interface prioriza modelos manuais compostos e mantém as peças editáveis', () => {
+test('presets "Extensão lateral"/"Cumeeira em níveis" saíram da interface, mas o motor continua servindo projetos salvos antigos', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const store = readFileSync(new URL('../src/core/Store.ts', import.meta.url), 'utf8');
   const app = readFileSync(new URL('../src/app/EsboceApplication.ts', import.meta.url), 'utf8');
   assert.doesNotMatch(html, /id="generateRoofBtn"/);
-  assert.match(html, /id="roofPresetExtension"/);
-  assert.match(html, /id="roofPresetParallel"/);
+  assert.doesNotMatch(html, /id="roofPresetExtension"/);
+  assert.doesNotMatch(html, /id="roofPresetParallel"/);
+  assert.doesNotMatch(app, /createRoofCompositePreset/);
   assert.match(store, /createRoofCompositePreset/);
   assert.match(store, /floor\.roofs\.push\(\.\.\.roofs\)/);
   assert.match(store, /raisedBaseHeightM = Core\.WALL_HEIGHT \+ 0\.45/);
@@ -33,7 +34,6 @@ test('interface prioriza modelos manuais compostos e mantém as peças editávei
   assert.doesNotMatch(store, /raised\.steppedLowerRoofId = lower\.id/);
   assert.doesNotMatch(store, /floor\.walls\.push\(divider\)/);
   assert.doesNotMatch(store, /raised\.atticWallIds = floor\.walls/);
-  assert.match(app, /createRoofCompositePreset\('extensaoLateral'\)/);
 });
 
 test('cumeeira em níveis usa volume visual fechado sem alterar paredes estruturais', () => {

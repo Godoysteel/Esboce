@@ -2755,11 +2755,16 @@ export function hashColorHex(key: string): number {
   // (removida de toda a casa — ver Sessão 27); os parâmetros
   // thickness/length continuam recebidos só por compatibilidade de
   // assinatura com o chamador, sem uso aqui agora.
-  function buildParapetSegmentMaterial(color: any, thickness: any, height: any, length: any) {
+  function buildParapetSegmentMaterial(color: any, thickness: any, height: any, length: any, isPlain?: any) {
     return new THREE.MeshStandardMaterial({
       color: color,
       roughness: 1,
-      flatShading: true
+      flatShading: true,
+      // Mesmo reforço emissivo do oitão sem acabamento (DEC-220) — sem
+      // isso o parapeito da platibanda pega só a luz colorida da cena e
+      // fica mais escuro/acinzentado que a parede idêntica logo abaixo.
+      emissive: isPlain ? 0xFFFFFF : 0x000000,
+      emissiveIntensity: isPlain ? 0.15 : 0,
     });
   }
 
@@ -2851,12 +2856,12 @@ export function hashColorHex(key: string): number {
     }
   }
 
-  function buildParapetWalls(bounds: any, topY: any, height: any, thickness: any, color: any) {
+  function buildParapetWalls(bounds: any, topY: any, height: any, thickness: any, color: any, isPlain: any) {
     var meshes: any[] = [];
     function seg(x1: any, z1: any, x2: any, z2: any) {
       var dx = x2 - x1, dz = z2 - z1, len = Math.hypot(dx, dz);
       var geo = new THREE.BoxGeometry(len + thickness, height, thickness);
-      var mat = buildParapetSegmentMaterial(color, thickness, height, len + thickness);
+      var mat = buildParapetSegmentMaterial(color, thickness, height, len + thickness, isPlain);
       var mesh = new THREE.Mesh(geo, mat);
       mesh.position.set((x1 + x2) / 2, topY + height / 2, (z1 + z2) / 2);
       mesh.rotation.y = -Math.atan2(dz, dx);
@@ -2881,7 +2886,7 @@ export function hashColorHex(key: string): number {
   function clampParapetHeight(h: any) {
     return Math.max(PARAPET_HEIGHT_MIN, Math.min(PARAPET_HEIGHT_MAX, h != null ? h : PARAPET_HEIGHT_DEFAULT));
   }
-  function buildRoofPlatibanda(topBounds: any, topY: any, roofColor: any, ridgeAxis: any, parapetHeight: any, parapetColor: any, hasMolding: any) {
+  function buildRoofPlatibanda(topBounds: any, topY: any, roofColor: any, ridgeAxis: any, parapetHeight: any, parapetColor: any, hasMolding: any, parapetColorIsPlain: any) {
     var height = clampParapetHeight(parapetHeight);
     var slopeRad = PLATIBANDA_SLOPE_DEG * Math.PI / 180;
     var verticalDrop = ROOF_THICKNESS / Math.cos(slopeRad);
@@ -2903,7 +2908,7 @@ export function hashColorHex(key: string): number {
     }
     meshes.push.apply(meshes, extrudeSlopeDown(pts, verticalDrop, roofColor, roofColor));
     var parapetColorResolved = parapetColor != null ? parapetColor : GABLE_COLOR;
-    meshes = meshes.concat(buildParapetWalls(topBounds, topY, height, PARAPET_THICK, parapetColorResolved));
+    meshes = meshes.concat(buildParapetWalls(topBounds, topY, height, PARAPET_THICK, parapetColorResolved, parapetColorIsPlain));
     // Moldura: um segundo anel, mais largo (projeta MOLDING_PROJECTION
     // além da face do parapeito dos dois lados) e mais baixo, encostado
     // no topo do parapeito já existente — mesma técnica de
@@ -2911,7 +2916,7 @@ export function hashColorHex(key: string): number {
     if (hasMolding) {
       var moldingThickness = PARAPET_THICK + MOLDING_PROJECTION * 2;
       var moldingTopY = topY + Math.max(height - MOLDING_HEIGHT, 0);
-      meshes = meshes.concat(buildParapetWalls(topBounds, moldingTopY, MOLDING_HEIGHT, moldingThickness, parapetColorResolved));
+      meshes = meshes.concat(buildParapetWalls(topBounds, moldingTopY, MOLDING_HEIGHT, moldingThickness, parapetColorResolved, parapetColorIsPlain));
     }
     return meshes;
   }
@@ -3079,9 +3084,44 @@ export function hashColorHex(key: string): number {
     return bestHex ? parseInt((bestHex as string).slice(1), 16) : GABLE_COLOR;
   }
 
+  // true quando nenhuma parede do pavimento tem acabamento (tinta)
+  // escolhido — mesmo critério de "cru" usado pela parede (isPlainWallFace)
+  // e pelo oitão (isPlainGable, DEC-220). Sem isso, o parapeito da
+  // platibanda, o painel de trás do uma-água e o forro do beiral (todos
+  // usam computeWallMatchColor) ficavam mais escuros/acinzentados que a
+  // parede crua logo abaixo — a mesma causa raiz do DEC-220, só que fora
+  // de escopo naquela correção por caírem num hex puro em vez de um
+  // THREE.Material próprio.
+  function isWallMatchColorPlain(walls: any) {
+    var found = false;
+    (walls || []).forEach(function (w: any) {
+      [w.finishA, w.finishB].forEach(function (productId: any) {
+        if (!productId) return;
+        var product = Catalog.getProduct(productId);
+        if (product && product.assets && product.assets.colorHex) found = true;
+      });
+    });
+    return !found;
+  }
+
+  // Material "cor de parede" com o mesmo reforço emissivo condicional do
+  // oitão/parede crua (ver isWallMatchColorPlain acima) — usado pro
+  // painel de trás do uma-água e pro forro do beiral, que (diferente do
+  // parapeito) já passam por resolveFaceMaterial e aceitam um
+  // THREE.Material no lugar de um hex puro.
+  function buildWallMatchMaterial(colorHex: any, isPlain: any, viewState: any) {
+    return new THREE.MeshStandardMaterial({
+      color: pickColor(colorHex, 'telhado', viewState),
+      side: THREE.DoubleSide,
+      flatShading: true,
+      emissive: isPlain ? 0xFFFFFF : 0x000000,
+      emissiveIntensity: isPlain ? 0.15 : 0,
+    });
+  }
+
   // Constrói UM telhado colocado (objeto persistente), convertendo do
   // espaço de modelo pro de mundo e despachando pro tipo certo.
-  function buildRoofPiece(roof: any, scale: any, offsetX: any, offsetY: any, floorTopY: any, viewState: any, wallMatchColor?: any) {
+  function buildRoofPiece(roof: any, scale: any, offsetX: any, offsetY: any, floorTopY: any, viewState: any, wallMatchColor?: any, wallMatchIsPlain?: any) {
     var roofFinish = roof.finishProductId && Catalog.getProduct(roof.finishProductId);
     var roofColor;
     if (roofFinish && roofFinish.assets.textures) {
@@ -3104,7 +3144,7 @@ export function hashColorHex(key: string): number {
     // Forro do beiral acompanha a cor das paredes da casa (mesma lógica
     // já usada pro painel de trás do uma-água e pro parapeito da
     // platibanda) — é um forro pintado, não uma continuação da telha.
-    var soffitColor = pickColor(wallMatchColor != null ? wallMatchColor : GABLE_COLOR, 'telhado', viewState);
+    var soffitColor = buildWallMatchMaterial(wallMatchColor != null ? wallMatchColor : GABLE_COLOR, wallMatchIsPlain, viewState);
     var bounds = {
       minX: (roof.x1 - offsetX) * scale, maxX: (roof.x2 - offsetX) * scale,
       minZ: (roof.y1 - offsetY) * scale, maxZ: (roof.y2 - offsetY) * scale
@@ -3128,12 +3168,12 @@ export function hashColorHex(key: string): number {
       // Owner: "a parede deve subir", ou seja, é a parede se estendendo
       // pra fechar o vão, não um oitão decorativo à parte. Mesma técnica
       // já usada pro parapeito da platibanda (wallMatchColor).
-      var backWallColor = pickColor(wallMatchColor != null ? wallMatchColor : GABLE_COLOR, 'telhado', viewState);
+      var backWallColor = buildWallMatchMaterial(wallMatchColor != null ? wallMatchColor : GABLE_COLOR, wallMatchIsPlain, viewState);
       return buildRoofUmaAgua(bounds, floorTopY, roofColor, gableColors, backWallColor, pitchDeg, ridgeAxis, tabeiraColor, soffitColor);
     }
     if (roof.type === 'platibanda') {
       var parapetColor = pickColor(wallMatchColor != null ? wallMatchColor : GABLE_COLOR, 'telhado', viewState);
-      return buildRoofPlatibanda(bounds, floorTopY, roofColor, ridgeAxis, roof.parapetHeight, parapetColor, !!roof.parapetMolding);
+      return buildRoofPlatibanda(bounds, floorTopY, roofColor, ridgeAxis, roof.parapetHeight, parapetColor, !!roof.parapetMolding, wallMatchIsPlain);
     }
     return buildRoofDuasAguas(bounds, floorTopY, roofColor, gableColors, pitchDeg, ridgeAxis, tabeiraColor, soffitColor);
   }
@@ -6306,6 +6346,7 @@ export function hashColorHex(key: string): number {
         if (!viewState.hideRoofs) {
         var roofTopY = yOffset + currentWallHeight;
         var wallMatchColor = computeWallMatchColor(floorData.walls);
+        var wallMatchIsPlain = isWallMatchColorPlain(floorData.walls);
         // Caixa (pegada retangular × altura própria) de cada cômodo
         // fechado do pavimento — usada logo abaixo pra esconder, por
         // pixel, o pedaço de qualquer telhado que cair dentro da caixa de
@@ -6391,7 +6432,7 @@ export function hashColorHex(key: string): number {
             ? Math.max(roof.baseHeightM || currentWallHeight, currentWallHeight + 0.15)
             : (roof.atticMode ? (roof.baseHeightM || 1.2) : Core.roofHeightAtRect(floorData.walls, roof.x1, roof.y1, roof.x2, roof.y2, currentWallHeight));
           var pieceBaseY = yOffset + roofOwnHeight;
-          var pieces = buildRoofPiece(roof, scale, offsetX, offsetY, pieceBaseY, viewState, wallMatchColor);
+          var pieces = buildRoofPiece(roof, scale, offsetX, offsetY, pieceBaseY, viewState, wallMatchColor, wallMatchIsPlain);
           if (roof.atticMode === 'preview') pieces.forEach(function (piece) {
             var materials = Array.isArray(piece.material) ? piece.material : [piece.material];
             materials.forEach(function (material: any) {
