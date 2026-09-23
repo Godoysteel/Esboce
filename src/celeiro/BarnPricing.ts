@@ -85,6 +85,7 @@ export const BARN_COLORS: { id: string; label: string; hex: string; premium?: bo
   { id: 'cinza', label: 'Cinza grafite', hex: '#5A5F63' },
   { id: 'preto', label: 'Preto fosco', hex: '#26282A', premium: true },
   { id: 'vermelho', label: 'Vermelho celeiro', hex: '#8E2B22', premium: true },
+  { id: 'vermelho-vivo', label: 'Vermelho vivo', hex: '#C8261C', premium: true },
   { id: 'azul', label: 'Azul', hex: '#2F5D8C' },
   { id: 'verde', label: 'Verde', hex: '#3E6B47' },
   { id: 'bege', label: 'Bege areia', hex: '#C9B99A' },
@@ -100,7 +101,7 @@ export const BARN_PRICES = {
   door: 1200,
   gatePerM2: { correr: 900, 'duas-folhas': 700, enrolar: 1100, sanfonado: 800 } as Record<BarnGateType, number>,
   silo: 18000,
-  acmPerM2Facade: 220,
+  acmPerM2Envelope: 220,
   rangeLow: 0.9,
   rangeHigh: 1.1,
 };
@@ -161,7 +162,11 @@ export function computeQuote(input: BarnConfig): Quote {
   const gateType = BARN_GATE_TYPES.find((g) => g.id === c.gateType)!;
   add(`Portões ${gateType.label.toLowerCase()} (${c.gates} × ${c.gateWidthM}×${c.gateHeightM} m)`, c.gates * c.gateWidthM * c.gateHeightM * P.gatePerM2[c.gateType]);
   if (c.silo) add('Silo decorativo', P.silo);
-  if (c.acm) add('Revestimento em ACM na fachada', c.widthM * c.eaveHeightM * P.acmPerM2Facade);
+  if (c.acm) {
+    // ACM em toda a construção: paredes (perímetro x pé-direito) + cobertura (~15% acima da área).
+    const envelopeM2 = Math.round(2 * (c.widthM + c.lengthM) * c.eaveHeightM + areaM2 * 1.15);
+    add(`Revestimento em ACM — paredes e cobertura (${envelopeM2} m²)`, envelopeM2 * P.acmPerM2Envelope);
+  }
 
   let total = lines.reduce((sum, line) => sum + line.amount, 0);
   if (findBarnColor(c.colorId).premium) {
