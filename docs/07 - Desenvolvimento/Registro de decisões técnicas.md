@@ -3115,3 +3115,5 @@ Passos porta/janela/telhado usam uma flag `armsViewportOnClick`: o alvo inicial 
 
 **Referências:** `celeiro/index.html` · `src/celeiro/BarnPricing.ts` · `src/celeiro/BarnScene.ts` · `src/celeiro/main.ts` · `vite.config.ts` · `tests/barn-quote.test.mjs`.
 
+**Atualização (mesmo dia):** o configurador será usado na página `artuzexpress.com.br/galpoes` (via iframe, `?embed=1` esconde o cabeçalho/rodapé e avisa a altura por `postMessage`) e **não tem relação com o Esboce**: a marca da página passou a ser só "Artuz Express × Godoy Construtor", sem links pro editor, termos ou privacidade do Esboce, e a mensagem do WhatsApp cita Artuz Express / Godoy Construtor. Tecnicamente ainda é servido pelo mesmo deploy (`esboce.com.br/celeiro/`); mover pra domínio próprio fica como pendência opcional.
+

@@ -85,3 +85,9 @@ test('modo embutido (?embed=1) existe: classe no body, CSS que esconde cabeçalh
   assert.match(main, /type: 'celeiro-height'/);
   assert.match(readFileSync(new URL('../celeiro/index.html', import.meta.url), 'utf8'), /body\.embed \.top/);
 });
+
+test('a página não tem marca nem links do Esboce (só Artuz Express e Godoy Construtor)', () => {
+  const html = readFileSync(new URL('../celeiro/index.html', import.meta.url), 'utf8');
+  assert.doesNotMatch(html, /esboce|termos\.html|privacidade\.html|editor de casas/i);
+  assert.match(html, /ARTUZ EXPRESS × GODOY CONSTRUTOR/);
+});

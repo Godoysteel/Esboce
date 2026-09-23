@@ -178,7 +178,7 @@ export function buildWhatsappMessage(config: BarnConfig, quote: Quote, contact: 
   const c = normalizeBarnConfig(config);
   const model = BARN_MODELS.find((m) => m.id === c.model)!;
   const parts = [
-    'Olá! Fiz uma simulação no configurador de celeiros e gostaria de um orçamento.',
+    'Olá! Fiz uma simulação no configurador de celeiros da Artuz Express / Godoy Construtor e gostaria de um orçamento.',
     '',
     `Modelo: ${model.label}`,
     `Dimensões: ${c.widthM} m × ${c.lengthM} m (${quote.areaM2} m²), pé-direito ${c.eaveHeightM} m`,
