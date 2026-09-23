@@ -92,7 +92,7 @@ export const BARN_COLORS: { id: string; label: string; hex: string; premium?: bo
 
 // Todos os valores em R$ — PROVISÓRIOS (ver cabeçalho).
 export const BARN_PRICES = {
-  perM2: { fechado: 380, aberto: 700, celeiro: 460 } as Record<BarnModel, number>,
+  perM2: { fechado: 1000, aberto: 700, celeiro: 1500 } as Record<BarnModel, number>,
   roofPerM2: { metalica: 0, termoacustica: 75, fibrocimento: 45 } as Record<BarnRoof, number>,
   eaveExtraPerMeterAbove4: 0.05,
   premiumColorFactor: 0.03,
