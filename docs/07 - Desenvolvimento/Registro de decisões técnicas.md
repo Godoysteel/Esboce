@@ -3101,3 +3101,17 @@ Passos porta/janela/telhado usam uma flag `armsViewportOnClick`: o alvo inicial 
 **Testes novos:** `tests/drywall-partition-standalone.test.mjs` (16 testes — entidade, catálogo, persistência com rotação não-ortogonal, comandos do Store, snap de ponta, criação orientada, ausência de grid-snap, alça de rotação, integração no orçamento). `tests/drywall-partition.test.mjs` perdeu os 3 testes específicos da DEC-228 (peça removida) e ganhou 1 confirmando a remoção completa.
 
 **Referências:** DEC-228 (arquitetura anterior, rejeitada) · `src/core/types.ts` (`DrywallPartition`) · `src/core/Core.ts` (`createDrywallPartitionEntity`) · `src/core/DrywallPartitionTypes.ts` (novo) · `src/core/Store.ts` (comandos) · `src/core/ViewportController.ts` (criação/arraste/snap/rotação livre) · `src/core/Scene3DRenderer.ts` (`buildDrywallPartitionMesh`, alças) · `src/core/GizmoController.ts` (`handleDrywallPartitionAction`) · `src/core/ProjectPersistence.ts` (`parseDrywallPartition`, v21) · `src/core/MaterialsPanel.ts` (`drywallPartitionQuantities`) · `tests/drywall-partition-standalone.test.mjs`.
+
+# DEC-230 — Área "Celeiro americano metálico": configurador 3D com cotação automática (segunda página do site)
+
+**Data:** 23/09/2026
+**Status:** Implementado e testado (809 testes, 10 novos; typecheck e `vite build` limpos). Verificado ao vivo em `/celeiro/index.html`: os 3 modelos renderizam (galpão fechado com portão de correr, galpão aberto com estrutura aparente, celeiro com telhado gambrel vermelho, portão em X e silo), cor/tamanho/aberturas atualizam o 3D e a cotação. **Preços são PROVISÓRIOS** — aguardando a tabela oficial de Rogério.
+
+**Contexto:** Rogério quer uma área no site dedicada a celeiro/galpão metálico, com o objetivo de gerar leads. Referência: artuzexpress.com.br/galpoes (form de 5 passos, cotação só via WhatsApp). Pedidos: 3 modelos (Galpão Fechado, Galpão Aberto, Celeiro), configurar cor/tamanho/portas/janelas, cotação automática, lead por WhatsApp, modelos 3D **bem realistas**.
+
+**Decisão:** segunda página do Vite (`celeiro/index.html`, `build.rollupOptions.input`), independente do editor. `src/celeiro/BarnPricing.ts` é módulo puro (só constantes/funções, nenhum import de valor — mesma regra do `Core.ts`, ver DEC-229) com tipos, catálogo de cores/telhas/portões, limites, `BARN_PRICES` (editável num lugar só), `normalizeBarnConfig` (limites, portões que cabem na largura, aberturas que cabem nas laterais, silo só no celeiro, ACM/portões não no aberto), `computeQuote` e mensagem/URL do WhatsApp (`wa.me/5547991987805`). `src/celeiro/BarnScene.ts` é o viewer Three.js autocontido, com realismo procedural: nervuras trapezoidais na geometria (paredes com vãos cortados de verdade e telhado nervurado), materiais PBR, ambiente PMREM, sombras suaves, ACES, estrutura metálica aparente no galpão aberto, calhas/rufos/cumeeira, portões (correr, duas folhas, enrolar, sanfonado), portas e janelas com caixilho e vidro, silo, fardos de feno, ACM, gramado, cascalho e árvores. Render sob demanda (só redesenha quando algo muda). Decisão de realismo confirmada com Rogério: procedural detalhado (não GLB).
+
+**Pendências:** tabela oficial de preços; link de entrada no site principal (por ora só via URL `/celeiro/`); lead não é salvo em backend (só WhatsApp, decisão confirmada).
+
+**Referências:** `celeiro/index.html` · `src/celeiro/BarnPricing.ts` · `src/celeiro/BarnScene.ts` · `src/celeiro/main.ts` · `vite.config.ts` · `tests/barn-quote.test.mjs`.
+

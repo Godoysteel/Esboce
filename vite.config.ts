@@ -14,6 +14,10 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: true
+    sourcemap: true,
+    // Segunda página: configurador de celeiro/galpão metálico (DEC-230).
+    rollupOptions: {
+      input: { main: 'index.html', celeiro: 'celeiro/index.html' }
+    }
   }
 });
