@@ -14,7 +14,48 @@ test('gerador ignora divisória interna e cria um volume retangular coeso', () =
   ];
   const rects = Core.roofGenerationRects(walls);
   assert.equal(rects.length, 1);
-  assert.ok(rects[0].x1 < 0 && rects[0].x2 > 200 && rects[0].y1 < 0 && rects[0].y2 > 100);
+  assert.equal(rects[0].x1, 0);
+  assert.equal(rects[0].x2, 200);
+  assert.equal(rects[0].y1, 0);
+  assert.equal(rects[0].y2, 100);
+});
+
+// DEC-224 — Rogério, ao testar o telhado 1 Água, reportou "o mesmo
+// problema" do DEC-223 (face externa não bate com a face externa da
+// parede) — mas a causa aqui é diferente e afeta TODOS os telhados
+// autogerados (duasAguas/umaAgua/platibanda), não só a platibanda.
+// roofGenerationRects usava roomModelBounds (que já soma meia espessura
+// de parede pra alcançar a FACE externa) — mas Roof.x1/x2/y1/y2 sempre
+// representa o EIXO da parede em qualquer outro lugar do app (telhado
+// desenhado à mão, GABLE_WALL_EXTEND em Scene3DRenderer.ts). Um telhado
+// GERADO nascia com bounds já na face externa; quando o oitão/parapeito/
+// painel de trás somava GABLE_WALL_EXTEND por cima pra tentar alcançar
+// essa mesma face, a meia espessura de parede era somada DUAS vezes —
+// ~6cm de saliência real além da parede, em qualquer telhado autogerado.
+test('roofGenerationRects usa o EIXO da parede (roomCenterlineBounds), não a face externa (roomModelBounds) — telhado autogerado precisa ter o mesmo referencial que um telhado desenhado à mão (DEC-224)', () => {
+  const source = readFileSync(new URL('../src/core/Core.ts', import.meta.url), 'utf8');
+  const start = source.indexOf('export function roofGenerationRects(');
+  const end = source.indexOf('\n}', start);
+  const body = source.slice(start, end);
+  assert.match(body, /const b = roomCenterlineBounds\(room\)!;/);
+  assert.doesNotMatch(body, /roomModelBounds\(room\)/);
+});
+
+test('roomCenterlineBounds devolve o EIXO puro (sem somar meia-espessura), diferente de roomModelBounds (que soma)', () => {
+  const walls = [
+    Core.createWallEntity(0, 0, 200, 0),
+    Core.createWallEntity(200, 0, 200, 100),
+    Core.createWallEntity(200, 100, 0, 100),
+    Core.createWallEntity(0, 100, 0, 0),
+  ];
+  const room = Core.detectRooms(walls)[0];
+  const centerline = Core.roomCenterlineBounds(room);
+  const withFace = Core.roomModelBounds(room);
+  const half = (Core.WALL_THICK / 2) * Core.GRID;
+  assert.equal(centerline.minX, 0);
+  assert.equal(centerline.maxX, 200);
+  assert.equal(withFace.minX, centerline.minX - half);
+  assert.equal(withFace.maxX, centerline.maxX + half);
 });
 
 test('presets "Extensão lateral"/"Cumeeira em níveis" saíram da interface, mas o motor continua servindo projetos salvos antigos', () => {

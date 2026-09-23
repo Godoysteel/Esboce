@@ -823,8 +823,11 @@ interface RectLike { x1: number; y1: number; x2: number; y2: number; }
 // compartilham uma aresta inteira viram um bloco maior; divisórias internas
 // deixam de produzir um telhadinho por quarto, sem criar áreas sobrepostas.
 export function roofGenerationRects(wallList: Wall[]): RectLike[] {
+  // roomCenterlineBounds, não roomModelBounds — Roof.x1/x2/y1/y2 é
+  // sempre o EIXO da parede (mesma convenção de um telhado desenhado à
+  // mão), nunca a face externa (ver DEC-224).
   let rects = detectRooms(wallList).map((room) => {
-    const b = roomModelBounds(room)!;
+    const b = roomCenterlineBounds(room)!;
     return { x1: b.minX, y1: b.minY, x2: b.maxX, y2: b.maxY };
   }).filter((r) => r.x2 - r.x1 >= SNAP_UNIT && r.y2 - r.y1 >= SNAP_UNIT);
   const same = (a: number, b: number) => Math.abs(a - b) <= COINCIDENCE_TOL;
@@ -1489,6 +1492,31 @@ export function roomModelBounds(room: Room): { minX: number; maxX: number; minY:
     if (p.x + half > maxX) maxX = p.x + half;
     if (p.y - half < minY) minY = p.y - half;
     if (p.y + half > maxY) maxY = p.y + half;
+  });
+  return { minX, maxX, minY, maxY };
+}
+
+// Limites de um cômodo no EIXO das paredes (sem somar meia-espessura) —
+// mesma convenção que um telhado colocado/redimensionado à mão pela
+// pessoa (Roof.x1/x2/y1/y2 sempre bate com o EIXO da parede, nunca com a
+// face — ver GABLE_WALL_EXTEND em Scene3DRenderer.ts, que soma a meia-
+// espessura por conta própria sempre que uma malha precisa alcançar a
+// face externa de verdade). Usada por roofGenerationRects: telhado
+// GERADO precisa nascer com o mesmo eixo que um telhado desenhado à mão
+// teria — usar roomModelBounds (que já soma a meia-espessura) ali fazia
+// esse acréscimo ser somado DUAS vezes (uma aqui, outra em
+// GABLE_WALL_EXTEND), deixando oitão/parapeito/painel-de-trás de
+// telhados AUTOGERADOS ~6cm além da face real da parede — bug real
+// reportado pelo Rogério (DEC-224), que a princípio pareceu ser "o mesmo
+// problema" do DEC-223 mas tem causa e correção diferentes.
+export function roomCenterlineBounds(room: Room): { minX: number; maxX: number; minY: number; maxY: number } | null {
+  if (!room.points || !room.points.length) return null;
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  room.points.forEach((p) => {
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.y > maxY) maxY = p.y;
   });
   return { minX, maxX, minY, maxY };
 }
@@ -2389,7 +2417,7 @@ export const Core = {
   findRoomsAdjacentToOpening, wallIsInteriorPartition,
   roofRidgeHeightMeters, roofPitchForRidgeHeight, roofsCanFuse, fusedRoofBounds, roofGenerationRects,
   rectPoints, lajeBounds,
-  rectsNearby, roofFootprintValleyCorner, roofValleySide, roofValleyOwnSign, pointInPolygon, roomModelBounds, findRoomWallIds, findIsolatedRoomWallIds, wallResizeTopology, resolveWallResizeOffset, computeWallFootprints,
+  rectsNearby, roofFootprintValleyCorner, roofValleySide, roofValleyOwnSign, pointInPolygon, roomModelBounds, roomCenterlineBounds, findRoomWallIds, findIsolatedRoomWallIds, wallResizeTopology, resolveWallResizeOffset, computeWallFootprints,
   roomsContainingWall, roomHeightM, roomOwnHeightM, resolveRoomHeightUpdate, resolvedWallHeights,
   roomAtPoint, roofHeightAtRect,
   wallResizeEndpointNeedsBridge,

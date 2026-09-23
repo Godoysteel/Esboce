@@ -2331,19 +2331,23 @@ test('Scene3DRenderer.roofSlopeSurfaceParams: platibanda vira platô plano (tanP
 // telhado vizinho mais baixo era escondido numa faixa "fantasma" onde a
 // platibanda mais alta nem chega a desenhar nada, abrindo a fresta.
 //
-// Atualizado na DEC-223: a face EXTERNA do parapeito passou a ficar
-// exatamente rente a `roof.x1/x2/y1/y2` (antes sobrava PARAPET_THICK/2
-// pra fora — Rogério: "a face externa da platibanda não bate exatamente
-// com a face externa da parede"), então a margem de compensação
-// PARAPET_THICK/2 usada aqui também deixou de existir — a pegada de
-// recorte já bate com a malha real, sem folga nenhuma.
-test('Scene3DRenderer.roofWorldFootprint: platibanda usa a pegada EXATA do telhado (sem margem nenhuma), não o beiral das águas inclinadas (ROOF_OVERHANG/RAKE_OVERHANG) — senão a caixa de recorte fica maior que a malha de verdade e abre fresta na junção (DEC-127/DEC-223)', () => {
+// Atualizado na DEC-223: `roof.x1/x2/y1/y2` é o EIXO da parede (não a
+// face — confirmado lendo Core.computeWallFootprints), então a margem
+// certa pra alcançar a face externa real é GABLE_WALL_EXTEND (meia
+// espessura de parede — mesma distância que os oitões já usam), não
+// PARAPET_THICK/2 (que media a espessura do PARAPEITO, não da parede —
+// erro original desta margem, e também o erro de uma correção
+// intermediária que zerou a margem por engano). Rogério: "a face
+// externa da platibanda não bate exatamente com a face externa da
+// parede" — a pegada de recorte agora usa a mesma distância que
+// buildParapetWalls usa de verdade pra alcançar essa face.
+test('Scene3DRenderer.roofWorldFootprint: platibanda usa GABLE_WALL_EXTEND como margem (a distância real até a face externa da parede), não PARAPET_THICK/2 nem o beiral das águas inclinadas (ROOF_OVERHANG/RAKE_OVERHANG) — senão a caixa de recorte não bate com a malha real e abre fresta na junção (DEC-127/DEC-223)', () => {
   const fnStart = scene3DRendererSource.indexOf('function roofWorldFootprint(');
   assert.notEqual(fnStart, -1, 'roofWorldFootprint não encontrada');
   const fnBlock = scene3DRendererSource.slice(fnStart, fnStart + 1300);
   assert.match(fnBlock, /if \(roof\.type === 'platibanda'\) \{/);
-  assert.match(fnBlock, /minX: \(Math\.min\(roof\.x1, roof\.x2\) - offsetX\) \* scale,/);
-  assert.doesNotMatch(fnBlock.slice(fnBlock.indexOf("roof.type === 'platibanda'")), /pMargin/);
+  assert.match(fnBlock, /var pMargin = GABLE_WALL_EXTEND;/);
+  assert.match(fnBlock, /minX: \(Math\.min\(roof\.x1, roof\.x2\) - offsetX\) \* scale - pMargin,/);
 });
 
 // DEC-90 — botão "Gerar Laje": cômodo nasce sem laje visível/contabilizada;

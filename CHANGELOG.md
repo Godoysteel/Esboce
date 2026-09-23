@@ -4,7 +4,10 @@
 
 - Removido da interface: os presets de telhado "Extensão lateral" e "Cumeeira em níveis" (painel Cobertura → Modelos compostos), o Módulo de varanda (Madeira/Concreto/Tijolo) e as categorias Materiais e Mobiliário do menu lateral (ambas só tinham botões "em breve", nada funcionando). Também saiu o Estúdio de Fachadas (botão "Fach." e todo o workspace de letreiro/vidro/isolamento de paredes) — decisão de produto, não bug. Em todos os casos só a interface saiu; projetos já salvos com esses elementos continuam carregando e aparecendo normalmente. Ver DEC-221.
 - Corrigido: o parapeito da platibanda (e, junto, o painel de trás do telhado uma-água e o forro do beiral de qualquer telhado) também ficava mais escuro/acinzentado que a parede idêntica quando nenhuma parede tinha acabamento escolhido — mesma causa raiz do oitão (DEC-220), agora corrigida nos três. Ver DEC-222.
-- Corrigido: a face externa do parapeito da platibanda não batia exatamente com a face externa da parede abaixo — sobrava cerca de 5cm pra fora em todo o perímetro, dando a impressão de um parapeito "maior" que a casa. Agora as duas faces ficam exatamente alinhadas. Ver DEC-223.
+- Corrigido: a face externa do parapeito da platibanda não batia exatamente com a face externa da parede abaixo (uns poucos centímetros de recesso, sutil mas perceptível de perto). Agora as duas faces ficam exatamente alinhadas. Ver DEC-223.
+- Corrigido: telhados criados pelo botão "Gerar Telhados" (qualquer estilo) ficavam com o oitão, o parapeito ou o painel de trás uns 6cm além da face real da parede — um telhado desenhado/redimensionado à mão na mesma casa não tinha esse problema. Agora os dois caminhos de criar telhado dão o mesmo resultado. Ver DEC-224.
+- Novo: o forro do beiral (parte de baixo do telhado, entre a parede e a borda) passa a acompanhar a inclinação real da água nos telhados 4 Águas e 1 Água — já valia só pro 2 Águas antes. Ver DEC-225.
+- Corrigido: numa casa em L (dois cômodos conectados fora do eixo), os dois telhados platibanda desenhavam parapeitos que se cruzavam exatamente onde um encosta no outro. Agora o parapeito para no ponto certo, sem sobreposição. Ver DEC-226.
 
 ## Alterado — 22/09/2026
 

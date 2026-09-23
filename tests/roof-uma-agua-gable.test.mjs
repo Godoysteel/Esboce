@@ -80,7 +80,7 @@ test('parapeito da platibanda propaga wallMatchIsPlain até buildParapetSegmentM
   const body = source.slice(start, end);
   assert.match(body, /emissive: isPlain \? 0xFFFFFF : 0x000000,/);
   assert.match(body, /emissiveIntensity: isPlain \? 0\.15 : 0,/);
-  assert.match(source, /return buildRoofPlatibanda\(bounds, floorTopY, roofColor, ridgeAxis, roof\.parapetHeight, parapetColor, !!roof\.parapetMolding, wallMatchIsPlain\);/);
+  assert.match(source, /return buildRoofPlatibanda\(bounds, floorTopY, roofColor, ridgeAxis, roof\.parapetHeight, parapetColor, !!roof\.parapetMolding, wallMatchIsPlain, neighborBounds\);/);
 });
 
 test('wallSupportsRoofGable também reconhece uma-água (suprime contorno duplicado igual já fazia pro duas-águas)', () => {
