@@ -11,6 +11,15 @@ let config: BarnConfig = defaultBarnConfig();
 let step = 1;
 const TOTAL_STEPS = 5;
 
+// Modo embutido (?embed=1): sem cabeçalho/rodapé, pra usar em iframe em outro
+// site (ex.: página de galpões de um parceiro). Avisa a página-mãe da altura
+// via postMessage ({type:'celeiro-height', height}) pra ela ajustar o iframe.
+if (new URLSearchParams(location.search).get('embed') === '1') {
+  document.body.classList.add('embed');
+  const postHeight = () => window.parent !== window && window.parent.postMessage({ type: 'celeiro-height', height: document.documentElement.scrollHeight }, '*');
+  new ResizeObserver(postHeight).observe(document.body);
+}
+
 const viewer = createBarnViewer($('viewer'));
 
 function contact(): BarnContact {

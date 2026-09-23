@@ -78,3 +78,10 @@ test('Vite tem a segunda entrada e a cena não usa import de valor do editor', (
   const scene = readFileSync(new URL('../src/celeiro/BarnScene.ts', import.meta.url), 'utf8');
   assert.doesNotMatch(scene, /from '\.\.\/core\//);
 });
+
+test('modo embutido (?embed=1) existe: classe no body, CSS que esconde cabeçalho e postMessage de altura', () => {
+  const main = readFileSync(new URL('../src/celeiro/main.ts', import.meta.url), 'utf8');
+  assert.match(main, /get\('embed'\) === '1'/);
+  assert.match(main, /type: 'celeiro-height'/);
+  assert.match(readFileSync(new URL('../celeiro/index.html', import.meta.url), 'utf8'), /body\.embed \.top/);
+});
