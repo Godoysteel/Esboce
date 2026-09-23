@@ -40,6 +40,7 @@ function render() {
   $('siloRow').style.display = c.model === 'celeiro' ? '' : 'none';
   $('acmRow').style.display = c.model === 'aberto' ? 'none' : '';
   $('gateBox').style.display = c.model === 'aberto' ? 'none' : '';
+  document.querySelectorAll<HTMLElement>('[data-count=windows],[data-count=doors]').forEach((b) => { const row = b.closest<HTMLElement>('.counter'); if (row) row.style.display = c.model === 'aberto' ? 'none' : ''; });
   $<HTMLInputElement>('silo').checked = c.silo; $<HTMLInputElement>('acm').checked = c.acm;
 
   $('area').textContent = String(q.areaM2).replace('.', ',');

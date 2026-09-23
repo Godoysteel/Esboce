@@ -71,7 +71,7 @@ function corrugatedWall(length: number, topAt: (x: number) => number, openings: 
     const cuts = openings.filter((o) => mid > o.x0 && mid < o.x1).sort((a, b) => a.y0 - b.y0);
     let lo = bottom;
     for (const c of cuts) {
-      if (c.y0 > lo) quad(xa, da, lo, lo, xb, db, c.y0, c.y0);
+      if (c.y0 > lo) quad(xa, da, lo, c.y0, xb, db, lo, c.y0);
       lo = Math.max(lo, c.y1);
     }
     const ta = topAt(xa), tb = topAt(xb);
@@ -322,7 +322,9 @@ export function createBarnViewer(container: HTMLElement): BarnViewer {
     const frontKind: ProfileKind = c.acm ? 'acm' : 'trap';
     const frontMat = c.acm ? new THREE.MeshStandardMaterial({ color: '#2b2e31', roughness: 0.28, metalness: 0.65, side: THREE.DoubleSide }) : wallMat;
 
+    // Galpão aberto: SEM paredes em nenhum lado (só colunas e cobertura).
     if (!open) {
+    {
       const fw = makeWall(W, gableTop, frontOpenings, [-half, 0, L / 2], 0, frontKind, frontMat, c.acm ? 1.2 : 0.2, c.acm ? 0.012 : RIB);
       frontOpenings.forEach((o) => gateAt(o, fw));
     }
@@ -339,8 +341,10 @@ export function createBarnViewer(container: HTMLElement): BarnViewer {
 
     // cantoneiras e rodapé
     const cornerT = 0.14;
-    const corners: [number, number][] = open ? [[-half, -L / 2], [half, -L / 2]] : [[-half, -L / 2], [half, -L / 2], [-half, L / 2], [half, L / 2]];
+    const corners: [number, number][] = [[-half, -L / 2], [half, -L / 2], [-half, L / 2], [half, L / 2]];
     corners.forEach(([x, z]) => box(cornerT, E - BASE_Y, cornerT, trimMat, x, BASE_Y + (E - BASE_Y) / 2, z, g));
+
+    }
 
     // ---------- estrutura aparente (galpão aberto) ----------
     if (open) {

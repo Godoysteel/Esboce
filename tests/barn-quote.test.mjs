@@ -91,3 +91,14 @@ test('a página não tem marca nem links do Esboce (só Artuz Express e Godoy Co
   assert.doesNotMatch(html, /esboce|termos\.html|privacidade\.html|editor de casas/i);
   assert.match(html, /ARTUZ EXPRESS × GODOY CONSTRUTOR/);
 });
+
+test('galpão aberto não tem portas, janelas nem portões (aberto por todos os lados)', () => {
+  const n = normalizeBarnConfig({ ...defaultBarnConfig(), model: 'aberto', windows: 6, doors: 2, gates: 2 });
+  assert.equal(n.windows, 0); assert.equal(n.doors, 0); assert.equal(n.gates, 0);
+  assert.match(BARN_MODELS.find((m) => m.id === 'aberto').description, /todos os lados/);
+});
+
+test('parede sob o vão da janela é gerada (quad do peitoril com altura real, não degenerado)', () => {
+  const scene = readFileSync(new URL('../src/celeiro/BarnScene.ts', import.meta.url), 'utf8');
+  assert.match(scene, /quad\(xa, da, lo, c\.y0, xb, db, lo, c\.y0\)/);
+});
