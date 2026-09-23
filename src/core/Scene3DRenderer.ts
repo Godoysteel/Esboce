@@ -27,6 +27,7 @@ import { floorWallHeight } from './Attic.js';
 import { hydraulicFixtureVisualPosition } from './Hydraulics.js';
 import { buildHipSolidFromWorldBox, buildGableSolidFromWorldBox, composeRoofPair, survivingSegments, type Point3 } from './roofSolidGeometry.js';
 import { steelFrameAssemblyColorHex } from './SteelFrameAssemblies.js';
+import { findDrywallPartitionType } from './DrywallPartitionTypes.js';
 
 export interface ViewState {
   drawPreview?: any;
@@ -52,6 +53,7 @@ export interface ViewState {
   selectedVaranda?: Varanda | null;
   selectedLaje?: Laje | null;
   selectedWall?: Wall | null;
+  selectedDrywallPartition?: any;
   // Ferramenta Terreno ativa — só enquanto ativa, o retângulo-guia e as
   // 4 faixas clicáveis de lado são desenhados (ver ADR-008). Muros já
   // confirmados (Terreno.muros) aparecem sempre, independente disso.
@@ -3769,6 +3771,25 @@ export function hashColorHex(key: string): number {
     return hitMesh;
   }
 
+  // Divisória de drywall livre (DEC-229) — um único box sólido, ao
+  // contrário da Sacada de vidro acima (hitMesh invisível + grupo de
+  // perfis/vidro como filho): não há partes procedurais aqui, então o
+  // próprio mesh visível já serve de alvo de clique/arraste. A
+  // espessura vem do catálogo de tipos (DrywallPartitionTypes.ts),
+  // nunca de Core.WALL_THICK — divisória livre não é uma Wall.
+  function buildDrywallPartitionMesh(partition: any, scale: any, offsetX: any, offsetY: any, yOffset: any) {
+    var thicknessM = findDrywallPartitionType(partition.thicknessTypeId).totalThicknessMm / 1000;
+    var sill = partition.sillHeightM || 0;
+    var geo = new THREE.BoxGeometry(partition.lengthM, partition.heightM, thicknessM);
+    var colorHex = steelFrameAssemblyColorHex(partition.finishAssemblyId || 'drywall-st');
+    var mat = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.9 });
+    var mesh = new THREE.Mesh(geo, mat);
+    var px = ((partition.x || 0) - offsetX) * scale, pz = ((partition.y || 0) - offsetY) * scale;
+    mesh.position.set(px, yOffset + sill + partition.heightM / 2, pz);
+    mesh.rotation.y = -((partition.rotationDeg || 0) * Math.PI / 180);
+    return mesh;
+  }
+
   // Bloco de Volumetria (fachada procedural) — box sólido simples.
   // Diferente do painel de Envidraçamento, não recorta nenhuma banda
   // da parede: é um volume que só se ENCOSTA e protrai pra fora,
@@ -5401,20 +5422,6 @@ export function hashColorHex(key: string): number {
         scene.add(m);
         registry.previewMeshes.push(m);
       });
-    } else if (p.tool === 'drywallDraw') {
-      // Linha-guia simples (mesmo espírito da antiga prévia de "Desenhar"
-      // parede, DEC-217) — só um traço no nível do chão marcando os dois
-      // pontos clicados, sem construir a parede/faixas de verdade antes
-      // da hora (isso só acontece em finalizeDraw, no segundo clique).
-      var dx1 = (p.x1 - offsetX) * scale, dz1 = (p.y1 - offsetY) * scale;
-      var dx2 = (p.x2 - offsetX) * scale, dz2 = (p.y2 - offsetY) * scale;
-      var dGeo = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(dx1, p.yOffset + 0.02, dz1),
-        new THREE.Vector3(dx2, p.yOffset + 0.02, dz2),
-      ]);
-      var dLine = new THREE.Line(dGeo, new THREE.LineBasicMaterial({ color: color }));
-      scene.add(dLine);
-      registry.previewMeshes.push(dLine);
     }
   }
 
@@ -5654,6 +5661,47 @@ export function hashColorHex(key: string): number {
       bottomHandle.position.set(brCenterWorldX, brYOffset + Math.max(0, brSill - 0.15), brCenterWorldZ);
       bottomHandle.userData.handle = 'balconyHeightBottom'; bottomHandle.renderOrder = 999;
       scene.add(bottomHandle); registry.handleMeshes.push(bottomHandle);
+    }
+
+    if (viewState.selectedDrywallPartition) {
+      // Mesmas 4 alças da Sacada de vidro acima (pontas esquerda/
+      // direita = comprimento, topo/base = altura/elevação), MAIS uma
+      // alça de giro LIVRE nova (verde, offset fixo em tela — não
+      // escala com lengthM), na direção PERPENDICULAR à peça (ângulo +
+      // 90°) pra não colidir visualmente com as alças de ponta que
+      // ficam no próprio eixo dela.
+      var dpSel = viewState.selectedDrywallPartition;
+      var dpYOffset = viewState.editingYOffset;
+      var dpSill = dpSel.sillHeightM || 0;
+      var dpCx = dpSel.x || 0, dpCy = dpSel.y || 0, dpAngle = (dpSel.rotationDeg || 0) * Math.PI / 180;
+      var dpAxisX = Math.cos(dpAngle), dpAxisY = Math.sin(dpAngle);
+      var dpCenterWorldX = (dpCx - offsetX) * scale, dpCenterWorldZ = (dpCy - offsetY) * scale;
+      var dpHandleY = dpYOffset + dpSill + dpSel.heightM / 2;
+      [-1, 1].forEach(function (side) {
+        var modelOffset = dpSel.lengthM * Core.GRID / 2 * side;
+        var handle = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 12), new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false }));
+        handle.position.set(dpCenterWorldX + dpAxisX * modelOffset * scale, dpHandleY, dpCenterWorldZ + dpAxisY * modelOffset * scale);
+        handle.userData.handle = side < 0 ? 'drywallPartitionLengthLeft' : 'drywallPartitionLengthRight';
+        handle.renderOrder = 999; scene.add(handle); registry.handleMeshes.push(handle);
+      });
+      var dpTopHandle = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 12), new THREE.MeshBasicMaterial({ color: SELECTED_ACCENT, depthTest: false }));
+      dpTopHandle.position.set(dpCenterWorldX, dpYOffset + dpSill + dpSel.heightM + 0.15, dpCenterWorldZ);
+      dpTopHandle.userData.handle = 'drywallPartitionHeightTop'; dpTopHandle.renderOrder = 999;
+      scene.add(dpTopHandle); registry.handleMeshes.push(dpTopHandle);
+      var dpBottomHandle = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 12), new THREE.MeshBasicMaterial({ color: SELECTED_ACCENT, depthTest: false }));
+      dpBottomHandle.position.set(dpCenterWorldX, dpYOffset + Math.max(0, dpSill - 0.15), dpCenterWorldZ);
+      dpBottomHandle.userData.handle = 'drywallPartitionHeightBottom'; dpBottomHandle.renderOrder = 999;
+      scene.add(dpBottomHandle); registry.handleMeshes.push(dpBottomHandle);
+      var dpPerpX = -Math.sin(dpAngle), dpPerpY = Math.cos(dpAngle);
+      var dpRotHandleDistM = 0.6;
+      var dpRotHandle = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 12), new THREE.MeshBasicMaterial({ color: 0x22C55E, depthTest: false }));
+      dpRotHandle.position.set(
+        dpCenterWorldX + dpPerpX * dpRotHandleDistM * scale,
+        dpHandleY,
+        dpCenterWorldZ + dpPerpY * dpRotHandleDistM * scale
+      );
+      dpRotHandle.userData.handle = 'drywallPartitionRotate'; dpRotHandle.renderOrder = 999;
+      scene.add(dpRotHandle); registry.handleMeshes.push(dpRotHandle);
     }
 
     if (viewState.selectedVolumeBox && viewState.volumeBoxEditMode) {
@@ -6038,6 +6086,17 @@ export function hashColorHex(key: string): number {
         bmesh.userData.balconyRailingId = railing.id; bmesh.userData.floorIndex = floorIdx;
         scene.add(bmesh);
         registry.furnitureMeshes.push(bmesh);
+      });
+
+      // Divisória de drywall livre (DEC-229) — mesh único simples, sem
+      // filhos (ao contrário da Sacada de vidro acima), registrado em
+      // structureMeshes (dispose não-recursivo já basta).
+      (floorData.drywallPartitions || []).forEach(function (partition) {
+        var dpMesh = buildDrywallPartitionMesh(partition, scale, offsetX, offsetY, yOffset);
+        tagCategory(dpMesh, 'drywallPartition');
+        dpMesh.userData.drywallPartitionId = partition.id; dpMesh.userData.floorIndex = floorIdx;
+        scene.add(dpMesh);
+        registry.structureMeshes.push(dpMesh);
       });
 
       if (floorData.planUnderlay && floorData.planUnderlay.visible && floorIdx === editingIdx) {

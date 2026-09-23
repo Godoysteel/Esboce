@@ -9,7 +9,7 @@ import { buildColdWaterKitchenPrototype, buildColdWaterNetworkFromFixtures, buil
 import type {
   Project, Floor, Wall, Column, Roof, Opening, OpeningKind, Varanda, Laje, Furniture, ColumnShape, RoofType,
   RidgeAxis, VarandaFrontSide, FoundationType, StoreEvent, StoreListener, ForroBoardType,
-  WallSnapshot, LinkedWallUpdate, GlazingPanel, GlazingGlassMaterial, FacadeSign, BalconyRailing, VolumeBox, VolumeBoxElementType, VolumeBoxMaterial, Stair, StairModel, PlanUnderlay, Terreno, TerrenoMuroSide, CommercialSelection,
+  WallSnapshot, LinkedWallUpdate, GlazingPanel, GlazingGlassMaterial, FacadeSign, BalconyRailing, VolumeBox, VolumeBoxElementType, VolumeBoxMaterial, Stair, StairModel, PlanUnderlay, Terreno, TerrenoMuroSide, CommercialSelection, DrywallPartition,
   HydraulicNetworkType, HydraulicNode, HydraulicSegment,
 } from './types.js';
 
@@ -194,6 +194,17 @@ export function balconyRailingsOfFloor(floor: Floor): BalconyRailing[] {
 }
 export function findBalconyRailing(id: string): BalconyRailing | null {
   const list = currentBalconyRailings();
+  for (let i = 0; i < list.length; i++) if (list[i]!.id === id) return list[i]!;
+  return null;
+}
+
+export function currentDrywallPartitions(): DrywallPartition[] {
+  const f = currentFloor();
+  if (!f.drywallPartitions) f.drywallPartitions = [];
+  return f.drywallPartitions;
+}
+export function findDrywallPartition(id: string): DrywallPartition | null {
+  const list = currentDrywallPartitions();
   for (let i = 0; i < list.length; i++) if (list[i]!.id === id) return list[i]!;
   return null;
 }
@@ -2132,6 +2143,89 @@ export const commands = {
     emit({ type: 'BalconyRailingDeleted', balconyRailingId });
   },
 
+  // Divisória de drywall livre (DEC-229) — nasce perto do envelope de
+  // paredes já colocadas, já com o ângulo da parede mais próxima
+  // (ViewportController.nearestWallAngleDeg), mesmo espírito de
+  // createBalconyRailing/createGlazingPanel.
+  createDrywallPartition(x: number, y: number, rotationDeg?: number): DrywallPartition | null {
+    pushUndoSnapshot();
+    const p = Core.createDrywallPartitionEntity(x, y, rotationDeg);
+    currentDrywallPartitions().push(p);
+    emit({ type: 'DrywallPartitionCreated', floorIndex: project.currentFloorIndex, drywallPartitionId: p.id });
+    return p;
+  },
+
+  // Arraste do corpo — SEM grid-snap nenhum (Product Owner: "essa
+  // divisória não segue o grid, o arraste é livre"), ao contrário de
+  // VolumeBox. O único snap é o de ponta contra parede, aplicado depois
+  // via ViewportController.clampDrywallPartitionTipsOutOfWalls, só ao
+  // soltar o mouse.
+  updateDrywallPartitionBodyLive(drywallPartitionId: string, x: number, y: number): void {
+    const p = findDrywallPartition(drywallPartitionId); if (!p) return;
+    p.x = x; p.y = y;
+    emit({ type: 'DrywallPartitionMoved', drywallPartitionId, live: true });
+  },
+
+  // Comprimento — alças de ponta esquerda/direita, crescimento ancorado
+  // na ponta oposta (mesmo padrão de updateBalconyRailingSizeLive).
+  updateDrywallPartitionLengthLive(drywallPartitionId: string, lengthM: number, centerDeltaM = 0): void {
+    const p = findDrywallPartition(drywallPartitionId); if (!p) return;
+    const finalLengthM = Math.max(Core.DRYWALL_PARTITION_MIN_LENGTH_M, Math.min(Core.DRYWALL_PARTITION_MAX_LENGTH_M, lengthM));
+    if (centerDeltaM) {
+      const angle = (p.rotationDeg || 0) * Math.PI / 180;
+      p.x = (p.x || 0) + Math.cos(angle) * centerDeltaM * Core.GRID;
+      p.y = (p.y || 0) + Math.sin(angle) * centerDeltaM * Core.GRID;
+    }
+    p.lengthM = finalLengthM;
+    emit({ type: 'DrywallPartitionResized', drywallPartitionId, live: true });
+  },
+
+  // Altura/elevação — alça de topo (heightM) ou de base (sillHeightM),
+  // mesmo padrão de updateBalconyRailingVerticalLive.
+  updateDrywallPartitionVerticalLive(drywallPartitionId: string, heightM: number, sillHeightM: number): void {
+    const p = findDrywallPartition(drywallPartitionId); if (!p) return;
+    p.heightM = Math.max(Core.DRYWALL_PARTITION_MIN_HEIGHT_M, Math.min(Core.DRYWALL_PARTITION_MAX_HEIGHT_M, heightM));
+    p.sillHeightM = Math.max(0, Math.min(Core.DRYWALL_PARTITION_MAX_SILL_HEIGHT_M, sillHeightM));
+    emit({ type: 'DrywallPartitionResized', drywallPartitionId, live: true });
+  },
+
+  // Botão do gizmo (±90°) — ajuste rápido, convive com a alça de giro
+  // livre (rotateDrywallPartitionTo) sem conflito.
+  rotateDrywallPartitionBy(drywallPartitionId: string, stepDeg?: number): void {
+    const p = findDrywallPartition(drywallPartitionId); if (!p) return;
+    pushUndoSnapshot();
+    const step = stepDeg || 90;
+    p.rotationDeg = (p.rotationDeg + step + 360) % 360;
+    emit({ type: 'DrywallPartitionRotated', drywallPartitionId });
+  },
+
+  // Alça de giro livre (drag-to-rotate) — ângulo ABSOLUTO, contínuo, ao
+  // contrário de TODO outro objeto livre do app (só gira em passos de
+  // 90°). Product Owner: "ela deve girar livremente no eixo vertical".
+  // "Live": a transação de undo já começou no pointerdown do gesto.
+  rotateDrywallPartitionTo(drywallPartitionId: string, rotationDeg: number): void {
+    const p = findDrywallPartition(drywallPartitionId); if (!p) return;
+    p.rotationDeg = ((rotationDeg % 360) + 360) % 360;
+    emit({ type: 'DrywallPartitionRotated', drywallPartitionId, live: true });
+  },
+
+  setDrywallPartitionType(drywallPartitionId: string, thicknessTypeId: string): void {
+    const p = findDrywallPartition(drywallPartitionId); if (!p) return;
+    pushUndoSnapshot();
+    p.thicknessTypeId = thicknessTypeId;
+    emit({ type: 'DrywallPartitionTypeChanged', drywallPartitionId });
+  },
+
+  deleteDrywallPartition(drywallPartitionId: string): void {
+    const list = currentDrywallPartitions();
+    let idx = -1;
+    for (let i = 0; i < list.length; i++) if (list[i]!.id === drywallPartitionId) { idx = i; break; }
+    if (idx < 0) return;
+    pushUndoSnapshot();
+    list.splice(idx, 1);
+    emit({ type: 'DrywallPartitionDeleted', drywallPartitionId });
+  },
+
   // Bloco de Volumetria — sempre livre nas 3 dimensões, sem ímã de
   // parede (Product Owner: "tirar o imã e fazer as alças em todas as
   // direções, para que ele possa formar sacadas, marquises, volumetria,
@@ -2590,6 +2684,7 @@ export const Store = {
   currentGlazingPanels,
   currentFacadeSigns,
   currentBalconyRailings,
+  currentDrywallPartitions,
   currentVolumeBoxes,
   currentStairs,
   currentPlanUnderlay,
@@ -2603,6 +2698,7 @@ export const Store = {
   findGlazingPanel,
   findFacadeSign,
   findBalconyRailing,
+  findDrywallPartition,
   findVolumeBox,
   findStair,
   findFurniture,

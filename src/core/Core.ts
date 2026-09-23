@@ -11,7 +11,7 @@ import type {
   Point, Wall, Column, ColumnShape, Roof, RoofType, RidgeAxis,
   Varanda, VarandaFrontSide, Laje, Opening, OpeningKind, Floor, Project,
   Room, WallFootprint, WallOBB, MTV, Interval, Furniture, GlazingPanel, FacadeSign, BalconyRailing, VolumeBox, Stair, StairModel, PlanUnderlay,
-  Terreno, TerrenoMuroSide
+  Terreno, TerrenoMuroSide, DrywallPartition
 } from './types.js';
 
 export const GRID = 20; // unidade de grade do modelo (1 unidade = 1 metro)
@@ -324,6 +324,41 @@ export function createBalconyRailingEntity(
     x, y, rotationDeg: rotationDeg || 0,
     sillHeightM: sillHeightM || 0,
   };
+}
+
+// Divisória de drywall livre (DEC-229) — ver comentário completo em
+// types.ts sobre DrywallPartition. Altura padrão = pé-direito da parede
+// (WALL_HEIGHT), igual a uma divisória de verdade nasceria.
+export const DRYWALL_PARTITION_DEFAULT_LENGTH_M = 2.0;
+export const DRYWALL_PARTITION_MIN_LENGTH_M = 0.4;
+export const DRYWALL_PARTITION_MAX_LENGTH_M = 15;
+export const DRYWALL_PARTITION_MIN_HEIGHT_M = 0.5;
+export const DRYWALL_PARTITION_MAX_HEIGHT_M = 6;
+export const DRYWALL_PARTITION_MAX_SILL_HEIGHT_M = 12;
+
+// thicknessTypeId fica AUSENTE quando não informado (em vez de um
+// default eager aqui) de propósito: Core.ts é importado como módulo
+// executável puro pela suíte de testes (sem depender de mais nenhum
+// arquivo do projeto em runtime — só `import type`, ver cabeçalho do
+// arquivo) e o catálogo de tipos vive em DrywallPartitionTypes.ts, um
+// arquivo separado. `Core.findDrywallPartitionType` (Scene3DRenderer/
+// ViewportController) já trata "ausente" como o primeiro tipo do
+// catálogo — mesmo contrato documentado em types.ts.
+export function createDrywallPartitionEntity(
+  x: number, y: number, rotationDeg?: number,
+  lengthM?: number, heightM?: number, id?: string,
+  thicknessTypeId?: string, finishAssemblyId?: string, sillHeightM?: number
+): DrywallPartition {
+  var partition: DrywallPartition = {
+    id: id || nextId('drywallpart'),
+    x, y, rotationDeg: rotationDeg || 0,
+    lengthM: lengthM != null ? lengthM : DRYWALL_PARTITION_DEFAULT_LENGTH_M,
+    heightM: heightM != null ? heightM : WALL_HEIGHT,
+    sillHeightM: sillHeightM || 0,
+    finishAssemblyId: finishAssemblyId || 'drywall-st',
+  };
+  if (thicknessTypeId) partition.thicknessTypeId = thicknessTypeId;
+  return partition;
 }
 
 // Tolerância pra detectar duas sacadas se encontrando num canto — mais
@@ -711,7 +746,7 @@ export function lajeBounds(laje: Laje): { minX: number; maxX: number; minY: numb
 }
 
 export function createFloorEntity(name: string, kind: Floor['kind'] = 'standard'): Floor {
-  return { id: nextId('floor'), name, kind, walls: [], columns: [], roofs: [], openings: [], varandas: [], lajes: [], furniture: [], glazingPanels: [], facadeSigns: [], balconyRailings: [], volumeBoxes: [], stairs: [], roomFinishes: {}, roomFinishSettings: {} };
+  return { id: nextId('floor'), name, kind, walls: [], columns: [], roofs: [], openings: [], varandas: [], lajes: [], furniture: [], glazingPanels: [], facadeSigns: [], balconyRailings: [], volumeBoxes: [], stairs: [], drywallPartitions: [], roomFinishes: {}, roomFinishSettings: {} };
 }
 
 // x,y: posição do "pé" do móvel no plano do pavimento. rotationDeg: passos
@@ -2429,6 +2464,8 @@ export const Core = {
   createBalconyRailingEntity, BALCONY_DEFAULT_WIDTH_M, BALCONY_DEFAULT_HEIGHT_M, BALCONY_DEFAULT_MODULE_TARGET_M,
   BALCONY_MIN_HEIGHT_M, BALCONY_MAX_HEIGHT_M, BALCONY_MAX_SILL_HEIGHT_M,
   computeBalconyRailingJoints, RAILING_JOIN_TOL_MODEL,
+  createDrywallPartitionEntity, DRYWALL_PARTITION_DEFAULT_LENGTH_M, DRYWALL_PARTITION_MIN_LENGTH_M, DRYWALL_PARTITION_MAX_LENGTH_M,
+  DRYWALL_PARTITION_MIN_HEIGHT_M, DRYWALL_PARTITION_MAX_HEIGHT_M, DRYWALL_PARTITION_MAX_SILL_HEIGHT_M,
   createVolumeBoxEntity, VOLUME_BOX_DEFAULT_WIDTH_M, VOLUME_BOX_DEFAULT_HEIGHT_M, VOLUME_BOX_DEFAULT_DEPTH_M, VOLUME_BOX_DEFAULT_COLOR,
   VOLUME_BOX_MIN_SIZE_M, VOLUME_BOX_MAX_SIZE_M, VOLUME_BOX_MIN_HEIGHT_M, VOLUME_BOX_MAX_HEIGHT_M, VOLUME_BOX_MAX_SILL_HEIGHT_M,
   volumeBoxCornerLocalPositions, volumeBoxFaces, volumeBoxSurfaceAreaM2, volumeBoxVolumeM3,

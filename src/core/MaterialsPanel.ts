@@ -1223,6 +1223,21 @@ function drywallPartitionQuantities(project: Project): SteelFrameQuantityLine[] 
         add(insulationId, product?.name || 'Isolamento térmico e acústico', Math.round(faceArea * 1.1 * 100) / 100, 'm²');
       }
     });
+    // Divisória de drywall livre (DEC-229) — objeto independente (não é
+    // Wall), mas o mesmo "preço uniforme por enquanto" da divisória de
+    // parede acima (Product Owner confirmou): soma na MESMA agregação
+    // (structuralArea/totals), sem duplicar add()/quantityWithWaste().
+    // finishAssemblyId é único pras duas faces (sem faceA/faceB próprio).
+    (floor.drywallPartitions || []).forEach((partition) => {
+      const faceAreaM2 = partition.lengthM * partition.heightM;
+      structuralArea += faceAreaM2 * 2;
+      const assembly = STEEL_FRAME_FACE_ASSEMBLIES.find((item) => item.id === (partition.finishAssemblyId || 'drywall-st') && item.use === 'internal');
+      [1, 2].forEach(() => {
+        assembly?.layers.forEach((layer) => {
+          add(layer.id, layer.label, quantityWithWaste(faceAreaM2, layer), layer.unit === 'unit' ? 'un' : layer.unit === 'm2' ? 'm²' : layer.unit);
+        });
+      });
+    });
   });
   if (structuralArea > 0) {
     add('drywall-partition-structure', 'Guias e montantes leves (parâmetro preliminar ' + DRYWALL_PARTITION_STRUCTURE_KG_PER_M2 + ' kg/m² + 5% de perda)', Math.round(structuralArea * DRYWALL_PARTITION_STRUCTURE_KG_PER_M2 * 1.05 * 100) / 100, 'kg');

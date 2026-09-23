@@ -359,6 +359,8 @@
   .shape-panel button.st.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
   .shape-panel button.ft { margin: 0; padding: 0; width: 30px; height: 30px; font-size: 12px; font-weight: 700; border-radius: 6px; line-height: 1; }
   .shape-panel button.ft.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
+  .shape-panel button.dwt { margin: 0; padding: 0; width: 34px; height: 30px; font-size: 11px; font-weight: 700; border-radius: 6px; line-height: 1; }
+  .shape-panel button.dwt.active { background: #534AB7; border-color: #534AB7; color: #FFFFFF; }
   .finish-panel { grid-template-columns: repeat(4, 26px); }
   .finish-panel button.fn { margin: 0; padding: 0; width: 26px; height: 26px; border-radius: 50%; border: 2px solid #FFFFFF; box-shadow: 0 0 0 1px #D3D1C7; cursor: pointer; }
   .finish-panel button.fn.active { box-shadow: 0 0 0 2px #534AB7; }
@@ -1939,12 +1941,15 @@
       <div><div class="cp-title">Drywall</div><div class="cp-desc">Divisória e forro</div></div>
       <button class="cp-close" data-close-panel title="Fechar">×</button>
     </div>
-    <div class="ts-group-label">Divisória</div>
+    <div class="ts-group-label">Divisória livre</div>
     <div class="cp-group-grid">
-      <button class="ts-btn tool-btn" id="toolDrywallDraw" data-tool="drywallDraw" title="Nova divisória em drywall — clique e arraste dentro de um cômodo fechado pra criar uma parede nova, já em drywall">
-        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6v28" stroke-dasharray="3 3"/><path d="M8 20h24"/></svg>
-        <span>Nova divisória</span>
+      <button class="ts-btn" id="addDrywallPartitionBtn" data-room-preset="drywall-partition" title="Divisória de drywall — clique pra criar uma divisória solta, paralela à parede mais próxima; arraste pra posicionar, as alças das pontas/topo/base pra escalonar, e a alça de giro pra rotacionar livremente">
+        <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="8" width="26" height="24" rx="1"/><path d="M13 8v24M20 8v24M27 8v24"/></svg>
+        <span>Divisória livre</span>
       </button>
+    </div>
+    <div class="ts-group-label">Marcar parede</div>
+    <div class="cp-group-grid">
       <button class="ts-btn tool-btn" id="toolDrywallPartition" data-tool="drywallPartition" title="Marcar parede existente — clique numa parede interna (cômodo dos dois lados) pra alternar drywall">
         <svg class="ts-icon" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="8" width="26" height="24" rx="1"/><path d="M13 8v24M20 8v24M27 8v24"/></svg>
         <span>Marcar parede</span>
@@ -2174,6 +2179,12 @@
     <button class="ft" data-forrotipo="RU" title="Resistente à umidade">RU</button>
     <button class="ft" data-forrotipo="RF" title="Resistente ao fogo">RF</button>
     <button class="ft" data-forrotipo="cimenticia" title="Cimentícia">Ci</button>
+  </div>
+  <div id="drywallPartitionTypePanel" class="shape-panel">
+    <button class="dwt" data-drywalltype="guide-48-simple" title="Simples 73mm (guia 48mm)">73</button>
+    <button class="dwt" data-drywalltype="guide-70-simple" title="Reforçada 95mm (guia 70mm)">95</button>
+    <button class="dwt" data-drywalltype="guide-90-simple" title="Reforçada 115mm (guia 90mm)">115</button>
+    <button class="dwt" data-drywalltype="guide-70-double" title="Dupla acústica 145mm (guia 70mm, dupla)">145</button>
   </div>
   <div id="planUnderlayGizmo" class="gizmo">
     <button class="gz" data-action="rotateCcw" title="Girar anti-horário">↺</button>

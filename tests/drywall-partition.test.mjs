@@ -150,14 +150,14 @@ test('botão de drywall existe no HTML como tool-btn genérico (data-tool="drywa
 // nova (já nascendo em drywall) — escopo mais estreito que o "Desenhar"
 // antigo (só faz sentido dentro de um cômodo, não desenha parede solta
 // em qualquer lugar).
-test('categoria "Drywall" existe na barra, com painel próprio reunindo a divisória nova, o botão de marcar parede existente e o Forro de Drywall (saíram de Paredes/Cobertura)', async () => {
+test('categoria "Drywall" existe na barra, com painel próprio reunindo a divisória livre, o botão de marcar parede existente e o Forro de Drywall (saíram de Paredes/Cobertura)', async () => {
   const htmlSource = await readFile(new URL('../index.html', import.meta.url), 'utf8');
   assert.match(htmlSource, /data-category="drywall"/);
   assert.match(htmlSource, /<div class="category-panel" id="panelDrywall" data-panel="drywall">/);
   const panelStart = htmlSource.indexOf('id="panelDrywall"');
   const panelEnd = htmlSource.indexOf('id="panelInstalacoes"', panelStart);
   const panelBody = htmlSource.slice(panelStart, panelEnd);
-  assert.match(panelBody, /id="toolDrywallDraw" data-tool="drywallDraw"/);
+  assert.match(panelBody, /id="addDrywallPartitionBtn" data-room-preset="drywall-partition"/);
   assert.match(panelBody, /id="toolDrywallPartition" data-tool="drywallPartition"/);
   assert.match(panelBody, /id="generateForroDrywallBtn"/);
   // Não pode sobrar duplicado nos painéis antigos.
@@ -169,25 +169,16 @@ test('categoria "Drywall" existe na barra, com painel próprio reunindo a divis�
   assert.doesNotMatch(htmlSource.slice(coberturaStart, coberturaEnd), /id="generateForroDrywallBtn"/);
 });
 
-test('ferramenta "Nova divisória" (drywallDraw): desenha uma parede nova (2 cliques, mesmo mecanismo do cômodo), conecta nas paredes existentes e já nasce marcada em drywall', async () => {
+// DEC-229 — a peça "Nova divisória" da DEC-228 (parede de verdade, via
+// desenho de 2 cliques) foi rejeitada pelo Product Owner depois de testar
+// em produção: a divisória de drywall precisa ser um objeto independente,
+// que não mexe em Wall/Core.detectRooms. Ver tests/drywall-partition-
+// standalone.test.mjs pra a nova implementação.
+test('a ferramenta "Nova divisória" (drywallDraw, parede de verdade) da DEC-228 foi removida — substituída pelo objeto livre DrywallPartition (DEC-229)', async () => {
   const vpSource = await readFile(new URL('../src/core/ViewportController.ts', import.meta.url), 'utf8');
-  assert.match(vpSource, /drywallDraw: 'Clique pra marcar o início da divisória/);
-  assert.match(vpSource, /currentTool !== 'room' && currentTool !== 'telhado' && currentTool !== 'drywallDraw'/);
-  const start = vpSource.indexOf('} else if (currentTool === \'drywallDraw\') {');
-  assert.ok(start !== -1, 'branch de drywallDraw não encontrado em finalizeDraw');
-  const end = vpSource.indexOf('\n    }', start);
-  const body = vpSource.slice(start, end);
-  assert.match(body, /var newDrywallWall = Store\.commands\.createWall\(p\.x1, p\.y1, p\.x2, p\.y2\);/);
-  assert.match(body, /Store\.commands\.splitWallsAtTJunctions\(\);/);
-  assert.match(body, /Store\.commands\.setWallPartitionSystem\(newDrywallWall\.id, \{/);
-  assert.match(body, /partitionSystem: 'drywall', faceAAssemblyId: 'drywall-st', faceBAssemblyId: 'drywall-st'/);
-});
-
-test('prévia da ferramenta "Nova divisória" (drywallDraw) existe em renderDrawPreview — linha-guia simples, mesmo espírito da antiga prévia de "Desenhar"', async () => {
   const rendererSource = await readFile(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
-  const start = rendererSource.indexOf("} else if (p.tool === 'drywallDraw') {");
-  assert.ok(start !== -1);
-  const end = rendererSource.indexOf('\n    }', start);
-  const body = rendererSource.slice(start, end);
-  assert.match(body, /new THREE\.Line\(dGeo, new THREE\.LineBasicMaterial\(\{ color: color \}\)\)/);
+  const htmlSource = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+  assert.doesNotMatch(vpSource, /drywallDraw/);
+  assert.doesNotMatch(rendererSource, /drywallDraw/);
+  assert.doesNotMatch(htmlSource, /drywallDraw/);
 });

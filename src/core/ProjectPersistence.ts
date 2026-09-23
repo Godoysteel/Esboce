@@ -1,5 +1,5 @@
 import type {
-  Column, Floor, Furniture, GlazingPanel, FacadeSign, BalconyRailing, VolumeBox, VolumeBoxElementType, VolumeBoxMaterial, Stair, PlanUnderlay, HydraulicNode, HydraulicSegment, Laje, Opening, Project, ProjectLayers, Roof, Terreno, Varanda, Wall, ForroBoardType, CommercialSelection,
+  Column, Floor, Furniture, GlazingPanel, FacadeSign, BalconyRailing, DrywallPartition, VolumeBox, VolumeBoxElementType, VolumeBoxMaterial, Stair, PlanUnderlay, HydraulicNode, HydraulicSegment, Laje, Opening, Project, ProjectLayers, Roof, Terreno, Varanda, Wall, ForroBoardType, CommercialSelection,
 } from './types.js';
 
 // v6: adiciona `project.terreno` (opcional) — tamanho do lote e muros de
@@ -59,7 +59,12 @@ import type {
 // telhado encontrada para não obrigar o usuário a configurar tudo de novo.
 // v20: adiciona `Floor.facadeSigns`, letreiros em letras-caixa vinculados
 // a paredes. Projetos anteriores abrem com a lista vazia.
-export const CURRENT_PROJECT_SCHEMA_VERSION = 20;
+// v21: adiciona `Floor.drywallPartitions` (Divisória de drywall livre,
+// categoria Drywall, DEC-229) — objeto 100% independente (nunca uma
+// Wall/Core.detectRooms), substitui a tentativa da DEC-228 (parede de
+// verdade via desenho de 2 cliques), rejeitada pelo Product Owner depois
+// de testar em produção. Projetos anteriores abrem com a lista vazia.
+export const CURRENT_PROJECT_SCHEMA_VERSION = 21;
 
 export interface StoredProjectDocument {
   schemaVersion: number;
@@ -416,6 +421,27 @@ function parseBalconyRailing(value: unknown, path: string): BalconyRailing {
   return railing;
 }
 
+function parseDrywallPartition(value: unknown, path: string): DrywallPartition {
+  const v = record(value, path);
+  const partition: DrywallPartition = {
+    id: string(v.id, `${path}.id`),
+    x: number(v.x, `${path}.x`),
+    y: number(v.y, `${path}.y`),
+    // Contínuo (não múltiplo de 90°) — diferente de todo outro objeto
+    // livre do app, a Divisória gira livre no eixo vertical.
+    rotationDeg: number(v.rotationDeg, `${path}.rotationDeg`, 0),
+    lengthM: number(v.lengthM, `${path}.lengthM`),
+    heightM: number(v.heightM, `${path}.heightM`),
+  };
+  const sillHeightM = optionalNumber(v.sillHeightM, `${path}.sillHeightM`);
+  if (sillHeightM !== undefined) partition.sillHeightM = sillHeightM;
+  const thicknessTypeId = optionalString(v.thicknessTypeId, `${path}.thicknessTypeId`);
+  if (thicknessTypeId !== undefined) partition.thicknessTypeId = thicknessTypeId;
+  const finishAssemblyId = optionalString(v.finishAssemblyId, `${path}.finishAssemblyId`);
+  if (finishAssemblyId !== undefined) partition.finishAssemblyId = finishAssemblyId;
+  return partition;
+}
+
 function parseVolumeBox(value: unknown, path: string): VolumeBox {
   const v = record(value, path);
   const box: VolumeBox = {
@@ -595,6 +621,7 @@ function parseFloor(value: unknown, path: string): Floor {
     glazingPanels: array(v.glazingPanels, `${path}.glazingPanels`, true).map((item, i) => parseGlazingPanel(item, `${path}.glazingPanels[${i}]`)),
     facadeSigns: array(v.facadeSigns, `${path}.facadeSigns`, true).map((item, i) => parseFacadeSign(item, `${path}.facadeSigns[${i}]`)),
     balconyRailings: array(v.balconyRailings, `${path}.balconyRailings`, true).map((item, i) => parseBalconyRailing(item, `${path}.balconyRailings[${i}]`)),
+    drywallPartitions: array(v.drywallPartitions, `${path}.drywallPartitions`, true).map((item, i) => parseDrywallPartition(item, `${path}.drywallPartitions[${i}]`)),
     volumeBoxes: array(v.volumeBoxes, `${path}.volumeBoxes`, true).map((item, i) => parseVolumeBox(item, `${path}.volumeBoxes[${i}]`)),
     stairs: array(v.stairs, `${path}.stairs`, true).map((item, i) => parseStair(item, `${path}.stairs[${i}]`)),
     roomFinishes: stringMap(v.roomFinishes, `${path}.roomFinishes`),
@@ -621,7 +648,7 @@ function parseFloor(value: unknown, path: string): Floor {
   (floor.facadeSigns || []).forEach((sign, index) => {
     if (!wallIds.has(sign.wallId)) fail(`${path}.facadeSigns[${index}].wallId`, 'parede hospedeira não existe');
   });
-  const ids = [...floor.walls, ...floor.columns, ...floor.roofs, ...floor.openings, ...floor.varandas, ...floor.lajes, ...floor.furniture, ...floor.glazingPanels, ...(floor.facadeSigns || []), ...floor.balconyRailings, ...floor.volumeBoxes].map((item) => item.id);
+  const ids = [...floor.walls, ...floor.columns, ...floor.roofs, ...floor.openings, ...floor.varandas, ...floor.lajes, ...floor.furniture, ...floor.glazingPanels, ...(floor.facadeSigns || []), ...floor.balconyRailings, ...floor.drywallPartitions, ...floor.volumeBoxes].map((item) => item.id);
   if (new Set(ids).size !== ids.length) fail(path, 'há identificadores de entidades duplicados');
   return floor;
 }

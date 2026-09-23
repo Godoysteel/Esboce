@@ -22,6 +22,7 @@ import { NavGizmo } from './NavGizmo.js';
 import { resolveDragAction, type NavigationMode } from './NavigationSchemes.js';
 import { touchCameraAnchor, updateTouchCamera, type TouchCameraAnchor } from './TouchCamera.js';
 import { DEFAULT_GLAZING_GLASS_MATERIAL } from './Glazing.js';
+import { DRYWALL_PARTITION_DEFAULT_TYPE_ID } from './DrywallPartitionTypes.js';
 import { hydraulicFixtureTemplate, hydraulicFixtureVisualPosition, hydraulicNodeWallOffsetsMeters, hydraulicPositionFromWallOffset, resolveHydraulicFixturePosition } from './Hydraulics.js';
 import type { CommercialSelection } from './types.js';
 import {
@@ -65,7 +66,7 @@ import {
   var selectedPaintRoomKey: any = null;
   var floorFinishScale = 1;
   var floorFinishRotation = 0;
-  var selectedWallId: any = null, selectedColumnId: any = null, selectedRoofId: any = null, selectedOpeningId: any = null, selectedVarandaId: any = null, selectedLajeId: any = null, selectedFurnitureId: any = null, selectedGlazingPanelId: any = null, selectedBalconyRailingId: any = null, selectedVolumeBoxId: any = null, selectedStairId: any = null, selectedForroRoomKey: any = null, selectedHydraulicNodeId: any = null;
+  var selectedWallId: any = null, selectedColumnId: any = null, selectedRoofId: any = null, selectedOpeningId: any = null, selectedVarandaId: any = null, selectedLajeId: any = null, selectedFurnitureId: any = null, selectedGlazingPanelId: any = null, selectedBalconyRailingId: any = null, selectedVolumeBoxId: any = null, selectedStairId: any = null, selectedForroRoomKey: any = null, selectedHydraulicNodeId: any = null, selectedDrywallPartitionId: any = null;
   // Modo Edição do Cubo mágico (Product Owner: "tem que haver um modo
   // edição desse cubo, como do blender, de forma que as deformações
   // são feitas somente no modo edição") — guarda o id do bloco cujas
@@ -125,6 +126,7 @@ import {
   var volumeBoxDragMesh: any = null;
   var stairDragMesh: any = null;
   var balconyRailingDragMesh: any = null;
+  var drywallPartitionDragMesh: any = null;
   var glazingResizePreview: any = null;
   var glazingResizeHiddenObject: any = null;
   var balconyResizePreview: any = null;
@@ -199,7 +201,7 @@ import {
   // 'facil' é o padrão de fábrica quando não há nada salvo ainda.
   var navigationMode: NavigationMode = 'facil';
 
-  var gizmoEl: any, gzSwapBtnEl: any, openingGizmoEl: any, roomGizmoEl: any, volumeBoxGizmoEl: any, stairGizmoEl: any, stairTypePanelEl: any, forroTypePanelEl: any, planUnderlayGizmoEl: any, columnShapePanelEl: any, roofTypePanelEl: any, roofElevationControlEl: any, roofElevationInputEl: any, roofElevationValueEl: any, roofPitchDragCotaEl: any, varandaTypePanelEl: any, varandaWidthInputEl: any, varandaHeightInputEl: any, varandaPitchInputEl: any, paintPickerPanelEl: any, openingPickerPanelEl: any, volumeBoxMaterialPickerPanelEl: any, objectPanelEl: any, objectPanelTitleEl: any, objectPanelBodyEl: any, hintEl: any, layersContextMenuEl: any, hydraulicWallPromptEl: any, hydraulicWallElevationPanelEl: any, hydraulicWallElevationTitleEl: any, hydraulicWallElevationSvgEl: any, hydraulicRouteDrawBarEl: any, hydraulicRouteDrawCountEl: any;
+  var gizmoEl: any, gzSwapBtnEl: any, openingGizmoEl: any, roomGizmoEl: any, volumeBoxGizmoEl: any, stairGizmoEl: any, stairTypePanelEl: any, forroTypePanelEl: any, planUnderlayGizmoEl: any, columnShapePanelEl: any, roofTypePanelEl: any, roofElevationControlEl: any, roofElevationInputEl: any, roofElevationValueEl: any, roofPitchDragCotaEl: any, varandaTypePanelEl: any, varandaWidthInputEl: any, varandaHeightInputEl: any, varandaPitchInputEl: any, paintPickerPanelEl: any, openingPickerPanelEl: any, volumeBoxMaterialPickerPanelEl: any, objectPanelEl: any, objectPanelTitleEl: any, objectPanelBodyEl: any, hintEl: any, layersContextMenuEl: any, hydraulicWallPromptEl: any, hydraulicWallElevationPanelEl: any, hydraulicWallElevationTitleEl: any, hydraulicWallElevationSvgEl: any, hydraulicRouteDrawBarEl: any, hydraulicRouteDrawCountEl: any, drywallPartitionTypePanelEl: any;
   // Estado do desenho de percurso guiado (H2): fixtureId sendo roteada e os
   // pontos-guia já clicados (só plano — a queda vertical final é
   // automática, ver Hydraulics.buildGuidedColdWaterHeaderRoute). null =
@@ -253,7 +255,6 @@ import {
     arco: 'Clique sobre uma parede pra abrir um vão ali — sacada, garagem, conceito aberto. Selecione um arco colocado pra arrastar os lados ou o topo.',
     varanda: 'Clique no chão pra colocar uma varanda. Selecione uma já colocada, clique direito nela pra girar qual lado é a frente ou excluir.',
     demolish: 'Clique numa parede pra quebrar ela — some da vista e do orçamento, mas o cômodo continua fechado (o piso não desaparece).',
-    drywallDraw: 'Clique pra marcar o início da divisória, dentro de um cômodo fechado. Mova o mouse e clique de novo pra confirmar — a parede já nasce em drywall. Esc cancela.',
     drywallPartition: 'Clique numa parede INTERNA (cômodo dos dois lados) pra marcar como divisória em drywall — clique de novo na mesma parede pra remover.',
     paintBucket: 'Material carregado do catálogo. Clique diretamente na face que deseja revestir.',
     terreno: 'Clique num lado destacado do retângulo pra adicionar ou remover o muro daquele lado.',
@@ -353,6 +354,11 @@ import {
   function findBalconyRailingSceneObject(id: string) {
     return scene.children.find(function (object: any) {
       return object.userData && object.userData.balconyRailingId === id;
+    }) || null;
+  }
+  function findDrywallPartitionSceneObject(id: string) {
+    return scene.children.find(function (object: any) {
+      return object.userData && object.userData.drywallPartitionId === id;
     }) || null;
   }
 
@@ -1066,17 +1072,17 @@ import {
     if (!mesh) return false;
     var editingIdx = Store.getProject().currentFloorIndex;
     if (mesh.userData.floorIndex !== editingIdx) return false;
-    return mesh.userData.category === 'paredesTerreo' || mesh.userData.category === 'paredesSuperiores' || mesh.userData.category === 'colunas' || mesh.userData.category === 'telhado' || mesh.userData.category === 'aberturas' || mesh.userData.category === 'varanda' || mesh.userData.category === 'furniture' || mesh.userData.category === 'glazingPanel' || mesh.userData.category === 'balconyRailing' || mesh.userData.category === 'volumeBox' || mesh.userData.category === 'stair' || mesh.userData.category === 'forroDrywall' || !!mesh.userData.lajeId || !!mesh.userData.hydraulicEditable;
+    return mesh.userData.category === 'paredesTerreo' || mesh.userData.category === 'paredesSuperiores' || mesh.userData.category === 'colunas' || mesh.userData.category === 'telhado' || mesh.userData.category === 'aberturas' || mesh.userData.category === 'varanda' || mesh.userData.category === 'furniture' || mesh.userData.category === 'glazingPanel' || mesh.userData.category === 'balconyRailing' || mesh.userData.category === 'volumeBox' || mesh.userData.category === 'stair' || mesh.userData.category === 'drywallPartition' || mesh.userData.category === 'forroDrywall' || !!mesh.userData.lajeId || !!mesh.userData.hydraulicEditable;
   }
 
   function select(wallId: any) {
-    selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedWallId = wallId; gizmoMenuOpen = false;
+    selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedDrywallPartitionId = null; selectedWallId = wallId; gizmoMenuOpen = false;
     heightAdjustArmedWallId = null;
     if (DEBUG_COLOR_MODE && wallId) hintEl.textContent = 'Debug — parede selecionada: ' + wallId;
     render();
   }
-  function selectColumn(columnId: any) { selectedWallId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedColumnId = columnId; gizmoMenuOpen = false; render(); }
-  function selectRoof(roofId: any) { selectedWallId = null; selectedColumnId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedRoofId = roofId; gizmoMenuOpen = true; render(); var selectedRoof = Store.findRoof(roofId); if (selectedRoof && (selectedRoof.steppedWallVolume || selectedRoof.steppedLowerRoofId)) hintEl.textContent = 'Telhado superior independente: suas alças controlam somente ele e sua parede de extensão.'; }
+  function selectColumn(columnId: any) { selectedWallId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedDrywallPartitionId = null; selectedColumnId = columnId; gizmoMenuOpen = false; render(); }
+  function selectRoof(roofId: any) { selectedWallId = null; selectedColumnId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedDrywallPartitionId = null; selectedRoofId = roofId; gizmoMenuOpen = true; render(); var selectedRoof = Store.findRoof(roofId); if (selectedRoof && (selectedRoof.steppedWallVolume || selectedRoof.steppedLowerRoofId)) hintEl.textContent = 'Telhado superior independente: suas alças controlam somente ele e sua parede de extensão.'; }
 
   function connectedRoofIds(startId: any) {
     var selected = Store.findRoof(startId);
@@ -1088,44 +1094,48 @@ import {
 
   // "Agarra" o cômodo inteiro (clique único numa parede que fecha só um
   // cômodo) — sem seleção de parede individual, sem gizmo de parede.
-  function selectRoomGroup(wallIds: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedRoomWallIds = wallIds; gizmoMenuOpen = false; render(); }
+  function selectRoomGroup(wallIds: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedDrywallPartitionId = null; selectedRoomWallIds = wallIds; gizmoMenuOpen = false; render(); }
   // Porta/janela: gizmo próprio (deslizar/excluir), sempre visível assim
   // que seleciona — diferente de parede/coluna/telhado, não precisa de
   // um segundo clique (clique direito) pra "abrir o menu", porque não
   // existe aqui a ambiguidade de "agarrar o cômodo inteiro" que motivou
   // aquele gesto extra nos outros tipos.
-  function selectOpening(openingId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedOpeningId = openingId; gizmoMenuOpen = false; render(); }
+  function selectOpening(openingId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedDrywallPartitionId = null; selectedOpeningId = openingId; gizmoMenuOpen = false; render(); }
   // Varanda: mesmo padrão do telhado (clique seleciona, clique direito
   // de novo abre o menu com girar/excluir).
-  function selectVaranda(varandaId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedVarandaId = varandaId; gizmoMenuOpen = true; render(); }
+  function selectVaranda(varandaId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedDrywallPartitionId = null; selectedVarandaId = varandaId; gizmoMenuOpen = true; render(); }
   // Laje: mesmo padrão da varanda — clique seleciona, arraste livre nas
   // bordas (nunca trava em contorno de parede — ver DEC-35).
 
-  function selectGlazingPanel(glazingPanelId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedGlazingPanelId = glazingPanelId; gizmoMenuOpen = false; openObjectPanel('glazingMaterial'); render(); }
+  function selectGlazingPanel(glazingPanelId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedDrywallPartitionId = null; selectedGlazingPanelId = glazingPanelId; gizmoMenuOpen = false; openObjectPanel('glazingMaterial'); render(); }
   // Sacada de vidro: mesmo padrão do móvel — reaproveita o gizmo
   // genérico (girar/excluir), sem painel de material próprio nesta v1.
-  function selectBalconyRailing(balconyRailingId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedBalconyRailingId = balconyRailingId; gizmoMenuOpen = false; render(); }
-  function selectVolumeBox(volumeBoxId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedVolumeBoxId = volumeBoxId; volumeBoxEditModeId = null; gizmoMenuOpen = false; render(); }
+  function selectBalconyRailing(balconyRailingId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedDrywallPartitionId = null; selectedBalconyRailingId = balconyRailingId; gizmoMenuOpen = false; render(); }
+  function selectVolumeBox(volumeBoxId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedDrywallPartitionId = null; selectedVolumeBoxId = volumeBoxId; volumeBoxEditModeId = null; gizmoMenuOpen = false; render(); }
   export function toggleVolumeBoxEditMode(volumeBoxId: any) { volumeBoxEditModeId = volumeBoxEditModeId === volumeBoxId ? null : volumeBoxId; render(); }
-  function selectStair(stairId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedStairId = stairId; gizmoMenuOpen = false; render(); }
+  function selectStair(stairId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedDrywallPartitionId = null; selectedStairId = stairId; gizmoMenuOpen = false; render(); }
   // Forro de drywall: sem entidade/id próprio (derivado do cômodo pelo
   // botão "Gerar Forro", ver Scene3DRenderer) — a chave é o roomKey
   // gravado em userData pelas peças da malha (placa/perfis/pendurais/
   // tabica), mesmo espírito de selectRoomGroup, mas com painel de tipo
   // de placa em vez de gizmo de girar/excluir.
-  function selectForro(roomKey: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedPlanUnderlay = false; selectedForroRoomKey = roomKey; gizmoMenuOpen = false; render(); }
+  function selectForro(roomKey: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedPlanUnderlay = false; selectedDrywallPartitionId = null; selectedForroRoomKey = roomKey; gizmoMenuOpen = false; render(); }
   // Planta baixa importada: sem ID (é singular por pavimento), só um
   // flag — mesmo padrão de gizmo dedicado do Bloco de Volumetria.
-  function selectPlanUnderlay() { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = true; gizmoMenuOpen = false; render(); }
+  function selectPlanUnderlay() { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedDrywallPartitionId = null; selectedPlanUnderlay = true; gizmoMenuOpen = false; render(); }
+  // Divisória de drywall livre (DEC-229): mesmo padrão da Sacada de
+  // vidro — reaproveita o gizmo genérico (girar em passos de 90°/
+  // excluir), mais o painel de tipo próprio (ver positionGizmoAndShapePanel).
+  function selectDrywallPartition(drywallPartitionId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedDrywallPartitionId = drywallPartitionId; gizmoMenuOpen = false; render(); }
   // Móvel: mesmo padrão da coluna (clique seleciona e já mostra o gizmo
   // completo — girar/duplicar/excluir — sem precisar de segundo clique).
-  function selectFurniture(furnitureId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedFurnitureId = furnitureId; gizmoMenuOpen = false; render(); }
-  function selectHydraulicNode(hydraulicNodeId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedHydraulicNodeId = hydraulicNodeId; gizmoMenuOpen = true; render(); }
+  function selectFurniture(furnitureId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedDrywallPartitionId = null; selectedFurnitureId = furnitureId; gizmoMenuOpen = false; render(); }
+  function selectHydraulicNode(hydraulicNodeId: any) { selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedDrywallPartitionId = null; selectedHydraulicNodeId = hydraulicNodeId; gizmoMenuOpen = true; render(); }
   function deselect() {
     commitRoomGroupIfNeeded(); // "clicou fora do objeto" — decide agora se funde
     var leavingRoof = selectedRoofId ? Store.findRoof(selectedRoofId) : null;
     if (leavingRoof && leavingRoof.atticMode === 'preview') pendingGenerateRoofId = leavingRoof.id;
-    selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedHydraulicNodeId = null;
+    selectedWallId = null; selectedColumnId = null; selectedRoofId = null; selectedRoomWallIds = null; resizeWallId = null; selectedOpeningId = null; selectedVarandaId = null; selectedLajeId = null; selectedFurnitureId = null; selectedGlazingPanelId = null; selectedBalconyRailingId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedDrywallPartitionId = null; selectedHydraulicNodeId = null;
     volumeBoxEditModeId = null;
     heightAdjustArmedWallId = null;
     if (generateAtticBtnEl) generateAtticBtnEl.classList.toggle('visible', !!pendingGenerateRoofId);
@@ -1387,7 +1397,7 @@ import {
         positionFloatingPanel(roomGizmoEl, hydraulicWorld.x, hydraulicTop, hydraulicWorld.z, 0);
         roomGizmoEl.classList.add('visible');
       }
-      gizmoEl.classList.remove('visible'); openingGizmoEl.classList.remove('visible'); columnShapePanelEl.classList.remove('visible'); roofTypePanelEl.classList.remove('visible'); volumeBoxGizmoEl?.classList.remove('visible'); stairGizmoEl?.classList.remove('visible'); stairTypePanelEl?.classList.remove('visible'); forroTypePanelEl?.classList.remove('visible'); planUnderlayGizmoEl?.classList.remove('visible');
+      gizmoEl.classList.remove('visible'); openingGizmoEl.classList.remove('visible'); columnShapePanelEl.classList.remove('visible'); roofTypePanelEl.classList.remove('visible'); volumeBoxGizmoEl?.classList.remove('visible'); stairGizmoEl?.classList.remove('visible'); stairTypePanelEl?.classList.remove('visible'); forroTypePanelEl?.classList.remove('visible'); planUnderlayGizmoEl?.classList.remove('visible'); drywallPartitionTypePanelEl?.classList.remove('visible');
       return;
     }
     var inactiveHydraulicFlipButton = roomGizmoEl.querySelector('[data-action="flipHydraulicFace"]');
@@ -1413,7 +1423,7 @@ import {
         positionFloatingPanel(openingGizmoEl, wpO.x, topY, wpO.z, 0);
         openingGizmoEl.classList.add('visible');
       }
-      gizmoEl.classList.remove('visible'); columnShapePanelEl.classList.remove('visible'); roofTypePanelEl.classList.remove('visible'); volumeBoxGizmoEl?.classList.remove('visible'); stairGizmoEl?.classList.remove('visible'); stairTypePanelEl?.classList.remove('visible'); forroTypePanelEl?.classList.remove('visible'); planUnderlayGizmoEl?.classList.remove('visible');
+      gizmoEl.classList.remove('visible'); columnShapePanelEl.classList.remove('visible'); roofTypePanelEl.classList.remove('visible'); volumeBoxGizmoEl?.classList.remove('visible'); stairGizmoEl?.classList.remove('visible'); stairTypePanelEl?.classList.remove('visible'); forroTypePanelEl?.classList.remove('visible'); planUnderlayGizmoEl?.classList.remove('visible'); drywallPartitionTypePanelEl?.classList.remove('visible');
       return;
     }
     openingGizmoEl.classList.remove('visible');
@@ -1435,7 +1445,7 @@ import {
         positionFloatingPanel(roomGizmoEl, wpG.x, topYG, wpG.z, 0);
         roomGizmoEl.classList.add('visible');
       }
-      gizmoEl.classList.remove('visible'); columnShapePanelEl.classList.remove('visible'); roofTypePanelEl.classList.remove('visible'); volumeBoxGizmoEl?.classList.remove('visible'); stairGizmoEl?.classList.remove('visible'); stairTypePanelEl?.classList.remove('visible'); forroTypePanelEl?.classList.remove('visible'); planUnderlayGizmoEl?.classList.remove('visible');
+      gizmoEl.classList.remove('visible'); columnShapePanelEl.classList.remove('visible'); roofTypePanelEl.classList.remove('visible'); volumeBoxGizmoEl?.classList.remove('visible'); stairGizmoEl?.classList.remove('visible'); stairTypePanelEl?.classList.remove('visible'); forroTypePanelEl?.classList.remove('visible'); planUnderlayGizmoEl?.classList.remove('visible'); drywallPartitionTypePanelEl?.classList.remove('visible');
       return;
     }
     roomGizmoEl.classList.remove('visible');
@@ -1446,7 +1456,7 @@ import {
     if (selectedVolumeBoxId) {
       var vbSel = Store.findVolumeBox(selectedVolumeBoxId);
       if (!vbSel) {
-        selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false;
+        selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedDrywallPartitionId = null;
         volumeBoxGizmoEl?.classList.remove('visible');
        
       } else {
@@ -1480,7 +1490,7 @@ import {
     if (selectedStairId) {
       var stSelG = Store.findStair(selectedStairId);
       if (!stSelG) {
-        selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false;
+        selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedDrywallPartitionId = null;
         stairGizmoEl?.classList.remove('visible'); stairTypePanelEl?.classList.remove('visible');
       } else {
         var wpSt = modelToWorld(stSelG.x || 0, stSelG.y || 0);
@@ -1667,7 +1677,7 @@ import {
     // genérico reaproveitado, sem painel extra próprio).
     if (selectedFurnitureId) {
       var fItem = Store.findFurniture(selectedFurnitureId);
-      if (!fItem) { selectedFurnitureId = null; selectedGlazingPanelId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; gizmoEl.classList.remove('visible'); return; }
+      if (!fItem) { selectedFurnitureId = null; selectedGlazingPanelId = null; selectedVolumeBoxId = null; selectedStairId = null; selectedForroRoomKey = null; selectedPlanUnderlay = false; selectedDrywallPartitionId = null; gizmoEl.classList.remove('visible'); return; }
       var midF = modelToWorld(fItem.x, fItem.y);
       positionFloatingPanel(gizmoEl, midF.x, yOffset + Scene3DRenderer.FLOOR_STACK_HEIGHT_GETTER(), midF.z, 0);
       gizmoEl.classList.add('visible');
@@ -1689,6 +1699,27 @@ import {
       return;
     }
 
+    // Divisória de drywall livre: mesmo padrão do gizmo genérico da
+    // Sacada de vidro (girar/excluir), mais o painel de tipo (espessura)
+    // ao lado dele — mesma técnica de stackLeftOf do painel de forro.
+    if (selectedDrywallPartitionId) {
+      var dpItem = Store.findDrywallPartition(selectedDrywallPartitionId);
+      if (!dpItem) { selectedDrywallPartitionId = null; gizmoEl.classList.remove('visible'); drywallPartitionTypePanelEl?.classList.remove('visible'); return; }
+      var midDp = modelToWorld(dpItem.x, dpItem.y);
+      var topYDp = yOffset + (dpItem.sillHeightM || 0) + dpItem.heightM + 0.15;
+      positionFloatingPanel(gizmoEl, midDp.x, topYDp, midDp.z, 0);
+      gizmoEl.classList.add('visible');
+      if (drywallPartitionTypePanelEl) {
+        positionFloatingPanel(drywallPartitionTypePanelEl, midDp.x, topYDp, midDp.z, -60);
+        drywallPartitionTypePanelEl.classList.add('visible');
+        stackLeftOf(drywallPartitionTypePanelEl, gizmoEl, 8);
+        var currentTypeId = dpItem.thicknessTypeId || DRYWALL_PARTITION_DEFAULT_TYPE_ID;
+        drywallPartitionTypePanelEl.querySelectorAll('.dwt').forEach(function (btn: any) { btn.classList.toggle('active', btn.dataset.drywalltype === currentTypeId); });
+      }
+      return;
+    }
+    drywallPartitionTypePanelEl?.classList.remove('visible');
+
     if (!selectedWallId) { gizmoEl.classList.remove('visible'); return; }
     var w = Store.findWall(selectedWallId);
     if (!w) { selectedWallId = null; gizmoEl.classList.remove('visible'); return; }
@@ -1701,6 +1732,43 @@ import {
   // arrastar um cômodo, mostra largura e profundidade; ao arrastar uma
   // parede solta, mostra o comprimento. Some assim que o arraste termina.
   function updateDimLabels() {
+    // Cotas ao vivo da Divisória de drywall livre (Product Owner: "deve
+    // também ter cotas para o usuário posicionar elas na medida
+    // correta") — reaproveita dimLabelA/B, mesmo mecanismo do arraste
+    // de parede acima. dimLabelA mostra o comprimento (corpo/pontas);
+    // dimLabelB mostra altura/elevação (topo/base) enquanto essas alças
+    // estão em uso.
+    var dpDragging = dragMode === 'drywallPartitionBody' || (dragMode && dragMode.indexOf('drywallPartitionLength') === 0);
+    var dpVerticalDragging = dragMode === 'drywallPartitionHeightTop' || dragMode === 'drywallPartitionHeightBottom';
+    if ((dpDragging || dpVerticalDragging) && selectedDrywallPartitionId) {
+      var dpLive = Store.findDrywallPartition(selectedDrywallPartitionId);
+      if (dpLive) {
+        var dpLabelY = currentFloorYOffset() + (dpLive.sillHeightM || 0) + dpLive.heightM + 0.3;
+        var dpMidWorld = modelToWorld(dpLive.x || 0, dpLive.y || 0);
+        liveRoomDimensionLineEl.style.display = 'none';
+        liveRoomDimensionLineBEl.style.display = 'none';
+        if (dpDragging) {
+          var dpLenM = dragElementStart && dragElementStart.lastWidthM != null ? dragElementStart.lastWidthM : dpLive.lengthM;
+          dimLabelAEl.textContent = dpLenM.toFixed(2).replace('.', ',') + ' m';
+          positionFloatingPanel(dimLabelAEl, dpMidWorld.x, dpLabelY, dpMidWorld.z, 0);
+          dimLabelAEl.classList.add('visible');
+          dimLabelAEl.style.display = 'block';
+          dimLabelBEl.classList.remove('visible');
+        } else {
+          var dpHeightLiveM = dragElementStart && dragElementStart.lastHeightM != null ? dragElementStart.lastHeightM : dpLive.heightM;
+          var dpSillLiveM = dragElementStart && dragElementStart.lastSillHeightM != null ? dragElementStart.lastSillHeightM : (dpLive.sillHeightM || 0);
+          dimLabelAEl.textContent = 'altura ' + dpHeightLiveM.toFixed(2).replace('.', ',') + ' m';
+          positionFloatingPanel(dimLabelAEl, dpMidWorld.x, dpLabelY, dpMidWorld.z, 0);
+          dimLabelAEl.classList.add('visible');
+          dimLabelAEl.style.display = 'block';
+          dimLabelBEl.textContent = 'base ' + dpSillLiveM.toFixed(2).replace('.', ',') + ' m';
+          positionFloatingPanel(dimLabelBEl, dpMidWorld.x, dpLabelY - 0.2, dpMidWorld.z, 0);
+          dimLabelBEl.classList.add('visible');
+          dimLabelBEl.style.display = 'block';
+        }
+        return;
+      }
+    }
     if (!drawPreview) {
       var liveWall = dragMode === 'wallResize' && wallResizeLiveCandidate
         ? wallResizeLiveCandidate
@@ -1795,7 +1863,7 @@ import {
   }
 
   function render() {
-    if (selectedHydraulicNodeId && (selectedWallId || selectedColumnId || selectedRoofId || selectedOpeningId || selectedVarandaId || selectedLajeId || selectedFurnitureId || selectedGlazingPanelId || selectedBalconyRailingId || selectedVolumeBoxId || selectedRoomWallIds)) selectedHydraulicNodeId = null;
+    if (selectedHydraulicNodeId && (selectedWallId || selectedColumnId || selectedRoofId || selectedOpeningId || selectedVarandaId || selectedLajeId || selectedFurnitureId || selectedGlazingPanelId || selectedBalconyRailingId || selectedDrywallPartitionId || selectedVolumeBoxId || selectedRoomWallIds)) selectedHydraulicNodeId = null;
     var project = Store.getProject();
     var selectedWall = selectedWallId ? Store.findWall(selectedWallId) : null;
     var selectedColumn = selectedColumnId ? Store.findColumn(selectedColumnId) : null;
@@ -1815,6 +1883,7 @@ import {
       selectedLaje: selectedLaje,
       selectedGlazingPanel: selectedGlazingPanelId ? Store.findGlazingPanel(selectedGlazingPanelId) : null,
       selectedBalconyRailing: selectedBalconyRailingId ? Store.findBalconyRailing(selectedBalconyRailingId) : null,
+      selectedDrywallPartition: selectedDrywallPartitionId ? Store.findDrywallPartition(selectedDrywallPartitionId) : null,
       selectedVolumeBox: selectedVolumeBoxId ? Store.findVolumeBox(selectedVolumeBoxId) : null,
       volumeBoxEditMode: !!selectedVolumeBoxId && volumeBoxEditModeId === selectedVolumeBoxId,
       selectedStair: selectedStairId ? Store.findStair(selectedStairId) : null,
@@ -1861,6 +1930,7 @@ import {
     if (selectedLajeId && !Store.findLaje(selectedLajeId)) selectedLajeId = null;
     if (selectedGlazingPanelId && !Store.findGlazingPanel(selectedGlazingPanelId)) selectedGlazingPanelId = null;
     if (selectedBalconyRailingId && !Store.findBalconyRailing(selectedBalconyRailingId)) selectedBalconyRailingId = null;
+    if (selectedDrywallPartitionId && !Store.findDrywallPartition(selectedDrywallPartitionId)) selectedDrywallPartitionId = null;
     if (selectedVolumeBoxId && !Store.findVolumeBox(selectedVolumeBoxId)) selectedVolumeBoxId = null;
     if (selectedStairId && !Store.findStair(selectedStairId)) selectedStairId = null;
     if (selectedPlanUnderlay && !Store.currentPlanUnderlay()) selectedPlanUnderlay = false;
@@ -2259,7 +2329,7 @@ import {
 
   function marcadorPieceInfo(mesh: any) {
     if (!mesh) return { category: 'nada (fora de qualquer superfície)', ids: '' };
-    var diagIdFields = ['roofId', 'wallId', 'gableSide', 'ridgePieceId', 'columnId', 'lajeId', 'furnitureId', 'openingId', 'varandaId', 'glazingPanelId', 'balconyRailingId', 'volumeBoxId', 'stairId', 'hydraulicNodeId', 'floorIndex'];
+    var diagIdFields = ['roofId', 'wallId', 'gableSide', 'ridgePieceId', 'columnId', 'lajeId', 'furnitureId', 'openingId', 'varandaId', 'glazingPanelId', 'balconyRailingId', 'drywallPartitionId', 'volumeBoxId', 'stairId', 'hydraulicNodeId', 'floorIndex'];
     var ids = diagIdFields.filter(function (k) { return mesh.userData[k] !== undefined; }).map(function (k) { return k + '=' + mesh.userData[k]; }).join(', ');
     return { category: mesh.userData.category || '?', ids: ids };
   }
@@ -2791,24 +2861,6 @@ import {
         fuseAllOverlaps(newRoomWalls.map(function (w: any) { return w.id; }));
       }
       Store.commands.splitWallsAtTJunctions();
-    } else if (currentTool === 'drywallDraw') {
-      // Ferramenta dedicada (painel Drywall) pra criar uma parede NOVA
-      // dividindo um cômodo já fechado — desde a DEC-217 (remoção do
-      // "Desenhar" livre) não sobrava nenhum jeito de fazer isso; a
-      // ferramenta "Marcar parede" (drywallPartition) só alterna uma
-      // parede que JÁ existe. splitWallsAtTJunctions conecta as pontas
-      // na(s) parede(s) existente(s) que ela encosta, igual o cômodo
-      // acima — sem isso a parede nasceria solta, sem virar divisória de
-      // verdade (Core.wallIsInteriorPartition exige cômodo fechado dos
-      // dois lados). Já nasce marcada em drywall — não precisa de um
-      // segundo clique com "Marcar parede" depois.
-      var newDrywallWall = Store.commands.createWall(p.x1, p.y1, p.x2, p.y2);
-      if (newDrywallWall) {
-        Store.commands.splitWallsAtTJunctions();
-        Store.commands.setWallPartitionSystem(newDrywallWall.id, {
-          partitionSystem: 'drywall', faceAAssemblyId: 'drywall-st', faceBAssemblyId: 'drywall-st', cavityAssembly: undefined,
-        });
-      }
     }
     placingDraw = false;
     drawStart = null; drawPreview = null;
@@ -3111,6 +3163,50 @@ import {
           dragElementStart = { widthM: brHeightBottom.widthM, heightM: brHeightBottom.heightM, sillHeightM: brHeightBottom.sillHeightM || 0, startScreenY: e.clientY, lastHeightM: brHeightBottom.heightM, lastSillHeightM: brHeightBottom.sillHeightM || 0 };
           beginBalconyResizePreview(brHeightBottom.id);
         }
+      } else if (handle.indexOf('drywallPartitionLength') === 0) {
+        // Alça de PONTA (comprimento) — mesma técnica de balconyWidth,
+        // eixo vindo só de rotationDeg (peça sempre livre, nunca
+        // hospedada numa parede) e teto generoso (DRYWALL_PARTITION_MAX_LENGTH_M).
+        var dpLength = Store.findDrywallPartition(selectedDrywallPartitionId);
+        if (dpLength) {
+          var dpLAngle = (dpLength.rotationDeg || 0) * Math.PI / 180;
+          var dpLAxisX = Math.cos(dpLAngle), dpLAxisY = Math.sin(dpLAngle);
+          var dpLSide = handle === 'drywallPartitionLengthRight' ? 1 : -1;
+          dragElementStart = { widthM: dpLength.lengthM, heightM: dpLength.heightM, center: { x: dpLength.x || 0, y: dpLength.y || 0 }, axisX: dpLAxisX, axisY: dpLAxisY, side: dpLSide, maxWidthM: Core.DRYWALL_PARTITION_MAX_LENGTH_M, lastWidthM: dpLength.lengthM, centerDeltaM: 0 };
+          drywallPartitionDragMesh = findDrywallPartitionSceneObject(dpLength.id);
+        }
+      } else if (handle === 'drywallPartitionHeightTop') {
+        var dpHeightTop = Store.findDrywallPartition(selectedDrywallPartitionId);
+        if (dpHeightTop) {
+          drywallPartitionDragMesh = findDrywallPartitionSceneObject(dpHeightTop.id);
+          dragElementStart = { widthM: dpHeightTop.lengthM, heightM: dpHeightTop.heightM, sillHeightM: dpHeightTop.sillHeightM || 0, startScreenY: e.clientY, lastHeightM: dpHeightTop.heightM, lastSillHeightM: dpHeightTop.sillHeightM || 0, baseWorldY: drywallPartitionDragMesh ? drywallPartitionDragMesh.position.y : 0 };
+        }
+      } else if (handle === 'drywallPartitionHeightBottom') {
+        var dpHeightBottom = Store.findDrywallPartition(selectedDrywallPartitionId);
+        if (dpHeightBottom) {
+          drywallPartitionDragMesh = findDrywallPartitionSceneObject(dpHeightBottom.id);
+          dragElementStart = { widthM: dpHeightBottom.lengthM, heightM: dpHeightBottom.heightM, sillHeightM: dpHeightBottom.sillHeightM || 0, startScreenY: e.clientY, lastHeightM: dpHeightBottom.heightM, lastSillHeightM: dpHeightBottom.sillHeightM || 0, baseWorldY: drywallPartitionDragMesh ? drywallPartitionDragMesh.position.y : 0 };
+        }
+      } else if (handle === 'drywallPartitionRotate') {
+        // Alça de giro LIVRE (drag-to-rotate) — única no app (todo outro
+        // objeto livre gira só em passos de 90° via botão). Mira o
+        // cursor no plano do chão e usa atan2 em torno do centro da
+        // peça, mesma primitiva de getGroundModelPoint usada em todo
+        // arraste — dá correspondência direta "aponto o mouse pra onde
+        // quero que a parede aponte". angleOffsetDeg compensa a posição
+        // da própria alça (fora do eixo da peça), pra não "saltar" o
+        // ângulo no primeiro frame do gesto.
+        var dpRot = Store.findDrywallPartition(selectedDrywallPartitionId);
+        if (dpRot) {
+          var dpRotGround = getGroundModelPoint(e.clientX, e.clientY);
+          var dpRotStartAngleDeg = dpRotGround ? Math.atan2(dpRotGround.y - (dpRot.y || 0), dpRotGround.x - (dpRot.x || 0)) * 180 / Math.PI : 0;
+          dragElementStart = {
+            centerX: dpRot.x || 0, centerY: dpRot.y || 0,
+            angleOffsetDeg: (dpRot.rotationDeg || 0) - dpRotStartAngleDeg,
+            lastRotationDeg: dpRot.rotationDeg || 0,
+          };
+          drywallPartitionDragMesh = findDrywallPartitionSceneObject(dpRot.id);
+        }
       } else if (handle.indexOf('volumeBoxFace:') === 0) {
         // Alça de FACE: push-pull ao longo da PRÓPRIA normal da face —
         // calculada uma vez aqui (início do arraste), não muda de
@@ -3328,7 +3424,7 @@ import {
     if (currentTool === 'demolish' && mesh) {
       var diagHit = pickMeshHit(e.clientX, e.clientY);
       var diagModelPt = diagHit ? worldToModel(diagHit.point.x, diagHit.point.z) : null;
-      var diagIdFields = ['roofId', 'wallId', 'gableSide', 'ridgePieceId', 'columnId', 'lajeId', 'furnitureId', 'openingId', 'varandaId', 'glazingPanelId', 'balconyRailingId', 'volumeBoxId', 'stairId', 'hydraulicNodeId', 'floorIndex'];
+      var diagIdFields = ['roofId', 'wallId', 'gableSide', 'ridgePieceId', 'columnId', 'lajeId', 'furnitureId', 'openingId', 'varandaId', 'glazingPanelId', 'balconyRailingId', 'drywallPartitionId', 'volumeBoxId', 'stairId', 'hydraulicNodeId', 'floorIndex'];
       var diagIds = diagIdFields.filter(function (k) { return mesh.userData[k] !== undefined; })
         .map(function (k) { return k + '=' + mesh.userData[k]; }).join(', ');
       hintEl.textContent = 'Diagnóstico (não apaga) — categoria "' + (mesh.userData.category || '?') + '"'
@@ -3582,6 +3678,19 @@ import {
           dragGroundStart = getGroundModelPoint(e.clientX, e.clientY);
           balconyRailingDragMesh = findBalconyRailingSceneObject(balconyRailingId);
           Store.commands.beginTransaction();
+        } else if (mesh.userData.drywallPartitionId) {
+          // Divisória de drywall livre (DEC-229): arraste do corpo
+          // SEMPRE livre (sem grid, sem snap de posição) — o único snap
+          // é o de ponta contra parede, aplicado só ao soltar (ver
+          // onPointerUp -> clampDrywallPartitionTipsOutOfWalls).
+          var drywallPartitionId = mesh.userData.drywallPartitionId;
+          var dpEnt = Store.findDrywallPartition(drywallPartitionId)!;
+          selectDrywallPartition(drywallPartitionId);
+          dragMode = 'drywallPartitionBody';
+          dragElementStart = { x: dpEnt.x || 0, y: dpEnt.y || 0 };
+          dragGroundStart = getGroundModelPoint(e.clientX, e.clientY);
+          drywallPartitionDragMesh = findDrywallPartitionSceneObject(drywallPartitionId);
+          Store.commands.beginTransaction();
         } else if (mesh.userData.volumeBoxId) {
           // Bloco de Volumetria: sempre livre no plano do chão (sem ímã
           // de parede/vizinho na POSIÇÃO enquanto arrasta — o snap
@@ -3656,7 +3765,7 @@ import {
     // vazio só desmarca o que estava selecionado, não desenha nada. Só
     // desenha depois que a pessoa escolher "Parede" ou "Cômodo livre" em
     // Avançado (ou "Telhado"), de propósito.
-    if (currentTool !== 'room' && currentTool !== 'telhado' && currentTool !== 'drywallDraw') return;
+    if (currentTool !== 'room' && currentTool !== 'telhado') return;
 
     // Cômodo/Parede: primeiro clique só marca o início — o cômodo/parede
     // nasce de verdade no SEGUNDO clique (finalizeDraw).
@@ -4018,6 +4127,87 @@ import {
     return bestId;
   }
 
+  // Ângulo (em graus) da parede mais próxima de (px, py) — mesma técnica
+  // de projeção de nearestWallForGlazingAttach, adaptada pra devolver o
+  // ÂNGULO em vez do id (usada só na criação da Divisória livre, pra
+  // ela já nascer "paralela a uma das paredes", pedido do Product
+  // Owner). Sem tolerância de distância — sempre pega a parede mais
+  // próxima que existir; sem nenhuma parede no projeto, cai em 0°.
+  function nearestWallAngleDeg(px: number, py: number): number {
+    var walls = Store.currentWalls();
+    var bestId: string | null = null, bestDist = Infinity;
+    walls.forEach(function (w: any) {
+      var dx = w.x2 - w.x1, dy = w.y2 - w.y1;
+      var lenSq = dx * dx + dy * dy;
+      if (lenSq < 1e-9) return;
+      var t = Math.max(0, Math.min(1, ((px - w.x1) * dx + (py - w.y1) * dy) / lenSq));
+      var projX = w.x1 + dx * t, projY = w.y1 + dy * t;
+      var dist = Math.hypot(px - projX, py - projY);
+      if (dist < bestDist) { bestDist = dist; bestId = w.id; }
+    });
+    if (!bestId) return 0;
+    var bw = Store.findWall(bestId);
+    if (!bw) return 0;
+    return (Math.atan2(bw.y2 - bw.y1, bw.x2 - bw.x1) * 180 / Math.PI + 360) % 360;
+  }
+
+  // Empurra (px, py) pra fora do footprint de UMA parede, se estiver
+  // dentro dele — projeta o ponto no eixo da parede (funciona em
+  // qualquer ângulo, não só axis-aligned como Core.wallOBB/VolumeBox),
+  // e sai na direção perpendicular mais curta. Devolve o ponto original
+  // (pushed: false) se já estiver fora do footprint dessa parede.
+  function pushPointOutOfWallRect(px: number, py: number, w: any): { x: number; y: number; pushed: boolean } {
+    var dx = w.x2 - w.x1, dy = w.y2 - w.y1;
+    var len = Math.hypot(dx, dy);
+    if (len < Core.GRID * 0.05) return { x: px, y: py, pushed: false };
+    var ux = dx / len, uy = dy / len, nx = -uy, ny = ux;
+    var alongRaw = (px - w.x1) * ux + (py - w.y1) * uy;
+    if (alongRaw < 0 || alongRaw > len) return { x: px, y: py, pushed: false };
+    var perp = (px - w.x1) * nx + (py - w.y1) * ny;
+    var halfThick = (Core.WALL_THICK * Core.GRID) / 2;
+    if (Math.abs(perp) >= halfThick) return { x: px, y: py, pushed: false };
+    var side = perp >= 0 ? 1 : -1;
+    var projX = w.x1 + ux * alongRaw, projY = w.y1 + uy * alongRaw;
+    return { x: projX + nx * side * halfThick, y: projY + ny * side * halfThick, pushed: true };
+  }
+
+  // Garante que nenhuma PONTA da divisória fique dentro do footprint de
+  // nenhuma parede (Product Owner: "ela só deve ter um snap na parede
+  // para as pontas não entrarem dentro das paredes") — único snap desta
+  // peça, roda só ao SOLTAR o mouse (corpo, pontas ou giro), nunca
+  // durante o arraste. Cada ponta é resolvida isoladamente contra a
+  // parede mais próxima que a contém; não mexe no ângulo. Um caso raro
+  // (a peça atravessa uma parede de ponta a ponta sem nenhuma ponta
+  // ficar dentro dela) não é coberto, de propósito — checar interseção
+  // de segmento completo não valeria a complexidade extra aqui.
+  function clampDrywallPartitionTipsOutOfWalls(id: string) {
+    var p = Store.findDrywallPartition(id);
+    if (!p) return;
+    var rad = (p.rotationDeg || 0) * Math.PI / 180;
+    var ux = Math.cos(rad), uy = Math.sin(rad);
+    var halfLen = (p.lengthM * Core.GRID) / 2;
+    var walls = Store.currentWalls();
+    var tips = [
+      { x: (p.x || 0) - ux * halfLen, y: (p.y || 0) - uy * halfLen },
+      { x: (p.x || 0) + ux * halfLen, y: (p.y || 0) + uy * halfLen },
+    ];
+    var moved = false;
+    var newTips = tips.map(function (tip) {
+      var best = tip;
+      walls.forEach(function (w: any) {
+        var r = pushPointOutOfWallRect(best.x, best.y, w);
+        if (r.pushed) { best = { x: r.x, y: r.y }; moved = true; }
+      });
+      return best;
+    });
+    if (!moved) return;
+    var newCx = (newTips[0]!.x + newTips[1]!.x) / 2, newCy = (newTips[0]!.y + newTips[1]!.y) / 2;
+    var newLenM = Math.hypot(newTips[1]!.x - newTips[0]!.x, newTips[1]!.y - newTips[0]!.y) / Core.GRID;
+    Store.commands.updateDrywallPartitionBodyLive(id, newCx, newCy);
+    if (newLenM >= Core.DRYWALL_PARTITION_MIN_LENGTH_M) Store.commands.updateDrywallPartitionLengthLive(id, newLenM);
+    render();
+  }
+
   function onPointerMove(e: any) {
     // Os navegadores também emitem pointermove para cada dedo. Durante
     // o gesto de dois dedos, somente onTouchMove controla a câmera;
@@ -4272,6 +4462,35 @@ import {
         var wpBr = modelToWorld(liveXBr, liveYBr);
         balconyRailingDragMesh.position.x = wpBr.x;
         balconyRailingDragMesh.position.z = wpBr.z;
+      }
+      return;
+    }
+    if (dragMode === 'drywallPartitionBody') {
+      // Mesmo raciocínio de performance da Sacada de vidro acima — só
+      // move o mesh visual direto durante o arraste. SEM grid-snap
+      // nenhum (Product Owner: "essa divisória não segue o grid, o
+      // arraste é livre") — o snap de ponta contra parede só roda ao
+      // soltar (onPointerUp).
+      var dpG = getGroundModelPoint(e.clientX, e.clientY);
+      if (dpG && dragGroundStart && drywallPartitionDragMesh) {
+        var dxDp = dpG.x - dragGroundStart.x, dyDp = dpG.y - dragGroundStart.y;
+        var liveXDp = dragElementStart.x + dxDp, liveYDp = dragElementStart.y + dyDp;
+        var wpDp = modelToWorld(liveXDp, liveYDp);
+        drywallPartitionDragMesh.position.x = wpDp.x;
+        drywallPartitionDragMesh.position.z = wpDp.z;
+      }
+      return;
+    }
+    if (dragMode === 'drywallPartitionRotate') {
+      // Alça de giro livre — atualiza só a rotação do mesh visual
+      // (preview), sem tocar no Store; o commit final acontece no
+      // onPointerUp via Store.commands.rotateDrywallPartitionTo.
+      var dpRotG = getGroundModelPoint(e.clientX, e.clientY);
+      if (dpRotG && dragElementStart && drywallPartitionDragMesh) {
+        var dpCursorAngleDeg = Math.atan2(dpRotG.y - dragElementStart.centerY, dpRotG.x - dragElementStart.centerX) * 180 / Math.PI;
+        var dpCandidateDeg = ((dpCursorAngleDeg + dragElementStart.angleOffsetDeg) % 360 + 360) % 360;
+        dragElementStart.lastRotationDeg = dpCandidateDeg;
+        drywallPartitionDragMesh.rotation.y = -(dpCandidateDeg * Math.PI / 180);
       }
       return;
     }
@@ -4547,6 +4766,46 @@ import {
         var candidateSillM = Math.max(0, dragElementStart.sillHeightM + deltaSillM);
         dragElementStart.lastSillHeightM = candidateSillM;
         balconyResizePreview.position.y = balconyResizeHiddenObject.position.y + (candidateSillM - dragElementStart.sillHeightM);
+      }
+      return;
+    }
+    if (dragMode && dragMode.indexOf('drywallPartitionLength') === 0) {
+      // Cópia direta do redimensionamento de comprimento da Sacada de
+      // vidro acima — sem preview fantasma (a peça é um único mesh
+      // simples), escala o mesh real diretamente durante o gesto.
+      var dpResizeW = Store.findDrywallPartition(selectedDrywallPartitionId);
+      var groundResizeDp = getGroundModelPoint(e.clientX, e.clientY);
+      if (dpResizeW && groundResizeDp && dragElementStart && drywallPartitionDragMesh) {
+        var alongDp = ((groundResizeDp.x - dragElementStart.center.x) * dragElementStart.axisX + (groundResizeDp.y - dragElementStart.center.y) * dragElementStart.axisY) / Core.GRID;
+        var candidateDpW = Math.max(Core.DRYWALL_PARTITION_MIN_LENGTH_M, Math.min(dragElementStart.maxWidthM, dragElementStart.widthM / 2 + alongDp * dragElementStart.side));
+        var centerDeltaDp = dragElementStart.side * (candidateDpW - dragElementStart.widthM) / 2;
+        dragElementStart.lastWidthM = candidateDpW;
+        dragElementStart.centerDeltaM = centerDeltaDp;
+        drywallPartitionDragMesh.scale.x = candidateDpW / dpResizeW.lengthM;
+        var worldDeltaDp = centerDeltaDp * Core.GRID * scale;
+        var dpBaseWorld = modelToWorld(dpResizeW.x || 0, dpResizeW.y || 0);
+        drywallPartitionDragMesh.position.x = dpBaseWorld.x + dragElementStart.axisX * worldDeltaDp;
+        drywallPartitionDragMesh.position.z = dpBaseWorld.z + dragElementStart.axisY * worldDeltaDp;
+      }
+      return;
+    }
+    if (dragMode === 'drywallPartitionHeightTop') {
+      var dpTopEnt = Store.findDrywallPartition(selectedDrywallPartitionId);
+      if (dpTopEnt && dragElementStart && drywallPartitionDragMesh) {
+        var candidateDpH = Math.max(Core.DRYWALL_PARTITION_MIN_HEIGHT_M, Math.min(Core.DRYWALL_PARTITION_MAX_HEIGHT_M, dragElementStart.heightM + (dragElementStart.startScreenY - e.clientY) * 0.02));
+        dragElementStart.lastHeightM = candidateDpH;
+        drywallPartitionDragMesh.scale.y = candidateDpH / dpTopEnt.heightM;
+        drywallPartitionDragMesh.position.y = dragElementStart.baseWorldY + (candidateDpH - dpTopEnt.heightM) / 2 * scale;
+      }
+      return;
+    }
+    if (dragMode === 'drywallPartitionHeightBottom') {
+      var dpBottomEnt = Store.findDrywallPartition(selectedDrywallPartitionId);
+      if (dpBottomEnt && dragElementStart && drywallPartitionDragMesh) {
+        var deltaSillDpM = (dragElementStart.startScreenY - e.clientY) * 0.02;
+        var candidateSillDpM = Math.max(0, Math.min(Core.DRYWALL_PARTITION_MAX_SILL_HEIGHT_M, dragElementStart.sillHeightM + deltaSillDpM));
+        dragElementStart.lastSillHeightM = candidateSillDpM;
+        drywallPartitionDragMesh.position.y = dragElementStart.baseWorldY + (candidateSillDpM - dragElementStart.sillHeightM) * scale;
       }
       return;
     }
@@ -4965,6 +5224,37 @@ import {
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       return;
     }
+    if (dragMode && dragMode.indexOf('drywallPartitionLength') === 0) {
+      var finalDpWidth = dragElementStart && dragElementStart.lastWidthM;
+      var dpLenId = selectedDrywallPartitionId;
+      if (drywallPartitionDragMesh) { drywallPartitionDragMesh.scale.x = 1; }
+      if (dpLenId && finalDpWidth) {
+        Store.commands.updateDrywallPartitionLengthLive(dpLenId, finalDpWidth, dragElementStart.centerDeltaM || 0);
+        clampDrywallPartitionTipsOutOfWalls(dpLenId);
+      }
+      dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null; drywallPartitionDragMesh = null;
+      return;
+    }
+    if (dragMode === 'drywallPartitionHeightTop' || dragMode === 'drywallPartitionHeightBottom') {
+      var finalDpHeight = dragElementStart && dragElementStart.lastHeightM;
+      var finalDpSill = dragElementStart && dragElementStart.lastSillHeightM;
+      if (drywallPartitionDragMesh) { drywallPartitionDragMesh.scale.y = 1; }
+      if (selectedDrywallPartitionId && finalDpHeight != null && finalDpSill != null) {
+        Store.commands.updateDrywallPartitionVerticalLive(selectedDrywallPartitionId, finalDpHeight, finalDpSill);
+      }
+      dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null; drywallPartitionDragMesh = null;
+      return;
+    }
+    if (dragMode === 'drywallPartitionRotate') {
+      var dpRotId = selectedDrywallPartitionId;
+      var finalDpRotation = dragElementStart && dragElementStart.lastRotationDeg;
+      if (dpRotId && finalDpRotation != null) {
+        Store.commands.rotateDrywallPartitionTo(dpRotId, finalDpRotation);
+        clampDrywallPartitionTipsOutOfWalls(dpRotId);
+      }
+      dragMode = null; dragElementStart = null; downButton = null; drywallPartitionDragMesh = null;
+      return;
+    }
     if (dragMode && dragMode.indexOf('stairWidth') === 0) {
       var finalStWidth = dragElementStart && dragElementStart.lastWidthM;
       clearStairResizePreview();
@@ -5133,6 +5423,25 @@ import {
       }
       dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
       balconyRailingDragMesh = null;
+      return;
+    }
+    if (dragMode === 'drywallPartitionBody') {
+      // Mesmo padrão do arraste do corpo acima — única atualização de
+      // Store no fim do gesto, seguida do snap de ponta contra parede
+      // (o único snap desta peça — Product Owner: "essa divisória não
+      // segue o grid, o arraste é livre, ela só deve ter um snap na
+      // parede para as pontas não entrarem dentro das paredes").
+      var dpId = selectedDrywallPartitionId;
+      if (dpId && dragElementStart && dragGroundStart) {
+        var dpUp = getGroundModelPoint(e.clientX, e.clientY);
+        if (dpUp) {
+          var dxDpUp = dpUp.x - dragGroundStart.x, dyDpUp = dpUp.y - dragGroundStart.y;
+          Store.commands.updateDrywallPartitionBodyLive(dpId, dragElementStart.x + dxDpUp, dragElementStart.y + dyDpUp);
+          clampDrywallPartitionTipsOutOfWalls(dpId);
+        }
+      }
+      dragMode = null; dragElementStart = null; dragGroundStart = null; downButton = null;
+      drywallPartitionDragMesh = null;
       return;
     }
     if (dragMode === 'furnitureBody') {
@@ -6006,6 +6315,35 @@ import {
         : 'Não foi possível criar a sacada de vidro.';
       return;
     }
+    if (key === 'drywall-partition') {
+      // Divisória de drywall livre (DEC-229) — nasce perto do envelope
+      // de paredes (mesmo espírito de vão de 1m da Sacada de vidro/Pele
+      // de vidro), mas já ORIENTADA paralela à parede mais próxima
+      // daquele ponto de nascimento (nearestWallAngleDeg), satisfazendo
+      // "a divisória aparece paralela a uma das paredes" sem precisar
+      // de um mecanismo novo de "ferramenta armada + clique no chão"
+      // (nenhum outro objeto livre do app nasce assim). Objeto 100%
+      // independente — não mexe em Wall nem em Core.detectRooms.
+      var wallsDp = Store.currentWalls();
+      var minXdp = Infinity, maxXdp = -Infinity, minYdp = Infinity;
+      wallsDp.forEach(function (w: any) {
+        [[w.x1, w.y1], [w.x2, w.y2]].forEach(function (pt: any) {
+          if (pt[0] < minXdp) minXdp = pt[0]; if (pt[0] > maxXdp) maxXdp = pt[0];
+          if (pt[1] < minYdp) minYdp = pt[1];
+        });
+      });
+      var gapDp = 1 * Core.GRID;
+      var gxDp = isFinite(maxXdp) ? maxXdp + gapDp : 0;
+      var gyDp = isFinite(minYdp) ? minYdp : 0;
+      var angleDp = nearestWallAngleDeg(gxDp, gyDp);
+      deselect();
+      var newPartition = Store.commands.createDrywallPartition(gxDp, gyDp, angleDp);
+      if (newPartition) selectDrywallPartition(newPartition.id);
+      hintEl.textContent = newPartition
+        ? 'Divisória de drywall criada, paralela à parede mais próxima — arraste o corpo pra posicionar (sem grade, livre), as alças das pontas/topo/base pra escalonar, e a alça verde pra girar livremente.'
+        : 'Não foi possível criar a divisória de drywall.';
+      return;
+    }
     var preset = ROOM_PRESETS[key];
     if (!preset) return;
     var rect = computeNextRoomSlot(preset.widthM, preset.depthM);
@@ -6059,6 +6397,7 @@ import {
     stairGizmoEl = document.getElementById('stairGizmo');
     stairTypePanelEl = document.getElementById('stairTypePanel');
     forroTypePanelEl = document.getElementById('forroTypePanel');
+    drywallPartitionTypePanelEl = document.getElementById('drywallPartitionTypePanel');
     planUnderlayGizmoEl = document.getElementById('planUnderlayGizmo');
     layersContextMenuEl = document.getElementById('layersContextMenu');
     columnShapePanelEl = document.getElementById('columnShapePanel');
@@ -6279,6 +6618,13 @@ import {
       Store.commands.setForroBoardType(selectedForroRoomKey, ftBtn.dataset.forrotipo);
       render();
     });
+    drywallPartitionTypePanelEl?.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
+    drywallPartitionTypePanelEl?.addEventListener('click', function (e: any) {
+      var dwtBtn = e.target.closest('button.dwt');
+      if (!dwtBtn || !selectedDrywallPartitionId) return;
+      Store.commands.setDrywallPartitionType(selectedDrywallPartitionId, dwtBtn.dataset.drywalltype);
+      render();
+    });
     planUnderlayGizmoEl?.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
     layersContextMenuEl.addEventListener('pointerdown', function (e: any) { e.stopPropagation(); });
     layersContextMenuEl.addEventListener('contextmenu', function (e: any) { e.preventDefault(); });
@@ -6362,6 +6708,7 @@ import {
   export function getSelectedFurnitureId() { return selectedFurnitureId; }
   export function getSelectedGlazingPanelId() { return selectedGlazingPanelId; }
   export function getSelectedBalconyRailingId() { return selectedBalconyRailingId; }
+  export function getSelectedDrywallPartitionId() { return selectedDrywallPartitionId; }
   export function getSelectedVolumeBoxId() { return selectedVolumeBoxId; }
   export function getSelectedStairId() { return selectedStairId; }
   export function getSelectedForroRoomKey() { return selectedForroRoomKey; }
@@ -6463,7 +6810,7 @@ export const ViewportController = {
   init, render, onModelChanged, deselect,
   select, selectColumn, selectRoof, selectOpening, selectVaranda, selectFurniture, selectGlazingPanel, selectVolumeBox, selectStair, selectForro, selectPlanUnderlay, selectHydraulicNode, beginHydraulicRouteDraw, toggleVolumeBoxEditMode,
   getSelectedWallId, getSelectedColumnId, getSelectedRoofId,
-  getSelectedOpeningId, getSelectedVarandaId, getSelectedLajeId, getSelectedFurnitureId, getSelectedGlazingPanelId, getSelectedBalconyRailingId, getSelectedVolumeBoxId, getSelectedStairId, getSelectedForroRoomKey, getSelectedPlanUnderlay, getSelectedHydraulicNodeId, getSelectedRoomWallIds,
+  getSelectedOpeningId, getSelectedVarandaId, getSelectedLajeId, getSelectedFurnitureId, getSelectedGlazingPanelId, getSelectedBalconyRailingId, getSelectedDrywallPartitionId, getSelectedVolumeBoxId, getSelectedStairId, getSelectedForroRoomKey, getSelectedPlanUnderlay, getSelectedHydraulicNodeId, getSelectedRoomWallIds,
   setNextRoofAtticMode, setNextRoofType, activateRoofTool, cancelActiveTool, setSteelFrameSurfaceSelectionHandler, setSteelFrameRoofHidden, activateCatalogProduct, armHeightAdjust,
   toggleWallDiagnostics,
   resetCamera,

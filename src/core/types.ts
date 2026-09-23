@@ -277,6 +277,38 @@ export interface BalconyRailing {
   glassMaterial?: GlazingGlassMaterial;
 }
 
+// Divisória de drywall livre (DEC-229) — substitui a tentativa da DEC-228
+// (criar uma Wall de verdade via desenho de 2 cliques, processada por
+// Core.detectRooms). Product Owner rejeitou essa arquitetura depois de
+// testar em produção: "a divisória de drywall não deve influenciar nas
+// paredes e comodos, elas devem ser independentes". Peça 100% solta,
+// nunca referenciada por Core.detectRooms(wallList: Wall[]) nem pelo
+// sistema de miter/footprint de paredes — mesmo espírito de
+// BalconyRailing/VolumeBox, com duas diferenças: rotationDeg é CONTÍNUO
+// (Product Owner: "ela deve girar livremente no eixo vertical", ao
+// contrário de todo outro objeto livre do app, que só gira em passos de
+// 90°) e o arraste do corpo não segue o grid (posicionamento livre; o
+// único snap é nas pontas, pra não entrarem dentro de uma parede — ver
+// ViewportController.clampDrywallPartitionTipsOutOfWalls).
+export interface DrywallPartition {
+  id: string;
+  /** Posição do centro, mesma unidade de grade de Wall.x1/Furniture.x (20 = 1m). */
+  x: number;
+  y: number;
+  /** Ângulo contínuo em graus — ver nota acima sobre giro livre. */
+  rotationDeg: number;
+  /** Comprimento, em metros — alças de ponta esquerda/direita. */
+  lengthM: number;
+  /** Altura, em metros — alça de topo (estica pra cima, base fixa). */
+  heightM: number;
+  /** Elevação da base acima do piso, em metros — alça de base. Ausente = 0 (nasce no piso). */
+  sillHeightM?: number;
+  /** Referência a DRYWALL_PARTITION_TYPES (DrywallPartitionTypes.ts) — define a espessura total renderizada/quantificada. Ausente = usa DRYWALL_PARTITION_DEFAULT_TYPE_ID. */
+  thicknessTypeId?: string;
+  /** Acabamento ST/RU/RF (STEEL_FRAME_FACE_ASSEMBLIES, use:'internal'), aplicado às DUAS faces igualmente — preço uniforme por enquanto (Product Owner), sem o modelo de duas faces independentes de Wall.faceA/BAssemblyId. Ausente = 'drywall-st'. */
+  finishAssemblyId?: string;
+}
+
 export type FacadeSignLighting = 'front' | 'halo' | 'internal';
 
 /** Letreiro em letras-caixa vinculado à face de uma parede. */
@@ -427,6 +459,8 @@ export interface Floor {
   balconyRailings: BalconyRailing[];
   volumeBoxes: VolumeBox[];
   stairs: Stair[];
+  /** Divisórias de drywall livres (DEC-229) — objetos 100% independentes, nunca processados por Core.detectRooms. */
+  drywallPartitions: DrywallPartition[];
   planUnderlay?: PlanUnderlay | null;
   roomFinishes: Record<string, string>;
   roomFinishSettings?: Record<string, { scale: number; rotation: number }>;

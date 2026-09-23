@@ -38,7 +38,7 @@ test('renderização usa textura emissiva e alternância dia/noite (motor mantid
 });
 
 test('letreiro participa da persistência versionada', () => {
-  assert.match(persistence, /CURRENT_PROJECT_SCHEMA_VERSION = 20/);
+  assert.match(persistence, /CURRENT_PROJECT_SCHEMA_VERSION = 21/);
   assert.match(persistence, /facadeSigns: array\(v\.facadeSigns/);
   assert.match(persistence, /parede hospedeira não existe/);
 });

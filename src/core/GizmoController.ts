@@ -165,6 +165,23 @@ function handleBalconyRailingAction(balconyRailingId: string, action: string): v
   }
 }
 
+// Divisória de drywall livre (DEC-229): mesmo padrão da Sacada de vidro
+// acima — girar (±90° por clique, ajuste rápido) e excluir. A alça de
+// arraste na própria peça (dragMode 'drywallPartitionRotate') já cobre
+// o giro LIVRE contínuo; este botão convive com ela pra ajuste fino nos
+// ângulos comuns. Mover é arrasto livre direto na peça (dragMode
+// 'drywallPartitionBody').
+function handleDrywallPartitionAction(drywallPartitionId: string, action: string): void {
+  const p = Store.findDrywallPartition(drywallPartitionId);
+  if (!p) return;
+  if (action === 'close') { ViewportController.deselect(); return; }
+  if (action === 'delete') { Store.commands.deleteDrywallPartition(drywallPartitionId); ViewportController.deselect(); return; }
+  if (action === 'rotateCw' || action === 'rotateCcw') {
+    Store.commands.rotateDrywallPartitionBy(drywallPartitionId, action === 'rotateCw' ? 90 : -90);
+    return;
+  }
+}
+
 export function init(): void {
   const gizmoEl = document.getElementById('wallGizmo');
   gizmoEl?.addEventListener('click', function (e: any) {
@@ -186,6 +203,9 @@ export function init(): void {
 
     const balconyRailingId = ViewportController.getSelectedBalconyRailingId();
     if (balconyRailingId) { handleBalconyRailingAction(balconyRailingId, action); return; }
+
+    const drywallPartitionId = ViewportController.getSelectedDrywallPartitionId();
+    if (drywallPartitionId) { handleDrywallPartitionAction(drywallPartitionId, action); return; }
 
     const wallId = ViewportController.getSelectedWallId();
     if (!wallId) return;
