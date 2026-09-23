@@ -64,7 +64,7 @@ export const BARN_LIMITS = {
 export const BARN_MODELS: { id: BarnModel; label: string; description: string }[] = [
   { id: 'fechado', label: 'Galpão Fechado', description: 'Fechado nas laterais e no fundo, com portão e porta de acesso.' },
   { id: 'aberto', label: 'Galpão Aberto', description: 'Aberto por todos os lados: só colunas e cobertura, ideal para veículos, máquinas e feno.' },
-  { id: 'celeiro', label: 'Celeiro', description: 'Telhado inclinado, portão em X e silo opcional. Estilo americano.' },
+  { id: 'celeiro', label: 'Celeiro', description: 'Nave central elevada com janelas, telhado verde, portão em X, cúpula e silo opcional. Estilo americano.' },
 ];
 
 export const BARN_ROOFS: { id: BarnRoof; label: string }[] = [

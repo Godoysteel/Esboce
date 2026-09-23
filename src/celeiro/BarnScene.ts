@@ -186,7 +186,7 @@ export function createBarnViewer(container: HTMLElement): BarnViewer {
     // ---------- materiais ----------
     const wallColor = new THREE.Color(color.hex);
     const trimColor = isBarn ? new THREE.Color('#f2f1ec') : wallColor.clone().multiplyScalar(0.72);
-    const roofColor = c.roof === 'fibrocimento' ? new THREE.Color('#9b9d9a') : isBarn ? new THREE.Color('#3b3e42') : wallColor.clone().multiplyScalar(0.9);
+    const roofColor = c.roof === 'fibrocimento' ? new THREE.Color('#9b9d9a') : isBarn ? new THREE.Color('#2f6b57') : wallColor.clone().multiplyScalar(0.9);
     const metal = (col: THREE.Color, rough = 0.48, met = 0.55) => new THREE.MeshStandardMaterial({ color: col, roughness: rough, metalness: met, side: THREE.DoubleSide, envMapIntensity: 1 });
     const wallMat = metal(wallColor);
     const trimMat = metal(trimColor, 0.5, 0.35);
@@ -207,22 +207,35 @@ export function createBarnViewer(container: HTMLElement): BarnViewer {
     };
 
     // ---------- perfil do telhado ----------
-    const upper = (15 * Math.PI) / 180, lowerA = (45 * Math.PI) / 180;
-    const roofPts: [number, number][] = [];
+    // Galpões: duas águas. Celeiro: "monitor barn" americano — nave central
+    // elevada (parede com janelas + telhado de duas águas) e duas abas
+    // laterais de uma água, como na referência do cliente.
+    type Seg = { a: [number, number]; b: [number, number]; extA: boolean; extB: boolean };
+    const roofSegs: Seg[] = [];
+    let gableTopWorld: (x: number) => number;
+    let ridgeY: number;
+    const core = half * 0.5;
+    const tanShed = Math.tan((16 * Math.PI) / 180), tanGable = Math.tan((20 * Math.PI) / 180);
+    const Ew = E + (half - core) * tanShed;
+    const clerH = 2.2 + W * 0.03;
+    const Ecl = Ew + clerH;
     if (isBarn) {
-      const kneeX = half * 0.55, kneeY = E + (half - kneeX) * Math.tan(lowerA);
-      roofPts.push([-half, E], [-kneeX, kneeY], [0, kneeY + kneeX * Math.tan(upper)], [kneeX, kneeY], [half, E]);
+      ridgeY = Ecl + core * tanGable;
+      roofSegs.push(
+        { a: [-half, E], b: [-core, Ew], extA: true, extB: false },
+        { a: [-core, Ecl], b: [0, ridgeY], extA: true, extB: false },
+        { a: [0, ridgeY], b: [core, Ecl], extA: false, extB: true },
+        { a: [core, Ew], b: [half, E], extA: false, extB: true },
+      );
+      gableTopWorld = (x: number) => { const ax = Math.abs(x); return ax > core ? E + (half - ax) * tanShed : Ecl + (core - ax) * tanGable; };
     } else {
-      roofPts.push([-half, E], [0, E + half * Math.tan((11 * Math.PI) / 180)], [half, E]);
+      ridgeY = E + half * Math.tan((11 * Math.PI) / 180);
+      roofSegs.push(
+        { a: [-half, E], b: [0, ridgeY], extA: true, extB: false },
+        { a: [0, ridgeY], b: [half, E], extA: false, extB: true },
+      );
+      gableTopWorld = (x: number) => E + (half - Math.abs(x)) * Math.tan((11 * Math.PI) / 180);
     }
-    const topAtWorld = (x: number) => {
-      for (let i = 0; i < roofPts.length - 1; i++) {
-        const a = roofPts[i]!, b = roofPts[i + 1]!;
-        if (x >= a[0] - 1e-9 && x <= b[0] + 1e-9) return a[1] + ((x - a[0]) / (b[0] - a[0])) * (b[1] - a[1]);
-      }
-      return E;
-    };
-    const ridgeY = Math.max(...roofPts.map((p) => p[1]));
 
     // ---------- laje, cascalho ----------
     box(W + 1.2, BASE_Y, L + 1.2, concreteMat, 0, BASE_Y / 2 - 0.0, 0, g, false).receiveShadow = true;
@@ -241,7 +254,7 @@ export function createBarnViewer(container: HTMLElement): BarnViewer {
       return items;
     };
     const sideOpenings = (items: { kind: string; x: number }[]): Opening[] => items.map((it) =>
-      it.kind === 'door' ? { x0: it.x - 0.5, x1: it.x + 0.5, y0: BASE_Y, y1: BASE_Y + 2.15 } : { x0: it.x - 0.8, x1: it.x + 0.8, y0: 1.55, y1: 2.6 });
+      it.kind === 'door' ? (isBarn ? { x0: it.x - 0.9, x1: it.x + 0.9, y0: BASE_Y, y1: BASE_Y + 2.35 } : { x0: it.x - 0.5, x1: it.x + 0.5, y0: BASE_Y, y1: BASE_Y + 2.15 }) : { x0: it.x - 0.8, x1: it.x + 0.8, y0: 1.55, y1: 2.6 });
 
     const gateOpen = (i: number): Opening => {
       const cx = (W * (i + 0.5)) / c.gates;
@@ -258,13 +271,52 @@ export function createBarnViewer(container: HTMLElement): BarnViewer {
       if (o.y0 > BASE_Y + 0.01) box(w + 2 * t, t, depth, mat, cx, o.y0 - t / 2, depth / 2 - 0.02, parent);
     };
     const windowAt = (o: Opening, parent: THREE.Object3D) => {
-      frame(o, alumMat, parent, 0.06);
+      frame(o, isBarn ? trimMat : alumMat, parent, 0.06);
       const w = o.x1 - o.x0, h = o.y1 - o.y0, cx = (o.x0 + o.x1) / 2, cy = (o.y0 + o.y1) / 2;
       const gp = new THREE.Mesh(new THREE.PlaneGeometry(w, h), glassMat); gp.position.set(cx, cy, 0.0); parent.add(gp);
-      box(0.04, h, 0.05, alumMat, cx, cy, 0.02, parent);
-      box(w, 0.04, 0.05, alumMat, cx, cy, 0.02, parent);
+      if (isBarn) {
+        for (const fx of [-1 / 6, 1 / 6]) box(0.025, h, 0.04, trimMat, cx + w * fx, cy, 0.02, parent);
+        for (const fy of [-1 / 4, 0, 1 / 4]) box(w, 0.025, 0.04, trimMat, cx, cy + h * fy, 0.02, parent);
+        // venezianas brancas dos dois lados (referência do cliente)
+        for (const sx of [-1, 1]) {
+          const sw = Math.max(0.3, w * 0.32);
+          const scx = cx + sx * (w / 2 + 0.06 + sw / 2);
+          box(sw, h + 0.06, 0.05, trimMat, scx, cy, 0.05, parent);
+          for (let k = 1; k < 6; k++) box(sw - 0.06, 0.012, 0.055, darkMat, scx, cy - h / 2 + (k * (h + 0.06)) / 6, 0.06, parent, false);
+        }
+      } else {
+        box(0.04, h, 0.05, alumMat, cx, cy, 0.02, parent);
+        box(w, 0.04, 0.05, alumMat, cx, cy, 0.02, parent);
+      }
+    };
+    // Folha de porta/portão do celeiro: moldura branca, vidro com caixilhos em cima
+    // e painel vermelho com X branco embaixo (referência do cliente).
+    const barnLeaf = (w: number, h: number, cx: number, cy: number, parent: THREE.Object3D, z: number) => {
+      const lf = new THREE.Group(); lf.position.set(cx - w / 2, cy - h / 2, z);
+      const t = 0.09, rail = h * 0.52;
+      box(w, t, 0.07, trimMat, w / 2, t / 2, 0.035, lf); box(w, t, 0.07, trimMat, w / 2, h - t / 2, 0.035, lf);
+      box(t, h, 0.07, trimMat, t / 2, h / 2, 0.035, lf); box(t, h, 0.07, trimMat, w - t / 2, h / 2, 0.035, lf);
+      box(w, t, 0.07, trimMat, w / 2, rail, 0.035, lf);
+      const gh = h - rail - t;
+      const gl = new THREE.Mesh(new THREE.PlaneGeometry(w - 2 * t, gh), glassMat); gl.position.set(w / 2, rail + t / 2 + gh / 2, 0.03); lf.add(gl);
+      for (let k = 1; k < 3; k++) box(0.03, gh, 0.05, trimMat, t + (k * (w - 2 * t)) / 3, rail + t / 2 + gh / 2, 0.04, lf);
+      for (let k = 1; k < 4; k++) box(w - 2 * t, 0.03, 0.05, trimMat, w / 2, rail + t / 2 + (k * gh) / 4, 0.04, lf);
+      const ph = rail - t;
+      box(w - 2 * t, ph, 0.04, wallMat, w / 2, t + ph / 2, 0.02, lf);
+      const len = Math.hypot(w - 2 * t, ph), ang = Math.atan2(ph, w - 2 * t);
+      for (const sg of [1, -1]) { const d = box(len, 0.07, 0.05, trimMat, w / 2, t + ph / 2, 0.05, lf); d.rotation.z = sg * ang; }
+      parent.add(lf);
     };
     const doorAt = (o: Opening, parent: THREE.Object3D) => {
+      if (isBarn) {
+        frame(o, trimMat, parent, 0.09);
+        const w = o.x1 - o.x0, h = o.y1 - o.y0, cx = (o.x0 + o.x1) / 2, cy = (o.y0 + o.y1) / 2;
+        barnLeaf(w / 2 - 0.01, h - 0.02, cx - w / 4, cy, parent, 0.0);
+        barnLeaf(w / 2 - 0.01, h - 0.02, cx + w / 4, cy, parent, 0.0);
+        const gold = new THREE.MeshStandardMaterial({ color: '#c9a95a', metalness: 0.9, roughness: 0.3 });
+        for (const sx of [-1, 1]) box(0.03, 0.22, 0.05, gold, cx + sx * 0.06, cy, 0.09, parent, false);
+        return;
+      }
       frame(o, alumMat, parent, 0.07);
       const w = o.x1 - o.x0, h = o.y1 - o.y0, cx = (o.x0 + o.x1) / 2, cy = (o.y0 + o.y1) / 2;
       box(w - 0.04, h - 0.03, 0.05, trimMat, cx, cy, 0.0, parent);
@@ -274,6 +326,7 @@ export function createBarnViewer(container: HTMLElement): BarnViewer {
 
     // ---------- portões ----------
     const drawLeaf = (w: number, h: number, cx: number, cy: number, parent: THREE.Object3D, z: number, xBrace: boolean) => {
+      if (isBarn) { barnLeaf(w, h, cx, cy, parent, z); return; }
       const leaf = new THREE.Group(); leaf.position.set(cx - w / 2, cy - h / 2, z);
       const panel = new THREE.Mesh(corrugatedWall(w, () => h, [], 0.16, 0.02, 'fine', 0), isBarn ? wallMat : trimMat);
       panel.castShadow = true; panel.receiveShadow = true; leaf.add(panel);
@@ -313,12 +366,12 @@ export function createBarnViewer(container: HTMLElement): BarnViewer {
     };
 
     // ---------- paredes ----------
-    const makeWall = (length: number, topAt: (x: number) => number, openings: Opening[], pos: [number, number, number], rotY: number, kind: ProfileKind, mat: THREE.Material, pitch = 0.2, depth = RIB) => {
+    const makeWall = (length: number, topAt: (x: number) => number, openings: Opening[], pos: [number, number, number], rotY: number, kind: ProfileKind, mat: THREE.Material, pitch = 0.2, depth = RIB, bottom = BASE_Y) => {
       const wg = new THREE.Group(); wg.position.set(...pos); wg.rotation.y = rotY;
-      const mesh = new THREE.Mesh(corrugatedWall(length, topAt, openings, pitch, depth, kind), mat);
+      const mesh = new THREE.Mesh(corrugatedWall(length, topAt, openings, pitch, depth, kind, bottom), mat);
       mesh.castShadow = true; mesh.receiveShadow = true; wg.add(mesh); g.add(wg); return wg;
     };
-    const gableTop = (x: number) => topAtWorld(x - half);
+    const gableTop = (x: number) => gableTopWorld(x - half);
     const frontKind: ProfileKind = c.acm ? 'acm' : 'trap';
     const frontMat = c.acm ? new THREE.MeshStandardMaterial({ color: '#2b2e31', roughness: 0.28, metalness: 0.65, side: THREE.DoubleSide }) : wallMat;
 
@@ -346,22 +399,57 @@ export function createBarnViewer(container: HTMLElement): BarnViewer {
 
     }
 
+    // ---------- celeiro: nave elevada (lanternim), cúpula, respiro ----------
+    if (isBarn) {
+      const clerN = Math.max(2, Math.floor(L / 4));
+      const clerOpen = (): Opening[] => Array.from({ length: clerN }, (_, i) => {
+        const x = (L * (i + 0.5)) / clerN;
+        return { x0: x - 0.65, x1: x + 0.65, y0: Ew + 0.7, y1: Ew + 1.6 };
+      });
+      for (const sx of [-1, 1]) {
+        const ops = clerOpen();
+        const cw = makeWall(L, () => Ecl, ops, sx > 0 ? [core, 0, L / 2] : [-core, 0, -L / 2], sx > 0 ? Math.PI / 2 : -Math.PI / 2, 'trap', wallMat, 0.2, RIB, Ew - 0.02);
+        ops.forEach((o) => windowAt(o, cw));
+      }
+      const count = Math.max(1, Math.floor(L / 14));
+      for (let i = 0; i < count; i++) {
+        const z = -L / 2 + (L * (i + 0.5)) / count;
+        const cup = new THREE.Group(); cup.position.set(0, ridgeY, z);
+        box(1.0, 0.9, 1.0, trimMat, 0, 0.35, 0, cup);
+        const faces: [number, number, number][] = [[0, 0.51, 0], [0, -0.51, 0], [0.51, 0, Math.PI / 2], [-0.51, 0, Math.PI / 2]];
+        for (const [dx, dz, ry] of faces) {
+          for (let k = 0; k < 5; k++) { const lv = box(0.5, 0.025, 0.03, darkMat, dx, 0.12 + k * 0.1, dz, cup, false); lv.rotation.y = ry; }
+        }
+        const roofC = new THREE.Mesh(new THREE.ConeGeometry(0.85, 0.6, 4), wallMat);
+        roofC.rotation.y = Math.PI / 4; roofC.position.y = 1.1; roofC.castShadow = true; cup.add(roofC);
+        const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.7, 8), darkMat); rod.position.y = 1.75; cup.add(rod);
+        box(0.5, 0.04, 0.02, darkMat, 0, 1.95, 0, cup, false); box(0.12, 0.12, 0.02, darkMat, 0.3, 1.95, 0, cup, false);
+        g.add(cup);
+      }
+      for (const sz of [-1, 1]) {
+        const vent = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.05, 28), trimMat);
+        vent.rotation.x = Math.PI / 2; vent.position.set(0, ridgeY - 1.0, sz * (L / 2 + 0.04)); g.add(vent);
+        const vin = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.06, 28), darkMat);
+        vin.rotation.x = Math.PI / 2; vin.position.set(0, ridgeY - 1.0, sz * (L / 2 + 0.05)); g.add(vin);
+      }
+    }
+
     // ---------- estrutura aparente (galpão aberto) ----------
     if (open) {
       const n = Math.max(1, Math.round(L / 6));
       for (let k = 0; k <= n; k++) {
         const z = -L / 2 + (k * L) / n;
         for (const sx of [-1, 1]) box(0.26, E, 0.16, steelMat, sx * (half - 0.2), BASE_Y + E / 2, z, g);
-        for (let i = 0; i < roofPts.length - 1; i++) {
-          const a = roofPts[i]!, b = roofPts[i + 1]!;
+        for (const sg of roofSegs) {
+          const a = sg.a, b = sg.b;
           const len = Math.hypot(b[0] - a[0], b[1] - a[1]), ang = Math.atan2(b[1] - a[1], b[0] - a[0]);
           const r = box(len, 0.28, 0.14, steelMat, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2 - 0.22, z, g); r.rotation.z = ang;
         }
       }
     }
     // terças
-    for (let i = 0; i < roofPts.length - 1; i++) {
-      const a = roofPts[i]!, b = roofPts[i + 1]!;
+    for (const sg of roofSegs) {
+      const a = sg.a, b = sg.b;
       const len = Math.hypot(b[0] - a[0], b[1] - a[1]), ang = Math.atan2(b[1] - a[1], b[0] - a[0]);
       const cnt = Math.max(2, Math.round(len / 1.5));
       for (let k = 0; k <= cnt; k++) {
@@ -379,14 +467,12 @@ export function createBarnViewer(container: HTMLElement): BarnViewer {
       const s = OV / Math.abs(ux);
       return [from[0] - ux * s, from[1] - uy * s];
     };
-    const ext: [number, number][] = roofPts.map((p) => [p[0], p[1]]);
-    ext[0] = extend(roofPts[0]!, roofPts[1]!);
-    ext[ext.length - 1] = extend(roofPts[roofPts.length - 1]!, roofPts[roofPts.length - 2]!);
+    const ext = roofSegs.map((sg) => ({ a: sg.extA ? extend(sg.a, sg.b) : sg.a, b: sg.extB ? extend(sg.b, sg.a) : sg.b }));
     const roofKind: ProfileKind = c.roof === 'termoacustica' ? 'fine' : 'trap';
     const roofPitch = c.roof === 'fibrocimento' ? 0.177 : c.roof === 'termoacustica' ? 0.1 : 0.2;
     const roofDepth = c.roof === 'fibrocimento' ? 0.05 : c.roof === 'termoacustica' ? 0.02 : 0.04;
-    for (let i = 0; i < ext.length - 1; i++) {
-      const sheet = new THREE.Mesh(corrugatedRoofSheet(ext[i]!, ext[i + 1]!, -L / 2 - OVZ, L / 2 + OVZ, roofPitch, roofDepth, roofKind), roofMat);
+    for (const sg of ext) {
+      const sheet = new THREE.Mesh(corrugatedRoofSheet(sg.a, sg.b, -L / 2 - OVZ, L / 2 + OVZ, roofPitch, roofDepth, roofKind), roofMat);
       sheet.castShadow = true; sheet.receiveShadow = true; add(sheet);
     }
     // cumeeira
@@ -399,14 +485,15 @@ export function createBarnViewer(container: HTMLElement): BarnViewer {
     for (const sx of [-1, 1]) {
       box(0.14, 0.16, L + 0.4, alumMat, sx * (half + 0.28), E - 0.18, 0, g);
       for (const sz of [-1, 1]) {
-        const dp = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, E - BASE_Y - 0.15, 12), alumMat);
+        const dp = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, E - BASE_Y - 0.15, 12), isBarn ? wallMat : alumMat);
         dp.position.set(sx * (half + 0.12), BASE_Y + (E - BASE_Y) / 2 - 0.05, sz * (L / 2 - 0.4)); dp.castShadow = true; add(dp);
       }
     }
     if (isBarn) {
-      for (let i = 0; i < ext.length - 1; i++) {
+      for (const sx of [-1, 1]) box(0.14, 0.16, L + 0.4, alumMat, sx * (core + 0.45), Ecl - 0.2, 0, g);
+      for (const sg of ext) {
         for (const sz of [-1, 1]) {
-          const a = ext[i]!, b = ext[i + 1]!;
+          const a = sg.a, b = sg.b;
           const len = Math.hypot(b[0] - a[0], b[1] - a[1]), ang = Math.atan2(b[1] - a[1], b[0] - a[0]);
           const f = box(len, 0.3, 0.06, trimMat, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2 - 0.1, sz * (L / 2 + OVZ), g); f.rotation.z = ang;
         }
@@ -467,12 +554,12 @@ export function createBarnViewer(container: HTMLElement): BarnViewer {
     const ext2 = span * 0.85 + 10;
     sc.left = -ext2; sc.right = ext2; sc.top = ext2; sc.bottom = -ext2; sc.near = 1; sc.far = span * 4 + 60;
     sc.updateProjectionMatrix();
-    controls.target.set(0, ridgeY * 0.32, 0);
+    controls.target.set(0, ridgeY * 0.42, 0);
     controls.minDistance = span * 0.5 + 6; controls.maxDistance = span * 3.2 + 40;
     const sig = `${c.model}|${W}|${L}|${E}`;
     if (sig !== framed) {
       framed = sig;
-      const dist = span * 1.25 + ridgeY * 2 + 8;
+      const dist = span * 1.25 + ridgeY * 2.6 + 8;
       camera.position.set(dist * 0.7, ridgeY * 0.9 + dist * 0.34, dist * 0.8);
       controls.update();
     }
