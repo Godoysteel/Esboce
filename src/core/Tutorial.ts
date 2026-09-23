@@ -216,7 +216,20 @@ function enterPhase(): void {
   }
   updateBoxText(phase.text);
   bindArmsViewportOnClick(phase);
+  scrollTargetIntoView(phase);
   positionSpotlight();
+}
+
+// Painéis de categoria (Ambientes/Aberturas/Cobertura) são roláveis
+// (.category-panel, overflow-y:auto) e nascem sempre com o scroll no
+// topo — sem isso, um alvo mais abaixo na lista (ex.: "Forro de
+// Drywall") fica fora da área visível: getBoundingClientRect() ainda
+// devolve a posição real (só não pintada), então o buraco do spotlight
+// e a caixa de instrução acabam calculados em cima de conteúdo que a
+// pessoa nem está vendo.
+function scrollTargetIntoView(phase: TutorialPhase): void {
+  if (phase.target === 'viewport') return;
+  document.querySelector<HTMLElement>(phase.target)?.scrollIntoView({ block: 'center' });
 }
 
 function bindArmsViewportOnClick(phase: TutorialPhase): void {
@@ -300,23 +313,37 @@ function positionSpotlight(): void {
   positionBox(rect);
 }
 
+// Alvo dentro de um painel de categoria (Ambientes/Aberturas/Cobertura)
+// pode ser um item estreito numa grade de várias colunas (ex.: o botão
+// "Forro" é só a 1ª coluna da própria grade) — posicionar a caixa "à
+// direita DO BOTÃO" ainda deixa metade dela em cima do painel (e da
+// barra de rolagem dele). Por isso a referência horizontal usada aqui é
+// sempre o painel INTEIRO quando o alvo mora dentro de um, nunca o
+// retângulo estreito do botão em si.
+function boxHorizontalReference(rect: DOMRect, phase: TutorialPhase | undefined): DOMRect {
+  if (!phase || phase.target === 'viewport') return rect;
+  const panel = document.querySelector<HTMLElement>(phase.target)?.closest<HTMLElement>('.category-panel');
+  return panel ? panel.getBoundingClientRect() : rect;
+}
+
 function positionBox(rect: DOMRect): void {
   const box = document.getElementById('tutorialBox');
   if (!box) return;
+  const ref = boxHorizontalReference(rect, currentPhase());
   const margin = 12;
   const vw = window.innerWidth;
   const vh = window.innerHeight;
   const boxWidth = Math.min(320, vw - 32);
   const boxHeight = box.offsetHeight || 140;
-  let left = rect.right + margin;
+  let left = ref.right + margin;
   let top = rect.top;
   if (left + boxWidth > vw - 12) {
-    left = rect.left - margin - boxWidth;
+    left = ref.left - margin - boxWidth;
   }
   if (left < 12) {
-    left = Math.min(Math.max(12, rect.left), Math.max(12, vw - boxWidth - 12));
-    top = rect.bottom + margin;
-    if (top + boxHeight > vh - 12) top = Math.max(12, rect.top - margin - boxHeight);
+    left = Math.min(Math.max(12, ref.left), Math.max(12, vw - boxWidth - 12));
+    top = ref.bottom + margin;
+    if (top + boxHeight > vh - 12) top = Math.max(12, ref.top - margin - boxHeight);
   }
   top = Math.min(Math.max(12, top), Math.max(12, vh - boxHeight - 12));
   box.style.left = left + 'px';
