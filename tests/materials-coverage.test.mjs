@@ -209,6 +209,18 @@ test('Chapisco+Reboco vira categoria própria, aplicado nas DUAS faces de toda p
   assert.match(body, /rebocoVolumeM3 \* MASONRY_REF\.sandM3PerM3/);
 });
 
+// Bug real (Product Owner: "o orçamento de steel frame deve ser
+// separado do orçamento de alvenaria" — PDF geral de um projeto Steel
+// Frame saía com cimento/cal/areia de reboco, que não existe nesse
+// sistema). O bloco de Alvenaria logo acima já usava esse gate desde a
+// DEC-51; o de Chapisco+Reboco (DEC-108, escrito depois) não herdou.
+test('Chapisco+Reboco só entra pra sistema com composição cerâmica (hasCeramicMasonryEstimate) — não vaza cimento/reboco pro orçamento de Steel Frame', () => {
+  const start = materialsSource.indexOf("const bothFacesAreaM2");
+  const ifStart = materialsSource.lastIndexOf('if (', start);
+  const ifLine = materialsSource.slice(ifStart, materialsSource.indexOf('{', start) + 1);
+  assert.match(ifLine, /hasCeramicMasonryEstimate\(q\.constructionSystem\) && q\.totals\.wallAreaNet > 0/);
+});
+
 // Product Owner: "como podemos aferir se tudo o que está sendo criado
 // está mesmo sendo quantificado e orçado?" — auditoria manual encontrou
 // 5 peças com ZERO linha no quantitativo (Pele de vidro, Sacada de

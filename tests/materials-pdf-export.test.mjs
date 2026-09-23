@@ -143,6 +143,21 @@ test('exportSteelFramePdf() valida sistema construtivo, especificação completa
   assert.match(body, /table: true/);
 });
 
+// Bug real (Product Owner: orçamento de Steel Frame deve ser separado
+// do de alvenaria, e completo por si só — não só sem item de alvenaria
+// vazando, mas também com preço de verdade, sem precisar abrir o PDF
+// Geral). Antes disso, Preço e Valor total saíam sempre "—", mesmo pros
+// itens que buildRows() já resolve com preço real desde a DEC-159.
+test('exportSteelFramePdf() resolve preço real pelo MESMO STEEL_FRAME_PRICE_KEY_BY_LAYER_ID que buildRows() usa — item sem entrada no mapa continua "—", nenhum número inventado', () => {
+  const start = materialsSource.indexOf('function exportSteelFramePdf(): void {');
+  const end = materialsSource.indexOf('\n}', start);
+  const body = materialsSource.slice(start, end);
+  assert.match(body, /const priceKey = STEEL_FRAME_PRICE_KEY_BY_LAYER_ID\[line\.id\];/);
+  assert.match(body, /if \(!priceKey\) return \['Steel Frame', line\.label, line\.quantity, line\.unit, '—', '—'\];/);
+  assert.match(body, /const cost = \(line\.technicalQuantity \?\? line\.quantity\) \* materialPrice\(priceKey\);/);
+  assert.match(body, /rows\.push\(\['TOTAL', 'Total estimado', '', '', '', hasCost \? fmtBRL\(total\) : '—'\]\);/);
+});
+
 test('pdfTableHtml gera uma tabela com bordas e as colunas Produto/Quantidade/Preço/Valor total', () => {
   const start = materialsSource.indexOf('function pdfTableHtml(');
   const end = materialsSource.indexOf('\n}', start);

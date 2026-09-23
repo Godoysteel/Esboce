@@ -2114,8 +2114,13 @@ export function buildRows(): (string | number)[][] {
   // Chapisco (traço 1:3) + Reboco (traço 1:2:8, 2cm) — aplicado nas DUAS
   // faces de toda parede (wallAreaNet é área de UMA face; alvenaria
   // recebe reboco por dentro e por fora), mesma fonte de área já usada
-  // pra pintura/alvenaria.
-  if (q.totals.wallAreaNet > 0) {
+  // pra pintura/alvenaria. Mesmo gate de hasCeramicMasonryEstimate já
+  // usado pro bloco de Alvenaria logo acima (DEC-51) — chapisco/reboco é
+  // acabamento de parede de bloco/tijolo; um projeto Steel Frame fecha a
+  // parede com placa, nunca reboca (bug real: DEC-108 introduziu este
+  // bloco sem herdar o gate que a DEC-51 já exigia, e ele vazava cimento/
+  // cal/areia de reboco pro orçamento de qualquer projeto Steel Frame).
+  if (hasCeramicMasonryEstimate(q.constructionSystem) && q.totals.wallAreaNet > 0) {
     const bothFacesAreaM2 = q.totals.wallAreaNet * 2;
     const rLabel = 'Chapisco e Reboco (ref. mercado)';
     const chapiscoCementBags = bagsQty(bothFacesAreaM2 * CHAPISCO_REF.cementKgPerM2, 50);
@@ -2476,9 +2481,13 @@ function exportCategoryPdf(categoryLabel: string, title: string): void {
 // Preço/Valor total) — mesmo formato pedido pelo Product Owner, visto em
 // calculadoras de fabricante (Trevo Drywall). Usa steelFrameQuantities()
 // diretamente (já em unidade comercial — placa(s), rolo(s), sc(kg) — ver
-// steelFrameCommercialUnit), não buildRows(), porque ainda não há preço
-// resolvido pra fechamentos/estrutura Steel Frame (Preço e Valor total
-// aparecem como '—', nunca um número inventado).
+// steelFrameCommercialUnit), não buildRows(), pra ficar um documento
+// AUTOSSUFICIENTE (Produto Owner pediu orçamento de Steel Frame separado
+// do de alvenaria — não só sem misturar categoria errada, mas também sem
+// precisar abrir o PDF Geral pra saber o preço). Preço resolve pelo MESMO
+// STEEL_FRAME_PRICE_KEY_BY_LAYER_ID que buildRows() já usa desde a
+// DEC-159 — item sem entrada no mapa continua '—', nenhum número
+// inventado (mesmo princípio ADR-006 §7/DOM-002 de sempre).
 function exportSteelFramePdf(): void {
   const project = Store.getProject();
   if (project.constructionSystem !== 'light_steel_frame') {
@@ -2494,11 +2503,21 @@ function exportSteelFramePdf(): void {
     window.alert('Nada gerado ainda no quantitativo de Steel Frame.');
     return;
   }
-  const rows: (string | number)[][] = lines.map((line) => ['Steel Frame', line.label, line.quantity, line.unit, '—', '—']);
-  rows.push(['TOTAL', 'Total estimado', '', '', '', '—']);
+  let total = 0;
+  let hasCost = false;
+  const rows: (string | number)[][] = lines.map((line) => {
+    const priceKey = STEEL_FRAME_PRICE_KEY_BY_LAYER_ID[line.id];
+    if (!priceKey) return ['Steel Frame', line.label, line.quantity, line.unit, '—', '—'];
+    const cost = (line.technicalQuantity ?? line.quantity) * materialPrice(priceKey);
+    const avgPrice = line.quantity > 0 ? cost / line.quantity : null;
+    total += cost;
+    hasCost = true;
+    return ['Steel Frame', line.label, line.quantity, line.unit, avgPrice != null ? fmtBRL(avgPrice) : '—', fmtBRL(cost)];
+  });
+  rows.push(['TOTAL', 'Total estimado', '', '', '', hasCost ? fmtBRL(total) : '—']);
   exportPdfRows(rows, 'Orçamento — Steel Frame', {
     table: true,
-    subtitle: 'Quantitativo estimado — fechamentos, isolamento e estrutura (parâmetro preliminar de peso)',
+    subtitle: 'Quantitativo estimado — fechamentos, isolamento e estrutura (parâmetro preliminar de peso). Preço só nos itens já pesquisados; os demais aparecem como "—", sem número inventado.',
   });
 }
 
