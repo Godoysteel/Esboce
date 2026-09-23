@@ -253,6 +253,7 @@ import {
     arco: 'Clique sobre uma parede pra abrir um vão ali — sacada, garagem, conceito aberto. Selecione um arco colocado pra arrastar os lados ou o topo.',
     varanda: 'Clique no chão pra colocar uma varanda. Selecione uma já colocada, clique direito nela pra girar qual lado é a frente ou excluir.',
     demolish: 'Clique numa parede pra quebrar ela — some da vista e do orçamento, mas o cômodo continua fechado (o piso não desaparece).',
+    drywallDraw: 'Clique pra marcar o início da divisória, dentro de um cômodo fechado. Mova o mouse e clique de novo pra confirmar — a parede já nasce em drywall. Esc cancela.',
     drywallPartition: 'Clique numa parede INTERNA (cômodo dos dois lados) pra marcar como divisória em drywall — clique de novo na mesma parede pra remover.',
     paintBucket: 'Material carregado do catálogo. Clique diretamente na face que deseja revestir.',
     terreno: 'Clique num lado destacado do retângulo pra adicionar ou remover o muro daquele lado.',
@@ -2790,6 +2791,24 @@ import {
         fuseAllOverlaps(newRoomWalls.map(function (w: any) { return w.id; }));
       }
       Store.commands.splitWallsAtTJunctions();
+    } else if (currentTool === 'drywallDraw') {
+      // Ferramenta dedicada (painel Drywall) pra criar uma parede NOVA
+      // dividindo um cômodo já fechado — desde a DEC-217 (remoção do
+      // "Desenhar" livre) não sobrava nenhum jeito de fazer isso; a
+      // ferramenta "Marcar parede" (drywallPartition) só alterna uma
+      // parede que JÁ existe. splitWallsAtTJunctions conecta as pontas
+      // na(s) parede(s) existente(s) que ela encosta, igual o cômodo
+      // acima — sem isso a parede nasceria solta, sem virar divisória de
+      // verdade (Core.wallIsInteriorPartition exige cômodo fechado dos
+      // dois lados). Já nasce marcada em drywall — não precisa de um
+      // segundo clique com "Marcar parede" depois.
+      var newDrywallWall = Store.commands.createWall(p.x1, p.y1, p.x2, p.y2);
+      if (newDrywallWall) {
+        Store.commands.splitWallsAtTJunctions();
+        Store.commands.setWallPartitionSystem(newDrywallWall.id, {
+          partitionSystem: 'drywall', faceAAssemblyId: 'drywall-st', faceBAssemblyId: 'drywall-st', cavityAssembly: undefined,
+        });
+      }
     }
     placingDraw = false;
     drawStart = null; drawPreview = null;
@@ -3637,7 +3656,7 @@ import {
     // vazio só desmarca o que estava selecionado, não desenha nada. Só
     // desenha depois que a pessoa escolher "Parede" ou "Cômodo livre" em
     // Avançado (ou "Telhado"), de propósito.
-    if (currentTool !== 'room' && currentTool !== 'telhado') return;
+    if (currentTool !== 'room' && currentTool !== 'telhado' && currentTool !== 'drywallDraw') return;
 
     // Cômodo/Parede: primeiro clique só marca o início — o cômodo/parede
     // nasce de verdade no SEGUNDO clique (finalizeDraw).

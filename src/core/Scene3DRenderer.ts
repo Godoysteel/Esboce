@@ -5401,6 +5401,20 @@ export function hashColorHex(key: string): number {
         scene.add(m);
         registry.previewMeshes.push(m);
       });
+    } else if (p.tool === 'drywallDraw') {
+      // Linha-guia simples (mesmo espírito da antiga prévia de "Desenhar"
+      // parede, DEC-217) — só um traço no nível do chão marcando os dois
+      // pontos clicados, sem construir a parede/faixas de verdade antes
+      // da hora (isso só acontece em finalizeDraw, no segundo clique).
+      var dx1 = (p.x1 - offsetX) * scale, dz1 = (p.y1 - offsetY) * scale;
+      var dx2 = (p.x2 - offsetX) * scale, dz2 = (p.y2 - offsetY) * scale;
+      var dGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(dx1, p.yOffset + 0.02, dz1),
+        new THREE.Vector3(dx2, p.yOffset + 0.02, dz2),
+      ]);
+      var dLine = new THREE.Line(dGeo, new THREE.LineBasicMaterial({ color: color }));
+      scene.add(dLine);
+      registry.previewMeshes.push(dLine);
     }
   }
 

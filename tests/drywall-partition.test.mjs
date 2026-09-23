@@ -141,3 +141,53 @@ test('botão de drywall existe no HTML como tool-btn genérico (data-tool="drywa
   const htmlSource = await readFile(new URL('../index.html', import.meta.url), 'utf8');
   assert.match(htmlSource, /data-tool="drywallPartition"/);
 });
+
+// DEC-228 — Rogério tentou dividir um cômodo com drywall e não conseguiu:
+// "Marcar parede" (drywallPartition) só alterna uma parede que JÁ existe,
+// e desde a DEC-217 (remoção do "Desenhar" livre) não sobrava nenhum jeito
+// de criar essa parede nova. Pedido do Product Owner: categoria própria
+// "Drywall" na barra, com uma ferramenta dedicada pra desenhar a divisória
+// nova (já nascendo em drywall) — escopo mais estreito que o "Desenhar"
+// antigo (só faz sentido dentro de um cômodo, não desenha parede solta
+// em qualquer lugar).
+test('categoria "Drywall" existe na barra, com painel próprio reunindo a divisória nova, o botão de marcar parede existente e o Forro de Drywall (saíram de Paredes/Cobertura)', async () => {
+  const htmlSource = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+  assert.match(htmlSource, /data-category="drywall"/);
+  assert.match(htmlSource, /<div class="category-panel" id="panelDrywall" data-panel="drywall">/);
+  const panelStart = htmlSource.indexOf('id="panelDrywall"');
+  const panelEnd = htmlSource.indexOf('id="panelInstalacoes"', panelStart);
+  const panelBody = htmlSource.slice(panelStart, panelEnd);
+  assert.match(panelBody, /id="toolDrywallDraw" data-tool="drywallDraw"/);
+  assert.match(panelBody, /id="toolDrywallPartition" data-tool="drywallPartition"/);
+  assert.match(panelBody, /id="generateForroDrywallBtn"/);
+  // Não pode sobrar duplicado nos painéis antigos.
+  const paredesStart = htmlSource.indexOf('id="panelParedes"');
+  const paredesEnd = htmlSource.indexOf('id="panelAberturas"', paredesStart);
+  assert.doesNotMatch(htmlSource.slice(paredesStart, paredesEnd), /data-tool="drywallPartition"/);
+  const coberturaStart = htmlSource.indexOf('id="panelCobertura"');
+  const coberturaEnd = htmlSource.indexOf('id="panelDrywall"', coberturaStart);
+  assert.doesNotMatch(htmlSource.slice(coberturaStart, coberturaEnd), /id="generateForroDrywallBtn"/);
+});
+
+test('ferramenta "Nova divisória" (drywallDraw): desenha uma parede nova (2 cliques, mesmo mecanismo do cômodo), conecta nas paredes existentes e já nasce marcada em drywall', async () => {
+  const vpSource = await readFile(new URL('../src/core/ViewportController.ts', import.meta.url), 'utf8');
+  assert.match(vpSource, /drywallDraw: 'Clique pra marcar o início da divisória/);
+  assert.match(vpSource, /currentTool !== 'room' && currentTool !== 'telhado' && currentTool !== 'drywallDraw'/);
+  const start = vpSource.indexOf('} else if (currentTool === \'drywallDraw\') {');
+  assert.ok(start !== -1, 'branch de drywallDraw não encontrado em finalizeDraw');
+  const end = vpSource.indexOf('\n    }', start);
+  const body = vpSource.slice(start, end);
+  assert.match(body, /var newDrywallWall = Store\.commands\.createWall\(p\.x1, p\.y1, p\.x2, p\.y2\);/);
+  assert.match(body, /Store\.commands\.splitWallsAtTJunctions\(\);/);
+  assert.match(body, /Store\.commands\.setWallPartitionSystem\(newDrywallWall\.id, \{/);
+  assert.match(body, /partitionSystem: 'drywall', faceAAssemblyId: 'drywall-st', faceBAssemblyId: 'drywall-st'/);
+});
+
+test('prévia da ferramenta "Nova divisória" (drywallDraw) existe em renderDrawPreview — linha-guia simples, mesmo espírito da antiga prévia de "Desenhar"', async () => {
+  const rendererSource = await readFile(new URL('../src/core/Scene3DRenderer.ts', import.meta.url), 'utf8');
+  const start = rendererSource.indexOf("} else if (p.tool === 'drywallDraw') {");
+  assert.ok(start !== -1);
+  const end = rendererSource.indexOf('\n    }', start);
+  const body = rendererSource.slice(start, end);
+  assert.match(body, /new THREE\.Line\(dGeo, new THREE\.LineBasicMaterial\(\{ color: color \}\)\)/);
+});

@@ -9,6 +9,7 @@
 - Novo: o forro do beiral (parte de baixo do telhado, entre a parede e a borda) passa a acompanhar a inclinação real da água nos telhados 4 Águas e 1 Água — já valia só pro 2 Águas antes. Ver DEC-225.
 - Corrigido: numa casa em L (dois cômodos conectados fora do eixo), os dois telhados platibanda desenhavam parapeitos que se cruzavam exatamente onde um encosta no outro. Agora o parapeito para no ponto certo, sem sobreposição. Ver DEC-226.
 - Corrigido: sobrava uma fresta bem pequena (~1cm) exatamente na quina do parapeito da platibanda — efeito colateral da correção da DEC-223. Some de um ângulo normal, mas de cima e bem perto ficava visível, dando pra ver o piso do cômodo por dentro. Ver DEC-227.
+- Novo: categoria "Drywall" própria no menu lateral, com um botão "Nova divisória" que cria uma parede nova dentro de um cômodo (2 cliques) já em drywall — antes só dava pra marcar uma parede que já existisse, e não tinha mais nenhum jeito de criar uma parede nova pra dividir um cômodo simples. "Marcar parede" e "Forro de Drywall" também mudaram pra essa categoria nova. Ver DEC-228.
 
 ## Alterado — 22/09/2026
 
