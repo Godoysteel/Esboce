@@ -578,6 +578,60 @@
     pointer-events: none;
   }
 
+  /* Tutorial guiado interativo — ver src/core/Tutorial.ts. As 4 tiras
+     cobrem a tela inteira exceto o retângulo do alvo do passo atual
+     (recortado em JS via getBoundingClientRect); bloqueiam clique fora
+     do alvo com um hint, sem precisar desabilitar cada botão do app
+     individualmente. */
+  .tutorial-spotlight {
+    position: fixed; inset: 0;
+    z-index: 95;
+    pointer-events: none;
+    display: none;
+  }
+  .tutorial-spotlight.visible { display: block; }
+  .tutorial-spotlight-strip {
+    position: fixed;
+    background: rgba(20, 20, 22, 0.55);
+    pointer-events: auto;
+  }
+  .tutorial-box {
+    display: none;
+    position: fixed;
+    z-index: 97;
+    max-width: min(320px, calc(100vw - 32px));
+    background: rgba(27, 28, 30, 0.94);
+    color: #F4F1EA;
+    border-radius: 12px;
+    padding: 14px 16px;
+    box-shadow: 0 14px 38px rgba(0,0,0,.35);
+    border: 1px solid rgba(244, 241, 234, 0.18);
+  }
+  .tutorial-box.visible { display: block; }
+  .tutorial-box-step {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .04em; color: #8fd99a; margin-bottom: 6px;
+  }
+  .tutorial-box-text { font-size: 13.5px; line-height: 1.5; margin-bottom: 12px; }
+  .tutorial-box-actions { display: flex; justify-content: flex-end; }
+  #tutorialSkipBtn {
+    background: transparent; border: 1px solid rgba(244, 241, 234, .35);
+    color: #F4F1EA; font-size: 12px; padding: 6px 12px; border-radius: 7px;
+    cursor: pointer;
+  }
+  #tutorialSkipBtn:hover { background: rgba(244, 241, 234, .12); }
+
+  @keyframes tutorial-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.65); }
+    50% { box-shadow: 0 0 0 8px rgba(46, 204, 113, 0); }
+  }
+  .tutorial-target-pulse {
+    position: relative;
+    z-index: 96;
+    animation: tutorial-pulse 1.4s ease-in-out infinite;
+    border-radius: 10px;
+  }
+
   /* Aba de elevação da parede — visualização 2D (distância × altura) de UMA
      parede só, usada pra posicionar pontos hidráulicos com precisão. Fica
      no meio da tela de propósito: é um passo guiado, não um painel
@@ -1498,6 +1552,28 @@
     </div>
   </div>
 
+  <!-- Tutorial guiado interativo (ver src/core/Tutorial.ts). O overlay
+       "spotlight" é 4 tiras que cobrem a tela inteira exceto o alvo do
+       passo atual (recortado via getBoundingClientRect, recalculado a
+       cada passo/resize) — mais simples e robusto entre navegadores que
+       desabilitar cada botão do app individualmente. z-index 95: acima
+       de rail/painéis/popups (até 50), abaixo dos modais grandes
+       (Ático/Normal, catálogo etc., 1000+) que continuam usáveis
+       normalmente quando abrem como parte do próprio passo. -->
+  <div id="tutorialSpotlight" class="tutorial-spotlight">
+    <div class="tutorial-spotlight-strip" data-strip="top"></div>
+    <div class="tutorial-spotlight-strip" data-strip="bottom"></div>
+    <div class="tutorial-spotlight-strip" data-strip="left"></div>
+    <div class="tutorial-spotlight-strip" data-strip="right"></div>
+  </div>
+  <div id="tutorialBox" class="tutorial-box" role="dialog" aria-live="polite">
+    <div class="tutorial-box-step" id="tutorialStepLabel"></div>
+    <div class="tutorial-box-text" id="tutorialStepText"></div>
+    <div class="tutorial-box-actions">
+      <button id="tutorialSkipBtn">Pular tutorial</button>
+    </div>
+  </div>
+
   <div class="tb-viewmode-panel">
     <button class="tb-viewmode-btn active" id="viewMode3DBtn" title="Visualização 3D — modo atual">3D</button>
     <button class="tb-viewmode-btn" id="viewMode2DBtn" title="Abrir planta técnica em 2D">2D</button>
@@ -1639,6 +1715,10 @@
       <button class="ts-small-btn" id="materialsToggleBtn" title="Lista de materiais (quantitativo e estimativa de custo)">
         <svg class="ts-small-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg>
         Quantitativo
+      </button>
+      <button class="ts-small-btn" id="tutorialHelpBtn" title="Rever o tutorial guiado">
+        <svg class="ts-small-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.5 9a2.5 2.5 0 0 1 5 0c0 1.5-2 2-2 3.5M12 17h.01"/></svg>
+        Ajuda
       </button>
     </div>
     <div class="ts-divider"></div>

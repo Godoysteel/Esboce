@@ -9,6 +9,7 @@ import { MaterialsSheet } from "../core/MaterialsSheet.js";
 import { NavGizmo } from "../core/NavGizmo.js";
 import { Scene3DRenderer } from "../core/Scene3DRenderer.js";
 import { Store } from "../core/Store.js";
+import { Tutorial } from "../core/Tutorial.js";
 import { ViewportController } from "../core/ViewportController.js";
 import { NAVIGATION_MODE_LABELS, isNavigationMode, type NavigationMode } from "../core/NavigationSchemes.js";
 import { Viewport2DController } from "../core/Viewport2DController.js";
@@ -301,6 +302,7 @@ export class EsboceApplication {
     GizmoController.init();
     GizmoController.setOnSwapRequested((productId) => this.handleSwapRequested(productId));
     MaterialsPanel.init();
+    Tutorial.init();
     // Rótulo de zoom da barra inferior — atualiza sozinho a cada
     // mudança de câmera (botão, roda do mouse, pinch), não só quando
     // clicado; ver ViewportController.setOnZoomChanged.
@@ -1205,6 +1207,11 @@ export class EsboceApplication {
       } catch (err) {
         console.warn("Não deu pra gravar localStorage — aviso de responsabilidade vai aparecer de novo na próxima carga:", err);
       }
+      // Encadeado aqui (não em openConstructionSystemSelector) porque o
+      // disclaimer é sempre o último dos dois overlays de onboarding a
+      // fechar — inclusive no fluxo de link compartilhado, onde o
+      // seletor de sistema construtivo nem abre (ver linha ~161).
+      Tutorial.maybeAutoStart();
     });
   }
 
