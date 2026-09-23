@@ -38,10 +38,9 @@ function render() {
   document.querySelectorAll<HTMLElement>('.model').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.model === c.model)));
   document.querySelectorAll<HTMLElement>('.sw').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.color === c.colorId)));
   $('siloRow').style.display = c.model === 'celeiro' ? '' : 'none';
-  $('acmRow').style.display = c.model === 'aberto' ? 'none' : '';
   $('gateBox').style.display = c.model === 'aberto' ? 'none' : '';
   document.querySelectorAll<HTMLElement>('[data-count=windows],[data-count=doors]').forEach((b) => { const row = b.closest<HTMLElement>('.counter'); if (row) row.style.display = c.model === 'aberto' ? 'none' : ''; });
-  $<HTMLInputElement>('silo').checked = c.silo; $<HTMLInputElement>('acm').checked = c.acm;
+  $<HTMLInputElement>('silo').checked = c.silo;
 
   $('area').textContent = String(q.areaM2).replace('.', ',');
   $('wVal').textContent = fmtM(c.widthM); $('lVal').textContent = fmtM(c.lengthM); $('eVal').textContent = fmtM(c.eaveHeightM);
@@ -70,9 +69,8 @@ $('swatches').innerHTML = BARN_COLORS.map((c) => `<button class="sw" data-color=
 $('roof').innerHTML = BARN_ROOFS.map((r) => `<option value="${r.id}">${r.label}</option>`).join('');
 $('gateType').innerHTML = BARN_GATE_TYPES.map((g) => `<option value="${g.id}">${g.label}</option>`).join('');
 
-document.querySelectorAll<HTMLElement>('.model').forEach((b) => b.addEventListener('click', () => set({ model: b.dataset.model as BarnModel })));
+document.querySelectorAll<HTMLElement>('.model').forEach((b) => b.addEventListener('click', () => set(b.dataset.model === 'celeiro' ? { model: 'celeiro', gateType: 'correr' } : { model: b.dataset.model as BarnModel })));
 $('swatches').addEventListener('click', (e) => { const b = (e.target as HTMLElement).closest<HTMLElement>('.sw'); if (b) set({ colorId: b.dataset.color! }); });
-$('acm').addEventListener('change', (e) => set({ acm: (e.target as HTMLInputElement).checked }));
 $('silo').addEventListener('change', (e) => set({ silo: (e.target as HTMLInputElement).checked }));
 $('width').addEventListener('input', (e) => set({ widthM: Number((e.target as HTMLInputElement).value) }));
 $('length').addEventListener('input', (e) => set({ lengthM: Number((e.target as HTMLInputElement).value) }));

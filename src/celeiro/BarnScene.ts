@@ -12,7 +12,7 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 import { normalizeBarnConfig, findBarnColor, type BarnConfig } from './BarnPricing.js';
 
 type Opening = { x0: number; x1: number; y0: number; y1: number };
-type ProfileKind = 'trap' | 'fine' | 'acm';
+type ProfileKind = 'trap' | 'fine';
 
 const BASE_Y = 0.15; // topo da laje de concreto
 const RIB = 0.032;
@@ -32,8 +32,7 @@ function mulberry32(seed: number) {
 function makeProfile(length: number, pitch: number, depth: number, kind: ProfileKind): [number, number][] {
   const pattern: [number, number][] =
     kind === 'trap' ? [[0, 0], [0.35, 0], [0.5, 1], [0.85, 1], [1, 0]]
-    : kind === 'fine' ? [[0, 0], [0.25, 1], [0.5, 1], [0.75, 0], [1, 0]]
-    : [[0, 0], [1, 0]];
+    : [[0, 0], [0.25, 1], [0.5, 1], [0.75, 0], [1, 0]];
   const pts: [number, number][] = [];
   const n = Math.ceil(length / pitch);
   for (let i = 0; i < n; i++) {
@@ -118,35 +117,6 @@ function noiseTexture(base: string, spread: number, size = 256, repeat = 1): THR
   return t;
 }
 
-// Textura de painel de ACM (alumínio composto): superfície lisa levemente
-// escovada e juntas com frestas escuras. Um "tile" = 1 painel de 1,25 x 2,50 m
-// (UVs em metros; repeat = 1/1,25 e 1/2,50). Multiplica a cor do material.
-let acmTex: THREE.CanvasTexture | null = null;
-function acmTexture(): THREE.CanvasTexture {
-  if (acmTex) return acmTex;
-  const W = 256, H = 512;
-  const c = document.createElement('canvas'); c.width = W; c.height = H;
-  const ctx = c.getContext('2d')!;
-  const grad = ctx.createLinearGradient(0, 0, W, 0);
-  grad.addColorStop(0, '#f4f4f4'); grad.addColorStop(0.5, '#ffffff'); grad.addColorStop(1, '#ececec');
-  ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
-  const rnd = mulberry32(21);
-  for (let i = 0; i < 9000; i++) {
-    const a = (rnd() - 0.5) * 0.06;
-    ctx.fillStyle = a > 0 ? `rgba(255,255,255,${a})` : `rgba(0,0,0,${-a})`;
-    ctx.fillRect(rnd() * W, rnd() * H, 1, 14 + rnd() * 40);
-  }
-  ctx.fillStyle = 'rgba(0,0,0,0.55)';
-  ctx.fillRect(W - 4, 0, 4, H); ctx.fillRect(0, 0, W, 4);
-  ctx.fillStyle = 'rgba(255,255,255,0.35)';
-  ctx.fillRect(W - 5, 0, 1, H); ctx.fillRect(0, 4, W, 1);
-  const t = new THREE.CanvasTexture(c);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1 / 1.25, 1 / 2.5);
-  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
-  acmTex = t;
-  return t;
-}
-
 function skyTexture(): THREE.CanvasTexture {
   const c = document.createElement('canvas'); c.width = 8; c.height = 256;
   const ctx = c.getContext('2d')!;
@@ -220,13 +190,12 @@ export function createBarnViewer(container: HTMLElement): BarnViewer {
 
     // ---------- materiais ----------
     const wallColor = new THREE.Color(color.hex);
-    const trimColor = c.acm ? new THREE.Color('#1d1f21') : isBarn ? new THREE.Color('#f2f1ec') : wallColor.clone().multiplyScalar(0.72);
+    const trimColor = isBarn ? new THREE.Color('#f2f1ec') : wallColor.clone().multiplyScalar(0.72);
     const roofColor = c.roof === 'fibrocimento' ? new THREE.Color('#9b9d9a') : isBarn ? new THREE.Color('#2f6b57') : wallColor.clone().multiplyScalar(0.9);
     const metal = (col: THREE.Color, rough = 0.48, met = 0.55) => new THREE.MeshStandardMaterial({ color: col, roughness: rough, metalness: met, side: THREE.DoubleSide, envMapIntensity: 1 });
-    const acmMat = () => new THREE.MeshPhysicalMaterial({ color: wallColor, map: acmTexture(), roughness: 0.3, metalness: 0.55, clearcoat: 0.7, clearcoatRoughness: 0.12, side: THREE.DoubleSide, envMapIntensity: 1.4 });
-    const wallMat = c.acm ? acmMat() : metal(wallColor);
+    const wallMat = metal(wallColor);
     const trimMat = metal(trimColor, 0.5, 0.35);
-    const roofMat = c.acm ? acmMat() : c.roof === 'fibrocimento' ? new THREE.MeshStandardMaterial({ color: roofColor, roughness: 0.92, metalness: 0, side: THREE.DoubleSide })
+    const roofMat = c.roof === 'fibrocimento' ? new THREE.MeshStandardMaterial({ color: roofColor, roughness: 0.92, metalness: 0, side: THREE.DoubleSide })
       : metal(roofColor, c.roof === 'termoacustica' ? 0.38 : 0.5, 0.6);
     const steelMat = new THREE.MeshStandardMaterial({ color: '#5d6166', roughness: 0.55, metalness: 0.8 });
     const darkMat = new THREE.MeshStandardMaterial({ color: '#1f2226', roughness: 0.7, metalness: 0.3 });
@@ -310,9 +279,7 @@ export function createBarnViewer(container: HTMLElement): BarnViewer {
       frame(o, isBarn ? trimMat : alumMat, parent, 0.06);
       const w = o.x1 - o.x0, h = o.y1 - o.y0, cx = (o.x0 + o.x1) / 2, cy = (o.y0 + o.y1) / 2;
       const gp = new THREE.Mesh(new THREE.PlaneGeometry(w, h), glassMat); gp.position.set(cx, cy, 0.0); parent.add(gp);
-      if (isBarn && c.acm) {
-        box(0.03, h, 0.04, trimMat, cx, cy, 0.02, parent);
-      } else if (isBarn) {
+      if (isBarn) {
         for (const fx of [-1 / 6, 1 / 6]) box(0.025, h, 0.04, trimMat, cx + w * fx, cy, 0.02, parent);
         for (const fy of [-1 / 4, 0, 1 / 4]) box(w, 0.025, 0.04, trimMat, cx, cy + h * fy, 0.02, parent);
         // venezianas brancas dos dois lados (referência do cliente)
@@ -385,6 +352,15 @@ export function createBarnViewer(container: HTMLElement): BarnViewer {
       const w = o.x1 - o.x0, h = o.y1 - o.y0, cx = (o.x0 + o.x1) / 2, cy = (o.y0 + o.y1) / 2;
       frame(o, isBarn ? trimMat : steelMat, parent, 0.12, RIB + 0.1);
       if (c.gateType === 'correr') {
+        if (isBarn) {
+          // Portão deslizante de duas folhas (X + vidro) correndo num trilho aparente.
+          drawLeaf(w / 2 + 0.15, h + 0.08, cx - w / 4 - 0.05, cy + 0.04, parent, RIB + 0.14, true);
+          drawLeaf(w / 2 + 0.15, h + 0.08, cx + w / 4 + 0.05, cy + 0.04, parent, RIB + 0.2, true);
+          box(w + 1.2, 0.12, 0.12, trimMat, cx, o.y1 + 0.34, RIB + 0.2, parent);
+          for (const sx of [-1, 1]) for (const k of [0.15, 0.85]) box(0.1, 0.16, 0.1, darkMat, cx + sx * (w / 2) * (k * 2 - 1) * 0.5 + sx * w * 0.25, o.y1 + 0.24, RIB + 0.2, parent);
+          for (const sx of [-1, 1]) box(0.16, 0.2, 0.16, steelMat, cx + sx * (w / 2 + 0.55), o.y1 + 0.34, RIB + 0.2, parent);
+          return;
+        }
         drawLeaf(w + 0.3, h + 0.08, cx + 0.15, cy + 0.04, parent, RIB + 0.14, isBarn);
         box(w * 2 + 0.6, 0.1, 0.1, steelMat, cx + w / 2, o.y1 + 0.32, RIB + 0.22, parent);
         for (let k = 0; k < 3; k++) box(0.12, 0.14, 0.1, darkMat, cx - w / 2 + 0.3 + k * (w / 3), o.y1 + 0.24, RIB + 0.22, parent);
@@ -410,8 +386,8 @@ export function createBarnViewer(container: HTMLElement): BarnViewer {
       mesh.castShadow = true; mesh.receiveShadow = true; wg.add(mesh); g.add(wg); return wg;
     };
     const gableTop = (x: number) => gableTopWorld(x - half);
-    const wKind: ProfileKind = c.acm ? 'acm' : 'trap';
-    const wPitch = c.acm ? 1.25 : 0.2, wDepth = c.acm ? 0 : RIB;
+    const wKind: ProfileKind = 'trap';
+    const wPitch = 0.2, wDepth = RIB;
 
     // Galpão aberto: SEM paredes em nenhum lado (só colunas e cobertura).
     if (!open) {
@@ -506,9 +482,9 @@ export function createBarnViewer(container: HTMLElement): BarnViewer {
       return [from[0] - ux * s, from[1] - uy * s];
     };
     const ext = roofSegs.map((sg) => ({ a: sg.extA ? extend(sg.a, sg.b) : sg.a, b: sg.extB ? extend(sg.b, sg.a) : sg.b }));
-    const roofKind: ProfileKind = c.acm ? 'trap' : c.roof === 'termoacustica' ? 'fine' : 'trap';
-    const roofPitch = c.acm ? 0.6 : c.roof === 'fibrocimento' ? 0.177 : c.roof === 'termoacustica' ? 0.1 : 0.2;
-    const roofDepth = c.acm ? 0.018 : c.roof === 'fibrocimento' ? 0.05 : c.roof === 'termoacustica' ? 0.02 : 0.04;
+    const roofKind: ProfileKind = c.roof === 'termoacustica' ? 'fine' : 'trap';
+    const roofPitch = c.roof === 'fibrocimento' ? 0.177 : c.roof === 'termoacustica' ? 0.1 : 0.2;
+    const roofDepth = c.roof === 'fibrocimento' ? 0.05 : c.roof === 'termoacustica' ? 0.02 : 0.04;
     for (const sg of ext) {
       const sheet = new THREE.Mesh(corrugatedRoofSheet(sg.a, sg.b, -L / 2 - OVZ, L / 2 + OVZ, roofPitch, roofDepth, roofKind), roofMat);
       sheet.castShadow = true; sheet.receiveShadow = true; add(sheet);

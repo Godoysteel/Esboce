@@ -26,7 +26,6 @@ export interface BarnConfig {
   gateWidthM: number;
   gateHeightM: number;
   silo: boolean;
-  acm: boolean;
 }
 
 export interface BarnContact {
@@ -101,7 +100,6 @@ export const BARN_PRICES = {
   door: 1200,
   gatePerM2: { correr: 900, 'duas-folhas': 700, enrolar: 1100, sanfonado: 800 } as Record<BarnGateType, number>,
   silo: 18000,
-  acmPerM2Envelope: 220,
   rangeLow: 0.9,
   rangeHigh: 1.1,
 };
@@ -114,7 +112,7 @@ export function clamp(value: number, min: number, max: number): number {
 export function defaultBarnConfig(): BarnConfig {
   return {
     model: 'fechado', widthM: 12, lengthM: 24, eaveHeightM: 5, roof: 'metalica', colorId: 'branco',
-    windows: 4, doors: 1, gates: 1, gateType: 'correr', gateWidthM: 4, gateHeightM: 4, silo: false, acm: false,
+    windows: 4, doors: 1, gates: 1, gateType: 'correr', gateWidthM: 4, gateHeightM: 4, silo: false,
   };
 }
 
@@ -136,9 +134,8 @@ export function normalizeBarnConfig(config: BarnConfig): BarnConfig {
   const windows = isOpen ? 0 : Math.min(maxSide - doors, Math.round(clamp(config.windows, L.openings.min, L.openings.max)));
   return {
     ...config, widthM, lengthM, eaveHeightM, gateWidthM, gateHeightM, gates, doors, windows,
-    // Silo só existe no Celeiro; ACM só faz sentido com parede frontal (não no aberto).
+    // Silo só existe no Celeiro.
     silo: config.model === 'celeiro' ? config.silo : false,
-    acm: config.model === 'aberto' ? false : config.acm,
   };
 }
 
@@ -162,11 +159,6 @@ export function computeQuote(input: BarnConfig): Quote {
   const gateType = BARN_GATE_TYPES.find((g) => g.id === c.gateType)!;
   add(`Portões ${gateType.label.toLowerCase()} (${c.gates} × ${c.gateWidthM}×${c.gateHeightM} m)`, c.gates * c.gateWidthM * c.gateHeightM * P.gatePerM2[c.gateType]);
   if (c.silo) add('Silo decorativo', P.silo);
-  if (c.acm) {
-    // ACM em toda a construção: paredes (perímetro x pé-direito) + cobertura (~15% acima da área).
-    const envelopeM2 = Math.round(2 * (c.widthM + c.lengthM) * c.eaveHeightM + areaM2 * 1.15);
-    add(`Revestimento em ACM — paredes e cobertura (${envelopeM2} m²)`, envelopeM2 * P.acmPerM2Envelope);
-  }
 
   let total = lines.reduce((sum, line) => sum + line.amount, 0);
   if (findBarnColor(c.colorId).premium) {
@@ -194,7 +186,6 @@ export function buildWhatsappMessage(config: BarnConfig, quote: Quote, contact: 
     `Janelas: ${c.windows} | Portas: ${c.doors} | Portões: ${c.gates} (${BARN_GATE_TYPES.find((g) => g.id === c.gateType)!.label}, ${c.gateWidthM}×${c.gateHeightM} m)`,
   ];
   if (c.silo) parts.push('Silo: sim');
-  if (c.acm) parts.push('Fachada em ACM: sim');
   parts.push('', `Estimativa: ${formatBRL(quote.low)} a ${formatBRL(quote.high)} (valor sujeito a confirmação)`);
   parts.push('', `Nome: ${contact.name || '-'}`, `Contato: ${contact.phone || '-'}`, `Local da obra: ${contact.city || '-'}`);
   if (contact.notes) parts.push(`Observações: ${contact.notes}`);

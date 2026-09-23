@@ -23,13 +23,12 @@ test('cotação soma as linhas e a faixa envolve o total', () => {
   assert.ok(q.low < q.total && q.total < q.high);
 });
 
-test('mais área, mais aberturas, silo e ACM aumentam o valor', () => {
+test('mais área, mais aberturas e silo aumentam o valor', () => {
   const base = defaultBarnConfig();
   const t = (c) => computeQuote(c).total;
   assert.ok(t({ ...base, lengthM: 40 }) > t(base));
   assert.ok(t({ ...base, windows: 8 }) > t(base));
   assert.ok(t({ ...base, model: 'celeiro', silo: true }) > t({ ...base, model: 'celeiro', silo: false }));
-  assert.ok(t({ ...base, acm: true }) > t(base));
 });
 
 test('cor premium acrescenta uma linha', () => {
@@ -38,9 +37,9 @@ test('cor premium acrescenta uma linha', () => {
 });
 
 test('normalização respeita limites e regras por modelo', () => {
-  const n = normalizeBarnConfig({ ...defaultBarnConfig(), widthM: 500, lengthM: 1, eaveHeightM: 99, model: 'aberto', gates: 5, silo: true, acm: true });
+  const n = normalizeBarnConfig({ ...defaultBarnConfig(), widthM: 500, lengthM: 1, eaveHeightM: 99, model: 'aberto', gates: 5, silo: true });
   assert.equal(n.widthM, 30); assert.equal(n.lengthM, 6); assert.equal(n.eaveHeightM, 10);
-  assert.equal(n.gates, 0); assert.equal(n.silo, false); assert.equal(n.acm, false);
+  assert.equal(n.gates, 0); assert.equal(n.silo, false);
   const s = normalizeBarnConfig({ ...defaultBarnConfig(), model: 'fechado', silo: true });
   assert.equal(s.silo, false);
 });
@@ -101,4 +100,19 @@ test('galpão aberto não tem portas, janelas nem portões (aberto por todos os 
 test('parede sob o vão da janela é gerada (quad do peitoril com altura real, não degenerado)', () => {
   const scene = readFileSync(new URL('../src/celeiro/BarnScene.ts', import.meta.url), 'utf8');
   assert.match(scene, /quad\(xa, da, lo, c\.y0, xb, db, lo, c\.y0\)/);
+});
+
+test('ACM foi removido do configurador (config, cotação, página e cena)', () => {
+  const read = (f) => readFileSync(new URL(f, import.meta.url), 'utf8');
+  for (const f of ['../src/celeiro/BarnPricing.ts', '../src/celeiro/BarnScene.ts', '../src/celeiro/main.ts', '../celeiro/index.html']) {
+    assert.doesNotMatch(read(f), /acm/i, f);
+  }
+  assert.equal('acm' in defaultBarnConfig(), false);
+});
+
+test('celeiro ganha portão deslizante de duas folhas na frente (trilho + folhas em X)', () => {
+  const scene = readFileSync(new URL('../src/celeiro/BarnScene.ts', import.meta.url), 'utf8');
+  assert.match(scene, /Portão deslizante de duas folhas/);
+  const main = readFileSync(new URL('../src/celeiro/main.ts', import.meta.url), 'utf8');
+  assert.match(main, /model: 'celeiro', gateType: 'correr'/);
 });
