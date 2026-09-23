@@ -931,22 +931,23 @@ export function hashColorHex(key: string): number {
 
   function roofWorldFootprint(roof: any, scale: number, offsetX: number, offsetY: number) {
     // Platibanda não tem beiral de verdade — o parapeito (buildParapetWalls)
-    // fica rente ao próprio contorno do telhado, só abrindo a meia
-    // espessura da parede do parapeito (PARAPET_THICK/2) pra fechar o
-    // canto, bem menor que o beiral de uma água inclinada (ROOF_OVERHANG/
-    // RAKE_OVERHANG). Usar a margem das águas aqui fazia essa função
-    // devolver uma pegada BEM maior que a malha real da platibanda —
-    // quem usa essa pegada pra decidir onde outro telhado deve ficar
-    // invisível (DEC-125/126) então escondia uma faixa fantasma onde a
-    // platibanda vizinha nem chega a desenhar nada, abrindo uma fresta
-    // visível (fundo aparecendo) bem na junção de dois telhados platibanda.
+    // fica com a face EXTERNA rente ao próprio contorno do telhado
+    // (roof.x1/x2/y1/y2, que já é a face externa real da parede — ver
+    // DEC-223), bem menor que o beiral de uma água inclinada
+    // (ROOF_OVERHANG/RAKE_OVERHANG). Usar a margem das águas aqui fazia
+    // essa função devolver uma pegada BEM maior que a malha real da
+    // platibanda — quem usa essa pegada pra decidir onde outro telhado
+    // deve ficar invisível (DEC-125/126) então escondia uma faixa
+    // fantasma onde a platibanda vizinha nem chega a desenhar nada,
+    // abrindo uma fresta visível (fundo aparecendo) bem na junção de
+    // dois telhados platibanda. Sem margem nenhuma agora — a pegada já
+    // bate exatamente com a face externa real do parapeito.
     if (roof.type === 'platibanda') {
-      var pMargin = PARAPET_THICK / 2;
       return {
-        minX: (Math.min(roof.x1, roof.x2) - offsetX) * scale - pMargin,
-        maxX: (Math.max(roof.x1, roof.x2) - offsetX) * scale + pMargin,
-        minZ: (Math.min(roof.y1, roof.y2) - offsetY) * scale - pMargin,
-        maxZ: (Math.max(roof.y1, roof.y2) - offsetY) * scale + pMargin
+        minX: (Math.min(roof.x1, roof.x2) - offsetX) * scale,
+        maxX: (Math.max(roof.x1, roof.x2) - offsetX) * scale,
+        minZ: (Math.min(roof.y1, roof.y2) - offsetY) * scale,
+        maxZ: (Math.max(roof.y1, roof.y2) - offsetY) * scale
       };
     }
     var ridgeAlongX = roof.ridgeAxis === 'x';
@@ -2858,6 +2859,20 @@ export function hashColorHex(key: string): number {
 
   function buildParapetWalls(bounds: any, topY: any, height: any, thickness: any, color: any, isPlain: any) {
     var meshes: any[] = [];
+    // `bounds` é a face EXTERNA real da parede (roofWorldFootprint/
+    // roomModelBounds já somam meia espessura de parede). Antes, cada
+    // segmento nascia CENTRADO em cima dessa linha — metade da espessura
+    // do parapeito (PARAPET_THICK/2) ficava pra fora dela, fazendo a
+    // face externa do parapeito sobrar ~5cm além da face externa da
+    // parede de verdade (Rogério: "a face externa da platibanda não
+    // bate exatamente com a face externa da parede"). O recuo abaixo usa
+    // sempre a meia espessura do parapeito BASE (nunca a de `thickness`,
+    // que na chamada da moldura é mais larga) — assim o parapeito comum
+    // fica com a face externa exatamente rente a `bounds`, e a moldura
+    // (mais larga, mesma chamada) continua centrada nesse MESMO eixo,
+    // projetando igualmente pra fora e pra dentro dele, como já era a
+    // intenção (ver comentário em buildRoofPlatibanda).
+    var inset = PARAPET_THICK / 2;
     function seg(x1: any, z1: any, x2: any, z2: any) {
       var dx = x2 - x1, dz = z2 - z1, len = Math.hypot(dx, dz);
       var geo = new THREE.BoxGeometry(len + thickness, height, thickness);
@@ -2867,10 +2882,10 @@ export function hashColorHex(key: string): number {
       mesh.rotation.y = -Math.atan2(dz, dx);
       return mesh;
     }
-    meshes.push(seg(bounds.minX, bounds.minZ, bounds.maxX, bounds.minZ));
-    meshes.push(seg(bounds.maxX, bounds.minZ, bounds.maxX, bounds.maxZ));
-    meshes.push(seg(bounds.maxX, bounds.maxZ, bounds.minX, bounds.maxZ));
-    meshes.push(seg(bounds.minX, bounds.maxZ, bounds.minX, bounds.minZ));
+    meshes.push(seg(bounds.minX, bounds.minZ + inset, bounds.maxX, bounds.minZ + inset));
+    meshes.push(seg(bounds.maxX - inset, bounds.minZ, bounds.maxX - inset, bounds.maxZ));
+    meshes.push(seg(bounds.maxX, bounds.maxZ - inset, bounds.minX, bounds.maxZ - inset));
+    meshes.push(seg(bounds.minX + inset, bounds.maxZ, bounds.minX + inset, bounds.minZ));
     return meshes;
   }
 

@@ -122,3 +122,23 @@ test('buildRoofPlatibanda constrói um segundo anel (moldura), mais largo e mais
   assert.match(body, /buildParapetWalls\(topBounds, moldingTopY, MOLDING_HEIGHT, moldingThickness, parapetColorResolved, parapetColorIsPlain\)/);
   assert.match(source, /buildRoofPlatibanda\(bounds, floorTopY, roofColor, ridgeAxis, roof\.parapetHeight, parapetColor, !!roof\.parapetMolding, wallMatchIsPlain\)/);
 });
+
+// Print do Rogério: "a face externa da platibanda não bate exatamente
+// com a face externa da parede". Causa: cada segmento nascia CENTRADO
+// em cima de `bounds` (a face externa real da parede) — metade da
+// espessura do parapeito sobrava pra fora dela. Corrigido recuando o
+// centro de cada segmento pela meia espessura do parapeito BASE
+// (PARAPET_THICK/2, nunca a de `thickness` — a moldura é mais larga mas
+// usa a MESMA chamada) — assim a face externa do parapeito comum fica
+// rente a `bounds`, e a moldura continua centrada no mesmo eixo do
+// parapeito, projetando igualmente pra fora/pra dentro dele.
+test('DEC-223: buildParapetWalls recua cada segmento por PARAPET_THICK/2 (não pela meia espessura de `thickness`) — face externa do parapeito fica rente à face externa real da parede', () => {
+  const start = source.indexOf('function buildParapetWalls(');
+  const end = source.indexOf('\n  }', start);
+  const body = source.slice(start, end);
+  assert.match(body, /var inset = PARAPET_THICK \/ 2;/);
+  assert.match(body, /seg\(bounds\.minX, bounds\.minZ \+ inset, bounds\.maxX, bounds\.minZ \+ inset\)/);
+  assert.match(body, /seg\(bounds\.maxX - inset, bounds\.minZ, bounds\.maxX - inset, bounds\.maxZ\)/);
+  assert.match(body, /seg\(bounds\.maxX, bounds\.maxZ - inset, bounds\.minX, bounds\.maxZ - inset\)/);
+  assert.match(body, /seg\(bounds\.minX \+ inset, bounds\.maxZ, bounds\.minX \+ inset, bounds\.minZ\)/);
+});

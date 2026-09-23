@@ -2974,3 +2974,20 @@ Passos porta/janela/telhado usam uma flag `armsViewportOnClick`: o alvo inicial 
 **Teste novo:** `tests/roof-uma-agua-gable.test.mjs` ganhou 3 testes — `buildWallMatchMaterial`/`isWallMatchColorPlain`/`buildParapetSegmentMaterial` aplicam o `emissive` condicional, e a chamada de `buildRoofPlatibanda` propaga `wallMatchIsPlain`. `tests/roof-eave-soffit-and-molding.test.mjs` atualizado pra cobrir as novas assinaturas (`buildWallMatchMaterial` em vez de `pickColor` puro pra `soffitColor`, parâmetro extra em `buildRoofPlatibanda`/`buildParapetWalls`).
 
 **Referências:** `src/core/Scene3DRenderer.ts` (`isWallMatchColorPlain`, `buildWallMatchMaterial`, `buildParapetSegmentMaterial`, `buildRoofPiece`, `buildRoofPlatibanda`) · `tests/roof-uma-agua-gable.test.mjs`, `tests/roof-eave-soffit-and-molding.test.mjs` · DEC-220.
+
+# DEC-223 — Face externa do parapeito da platibanda não batia com a face externa da parede (sobrava ~5cm pra fora)
+
+**Data:** 23/09/2026
+**Status:** Implementado e testado (777 testes, 1 novo; typecheck limpo). Verificado ao vivo (`npm run build` + `vite preview`): casa simples com telhado Platibanda — parapeito agora contínuo com a parede abaixo, sem degrau/saliência na junção.
+
+**Contexto:** Rogério: "notei que a face externa da platibanda não bate exatamente com a face externa da parede".
+
+**Causa raiz:** `buildParapetWalls()` monta cada um dos 4 segmentos do parapeito como uma caixa CENTRADA em cima de `bounds` (a face externa real da parede — `roof.x1/x2/y1/y2` já vem de `roomModelBounds`, que soma meia espessura de parede, mesma convenção documentada em `roofWorldFootprint`). Como o parapeito tem sua própria espessura (`PARAPET_THICK = 0,1m`), centrar a caixa sobre essa linha deixava metade dela (`PARAPET_THICK/2` = 5cm) pra FORA da face real da parede — o parapeito ficava sistematicamente mais largo que a casa, saliente em todo o perímetro.
+
+**Correção:** `buildParapetWalls()` ganhou um recuo fixo (`inset = PARAPET_THICK / 2`) aplicado ao centro de cada segmento, sempre na direção "pra dentro" — a face EXTERNA do parapeito passa a cair exatamente em `bounds`, com a espessura inteira sobrando pra dentro. Importante: o recuo usa sempre a meia espessura do parapeito BASE (`PARAPET_THICK`), nunca a de `thickness` (o parâmetro da função) — a moldura opcional (DEC-166) chama essa mesma função com uma `thickness` maior (`PARAPET_THICK + MOLDING_PROJECTION*2`) mas precisa continuar CENTRADA no mesmo eixo do parapeito comum, não rente à parede — usar `thickness/2` ali teria posicionado a moldura errada (rente à parede em vez de projetando pra fora/dentro do parapeito, quebrando o efeito de moldura já certo desde a DEC-166).
+
+**Efeito colateral corrigido junto:** `roofWorldFootprint()` tinha uma margem `pMargin = PARAPET_THICK/2` especificamente pra compensar essa mesma saliência de 5cm (documentada na DEC-127, usada pra decidir onde esconder telhados vizinhos nas junções). Com a saliência corrigida, a pegada real do parapeito passou a bater exatamente com `roof.x1/x2/y1/y2` — a margem virou compensação de um bug que não existe mais, então foi removida (senão a caixa de recorte ficaria 5cm maior que a malha real em cada lado, reabrindo o mesmo tipo de fresta fantasma que a DEC-127 resolveu).
+
+**Teste novo:** `tests/roof-eave-soffit-and-molding.test.mjs` confirma o `inset`/os 4 `seg(...)` recuados. `tests/wall-geometry.test.mjs` (DEC-127) atualizado — a margem que confirmava antes não existe mais, teste passou a confirmar que `pMargin` sumiu do branch da platibanda.
+
+**Referências:** `src/core/Scene3DRenderer.ts` (`buildParapetWalls`, `roofWorldFootprint`) · `tests/roof-eave-soffit-and-molding.test.mjs`, `tests/wall-geometry.test.mjs` · DEC-127 (origem da margem agora removida), DEC-166 (moldura).
