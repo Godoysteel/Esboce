@@ -3039,3 +3039,20 @@ Passos porta/janela/telhado usam uma flag `armsViewportOnClick`: o alvo inicial 
 **Teste novo:** `tests/roof-eave-soffit-and-molding.test.mjs` — `subtractCoveredIntervals` testada isolada (reimplementação idêntica, já que o arquivo não é importável direto) contra os 3 cenários reais (cobertura total, parcial, nenhuma); `buildParapetWalls`/`buildRoofPlatibanda`/`buildRoofPiece` confirmados propagando `neighborBounds` ponta a ponta.
 
 **Referências:** `src/core/Scene3DRenderer.ts` (`buildParapetWalls`, `buildRoofPlatibanda`, `buildRoofPiece`, `subtractCoveredIntervals`) · `src/core/Core.ts` (`roofsCanFuse`) · `tests/roof-eave-soffit-and-molding.test.mjs` · DEC-223/DEC-224 (mesma família de correções de geometria da platibanda).
+
+# DEC-227 — Fresta de ~1cm na QUINA do parapeito da platibanda (efeito colateral do DEC-223) — deixava ver o piso por dentro num ângulo raso de cima
+
+**Data:** 23/09/2026
+**Status:** Implementado e testado (782 testes, 1 novo; typecheck limpo). Verificado numericamente ao vivo: `Core.computeWallFootprints` (a face externa REAL da parede, `fp.p1b`) comparada contra o alcance previsto da quina do parapeito pela fórmula nova — diferença `-2,22e-16` (ruído de ponto flutuante, ou seja, zero) nos dois eixos.
+
+**Contexto:** Rogério testou de novo, com print de um ângulo bem de cima e na diagonal, bem perto da quina: "a quina ainda não está perfeita e não está rente à parede inferior". Perguntei se a faixa marrom no print era telha/tabeira de outro telhado — não: "é o piso" (o chão do cômodo, visível através da fresta). Como o ângulo é bem raso e de cima, uma fresta de milímetros na quina vira uma faixa bem visível — de um ângulo normal (andando ao redor da casa) ela não aparece, foi por isso que a verificação visual do DEC-223 (screenshots de lado/de longe) não pegou.
+
+**Causa raiz:** efeito colateral direto do DEC-223. Antes daquela correção, cada segmento do parapeito nascia centrado exatamente no eixo da parede (`bounds`), e a extensão da quina (`BoxGeometry(len + thickness, ...)`, que soma `thickness` — metade pra cada lado — pra dois segmentos perpendiculares se encontrarem sem fresta) alcançava exatamente esse mesmo eixo no segmento vizinho: consistente, sem fresta na quina (só a face reta ficava com o recesso de 1cm que o DEC-223 resolveu). O DEC-223 empurrou o CENTRO de cada segmento `outset` (~1cm) pra fora — mas a extensão da quina continuou de tamanho igual (`thickness`), medida a partir da ponta NOMINAL antiga, que não tinha esse mesmo deslocamento. Resultado: ao longo da parede reta, a face externa ficou perfeita (é isso que a verificação do DEC-223 mediu e confirmou) — mas bem na PONTA de cada segmento, sobrou uma fresta de exatamente `outset` (~1cm) que nenhum dos dois segmentos perpendiculares cobre, nos quatro cantos.
+
+**Correção:** a extensão da quina passa a ser `thickness + 2 * outset` (`cornerExtend`) em vez de só `thickness` — cada segmento agora estende `thickness/2 + outset` além da própria ponta nominal, alcançando exatamente a face externa real da parede vizinha (verificado numericamente acima), não mais só o eixo bruto dela.
+
+**Limitação conhecida (herdada do DEC-226, não alterada):** trechos recortados por um telhado vizinho (`subtractCoveredIntervals`) também ganham essa extensão maior nas próprias pontas de corte — o stub de ~5-6cm já documentado no DEC-226 fica uns 6-7cm agora. Diferença pequena, não parece valer a pena complicar o código pra distinguir "ponta real" de "ponta de corte" só por isso.
+
+**Teste novo:** `tests/roof-eave-soffit-and-molding.test.mjs` confirma `cornerExtend = thickness + 2 * outset` e seu uso em `BoxGeometry`/`buildParapetSegmentMaterial`.
+
+**Referências:** `src/core/Scene3DRenderer.ts` (`buildParapetWalls`) · `tests/roof-eave-soffit-and-molding.test.mjs` · DEC-223 (origem do `outset` que este DEC completa), DEC-226 (mesma limitação de stub nas pontas de corte).

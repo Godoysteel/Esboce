@@ -211,3 +211,22 @@ test('subtractCoveredIntervals devolve os trechos abertos que sobram fora dos in
   // Sem vizinho nenhum: o trecho inteiro continua aberto, igual sempre foi.
   assert.deepEqual(subtractCoveredIntervals(-30, 30, []), [[-30, 30]]);
 });
+
+// Rogério, testando de novo, com print: "a quina ainda não está
+// perfeita e não está rente à parede inferior" — a mesma quina do
+// DEC-223, olhando de cima numa diagonal (o ângulo raso é que faz uma
+// fresta de milímetros virar uma faixa visível do piso lá dentro).
+// Causa: o DEC-223 empurrou cada segmento OUTSET pra fora, mas a
+// extensão da quina (que soma `thickness` pra dois segmentos
+// perpendiculares se encontrarem) continuou medindo a partir da ponta
+// NOMINAL antiga — sobrava exatamente `outset` (~1cm) de fresta bem na
+// ponta, nos quatro cantos, mesmo com a face externa já certa ao longo
+// da parede reta.
+test('DEC-227: buildParapetWalls estende a quina por `thickness + 2*outset` (não só `thickness`) — fecha a fresta de ~1cm que sobrava exatamente na ponta depois do DEC-223', () => {
+  const start = source.indexOf('function buildParapetWalls(');
+  const end = source.indexOf('\n  }', start);
+  const body = source.slice(start, end);
+  assert.match(body, /var cornerExtend = thickness \+ 2 \* outset;/);
+  assert.match(body, /new THREE\.BoxGeometry\(len \+ cornerExtend, height, thickness\)/);
+  assert.match(body, /buildParapetSegmentMaterial\(color, thickness, height, len \+ cornerExtend, isPlain\)/);
+});

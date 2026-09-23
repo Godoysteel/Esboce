@@ -2924,11 +2924,21 @@ export function hashColorHex(key: string): number {
     // a moldura continua centrada no MESMO eixo do parapeito comum,
     // projetando igualmente pra fora/pra dentro dele (ver buildRoofPlatibanda).
     var outset = GABLE_WALL_EXTEND - PARAPET_THICK / 2;
+    // A extensão da quina (pra dois segmentos perpendiculares se
+    // encontrarem sem fresta) precisa cobrir a MESMA distância que
+    // `outset` empurrou os dois pra fora — cada segmento normalmente
+    // reconta `thickness/2` além da própria ponta nominal (o bastante
+    // pra alcançar o eixo bruto do outro), mas como as pontas AGORA
+    // nascem `outset` além desse eixo, faltava exatamente esse tanto:
+    // sobrava uma fresta de ~1cm bem na quina (nem visível de perto na
+    // reta, só de cima, num ângulo raso, olhando direto pra ela — foi
+    // assim que o Rogério achou, "a quina ainda não está perfeita").
+    var cornerExtend = thickness + 2 * outset;
     function seg(x1: any, z1: any, x2: any, z2: any) {
       var dx = x2 - x1, dz = z2 - z1, len = Math.hypot(dx, dz);
       if (len < 1e-3) return null;
-      var geo = new THREE.BoxGeometry(len + thickness, height, thickness);
-      var mat = buildParapetSegmentMaterial(color, thickness, height, len + thickness, isPlain);
+      var geo = new THREE.BoxGeometry(len + cornerExtend, height, thickness);
+      var mat = buildParapetSegmentMaterial(color, thickness, height, len + cornerExtend, isPlain);
       var mesh = new THREE.Mesh(geo, mat);
       mesh.position.set((x1 + x2) / 2, topY + height / 2, (z1 + z2) / 2);
       mesh.rotation.y = -Math.atan2(dz, dx);

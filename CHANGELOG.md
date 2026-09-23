@@ -8,6 +8,7 @@
 - Corrigido: telhados criados pelo botão "Gerar Telhados" (qualquer estilo) ficavam com o oitão, o parapeito ou o painel de trás uns 6cm além da face real da parede — um telhado desenhado/redimensionado à mão na mesma casa não tinha esse problema. Agora os dois caminhos de criar telhado dão o mesmo resultado. Ver DEC-224.
 - Novo: o forro do beiral (parte de baixo do telhado, entre a parede e a borda) passa a acompanhar a inclinação real da água nos telhados 4 Águas e 1 Água — já valia só pro 2 Águas antes. Ver DEC-225.
 - Corrigido: numa casa em L (dois cômodos conectados fora do eixo), os dois telhados platibanda desenhavam parapeitos que se cruzavam exatamente onde um encosta no outro. Agora o parapeito para no ponto certo, sem sobreposição. Ver DEC-226.
+- Corrigido: sobrava uma fresta bem pequena (~1cm) exatamente na quina do parapeito da platibanda — efeito colateral da correção da DEC-223. Some de um ângulo normal, mas de cima e bem perto ficava visível, dando pra ver o piso do cômodo por dentro. Ver DEC-227.
 
 ## Alterado — 22/09/2026
 
