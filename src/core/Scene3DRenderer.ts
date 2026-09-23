@@ -3036,8 +3036,19 @@ export function hashColorHex(key: string): number {
       });
     }
     var color = product ? parseInt(product.assets.colorHex.slice(1), 16) : GABLE_COLOR;
+    // Mesmo ajuste da face crua da parede (ver comentário em cima do
+    // `faceMat` mais abaixo, linha ~6141): sem acabamento do Catálogo
+    // escolhido, o oitão pegava só a luz colorida da cena (hemisfério
+    // céu/chão) e ficava num cinza-azulado visivelmente mais escuro que a
+    // parede logo abaixo dele — mesmo os dois usando o MESMO GABLE_COLOR
+    // nominal. Faltava o mesmo reforço emissivo branco que a parede já
+    // ganhou; sem ele, "nunca destoa" (comentário de computeWallMatchColor)
+    // não valia pro oitão sem acabamento.
+    var isPlainGable = !product;
     return new THREE.MeshStandardMaterial({
       color: pickColor(color, 'paredesTerreo', viewState),
+      emissive: isPlainGable ? 0xFFFFFF : 0x000000,
+      emissiveIntensity: isPlainGable ? 0.15 : 0,
       roughness: 1,
       side: THREE.DoubleSide
     });

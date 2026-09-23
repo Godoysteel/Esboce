@@ -68,3 +68,19 @@ test('orçamento também soma o painel de trás do uma-água (área própria, um
   assert.match(materialsSource, /const backWallArea = umaAguaBackWallAreaMeters\(roof\);/);
   assert.match(materialsSource, /totals\.wallAreaNet \+= backWallArea;/);
 });
+
+// Print do Rogério: oitão do 2 Águas sem acabamento escolhido aparecia
+// visivelmente mais escuro/acinzentado que a parede idêntica logo
+// abaixo, mesmo os dois usando o MESMO GABLE_COLOR nominal (0xFFFFFF).
+// Causa: só a face da parede (faceMat, ~linha 6154) tinha o reforço
+// emissivo branco que compensa a luz colorida da cena (hemisfério céu/
+// chão) tingindo o branco puro pra um cinza-azulado — buildGableWallMaterial
+// nunca ganhou o mesmo tratamento.
+test('buildGableWallMaterial aplica o mesmo reforço emissivo branco da parede crua (isPlainWallFace) quando não há acabamento do Catálogo — sem isso o oitão fica mais escuro que a parede abaixo dele', () => {
+  const start = source.indexOf('function buildGableWallMaterial(');
+  const end = source.indexOf('\n  }', start);
+  const body = source.slice(start, end);
+  assert.match(body, /var isPlainGable = !product;/);
+  assert.match(body, /emissive: isPlainGable \? 0xFFFFFF : 0x000000,/);
+  assert.match(body, /emissiveIntensity: isPlainGable \? 0\.15 : 0,/);
+});
